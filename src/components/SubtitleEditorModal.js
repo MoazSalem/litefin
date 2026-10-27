@@ -122,7 +122,9 @@ class SubtitleEditorModal {
                 detailsPage._item?.MediaSources?.[0]?.MediaStreams?.find((s) => s.Type === 'Audio')?.Language || '';
             let currentLang = savedLang || prefLang || audioLang || 'eng';
 
-            const langOptions = cultures
+            // Filter out regional dialects to retain only singular canonical languages
+            const singularCultures = languageManager.filterSingularCultures(cultures);
+            const langOptions = singularCultures
                 .filter((c) => c.ThreeLetterISOLanguageName) // Only include languages with a valid code
                 .sort((a, b) => (a.DisplayName || '').localeCompare(b.DisplayName || ''))
                 .map((c) => ({
@@ -206,16 +208,17 @@ class SubtitleEditorModal {
                     }
 
                     // Build options HTML
-                    const optionsHtml = displayOptions.length === 0
-                        ? `
+                    const optionsHtml =
+                        displayOptions.length === 0
+                            ? `
                             <div class="modal-empty-placeholder" style="padding: 24px 16px; text-align: center; opacity: 0.7; font-size: 1.1rem; pointer-events: none;" data-i18n="NoOptionsAvailable">
                                 ${i18n.t('NoOptionsAvailable') || 'No options available'}
                             </div>
                         `
-                        : displayOptions
-                            .map((opt) => {
-                                const isFav = languageManager.isFavorite(opt);
-                                return `
+                            : displayOptions
+                                  .map((opt) => {
+                                      const isFav = languageManager.isFavorite(opt);
+                                      return `
                                     <button class="modal-option-btn ${opt.value === currentLang ? 'selected' : ''}" 
                                             data-value="${opt.value}"
                                             tabindex="0">
@@ -225,8 +228,8 @@ class SubtitleEditorModal {
                                         </span>
                                     </button>
                                 `;
-                            })
-                            .join('');
+                                  })
+                                  .join('');
 
                     subOverlay.innerHTML = `
                         <div class="settings-modal" role="dialog" aria-modal="true">
@@ -259,13 +262,19 @@ class SubtitleEditorModal {
                                     starBtn.textContent = isNowFav ? '★' : '☆';
 
                                     // Update the Favorites count badge on the pill
-                                    const favPill = subOverlay.querySelector('.modal-filter-pill[data-filter="favorites"]');
+                                    const favPill = subOverlay.querySelector(
+                                        '.modal-filter-pill[data-filter="favorites"]'
+                                    );
                                     if (favPill) {
-                                        const newCount = langOptions.filter((o) => languageManager.isFavorite(o)).length;
+                                        const newCount = langOptions.filter((o) =>
+                                            languageManager.isFavorite(o)
+                                        ).length;
                                         favPill.textContent = `★ ${i18n.t('FavoritesOnly') || 'Favorites'} (${newCount})`;
                                     }
                                 } else {
-                                    const currentIdx = Array.from(subOverlay.querySelectorAll('.modal-option-btn')).indexOf(btn);
+                                    const currentIdx = Array.from(
+                                        subOverlay.querySelectorAll('.modal-option-btn')
+                                    ).indexOf(btn);
                                     renderLanguageModalContent();
                                     const remainingOptions = subOverlay.querySelectorAll('.modal-option-btn');
                                     if (remainingOptions.length > 0) {
@@ -303,43 +312,53 @@ class SubtitleEditorModal {
 
                     // Focus Registration with Left/Right tab switching
                     if (subOverlay.querySelector('#sub-modal-lang-filter-pills')) {
-                        detailsPage.registerFocusSection('lang-modal-filter-pills', subOverlay.querySelector('#sub-modal-lang-filter-pills'), {
-                            orientation: 'horizontal',
-                            leaveDown: 'lang-modal-options',
-                            onMove: (direction) => {
-                                const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
-                                if (direction === 'left') {
-                                    const targetFilter = isRtl ? 'all' : 'favorites';
-                                    if (activeFilter !== targetFilter) {
-                                        activeFilter = targetFilter;
-                                        renderLanguageModalContent();
-                                        setTimeout(() => {
-                                            const pill = subOverlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
-                                            if (pill) focusManager.focusElement(pill);
-                                        }, 50);
-                                        return true;
+                        detailsPage.registerFocusSection(
+                            'lang-modal-filter-pills',
+                            subOverlay.querySelector('#sub-modal-lang-filter-pills'),
+                            {
+                                orientation: 'horizontal',
+                                leaveDown: 'lang-modal-options',
+                                onMove: (direction) => {
+                                    const isRtl = document.documentElement.getAttribute('dir') === 'rtl';
+                                    if (direction === 'left') {
+                                        const targetFilter = isRtl ? 'all' : 'favorites';
+                                        if (activeFilter !== targetFilter) {
+                                            activeFilter = targetFilter;
+                                            renderLanguageModalContent();
+                                            setTimeout(() => {
+                                                const pill = subOverlay.querySelector(
+                                                    `.modal-filter-pill[data-filter="${targetFilter}"]`
+                                                );
+                                                if (pill) focusManager.focusElement(pill);
+                                            }, 50);
+                                            return true;
+                                        }
+                                    } else if (direction === 'right') {
+                                        const targetFilter = isRtl ? 'favorites' : 'all';
+                                        if (activeFilter !== targetFilter) {
+                                            activeFilter = targetFilter;
+                                            renderLanguageModalContent();
+                                            setTimeout(() => {
+                                                const pill = subOverlay.querySelector(
+                                                    `.modal-filter-pill[data-filter="${targetFilter}"]`
+                                                );
+                                                if (pill) focusManager.focusElement(pill);
+                                            }, 50);
+                                            return true;
+                                        }
                                     }
-                                } else if (direction === 'right') {
-                                    const targetFilter = isRtl ? 'favorites' : 'all';
-                                    if (activeFilter !== targetFilter) {
-                                        activeFilter = targetFilter;
-                                        renderLanguageModalContent();
-                                        setTimeout(() => {
-                                            const pill = subOverlay.querySelector(`.modal-filter-pill[data-filter="${targetFilter}"]`);
-                                            if (pill) focusManager.focusElement(pill);
-                                        }, 50);
-                                        return true;
-                                    }
+                                    return false;
                                 }
-                                return false;
                             }
-                        });
+                        );
                     }
 
                     detailsPage.registerFocusSection('lang-modal-options', subOverlay.querySelector('.modal-options'), {
                         orientation: 'vertical',
                         leaveDown: 'lang-modal-actions',
-                        leaveUp: subOverlay.querySelector('#sub-modal-lang-filter-pills') ? 'lang-modal-filter-pills' : 'lang-modal-actions',
+                        leaveUp: subOverlay.querySelector('#sub-modal-lang-filter-pills')
+                            ? 'lang-modal-filter-pills'
+                            : 'lang-modal-actions',
                         enterTo: 'last-focused',
                         onMove: (direction) => {
                             if (languageManager.hasFavorites()) {
@@ -559,7 +578,6 @@ class SubtitleEditorModal {
         }
 
         // ── Build results HTML ───────────────────────────────────────────────
-        let downloadableCount = 0;
         const resultsHtml =
             results && results.length > 0
                 ? results
@@ -581,7 +599,6 @@ class SubtitleEditorModal {
                               `;
                           }
 
-                          downloadableCount++;
                           return `
                     <button class="modal-option-btn subtitle-result-btn" data-id="${meta.id}" tabindex="0">
                         <div class="subtitle-result-info">

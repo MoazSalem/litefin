@@ -15,6 +15,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { gamepadManager } from '../utils/GamepadManager.js';
 
 // Initialize dedicated logger for Desktop adapter events
 const log = logger.create('DesktopAdapter');
@@ -92,6 +93,12 @@ class DesktopAdapter {
 
         // Register global physical keyboard handler
         this._setupKeyHandler();
+
+        // Initialize gamepad and controller navigation subsystem (Xbox, DualShock/DualSense, 8BitDo)
+        gamepadManager.init({
+            onActivity: () => this.reportInput(),
+            onFullscreen: () => this.toggleFullscreen()
+        });
 
         // Register pointer, mouse, and wheel listeners to report user activity
         document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
@@ -267,6 +274,66 @@ class DesktopAdapter {
                         this.toggleFullscreen();
                         return;
 
+                    /*
+                     * =================================================================
+                     * Escape / Esc Fullscreen Dismissal Override
+                     * =================================================================
+                     * When player is actively rendering in fullscreen mode, pressing
+                     * Escape disables fullscreen back to windowed mode without exiting
+                     * the player or navigating backward.
+                     *
+                     * Exception: If a selection modal (subtitles, audio, settings) is
+                     * currently open, let Escape pass through to back handler to dismiss
+                     * the menu popup first.
+                     * =================================================================
+                     */
+                    case 'Escape':
+                    case 'Esc':
+                        if (this.isFullscreen()) {
+                            // If a modal or menu popup is active, let back close the modal first
+                            if (
+                                document.querySelector(
+                                    '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                                )
+                            ) {
+                                break;
+                            }
+                            e.preventDefault();
+                            this.toggleFullscreen();
+                            return;
+                        }
+                        break;
+
+                    // Volume increase shortcut (ArrowUp)
+                    case 'ArrowUp':
+                    case 'Up':
+                        // Only intercept when no modal popup or selection menu is open in view
+                        if (
+                            !document.querySelector(
+                                '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                            )
+                        ) {
+                            e.preventDefault();
+                            eventBus.emit('remote:volumeup');
+                            return;
+                        }
+                        break;
+
+                    // Volume decrease shortcut (ArrowDown)
+                    case 'ArrowDown':
+                    case 'Down':
+                        // Only intercept when no modal popup or selection menu is open in view
+                        if (
+                            !document.querySelector(
+                                '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                            )
+                        ) {
+                            e.preventDefault();
+                            eventBus.emit('remote:volumedown');
+                            return;
+                        }
+                        break;
+
                     default:
                         break;
                 }
@@ -392,9 +459,14 @@ class DesktopAdapter {
                     } catch (_) {
                         // Fall back to Tauri v2 core window plugin IPC
                         const label = window.__TAURI_INTERNALS__?.metadata?.currentWindow?.label || 'main';
-                        const isFullscreen = await window.__TAURI_INTERNALS__.invoke('plugin:window|is_fullscreen', { label });
+                        const isFullscreen = await window.__TAURI_INTERNALS__.invoke('plugin:window|is_fullscreen', {
+                            label
+                        });
                         const nextState = !isFullscreen;
-                        await window.__TAURI_INTERNALS__.invoke('plugin:window|set_fullscreen', { label, value: nextState });
+                        await window.__TAURI_INTERNALS__.invoke('plugin:window|set_fullscreen', {
+                            label,
+                            value: nextState
+                        });
                         log.info(`Tauri fullscreen toggled via window plugin: ${nextState}`);
                         this._isFullscreen = nextState;
                         eventBus.emit('window:fullscreen', nextState);
@@ -409,7 +481,9 @@ class DesktopAdapter {
                         return newState;
                     } catch (_) {
                         const label = 'main';
-                        const isFullscreen = await window.__TAURI__.core.invoke('plugin:window|is_fullscreen', { label });
+                        const isFullscreen = await window.__TAURI__.core.invoke('plugin:window|is_fullscreen', {
+                            label
+                        });
                         const nextState = !isFullscreen;
                         await window.__TAURI__.core.invoke('plugin:window|set_fullscreen', { label, value: nextState });
                         log.info(`Tauri fullscreen toggled via core window plugin: ${nextState}`);

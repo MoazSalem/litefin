@@ -12,6 +12,9 @@ From a scale of 1 to 10 (1 = minor annoyance, 10 = critical crash/unusable block
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+**Special Settings**
+If you changed any settings, specially in playback tab, include them here [e.g. Force Direct playback, TrueHD/DTS passthrough], it recommended you backup your settings, and reset them to see if you can reproduce the issue with default settings. 
+
 **To Reproduce**
 Steps to reproduce the behavior:
 

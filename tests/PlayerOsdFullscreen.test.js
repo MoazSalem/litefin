@@ -22,14 +22,20 @@ function setupAdapterTest(filePath, adapterExportName) {
 
     let fullscreenListener = null;
     let fullscreenElement = null;
+    let keydownListener = null;
 
     const mockDocument = {
         addEventListener(event, handler) {
             if (event === 'fullscreenchange') {
                 fullscreenListener = handler;
+            } else if (event === 'keydown') {
+                keydownListener = handler;
             }
         },
         removeEventListener() {},
+        querySelector() {
+            return null;
+        },
         get fullscreenElement() {
             return fullscreenElement;
         },
@@ -87,6 +93,7 @@ function setupAdapterTest(filePath, adapterExportName) {
         eventBus: mockEventBus,
         storage: mockStorage,
         logger: mockLogger,
+        gamepadManager: { init() {}, update() {}, destroy() {} },
         console,
         Boolean,
         Date
@@ -101,6 +108,21 @@ function setupAdapterTest(filePath, adapterExportName) {
         emittedEvents,
         triggerFullscreenChange() {
             if (fullscreenListener) fullscreenListener();
+        },
+        triggerKeydown(key, keyCode, extra = {}) {
+            if (keydownListener) {
+                let defaultPrevented = false;
+                const event = {
+                    key,
+                    keyCode,
+                    preventDefault() { defaultPrevented = true; },
+                    stopPropagation() {},
+                    ...extra
+                };
+                keydownListener(event);
+                return { defaultPrevented };
+            }
+            return { defaultPrevented: false };
         }
     };
 }
@@ -231,3 +253,130 @@ test('OSDController: Fullscreen button markup, tooltip and state updates', () =>
     assert.strictEqual(button.getAttribute('aria-label'), 'Full Screen');
     assert.strictEqual(button.innerHTML, 'expand_svg');
 });
+
+test('DesktopAdapter: Escape shortcut disables fullscreen when active, and emits key:back in windowed mode', async () => {
+    const { adapter, emittedEvents, triggerKeydown } = setupAdapterTest(
+        new URL('../src/desktop/DesktopAdapter.js', import.meta.url),
+        'desktopAdapter'
+    );
+
+    // Initialize adapter listeners
+    adapter.init();
+
+    // 1. In windowed mode: Escape should fall through and emit key:back
+    assert.strictEqual(adapter.isFullscreen(), false);
+    triggerKeydown('Escape', 27);
+    const backEvent1 = emittedEvents.find(e => e.event === 'key:back');
+    assert.ok(backEvent1, 'Escape must emit key:back when in windowed mode');
+
+    // Clear events
+    emittedEvents.length = 0;
+
+    // 2. In fullscreen mode: Escape should toggle fullscreen off instead of emitting key:back
+    await adapter.toggleFullscreen();
+    assert.strictEqual(adapter.isFullscreen(), true);
+
+    const { defaultPrevented } = triggerKeydown('Escape', 27);
+    assert.strictEqual(defaultPrevented, true, 'Escape in fullscreen mode must preventDefault');
+    await new Promise(r => setTimeout(r, 0));
+    assert.strictEqual(adapter.isFullscreen(), false, 'Escape in fullscreen mode must toggle fullscreen off');
+    const backEvent2 = emittedEvents.find(e => e.event === 'key:back');
+    assert.strictEqual(backEvent2, undefined, 'Escape in fullscreen mode must NOT emit key:back');
+});
+
+test('WebAdapter: Escape shortcut disables fullscreen when active, and emits key:back in windowed mode', async () => {
+    const { adapter, emittedEvents, triggerKeydown } = setupAdapterTest(
+        new URL('../src/web/WebAdapter.js', import.meta.url),
+        'webAdapter'
+    );
+
+    // Initialize adapter listeners
+    adapter.init();
+
+    // 1. In windowed mode: Escape should fall through and emit key:back
+    assert.strictEqual(adapter.isFullscreen(), false);
+    triggerKeydown('Escape', 27);
+    const backEvent1 = emittedEvents.find(e => e.event === 'key:back');
+    assert.ok(backEvent1, 'Escape must emit key:back when in windowed mode');
+
+    // Clear events
+    emittedEvents.length = 0;
+
+    // 2. In fullscreen mode: Escape should toggle fullscreen off instead of emitting key:back
+    await adapter.toggleFullscreen();
+    assert.strictEqual(adapter.isFullscreen(), true);
+
+    const { defaultPrevented } = triggerKeydown('Escape', 27);
+    assert.strictEqual(defaultPrevented, true, 'Escape in fullscreen mode must preventDefault');
+    assert.strictEqual(adapter.isFullscreen(), false, 'Escape in fullscreen mode must toggle fullscreen off');
+    const backEvent2 = emittedEvents.find(e => e.event === 'key:back');
+    assert.strictEqual(backEvent2, undefined, 'Escape in fullscreen mode must NOT emit key:back');
+});
+
+test('OSDController: double click toggles fullscreen and _handleBack overrides back in fullscreen', () => {
+    const osdSource = readFileSync(new URL('../src/player/osd/OSDController.js', import.meta.url), 'utf8');
+
+    // 1. Verify dblclick listener registration is present on desktop/web
+    assert.ok(
+        osdSource.includes("this._osdEl.addEventListener('dblclick'"),
+        'OSDController must register a dblclick listener on _osdEl'
+    );
+
+    // 2. Verify _handleBack overrides back navigation when in fullscreen on desktop/web
+    assert.ok(
+        osdSource.includes('(platformInfo.isDesktop || platformInfo.isWeb) && this._isFullscreen()'),
+        'OSDController _handleBack must check platformInfo and _isFullscreen'
+    );
+
+    // 3. Verify single-click background timer buffering exists
+    assert.ok(
+        osdSource.includes('_dispatchBackgroundClick'),
+        'OSDController must define _dispatchBackgroundClick'
+    );
+    assert.ok(
+        osdSource.includes('_clearBackgroundClickTimeout'),
+        'OSDController must define _clearBackgroundClickTimeout'
+    );
+});
+
+test('PlayerPage: single click is debounced and double click triggers fullscreen without play/pause override', () => {
+    const playerPageSource = readFileSync(new URL('../src/pages/PlayerPage.js', import.meta.url), 'utf8');
+
+    // 1. Verify _bgClickTimer instance variable initialization
+    assert.ok(
+        playerPageSource.includes('this._bgClickTimer = null;'),
+        'PlayerPage must initialize this._bgClickTimer'
+    );
+
+    // 2. Verify single-click listener debounces on desktop and web runtimes
+    assert.ok(
+        playerPageSource.includes('if (platformInfo.isDesktop || platformInfo.isWeb) {'),
+        'PlayerPage click listener must check platformInfo.isDesktop and platformInfo.isWeb'
+    );
+    assert.ok(
+        playerPageSource.includes('if (e.detail > 1) {'),
+        'PlayerPage click listener must discard consecutive clicks in multi-click sequence'
+    );
+    assert.ok(
+        playerPageSource.includes('this._bgClickTimer = setTimeout('),
+        'PlayerPage click listener must buffer single-click with setTimeout'
+    );
+
+    // 3. Verify dblclick listener exists on this.el for desktop and web
+    assert.ok(
+        playerPageSource.includes("this.el.addEventListener('dblclick'"),
+        'PlayerPage must attach dblclick event listener to this.el'
+    );
+    assert.ok(
+        playerPageSource.includes('this._osd._toggleFullscreen()'),
+        'PlayerPage dblclick listener must invoke this._osd._toggleFullscreen()'
+    );
+
+    // 4. Verify cleanup in destroy and _stopAndExit
+    assert.ok(
+        playerPageSource.includes('clearTimeout(this._bgClickTimer)'),
+        'PlayerPage must clear _bgClickTimer on teardown and exit'
+    );
+});
+
+

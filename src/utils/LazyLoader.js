@@ -12,6 +12,7 @@ import { eventBus } from '../core/EventBus.js';
 import BlurHashDecoder from './BlurHashDecoder.js';
 import { storage } from './StorageService.js';
 import { escapeHtml } from './Utils.js';
+import { customHeaders } from './CustomHeaders.js';
 
 const log = logger.create('LazyLoader');
 
@@ -38,6 +39,12 @@ class LazyLoader {
          * ---------------------------------------------------------------- */
         this._scrollTimeout = null;
 
+        // ── Deferred marquee measurement ────────────────────────────────────
+        // Holds the focused card element when its text-overflow measurement was
+        // deferred because a scroll transition was in flight. Flushed when
+        // scrolling settles (see _flushPendingMarquee).
+        this._pendingMarqueeTarget = null;
+
         // ── BlurHash decode queue ───────────────────────────────────────────
         // Prevents micro-freeze storms on low-end TV CPUs by throttling
         // BlurHash DCT inversions to at most N per animation frame.
@@ -62,6 +69,7 @@ class LazyLoader {
                     // Resume deferred BlurHash decoding once viewport scrolling settles
                     if (!this._isScrolling()) {
                         this._processBlurHashQueue();
+                        this._flushPendingMarquee();
                     }
                 }, 150);
             },
@@ -75,6 +83,8 @@ class LazyLoader {
                 if (!this._isScrolling()) {
                     // Resume deferred BlurHash decoding once scrolling transitions settle
                     this._processBlurHashQueue();
+                    // Engage any marquee check deferred during the scroll transition
+                    this._flushPendingMarquee();
                 }
             }, 50);
         });
@@ -134,28 +144,18 @@ class LazyLoader {
                         // Guard against focus having already left the card
                         if (!target || !target.classList.contains('focused')) return;
 
-                        const textElements = target.querySelectorAll('.card-title, .card-subtitle');
-                        textElements.forEach((el) => {
-                            const span = el.querySelector('span');
-                            if (!span) return;
+                        // PERFORMANCE: Reading scrollWidth/clientWidth forces a synchronous
+                        // layout reflow (50-100ms on TV hardware). If a scroll transition is
+                        // in flight at this frame, defer the measurement until scrolling
+                        // settles so frame 1 of the transition is never blocked. The pending
+                        // target is flushed from the native-scroll debounce and the
+                        // 'scroll:finished' listener above.
+                        if (this._isScrolling()) {
+                            this._pendingMarqueeTarget = target;
+                            return;
+                        }
 
-                            const scrollW = span.scrollWidth;
-                            const clientW = el.clientWidth;
-
-                            // Check if text exceeds horizontal boundaries of the card
-                            if (scrollW > clientW) {
-                                const scrollDist = scrollW - clientW;
-                                const extraSpacing = 30; // 30px visual buffer/margin before looping back
-                                const totalScroll = scrollDist + extraSpacing;
-
-                                // Adjust scrolling duration dynamically based on length (30px/sec speed)
-                                const duration = Math.max(3, totalScroll / 30);
-
-                                el.style.setProperty('--scroll-dist', `-${totalScroll}px`);
-                                el.style.setProperty('--marquee-duration', `${duration}s`);
-                                el.classList.add('marquee-active');
-                            }
-                        });
+                        this._checkTextMarquee(target);
                     });
                 }
             }
@@ -253,6 +253,59 @@ class LazyLoader {
         return this._scrollTimeout !== null;
     }
 
+    /**
+     * Measure text overflow on the focused card and engage the CSS marquee
+     * animation when the inner span overflows its container.
+     *
+     * PERFORMANCE NOTE: Reading scrollWidth/clientWidth forces a synchronous
+     * layout reflow on low-end TV CPUs. Never call this while a scroll
+     * transition is in flight — the focus:changed handler defers the call and
+     * it is flushed from the scroll-settle paths instead.
+     * @param {HTMLElement} target - The focused media card element
+     * @private
+     */
+    _checkTextMarquee(target) {
+        if (!target || !target.isConnected || !target.classList.contains('focused')) return;
+
+        const textElements = target.querySelectorAll('.card-title, .card-subtitle');
+        textElements.forEach((el) => {
+            const span = el.querySelector('span');
+            if (!span) return;
+
+            const scrollW = span.scrollWidth;
+            const clientW = el.clientWidth;
+
+            // Check if text exceeds horizontal boundaries of the card
+            if (scrollW > clientW) {
+                const scrollDist = scrollW - clientW;
+                const extraSpacing = 30; // 30px visual buffer/margin before looping back
+                const totalScroll = scrollDist + extraSpacing;
+
+                // Adjust scrolling duration dynamically based on length (30px/sec speed)
+                const duration = Math.max(3, totalScroll / 30);
+
+                el.style.setProperty('--scroll-dist', `-${totalScroll}px`);
+                el.style.setProperty('--marquee-duration', `${duration}s`);
+                el.classList.add('marquee-active');
+            }
+        });
+    }
+
+    /**
+     * Flush a marquee overflow check that was deferred during active scrolling.
+     * Invoked from the scroll-settle paths (native scroll debounce and the
+     * 'scroll:finished' event) so the forced reflow only happens once motion
+     * has ended.
+     * @private
+     */
+    _flushPendingMarquee() {
+        if (!this._pendingMarqueeTarget) return;
+
+        const target = this._pendingMarqueeTarget;
+        this._pendingMarqueeTarget = null;
+
+        this._checkTextMarquee(target);
+    }
 
     /**
      * Helper to load all images in a row container
@@ -296,12 +349,56 @@ class LazyLoader {
             };
 
             img.crossOrigin = 'anonymous';
-            img.src = img.dataset.src;
+            this._assignImageSource(img, img.dataset.src);
         });
 
         if (this.observer) {
             this.observer.unobserve(row);
         }
+    }
+
+    /**
+     * Assigns the final image source to an image element.
+     * When custom reverse proxy headers are active, resolves the URL via
+     * CustomHeadersManager (which fetches the image with headers and converts
+     * to a local in-memory blob URL), falling back gracefully on failure.
+     *
+     * @param {HTMLImageElement} img - Image element to update
+     * @param {string} targetSrc - Jellyfin image URL from dataset
+     * @private
+     */
+    _assignImageSource(img, targetSrc) {
+        // Fast path: if no custom headers configured, assign src directly
+        if (!customHeaders?.hasCustomHeaders?.()) {
+            img.src = targetSrc;
+            return;
+        }
+
+        // Check if Blob URL is already in cache for zero-latency synchronous hit
+        const cached = customHeaders.getCachedBlobUrl(targetSrc);
+        if (cached) {
+            img.src = cached;
+            return;
+        }
+
+        // Mark as lazy loading so in-flight state is preserved
+        img.setAttribute('data-lazy-loading', '');
+
+        // Asynchronously fetch with custom headers and convert to Blob URL
+        customHeaders
+            .resolveImageUrl(targetSrc)
+            .then((resolvedUrl) => {
+                // Ensure image element is still in DOM and pending load
+                if (img.isConnected && img.hasAttribute('data-lazy-loading')) {
+                    img.src = resolvedUrl;
+                }
+            })
+            .catch(() => {
+                // Fallback to original URL so browser error handler can render initials
+                if (img.isConnected) {
+                    img.src = targetSrc;
+                }
+            });
     }
 
     _loadImage(img) {
@@ -342,7 +439,7 @@ class LazyLoader {
         };
 
         img.crossOrigin = 'anonymous';
-        img.src = img.dataset.src;
+        this._assignImageSource(img, img.dataset.src);
 
         if (this.observer) {
             this.observer.unobserve(img);
@@ -469,13 +566,12 @@ class LazyLoader {
         }
 
         const isSupportedParent =
-            parent &&
-            (parent.classList.contains('card-image') ||
-                parent.classList.contains('queue-row__thumb-wrap'));
+            parent && (parent.classList.contains('card-image') || parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
             const mediaLayout = document.documentElement.getAttribute('data-layout-media-rows');
-            const isModernOrExpanded = mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
+            const isModernOrExpanded =
+                mediaLayout === 'modern' || mediaLayout === 'expanded' || mediaLayout === 'modern-posters';
 
             parent.classList.remove('skeleton-shimmer');
 
@@ -488,7 +584,9 @@ class LazyLoader {
 
             if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
                 const hideInitials = img.dataset.fbHideInitials === 'true';
-                const isLibrary = parent.closest('.library-grid, .library-row, .library-content') !== null || parent.dataset?.contextType === 'library';
+                const isLibrary =
+                    parent.closest('.library-grid, .library-row, .library-content') !== null ||
+                    parent.dataset?.contextType === 'library';
                 const showName = isLibrary || hideInitials || !isModernOrExpanded;
                 // dataset.* decodes the escaped attribute values back to raw
                 // strings — escape again before insertAdjacentHTML.
@@ -694,7 +792,6 @@ class LazyLoader {
             cancelAnimationFrame(this._deferredPreloadFrameId);
             this._deferredPreloadFrameId = null;
         }
-
 
         // Unobserve all images tracked by the main observer
         if (this.observer) {

@@ -595,7 +595,8 @@ export class TrailerPlayer extends Component {
 
         /* Ensure host container has explicit full viewport geometry before YT instantiation
            so YouTube does not measure 0px height and default to low resolution streams */
-        container.innerHTML = '<div id="yt-player-host" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>';
+        container.innerHTML =
+            '<div id="yt-player-host" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>';
 
         const createPlayer = () => this._createYTPlayer(videoId);
 
@@ -688,7 +689,8 @@ export class TrailerPlayer extends Component {
         iframe.height = '100%';
         iframe.setAttribute('frameborder', '0');
         // Include full capabilities (encrypted-media is required by Chrome for Widevine HD streams)
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
+        iframe.allow =
+            'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
         iframe.allowFullscreen = true;
 
         const revealIframe = () => {
@@ -792,7 +794,10 @@ export class TrailerPlayer extends Component {
         try {
             const iframe = event.target.getIframe?.() || this._overlay.querySelector('#trailerIframeContainer iframe');
             if (iframe) {
-                iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+                iframe.setAttribute(
+                    'allow',
+                    'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                );
                 iframe.setAttribute('allowfullscreen', 'true');
                 iframe.style.width = '100%';
                 iframe.style.height = '100%';
@@ -901,9 +906,8 @@ export class TrailerPlayer extends Component {
         } catch (e) {}
         try {
             if (typeof player.setPlaybackQuality === 'function') {
-                const levels = typeof player.getAvailableQualityLevels === 'function'
-                    ? player.getAvailableQualityLevels()
-                    : null;
+                const levels =
+                    typeof player.getAvailableQualityLevels === 'function' ? player.getAvailableQualityLevels() : null;
 
                 if (Array.isArray(levels) && levels.length > 0) {
                     const preferred = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720'];
@@ -1155,7 +1159,7 @@ export class TrailerPlayer extends Component {
                     e.preventDefault();
                     e.stopPropagation();
                     // Debounce rapid Enter presses right after panel opening
-                    if (this._queueOpenedAt && (Date.now() - this._queueOpenedAt < 300)) {
+                    if (this._queueOpenedAt && Date.now() - this._queueOpenedAt < 300) {
                         return;
                     }
                     this._selectQueueItem(this._queueFocusIndex);
@@ -1445,32 +1449,34 @@ export class TrailerPlayer extends Component {
         const parentItemYear = this._parentPage?._item?.ProductionYear || '';
 
         // Generate rows HTML for each trailer
-        const rowsHtml = (this._trailers || []).map((trailer, index) => {
-            const isActive = index === this._currentIndex;
-            const name = trailer.Name || `${i18n.t('Trailer') || 'Trailer'} ${index + 1}`;
+        const rowsHtml = (this._trailers || [])
+            .map((trailer, index) => {
+                const isActive = index === this._currentIndex;
+                const name = trailer.Name || `${i18n.t('Trailer') || 'Trailer'} ${index + 1}`;
 
-            // Determine thumbnail URL: priority to YouTube thumbnail, then parent item art
-            const ytId = this._extractYouTubeId(trailer.Url);
-            let thumbUrl = '';
-            if (ytId) {
-                thumbUrl = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-            } else if (this._parentPage?._item?.Id) {
-                thumbUrl = api.getImageUrl(this._parentPage._item.Id, 'Primary', { maxHeight: 120 })
-                        || api.getImageUrl(this._parentPage._item.Id, 'Backdrop', { maxWidth: 240 })
-                        || '';
-            }
+                // Determine thumbnail URL: priority to YouTube thumbnail, then parent item art
+                const ytId = this._extractYouTubeId(trailer.Url);
+                let thumbUrl = '';
+                if (ytId) {
+                    thumbUrl = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+                } else if (this._parentPage?._item?.Id) {
+                    thumbUrl =
+                        api.getImageUrl(this._parentPage._item.Id, 'Primary', { maxHeight: 120 }) ||
+                        api.getImageUrl(this._parentPage._item.Id, 'Backdrop', { maxWidth: 240 }) ||
+                        '';
+                }
 
-            // Compose contextual subtitle
-            let subtitle = '';
-            if (trailer.ItemName) {
-                subtitle = `${trailer.ItemName}${trailer.ItemYear ? ` (${trailer.ItemYear})` : ''}`;
-            } else if (parentItemName) {
-                subtitle = `${parentItemName}${parentItemYear ? ` (${parentItemYear})` : ''}`;
-            }
+                // Compose contextual subtitle
+                let subtitle = '';
+                if (trailer.ItemName) {
+                    subtitle = `${trailer.ItemName}${trailer.ItemYear ? ` (${trailer.ItemYear})` : ''}`;
+                } else if (parentItemName) {
+                    subtitle = `${parentItemName}${parentItemYear ? ` (${parentItemYear})` : ''}`;
+                }
 
-            const fallbackHtml = this._getFallbackHtml(name);
+                const fallbackHtml = this._getFallbackHtml(name);
 
-            return `
+                return `
                 <div class="queue-row ${isActive ? 'queue-row--active' : ''}"
                      data-index="${index}"
                      tabindex="${isActive ? '0' : '-1'}">
@@ -1480,13 +1486,17 @@ export class TrailerPlayer extends Component {
 
                     <!-- Video thumbnail preview wrap -->
                     <div class="queue-row__thumb-wrap">
-                        ${thumbUrl ? `
+                        ${
+                            thumbUrl
+                                ? `
                             <img class="queue-row__thumb" src="${thumbUrl}" alt=""
                                  onerror="this.style.display='none'; const fb = this.parentElement.querySelector('.media-fallback'); if(fb) fb.style.display='flex';" />
                             <div style="display: none; width: 100%; height: 100%;">
                                 ${fallbackHtml}
                             </div>
-                        ` : fallbackHtml}
+                        `
+                                : fallbackHtml
+                        }
                         ${isActive ? '<div class="queue-row__playing-indicator"></div>' : ''}
                     </div>
 
@@ -1497,9 +1507,10 @@ export class TrailerPlayer extends Component {
                     </div>
                 </div>
             `;
-        }).join('');
+            })
+            .join('');
 
-        const countText = `${this._trailers.length} ${this._trailers.length === 1 ? (i18n.t('Item') || 'item') : (i18n.t('Items') || 'items')}`;
+        const countText = `${this._trailers.length} ${this._trailers.length === 1 ? i18n.t('Item') || 'item' : i18n.t('Items') || 'items'}`;
 
         overlay.innerHTML = `
             <div class="queue-modal">
@@ -1554,7 +1565,7 @@ export class TrailerPlayer extends Component {
         if (!this._queueModalOverlay) return;
 
         // Clear previous focus highlight on all rows
-        this._queueModalOverlay.querySelectorAll('.queue-row').forEach(row => {
+        this._queueModalOverlay.querySelectorAll('.queue-row').forEach((row) => {
             row.classList.remove('focused');
         });
 

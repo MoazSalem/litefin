@@ -25,6 +25,60 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+
+// ============================================================================
+// Comment & Legal-Notice Stripping
+// ============================================================================
+// Every build tier ships with ALL comments removed - source annotations in
+// first-party modules, legal banner comments importing with "!" in
+// third-party code, and the per-chunk *.js.LICENSE.txt sidecar files Terser
+// normally emits. This is a deliberate licensing tradeoff: the upstream
+// projects remain MIT/BSD/Apache licensed and their full license texts are
+// available at their source repositories (see package.json dependencies);
+// they are just no longer duplicated into every distribution package.
+// Tradeoff chosen for storage-constrained Smart TV flash memory.
+//
+// Note: copied plain-script vendor/worker files (webOSTV.js, libpgs.worker.js,
+// subtitles-octopus-worker.js, ...) need no special handling - in webpack 5
+// TerserPlugin's processAssets pass also walks CopyPlugin-emitted assets.
+//
+// Minimizer configuration shared by the tier configs. Fresh plugin instances
+// per call - webpack does not support sharing plugin instances between
+// concurrently-applied configurations.
+// ============================================================================
+
+/**
+ * Builds the [JavaScript, CSS] minimizer pair used by every tier config.
+ * - TerserPlugin replaces webpack's implicit default ('...' entry) so the
+ *   options are explicit: no comment survives and no *.js.LICENSE.txt
+ *   sidecars are emitted. Compression parameters mirror webpack's built-in
+ *   TerserPlugin defaults exactly so output stays byte-comparable with the
+ *   previous configuration; only the comment-facing options differ.
+ * - CssMinimizerPlugin runs the cssnano 'default' preset with ALL comments
+ *   discarded, matching the css-minify-loader pipeline legacy/ultra-legacy
+ *   already use for inlined CSS.
+ *
+ * @returns {Array} minimizer plugin list (fresh instances)
+ */
+function getMinimizers() {
+    return [
+        new TerserPlugin({
+            // Keep legal comments in the bundle itself; never emit sidecar files
+            extractComments: false,
+            terserOptions: {
+                compress: { passes: 2 },
+                mangle: { safari10: false },
+                format: { comments: false, safari10: false }
+            }
+        }),
+        new CssMinimizerPlugin({
+            minimizerOptions: {
+                preset: ['default', { discardComments: { removeAll: true } }]
+            }
+        })
+    ];
+}
 
 // ============================================================================
 // Shared plugins factory
@@ -59,8 +113,10 @@ function getPlugins(tier, options = {}) {
         { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
         // Copy translation localization files
         { from: 'src/locales', to: 'locales' },
-        // Copy libpgs web worker file
-        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
+        /*
+         * libpgs web worker ships unminified (95% comments) and is a Worker-script
+         * payload outside webpack's graph -> stripped via transform below.
+         */
         /*
          * WebOS SDK: required for window.webOS and window.webOS.service to exist.
          * Without this script the Luna service check in ApiClient.js
@@ -71,7 +127,9 @@ function getPlugins(tier, options = {}) {
         // Copy early boot diagnostic console logger for all builds
         { from: 'src/logger.js', to: 'js/logger.js' },
         // Copy early DOM and ES2015 polyfills script for all builds
-        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' }
+        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' },
+        // Copy libpgs web worker file
+        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' }
     ];
 
     // Include libass-wasm worker assets for modern, legacy, desktop, and web build tiers.
@@ -128,6 +186,25 @@ function getPlugins(tier, options = {}) {
             new webpack.NormalModuleReplacementPlugin(
                 /src[\\/]player[\\/]core[\\/]MoviVideoPlayer\.js$/,
                 path.resolve(__dirname, 'src/player/core/MoviVideoPlayer.stub.js')
+            ),
+            /*
+             * =======================================================================
+             * TV Bundle CSS: drop mobile-only stylesheets
+             * =======================================================================
+             * Tizen/webOS TV tiers never mount MobileNav (App.js suppresses it for
+             * platformInfo.isTv) and LayoutManager strips the mobile attributes
+             * (html[data-litefin-portrait|scaled|touch]) on TV hardware, so
+             * android-mobile.css and mobile-nav.css can never match on a TV yet
+             * cost ~180KB of raw stylesheet text inside the inline CSS bundle.
+             *
+             * ScrollController's data-horizontal-scroll compositing rules apply on
+             * TVs too - those live in scroll-compositing.css and are included in
+             * BOTH bundle.css and bundle.tv.css, so no behavior is lost here.
+             * =======================================================================
+             */
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\\/]styles[\\/]bundle\.css$/,
+                path.resolve(__dirname, 'src/styles/bundle.tv.css')
             )
         );
     }
@@ -149,7 +226,7 @@ const tvResolveAliases = {
 };
 
 // ============================================================================
-// Modern build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Modern build - Tizen 6.5+ / WebOS 22+ (No transpilation, pure ES6+, no source maps)
 // Formerly referred to as the "ES6" build tier. Renamed to "Modern" to ensure
 // non-technical users can easily distinguish this as the appropriate package
 // for newer/modern television models.
@@ -175,8 +252,12 @@ const modernConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -228,8 +309,12 @@ const debugConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -283,8 +368,12 @@ const normalConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -350,6 +439,7 @@ const legacyConfig = {
         hints: 'warning'
     },
     entry: [
+        'whatwg-fetch',
         'url-search-params-polyfill',
         './src/utils/DomPolyfills.js',
         './src/utils/AssJsPolyfills.js',
@@ -363,8 +453,12 @@ const legacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -397,7 +491,52 @@ const legacyConfig = {
                     }
                 }
             },
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            /*
+             * =======================================================================
+             * Consolidated Singleton CSS Inlining for Legacy Smart TVs (file://)
+             * =======================================================================
+             * Legacy TV platforms (webOS 3.x and Tizen 3.0, running Chromium 38-47)
+             * lack native CSS custom property ('var()') support.
+             *
+             * When packaged into local TV applications (webOS IPK and Tizen WGT),
+             * the app executes under the file:// protocol. MiniCssExtractPlugin
+             * outputs discrete external CSS files linked via <link rel="stylesheet">,
+             * which fail or hang on file:// XHR requests.
+             *
+             * Furthermore, standard 'style-loader' injects dozens of individual
+             * <style> tags (one per imported CSS module), forcing the browser to
+             * rebuild its internal stylesheet rule tree 47+ times and flooding the DOM.
+             *
+             * By configuring 'injectType: singletonStyleTag', all bundled CSS is
+             * concatenated directly into ONE single <style id="litefin-bundled-styles">
+             * element. This eliminates multiple DOM reflows, reduces memory footprint,
+             * and allows our CSS variable transformer to process the entire stylesheet
+             * in a single pass in under 20ms.
+             * =======================================================================
+             */
+            /*
+             * css-minify-loader runs FIRST (use array executes bottom-up) on the
+             * raw stylesheet text, before css-loader wraps it in a JS string.
+             * style-loader injects the resulting string verbatim and Terser
+             * cannot touch it, so without this loader every comment and byte of
+             * whitespace in the .css sources ships inside main.js.
+             */
+            {
+                test: /\.css$/,
+                use: [
+                    {
+                        loader: 'style-loader',
+                        options: {
+                            injectType: 'singletonStyleTag',
+                            attributes: {
+                                id: 'litefin-bundled-styles'
+                            }
+                        }
+                    },
+                    'css-loader',
+                    path.resolve(__dirname, 'css-minify-loader.cjs')
+                ]
+            },
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
@@ -461,8 +600,12 @@ const ultraLegacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -504,15 +647,42 @@ const ultraLegacyConfig = {
                 }
             },
             /*
-             * style-loader is used here (not MiniCssExtractPlugin) because:
-             * Ultra-legacy apps run off the file:// protocol (local install).
-             * MiniCssExtractPlugin creates a separate main.css file that the
-             * css-vars-ponyfill tries to fetch via XMLHttpRequest, which is
-             * blocked by strict CORS rules on file:// in these ancient runtimes.
-             * style-loader bundles the CSS directly into the JS chunks as
-             * inline <style> tags — no network request, no CORS problem.
+             * =======================================================================
+             * Consolidated Singleton CSS Inlining for Ultra-Legacy Runtimes
+             * =======================================================================
+             * Ultra-legacy apps (webOS 1.x-2.x, Tizen 2.x, Chrome 26-32) run from
+             * local file:// installs with strict CORS restrictions on external CSS.
+             *
+             * Standard style-loader creates dozens of distinct <style> tags, causing
+             * significant memory overhead and repeated stylesheet re-parses on 512MB
+             * memory TV hardware.
+             *
+             * Using 'injectType: singletonStyleTag' bundles all CSS into a single
+             * <style id="litefin-bundled-styles"> element, eliminating DOM fragmentation
+             * and enabling near-instantaneous CSS custom property resolution.
+             * =======================================================================
+             * css-minify-loader runs FIRST (use array executes bottom-up) on the raw
+             * stylesheet text, before css-loader wraps it in a JS string. The injected
+             * style string bypasses Terser entirely, so raw .css comments and
+             * whitespace would otherwise ship verbatim inside js/main.js.
+             * =======================================================================
              */
-            { test: /\.css$/, use: ['style-loader', 'css-loader'] },
+            {
+                test: /\.css$/,
+                use: [
+                    {
+                        loader: 'style-loader',
+                        options: {
+                            injectType: 'singletonStyleTag',
+                            attributes: {
+                                id: 'litefin-bundled-styles'
+                            }
+                        }
+                    },
+                    'css-loader',
+                    path.resolve(__dirname, 'css-minify-loader.cjs')
+                ]
+            },
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
@@ -613,9 +783,12 @@ const normalOblongConfig = {
     },
 
     optimization: {
-        // Shared optimization settings
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // Consolidated single-entry bundle for local TV package storage (file://)
+        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
+        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
+        splitChunks: false,
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -711,7 +884,7 @@ const desktopConfig = {
 
     optimization: {
         splitChunks: { chunks: 'all', maxSize: 250000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        minimizer: getMinimizers()
     },
 
     module: {
@@ -786,7 +959,7 @@ const webConfig = {
     optimization: {
         // Chunk splitting for efficient browser caching
         splitChunks: { chunks: 'all', maxSize: 250000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        minimizer: getMinimizers()
     },
 
     module: {

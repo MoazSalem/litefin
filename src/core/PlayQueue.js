@@ -17,6 +17,27 @@ import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('PlayQueue');
 
+/**
+ * How long PlayQueue.init() waits for the queue (series episodes, album,
+ * collection, additional parts…) before playback starts with the item alone.
+ * A healthy server answers in a fraction of this. A stalled one held the
+ * start for ApiClient's 30 s timeout per request (two for an episode), or
+ * without a limit on Chromium < 66, whose AbortController polyfill cannot
+ * abort fetch(). The full queue is put in place when it arrives.
+ */
+const QUEUE_START_WAIT_MS = 2000;
+
+/** Queue state a build produces; see PlayQueue._adoptQueue(). */
+const BUILT_QUEUE_FIELDS = [
+    '_queue',
+    '_unshuffledQueue',
+    '_currentIndex',
+    '_episodeSeriesId',
+    '_seriesAllEpisodes',
+    '_seriesWindowStartIndex',
+    '_seriesWindowEndIndex'
+];
+
 // ============================================================================
 // PlaylistItemId Stamping
 // ============================================================================
@@ -55,10 +76,17 @@ class PlayQueue {
         this._repeatMode = 'RepeatNone'; // 'RepeatNone' | 'RepeatAll' | 'RepeatOne'
         this._shuffleMode = false;
 
+        // Advanced by clear(): a build for an earlier queue is dropped
+        this._queueGeneration = 0;
+
         // Dynamic TV Series Episode Queue window tracking
         this._episodeSeriesId = null;
         this._seriesAllEpisodes = null;
         this._seriesWindowStartIndex = 0;
+        // Series index after the last episode loaded. Not derived from the
+        // queue length: items inserted later (a Local Intros pre-roll, "play
+        // next") would move the next window one episode on for each of them.
+        this._seriesWindowEndIndex = 0;
         this._isLoadingMore = false;
     }
 
@@ -179,7 +207,49 @@ class PlayQueue {
         this._contextType = contextType;
         this._contextId = contextId;
         this._isInitialized = true;
+        const generation = this._queueGeneration;
 
+        // ====================================================================
+        // The queue is built on a separate instance and put in place when it
+        // is complete, so playback does not have to wait for a slow server
+        // (see QUEUE_START_WAIT_MS), and a build that finishes after another
+        // init() never writes into the newer queue.
+        // ====================================================================
+        const staging = new PlayQueue();
+        staging._contextType = contextType;
+        staging._contextId = contextId;
+        staging._isInitialized = true;
+        staging._shuffleMode = this._shuffleMode;
+        staging._repeatMode = this._repeatMode;
+
+        const build = staging
+            ._build(item, contextType, contextId, boxsetSortBy)
+            .then(() => this._adoptQueue(generation, staging));
+
+        let waitTimer = null;
+        const waited = await Promise.race([
+            build.then(() => 'built'),
+            new Promise((resolve) => {
+                waitTimer = setTimeout(() => resolve('timeout'), QUEUE_START_WAIT_MS);
+            })
+        ]);
+        clearTimeout(waitTimer);
+
+        if (waited === 'timeout' && generation === this._queueGeneration && this._queue.length === 0) {
+            log.warn(
+                `Queue for ${item?.Id} not loaded after ${QUEUE_START_WAIT_MS} ms — starting with the item alone, the rest follows when it arrives`
+            );
+            _stampPlaylistItemId(item);
+            this._queue = [item];
+            this._currentIndex = 0;
+        }
+    }
+
+    /**
+     * Build the queue for init() on this (staging) instance.
+     * @private
+     */
+    async _build(item, contextType, contextId, boxsetSortBy) {
         try {
             if ((contextType === 'boxset' || contextType === 'music') && (contextId || item.ParentId)) {
                 // Prioritize collection context if explicitly provided.
@@ -208,13 +278,64 @@ class PlayQueue {
             if (this._shuffleMode) {
                 this._applyShuffle();
             }
-
-            log.info(`Queue initialized with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
         } catch (error) {
             log.error('Failed to initialize play queue:', error);
             // Fallback to single item
             this._queue = [item];
             this._currentIndex = 0;
+        }
+    }
+
+    /**
+     * Put a queue built by init() in place, unless clear() or a newer init()
+     * came first. When playback already started with the item alone, the OSD
+     * is told about the full queue.
+     * @private
+     * @param {number} generation - _queueGeneration when the build started
+     * @param {PlayQueue} staging - Instance the queue was built on
+     */
+    _adoptQueue(generation, staging) {
+        if (generation !== this._queueGeneration) {
+            log.info('Dropping a queue built for an earlier playback');
+            return;
+        }
+        // Playback already started with the item alone (see init()). Items may
+        // have been added around it since (Local Intros' pre-roll, insertNext()),
+        // and the cursor is on the item that is actually playing.
+        const liveQueue = this._queue;
+        const liveIndex = this._currentIndex;
+        const liveUnshuffled = this._unshuffledQueue.length > 0 ? this._unshuffledQueue : liveQueue;
+        const playing = liveQueue.length > 0;
+        const built = staging._queue[staging._currentIndex];
+        for (const field of BUILT_QUEUE_FIELDS) {
+            this[field] = staging[field];
+        }
+        // The live queue takes the place of the item the queue was built
+        // around. This also keeps the instance playback started with: PlayerPage
+        // merged the item's full details into it and holds on to it.
+        if (playing && built) {
+            const builtIndex = this._currentIndex;
+            this._queue = [...this._queue.slice(0, builtIndex), ...liveQueue, ...this._queue.slice(builtIndex + 1)];
+            this._currentIndex = builtIndex + liveIndex;
+            const unshuffledIndex = this._unshuffledQueue.indexOf(built);
+            if (unshuffledIndex !== -1) {
+                this._unshuffledQueue = [
+                    ...this._unshuffledQueue.slice(0, unshuffledIndex),
+                    ...liveUnshuffled,
+                    ...this._unshuffledQueue.slice(unshuffledIndex + 1)
+                ];
+            }
+        }
+        // Shuffle toggled while the queue was loading
+        if (this._shuffleMode !== staging._shuffleMode) {
+            this._applyShuffle();
+        }
+        log.info(`Queue initialized with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+        if (playing) {
+            eventBus.emit('playqueue:updated', {
+                repeatMode: this._repeatMode,
+                shuffleMode: this._shuffleMode
+            });
         }
     }
 
@@ -308,6 +429,7 @@ class PlayQueue {
      * within the app session.
      */
     clear() {
+        this._queueGeneration++;
         this._queue = [];
         this._unshuffledQueue = [];
         this._currentIndex = -1;
@@ -319,6 +441,7 @@ class PlayQueue {
         this._episodeSeriesId = null;
         this._seriesAllEpisodes = null;
         this._seriesWindowStartIndex = 0;
+        this._seriesWindowEndIndex = 0;
         this._isLoadingMore = false;
         // Should NOT clear RepeatMode and ShuffleMode - they are user preferences
     }
@@ -474,8 +597,7 @@ class PlayQueue {
 
         // If at the end of the loaded slice, check if more series episodes remain in the manifest
         if (this._episodeSeriesId && this._seriesAllEpisodes?.length) {
-            const nextWindowEnd = this._seriesWindowStartIndex + this._queue.length;
-            if (nextWindowEnd < this._seriesAllEpisodes.length) {
+            if (this._seriesWindowEndIndex < this._seriesAllEpisodes.length) {
                 return true;
             }
         }
@@ -733,6 +855,7 @@ class PlayQueue {
             this._queue = [currentItem];
             this._currentIndex = 0;
         }
+        this._seriesWindowEndIndex = this._seriesWindowStartIndex + this._queue.length;
     }
 
     /**
@@ -745,13 +868,16 @@ class PlayQueue {
         if (!this._episodeSeriesId || !this._seriesAllEpisodes?.length || this._isLoadingMore) {
             return;
         }
+        // A queue put in place while the episodes load (setQueue() from a
+        // remote control, a new init()) is not this series' window any more
+        const generation = this._queueGeneration;
 
         const windowLimit = Math.max(10, PlayerSettings.get('playQueueEpisodeLimit') || 50);
         const threshold = Math.min(5, Math.floor(windowLimit / 4));
 
         if (direction === 'next') {
             const remainingAhead = this._queue.length - 1 - this._currentIndex;
-            const currentWindowEnd = this._seriesWindowStartIndex + this._queue.length;
+            const currentWindowEnd = this._seriesWindowEndIndex;
 
             if (remainingAhead <= threshold && currentWindowEnd < this._seriesAllEpisodes.length) {
                 this._isLoadingMore = true;
@@ -779,9 +905,14 @@ class PlayQueue {
                         newItems = res?.Items || [];
                     }
 
+                    if (generation !== this._queueGeneration) {
+                        log.info('[PlayQueue] Queue replaced while loading the next episodes — dropping them');
+                        return;
+                    }
                     if (newItems.length > 0) {
                         newItems.forEach(_stampPlaylistItemId);
                         this._queue.push(...newItems);
+                        this._seriesWindowEndIndex = currentWindowEnd + newItems.length;
                         log.info(`[PlayQueue] Appended ${newItems.length} episodes. Queue size: ${this._queue.length}`);
                         eventBus.emit('playqueue:updated', {
                             queue: this._queue,
@@ -793,7 +924,8 @@ class PlayQueue {
                 } catch (err) {
                     log.warn('[PlayQueue] Failed to preload next episodes:', err);
                 } finally {
-                    this._isLoadingMore = false;
+                    // clear() already reset it for the new queue
+                    if (generation === this._queueGeneration) this._isLoadingMore = false;
                 }
             }
         } else if (direction === 'previous') {
@@ -824,12 +956,18 @@ class PlayQueue {
                         prevItems = res?.Items || [];
                     }
 
+                    if (generation !== this._queueGeneration) {
+                        log.info('[PlayQueue] Queue replaced while loading the previous episodes — dropping them');
+                        return;
+                    }
                     if (prevItems.length > 0) {
                         prevItems.forEach(_stampPlaylistItemId);
                         this._queue.unshift(...prevItems);
                         this._seriesWindowStartIndex = prevStartIndex;
                         this._currentIndex += prevItems.length;
-                        log.info(`[PlayQueue] Prepended ${prevItems.length} episodes. Queue size: ${this._queue.length}`);
+                        log.info(
+                            `[PlayQueue] Prepended ${prevItems.length} episodes. Queue size: ${this._queue.length}`
+                        );
                         eventBus.emit('playqueue:updated', {
                             queue: this._queue,
                             currentIndex: this._currentIndex,
@@ -840,7 +978,8 @@ class PlayQueue {
                 } catch (err) {
                     log.warn('[PlayQueue] Failed to preload previous episodes:', err);
                 } finally {
-                    this._isLoadingMore = false;
+                    // clear() already reset it for the new queue
+                    if (generation === this._queueGeneration) this._isLoadingMore = false;
                 }
             }
         }
@@ -889,9 +1028,10 @@ class PlayQueue {
                 ParentId: parentId,
                 Recursive: true,
                 IncludeItemTypes: 'Audio',
-                SortBy: (this._contextType === 'music' || currentItem.Type === 'Audio')
-                    ? 'ParentIndexNumber,IndexNumber,SortName'
-                    : sortBy,
+                SortBy:
+                    this._contextType === 'music' || currentItem.Type === 'Audio'
+                        ? 'ParentIndexNumber,IndexNumber,SortName'
+                        : sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
                 Fields: 'RunTimeTicks'

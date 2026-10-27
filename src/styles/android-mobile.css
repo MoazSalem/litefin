@@ -64,6 +64,14 @@ html[data-litefin-touch] *::after,
 }
 
 /* ============================================================================
+ * High-Performance GPU Accelerated & Instant Horizontal Scroll Overrides
+ * ============================================================================
+ * MOVED to scroll-compositing.css - kept in all build tiers (ScrollController
+ * stamps html[data-horizontal-scroll] on TVs as well, so the compositing
+ * rules must also ship in the TV stylesheet bundle).
+ * ============================================================================ */
+
+/* ============================================================================
  * Android Touch-Primary Tooltip & Sidebar Overhaul
  * ============================================================================
  * On touchscreens, hover tooltips do not make sense. Tooltips and item labels
@@ -584,28 +592,37 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
      * ========================================================================
      * Mobile Landscape Player Playback Info Overlay
      * ========================================================================
-     * Eliminates 300px TV clipping, utilizing full vertical landscape space.
-     * Positions panel neatly on the right with smooth touch scrolling.
+     * Scoped strictly to touch and scaled mobile viewports to prevent leaking
+     * unconstrained vertical panel height onto 1080p television panels (Android TV).
+     * Positions panel neatly on the right with smooth touch scrolling and natural height.
      * ========================================================================
      */
-    html[data-litefin-scaled] #osdPlaybackInfoOverlay,
-    html[data-litefin-touch] #osdPlaybackInfoOverlay,
-    html[data-platform="android"] #osdPlaybackInfoOverlay {
+    html[data-litefin-scaled]:not([data-device-type="tv"]) #osdPlaybackInfoOverlay,
+    html[data-litefin-touch]:not([data-device-type="tv"]) #osdPlaybackInfoOverlay {
+        /* Pin top position with generous touch clearance from status bar */
         top: 14px !important;
-        bottom: 14px !important;
+        /* Allow natural height expansion instead of stretching across the screen */
+        bottom: auto !important;
+        /* Position neatly against right edge on landscape touch screens */
         right: 18px !important;
         left: auto !important;
+        /* Responsive panel width bounded for compact touch layouts */
         width: 420px !important;
         max-width: calc(100vw - 36px) !important;
+        /* Constrain maximum vertical height to visible viewport boundary */
         max-height: calc(100vh - 28px) !important;
         height: auto !important;
+        /* Translucent dark glass background with backdrop blur */
         background: rgba(12, 12, 16, 0.94) !important;
         -webkit-backdrop-filter: blur(24px) !important;
         backdrop-filter: blur(24px) !important;
+        /* Subtle perimeter stroke and rounded surface geometry */
         border: 1px solid rgba(255, 255, 255, 0.16) !important;
         border-radius: 20px !important;
+        /* Interior breathing room for metadata chips and rows */
         padding: 14px 18px !important;
         box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8) !important;
+        /* Inertial momentum touch scrolling */
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         z-index: 10002 !important;
@@ -1991,28 +2008,34 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
      * Mobile Portrait Player Playback Info Overlay
      * ========================================================================
      * Centers playback info panel as a responsive modal card on portrait viewports.
+     * Excludes TV environments to preserve standard television navigation.
      * ========================================================================
      */
-    html[data-litefin-scaled] #osdPlaybackInfoOverlay,
-    html[data-litefin-portrait] #osdPlaybackInfoOverlay,
-    html[data-litefin-touch] #osdPlaybackInfoOverlay,
-    html[data-platform="android"] #osdPlaybackInfoOverlay {
+    html[data-litefin-scaled]:not([data-device-type="tv"]) #osdPlaybackInfoOverlay,
+    html[data-litefin-portrait]:not([data-device-type="tv"]) #osdPlaybackInfoOverlay,
+    html[data-litefin-touch]:not([data-device-type="tv"]) #osdPlaybackInfoOverlay {
+        /* Center overlay precisely in the portrait viewport */
         top: 50% !important;
         left: 50% !important;
         right: auto !important;
         bottom: auto !important;
         transform: translate(-50%, -50%) !important;
+        /* Fluid modal width with safe horizontal padding */
         width: calc(100% - 32px) !important;
         max-width: 480px !important;
+        /* Vertical bounds bounded within portrait display area */
         max-height: calc(100vh - 48px) !important;
         max-height: calc(100% - 48px) !important;
+        /* High-opacity frosted dark backdrop */
         background: rgba(12, 12, 16, 0.95) !important;
         -webkit-backdrop-filter: blur(24px) !important;
         backdrop-filter: blur(24px) !important;
+        /* Elevated surface border and continuous rounded curvature */
         border: 1px solid rgba(255, 255, 255, 0.16) !important;
         border-radius: 22px !important;
         padding: 16px 20px !important;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8) !important;
+        /* Smooth scrolling container for deep metadata trees */
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         z-index: 10002 !important;

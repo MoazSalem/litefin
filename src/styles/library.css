@@ -594,12 +594,6 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
     border-radius: var(--jf-border-radius-lg);
 }
 
-.library-grid .media-card .card-image img,
-.library-grid .media-card .media-fallback {
-    border-radius: inherit;
-    -webkit-border-radius: inherit;
-}
-
 /* Modern Layouts: 24px Rounded Corners for Library Grids */
 html[data-layout-media-rows="modern"] .library-grid .media-card .card-image,
 html[data-layout-media-rows="expanded"] .library-grid .media-card .card-image,
@@ -878,11 +872,15 @@ html[data-layout-media-rows="modern-posters"] .library-grid.view-list .media-car
 .library-grid.view-list .played-badge,
 .library-grid.view-list .count-badge,
 .library-grid.view-list .quality-badge,
-.library-grid.view-list .episode-badge {
+.library-grid.view-list .episode-badge,
+.library-grid.view-list .version-badge,
+.library-grid.view-list .media-source-count-badge,
+.library-grid.view-list .favorite-badge {
     position: relative !important;
     top: 0 !important;
     right: 0 !important;
     left: 0 !important;
+    bottom: 0 !important;
     transform: none !important;
     margin-left: 10px !important; /* Perfect gap after the title text */
     flex-shrink: 0;

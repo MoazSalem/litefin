@@ -11,7 +11,7 @@ import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
 
 import { storage } from './StorageService.js';
-
+import { customHeaders } from './CustomHeaders.js';
 import { logger } from './Logger.js';
 
 const log = logger.create('BackdropManager');
@@ -55,8 +55,8 @@ class BackdropManager {
             item.BackdropImageTags && item.BackdropImageTags.length > 0
                 ? item.BackdropImageTags[0]
                 : item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0
-                    ? item.ParentBackdropImageTags[0]
-                    : null;
+                  ? item.ParentBackdropImageTags[0]
+                  : null;
 
         // Assign tag parameter if not explicitly specified by caller
         if (backdropTag && !options.tag) {
@@ -244,28 +244,56 @@ class BackdropManager {
                 .catch((err) => log.error('Failed to decode backdrop blurhash', err));
         }
 
-        // Preload image
-        const img = new Image();
-        img.onload = () => {
-            element.style.backgroundImage = `url('${url}')`;
+        /*
+         * ====================================================================
+         * High-Resolution Backdrop Preload & Presentation Pipeline
+         * ====================================================================
+         * Sets the backdrop on the element and cleanly transitions from any
+         * active BlurHash canvas. When reverse proxy custom headers are active,
+         * resolves the image via CustomHeadersManager to acquire a local Blob URL.
+         * ====================================================================
+         */
+        const loadBackdropImage = (effectiveUrl) => {
+            const img = new Image();
+            img.onload = () => {
+                element.style.backgroundImage = `url('${effectiveUrl}')`;
 
-            requestAnimationFrame(() => {
-                // Ensure backdrop container is fully visible
-                element.style.opacity = '1';
+                requestAnimationFrame(() => {
+                    // Ensure backdrop container is fully visible
+                    element.style.opacity = '1';
 
-                // Fade out and remove the BlurHash canvas cleanly
-                if (canvas) {
-                    canvas.style.opacity = '0';
-                    setTimeout(() => {
-                        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                    }, 500);
-                }
-            });
+                    // Fade out and remove the BlurHash canvas cleanly
+                    if (canvas) {
+                        canvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                        }, 500);
+                    }
+                });
+            };
+            img.onerror = () => {
+                log.warn(`Failed to load backdrop from ${effectiveUrl}`);
+            };
+            img.src = effectiveUrl;
         };
-        img.onerror = () => {
-            log.warn(`Failed to load backdrop from ${url}`);
-        };
-        img.src = url;
+
+        // Check if custom reverse proxy headers are active for this server
+        if (customHeaders?.hasCustomHeaders?.()) {
+            // Check synchronous cache first
+            const cached = customHeaders.getCachedBlobUrl(url);
+            if (cached) {
+                loadBackdropImage(cached);
+            } else {
+                // Asynchronously fetch with custom headers and convert to Blob URL
+                customHeaders
+                    .resolveImageUrl(url)
+                    .then((resolvedUrl) => loadBackdropImage(resolvedUrl))
+                    .catch(() => loadBackdropImage(url));
+            }
+        } else {
+            // Standard direct load
+            loadBackdropImage(url);
+        }
     }
 
     /**

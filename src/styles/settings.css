@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================================
  * Litefin Tizen - Settings Styles (Redesigned)
  * ============================================================================
@@ -1563,8 +1563,132 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 
 
 /* ==========================================================================
-   Plugins Tab
+   Plugins Tab - Header & Actions
    ========================================================================== */
+
+/*
+ * Top header container for the Plugins tab.
+ * Clean flexbox layout with high-contrast typographic hierarchy
+ * and a prominent action button positioned at the top right.
+ * Padded on the right to guarantee clear separation from the fixed top-corner global clock.
+ */
+.plugins-tab-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    /* Clear fixed top-corner global clock (right: 50px) with generous breathing space */
+    padding-right: 140px;
+}
+
+[dir="rtl"] .plugins-tab-header {
+    padding-right: 0;
+    padding-left: 140px;
+}
+
+/* Container for category title and descriptive subtitle */
+.plugins-tab-header-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Tighten bottom padding of title when paired inside header flex container */
+.plugins-tab-header-info .content-title {
+    padding-bottom: 8px;
+    margin: 0;
+}
+
+/* Maintain comfortable reading line length for the tab description */
+.plugins-tab-header-info .content-subtitle {
+    margin: 0;
+    max-width: 680px;
+}
+
+/*
+ * Lightweight pill action button for opening Jellyfin Dashboard.
+ * Clean, flat, performant design with minimal resource footprint.
+ */
+.btn-open-dashboard {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px;
+    padding: 11px 22px !important;
+    border-radius: 9999px !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--jf-text-primary, #ffffff) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    will-change: transform;
+    /* Spring animation easing curve */
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.2s ease,
+                border-color 0.2s ease !important;
+}
+
+/* External link launcher icon inside button */
+.btn-open-dashboard .btn-icon-svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    transition: transform 0.2s ease;
+}
+
+/* Hover state: slight spring lift and border highlight */
+.btn-open-dashboard:hover {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.32) !important;
+    transform: scale(1.04) translateY(-1px) !important;
+}
+
+/* Subtly nudge icon forward on hover */
+.btn-open-dashboard:hover .btn-icon-svg {
+    transform: translate(1px, -1px);
+}
+
+/* Focused / active state: high-contrast focus border with spring scale */
+.btn-open-dashboard:focus,
+.btn-open-dashboard.focused {
+    background: var(--jf-btn-primary-focus-bg, rgba(0, 164, 220, 0.25)) !important;
+    border: 2px solid var(--jf-btn-primary-focus-border, #00a4dc) !important;
+    color: var(--jf-btn-primary-focus-color, #ffffff) !important;
+    transform: scale(1.05) !important;
+    outline: none !important;
+}
+
+/* Active press compression */
+.btn-open-dashboard:active {
+    transform: scale(0.97) !important;
+    transition-duration: 0.1s !important;
+}
+
+/* Responsive adaptation for mobile portrait viewports */
+@media (max-width: 768px) {
+    .plugins-tab-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        padding-right: 0 !important;
+        padding-left: 0 !important;
+    }
+
+    .btn-open-dashboard {
+        align-self: flex-start;
+        width: 100%;
+        padding: 13px 20px !important;
+    }
+}
+
+html[data-litefin-portrait] .plugins-tab-header {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+}
 
 /* Plugin name row: name text + version chip + status badge, all inline */
 .plugin-version {

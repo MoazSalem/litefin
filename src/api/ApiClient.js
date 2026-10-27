@@ -15,6 +15,9 @@ import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { i18n } from '../utils/i18n.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
+// Centralized platform info utility
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('ApiClient');
 
@@ -46,7 +49,7 @@ export class ApiClient {
         this._deviceId = null;
         this._deviceName = 'Litefin'; // Default, will be updated by AuthManager.init()
         this._clientName = 'Litefin';
-        this._clientVersion = __APP_VERSION__;
+        this._clientVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
 
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
@@ -63,6 +66,11 @@ export class ApiClient {
         // cached data when the server reports no change.
         this._etagCache = new Map();
         this._etagCacheMaxSize = 20;
+
+        // ── In-Flight Request Deduplication Promises ───────────────────────
+        // Prevents burst duplicate network requests during boot and navigation
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
     }
 
     // ========================================================================
@@ -151,6 +159,9 @@ export class ApiClient {
         this._hasLitefinServerPlugin = null;
         this._litefinPluginProbePromise = null;
 
+        // Synchronize active server URL with the custom headers manager
+        customHeaders.setActiveServer(this._serverUrl);
+
         log.info(`Server set to ${this._serverUrl}`);
     }
 
@@ -162,6 +173,11 @@ export class ApiClient {
     setAuth(accessToken, userId) {
         this._accessToken = accessToken;
         this._userId = userId;
+
+        // Reset user-scoped request promises
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
+
         state.set('user:authenticated', !!accessToken);
         log.info(`Authenticated as user ${userId}`);
     }
@@ -186,6 +202,11 @@ export class ApiClient {
     clearAuth() {
         this._accessToken = null;
         this._userId = null;
+
+        // Reset user-scoped request promises
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
+
         state.set('user:authenticated', false);
         state.set('user:data', null);
 
@@ -311,8 +332,8 @@ export class ApiClient {
             const endsWithSingleItemId = /\/[0-9a-f]{32}$/i.test(endpoint.replace(/\?.*$/, ''));
 
             const isItemsEndpoint =
-                !endsWithSingleItemId && (
-                    (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
+                !endsWithSingleItemId &&
+                ((endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
                     endpoint.includes('/Latest') ||
                     endpoint.includes('/Resume') ||
                     endpoint.includes('/NextUp') ||
@@ -321,8 +342,7 @@ export class ApiClient {
                     endpoint.includes('/Episodes') ||
                     endpoint.includes('/Search/Hints') ||
                     endpoint.includes('/Persons') ||
-                    endpoint.includes('/MergedRows')
-                );
+                    endpoint.includes('/MergedRows'));
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
@@ -380,6 +400,17 @@ export class ApiClient {
             Accept: 'application/json', // Explicitly request JSON response
             ...options.headers
         };
+
+        // ------------------------------------------------------------------
+        // Custom HTTP Headers (Reverse Proxy / Gateway Authentication)
+        // If the user has configured custom headers (e.g. Cloudflare Zero
+        // Trust, Pangolin, Authelia) for this server, attach them to all
+        // outbound requests that match the server's origin and base path.
+        // ------------------------------------------------------------------
+        const proxyHeaders = customHeaders.getHeadersForUrl(url, this._serverUrl);
+        if (proxyHeaders && typeof proxyHeaders === 'object') {
+            Object.assign(headers, proxyHeaders);
+        }
 
         // ------------------------------------------------------------------
         // Accept-Language Header (Jellyfin 12+ Localization Middleware)
@@ -524,7 +555,10 @@ export class ApiClient {
                 // a serialized JSON array or object and parse it accordingly.
                 if (typeof body === 'string' && body.length > 0) {
                     const trimmed = body.trim();
-                    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    if (
+                        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+                    ) {
                         try {
                             body = JSON.parse(trimmed);
                         } catch {
@@ -555,9 +589,16 @@ export class ApiClient {
 
             if (isTimeout || isNetworkError) {
                 const timeout = options.timeout || REQUEST_TIMEOUT;
-                const msg = isTimeout
+                let msg = isTimeout
                     ? `Connection timed out after ${timeout / 1000}s`
                     : `Server unreachable at ${this._serverUrl}`;
+
+                const activeProxyHeaders = customHeaders.getActiveHeaders();
+                const hasProxyHeaders = activeProxyHeaders && Object.keys(activeProxyHeaders).length > 0;
+
+                if (isNetworkError && hasProxyHeaders) {
+                    msg += ' (CORS or reverse proxy error)';
+                }
 
                 log.error(`${msg}:`, error.message);
 
@@ -571,11 +612,15 @@ export class ApiClient {
                 const wolMac = storage.getItem('pref:wolMacAddress');
 
                 if (wolTimeoutEnabled && wolMac && !options._isWolTimeoutRetry) {
-                    log.info(`Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`);
+                    log.info(
+                        `Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`
+                    );
 
                     try {
                         // Send Wake-on-LAN Magic Packet
-                        sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
+                        sendWakeOnLan(wolMac).catch((wolErr) =>
+                            log.warn('Failed to send WOL packet on timeout:', wolErr)
+                        );
 
                         // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
                         const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
@@ -596,10 +641,16 @@ export class ApiClient {
                                 if (testRes.ok) {
                                     log.info('Server responded to status probe! Re-executing failed API request...');
                                     // Re-run original request with _isWolTimeoutRetry flag set to prevent recursion loops
-                                    return await this.request(endpoint, { ...options, _isWolTimeoutRetry: true }, isRetry);
+                                    return await this.request(
+                                        endpoint,
+                                        { ...options, _isWolTimeoutRetry: true },
+                                        isRetry
+                                    );
                                 }
                             } catch (probeErr) {
-                                log.debug(`Server status probe ${attempt}/${maxAttempts} failed — server still booting...`);
+                                log.debug(
+                                    `Server status probe ${attempt}/${maxAttempts} failed — server still booting...`
+                                );
                             }
                         }
                     } catch (wolCycleErr) {
@@ -607,7 +658,11 @@ export class ApiClient {
                     }
                 }
 
-                const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
+                const extraHint =
+                    isNetworkError && hasProxyHeaders
+                        ? ' If using Cloudflare Access, verify that CORS is enabled in your Zero Trust Application settings and that the custom headers are allowed.'
+                        : ' Please check your network and server status.';
+                const networkError = new ServerUnreachableError(`${msg}.${extraHint}`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;
             }
@@ -651,7 +706,10 @@ export class ApiClient {
                     let cleaned = (bodyText || '').trim();
                     if (cleaned.startsWith('<')) {
                         // Strip HTML markup and collapse whitespace
-                        cleaned = cleaned.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                        cleaned = cleaned
+                            .replace(/<[^>]*>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
                     }
                     if (cleaned) {
                         message = cleaned.length > 200 ? cleaned.slice(0, 200) + '…' : cleaned;
@@ -947,20 +1005,37 @@ export class ApiClient {
     async updateUserConfiguration(configuration) {
         if (this.isJF12Plus()) {
             // New JF12 canonical route — userId goes in the query string
-            return this.post(
-                `/Users/Configuration?userId=${encodeURIComponent(this._userId)}`,
-                configuration
-            );
+            return this.post(`/Users/Configuration?userId=${encodeURIComponent(this._userId)}`, configuration);
         }
         // Legacy path used by JF 10.10 / 10.11
         return this.post(`/Users/${this._userId}/Configuration`, configuration);
     }
 
     /**
-     * Get user's library views
+     * Get user's library views with in-flight request deduplication.
+     * Prevents multiple components (Sidebar, HomePage, MobileNav) from firing
+     * duplicate concurrent HTTP GET requests for the same user library data.
+     *
+     * @returns {Promise<any>} User views list
      */
     async getUserViews() {
-        return this.get(`/Users/${this._userId}/Views`);
+        /*
+         * If an identical request for the active user's views is already in-flight
+         * or resolved within the last few seconds, return the shared active promise.
+         */
+        if (this._userViewsPromise) {
+            return this._userViewsPromise;
+        }
+
+        // Dispatch GET request and store promise
+        this._userViewsPromise = this.get(`/Users/${this._userId}/Views`).finally(() => {
+            // Keep active for 2.5 seconds so rapid concurrent mounting components share payload
+            setTimeout(() => {
+                this._userViewsPromise = null;
+            }, 2500);
+        });
+
+        return this._userViewsPromise;
     }
 
     // ========================================================================
@@ -1171,10 +1246,14 @@ export class ApiClient {
 
         this._litefinPluginProbePromise = (async () => {
             try {
-                // Strategy A: Check admin installed plugins list if accessible
+                // Strategy A: Check admin installed plugins list if already initialized
                 try {
                     const { serverPluginClient } = await import('../plugins/ServerPluginClient.js');
-                    if (serverPluginClient && typeof serverPluginClient.getInstalledPlugins === 'function') {
+                    if (
+                        serverPluginClient &&
+                        typeof serverPluginClient.isInitialized === 'function' &&
+                        serverPluginClient.isInitialized()
+                    ) {
                         if (force) {
                             serverPluginClient.reset();
                         }
@@ -1191,11 +1270,14 @@ export class ApiClient {
                                     status === 'malfunctioned' ||
                                     status === 'notsupported' ||
                                     status === 'superseded';
-                                const isActive = !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
+                                const isActive =
+                                    !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
                                 return matchesName && isActive;
                             });
                             this._hasLitefinServerPlugin = match;
-                            log.info(`Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`);
+                            log.info(
+                                `Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`
+                            );
                             return match;
                         }
                     }
@@ -1212,7 +1294,9 @@ export class ApiClient {
             } catch (err) {
                 // 404 indicates the plugin is not installed or disabled on this server
                 if (err.status === 404 || err.message?.includes('Not found') || err.message?.includes('404')) {
-                    log.info('Litefin server companion plugin is not installed or disabled — using native Jellyfin routes');
+                    log.info(
+                        'Litefin server companion plugin is not installed or disabled — using native Jellyfin routes'
+                    );
                     this._hasLitefinServerPlugin = false;
                     return false;
                 }
@@ -1246,10 +1330,14 @@ export class ApiClient {
         if (!isAvailable) return null;
 
         try {
-            return await this.get('/Litefin/Items/Latest', {
-                parentIds: parentIds.join(','),
-                ...params
-            }, { warnOnError: true });
+            return await this.get(
+                '/Litefin/Items/Latest',
+                {
+                    parentIds: parentIds.join(','),
+                    ...params
+                },
+                { warnOnError: true }
+            );
         } catch (e) {
             return null;
         }
@@ -1268,9 +1356,13 @@ export class ApiClient {
         if (!isAvailable) return null;
 
         try {
-            return await this.get('/Litefin/Items/Thumbnails', {
-                parentIds: parentIds.join(',')
-            }, { warnOnError: true });
+            return await this.get(
+                '/Litefin/Items/Thumbnails',
+                {
+                    parentIds: parentIds.join(',')
+                },
+                { warnOnError: true }
+            );
         } catch (e) {
             return null;
         }
@@ -1479,12 +1571,16 @@ export class ApiClient {
             ...options
         };
 
-        return this.get(`/Playlists/${playlistId}/Items`, {
-            UserId: this._userId,
-            Fields: 'UserData,RunTimeTicks',
-            EnableImageTypes: 'Primary,Backdrop,Thumb',
-            ...params
-        }, requestOptions);
+        return this.get(
+            `/Playlists/${playlistId}/Items`,
+            {
+                UserId: this._userId,
+                Fields: 'UserData,RunTimeTicks',
+                EnableImageTypes: 'Primary,Backdrop,Thumb',
+                ...params
+            },
+            requestOptions
+        );
     }
 
     /**
@@ -1849,10 +1945,12 @@ export class ApiClient {
                 // Using clean names ensures uniform filtering across Jellyfin 10.x through 12.0+
                 // ------------------------------------------------------------------
                 const v2GenreNames = Array.isArray(v2.Genres)
-                    ? v2.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    ? v2.Genres.map((g) => (typeof g === 'object' && g ? g.Name || g.name || '' : g)).filter(Boolean)
                     : [];
                 const legacyGenreNames = Array.isArray(legacy.Genres)
-                    ? legacy.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    ? legacy.Genres.map((g) => (typeof g === 'object' && g ? g.Name || g.name || '' : g)).filter(
+                          Boolean
+                      )
                     : [];
 
                 // Deduplicate genres while preserving encounter order
@@ -1866,9 +1964,9 @@ export class ApiClient {
                 // Return combined, normalized filter structure
                 return {
                     // List of genre names ready for UI display and pipe-delimited item queries
-                    Genres: combinedGenres.length > 0 ? combinedGenres : (legacy.Genres || []),
+                    Genres: combinedGenres.length > 0 ? combinedGenres : legacy.Genres || [],
                     // Deduplicated tags available across items in the library
-                    Tags: combinedTags.length > 0 ? combinedTags : (legacy.Tags || []),
+                    Tags: combinedTags.length > 0 ? combinedTags : legacy.Tags || [],
                     // Ratings and Years only exist on the legacy endpoint
                     OfficialRatings: legacy.OfficialRatings || [],
                     Years: legacy.Years || [],
@@ -2320,11 +2418,31 @@ export class ApiClient {
     /**
      * Report device capabilities to the server
      * CRITICAL: Must be called after login to establish session
-     * Without this, the server won't track playback status
+     * Without this, the server won't track playback status.
+     * Includes in-flight deduplication to avoid firing duplicate 15KB payloads
+     * when platform adapters and auth initialization handshake concurrently.
+     *
      * @param {Object} capabilities - Device/app capabilities
+     * @returns {Promise<any>}
      */
     async reportCapabilities(capabilities) {
-        return this.post('/Sessions/Capabilities/Full', capabilities);
+        /*
+         * Deduplicate rapid back-to-back capability reporting. On TV platforms,
+         * hardware detection and session restoration run in parallel and both
+         * attempt to report capabilities within ~500ms of each other.
+         */
+        if (this._reportCapabilitiesPromise) {
+            return this._reportCapabilitiesPromise;
+        }
+
+        this._reportCapabilitiesPromise = this.post('/Sessions/Capabilities/Full', capabilities).finally(() => {
+            // Keep guard active for 4 seconds to absorb initial boot bursts
+            setTimeout(() => {
+                this._reportCapabilitiesPromise = null;
+            }, 4000);
+        });
+
+        return this._reportCapabilitiesPromise;
     }
 
     /**
@@ -2618,6 +2736,8 @@ export class ApiClient {
 
             // Connection opened
             this._webSocket.onopen = () => {
+                // Reset reconnect attempt counter upon successful handshake
+                this._wsReconnectAttempts = 0;
                 log.info('WebSocket connected - user is now online');
                 eventBus.emit('websocket:connected');
 
@@ -2642,16 +2762,52 @@ export class ApiClient {
                 this._stopWebSocketKeepalive();
                 eventBus.emit('websocket:disconnected');
 
-                // Attempt to reconnect if we still have credentials and the app is visible
+                /*
+                 * ============================================================
+                 * Progressive WebSocket Exponential Reconnect Backoff
+                 * ============================================================
+                 * Prevents connection thrashing, CPU churn, and log spam on TV
+                 * devices when upstream reverse proxies (e.g. Cloudflare Zero Trust)
+                 * reject the W3C WebSocket handshake (HTTP 403 Forbidden).
+                 *
+                 * Backs off from 5s up to 60s max. Emits actionable diagnostic log
+                 * on persistent failure pointing user to bypass reverse proxy rules.
+                 * ============================================================
+                 */
                 if (this._serverUrl && this._accessToken && !document.hidden) {
-                    log.info('Scheduling WebSocket reconnect in 5 seconds...');
+                    // Increment consecutive reconnect failures
+                    this._wsReconnectAttempts = (this._wsReconnectAttempts || 0) + 1;
+
+                    // Calculate exponential delay (5s, 7.5s, 11s, 17s, 25s, 38s, up to 60s max)
+                    const baseDelay = 5000;
+                    const exponentialFactor = Math.pow(1.5, Math.min(this._wsReconnectAttempts - 1, 6));
+                    const delayMs = Math.min(60000, Math.round(baseDelay * exponentialFactor));
+                    const delaySec = Math.round(delayMs / 1000);
+
+                    // Throttle reconnect scheduling logs after the first few failures
+                    if (this._wsReconnectAttempts <= 3 || this._wsReconnectAttempts % 5 === 0) {
+                        log.info(
+                            `Scheduling WebSocket reconnect in ${delaySec} seconds (attempt ${this._wsReconnectAttempts})...`
+                        );
+                    }
+
+                    // Diagnostic guidance on persistent disconnection
+                    if (this._wsReconnectAttempts === 5) {
+                        log.warn(
+                            '[ApiClient] WebSocket handshake continuously failing. If using a reverse proxy or Cloudflare Access, ensure path /socket (or /embywebsocket) has a Bypass policy configured.'
+                        );
+                    }
+
+                    // Schedule next reconnect attempt
                     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
                     this._reconnectTimer = setTimeout(() => {
                         if (!this.isWebSocketConnected) {
-                            log.info('Attempting to reconnect WebSocket...');
+                            if (this._wsReconnectAttempts <= 3 || this._wsReconnectAttempts % 5 === 0) {
+                                log.info('Attempting to reconnect WebSocket...');
+                            }
                             this.openWebSocket();
                         }
-                    }, 5000);
+                    }, delayMs);
                 }
             };
 
@@ -2671,6 +2827,13 @@ export class ApiClient {
      */
     closeWebSocket() {
         this._stopWebSocketKeepalive();
+
+        // Reset reconnect attempts and clear any pending timer
+        this._wsReconnectAttempts = 0;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
 
         if (this._webSocket) {
             log.info('Closing WebSocket connection');
@@ -2925,7 +3088,7 @@ export class ApiClient {
  *     which makes subnet scanning unbearably slow on older platforms
  *   - XHR.timeout is a native hard-kill supported since Chrome 29
  */
-export function testServer(address, timeout = 1000, parentSignal = null) {
+export function testServer(address, timeout = 1000, parentSignal = null, headersOverride = null) {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         let resolved = false;
@@ -2959,14 +3122,14 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         let abortTimer = setTimeout(() => {
             try {
                 xhr.abort();
-            } catch (_) { }
+            } catch (_) {}
             done(null);
         }, timeout);
 
         // Native timeout setting (supported natively in Chromium 29+)
         try {
             xhr.timeout = timeout;
-        } catch (_) { }
+        } catch (_) {}
 
         // If the parent discovery scan was cancelled, abort this probe too
         const onParentAbort = () => {
@@ -3023,6 +3186,25 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         xhr.onerror = () => done(null);
 
         xhr.open('GET', `${address}/System/Info/Public`, /* async */ true);
+
+        // ====================================================================
+        // Custom Reverse Proxy Headers (Cloudflare Access / Pangolin)
+        // If specific headers are provided for this probe, or stored for this
+        // server address, apply them so discovery and connection succeed.
+        // ====================================================================
+        const probeHeaders = headersOverride || customHeaders.getNormalizedHeaders(address);
+        if (probeHeaders && typeof probeHeaders === 'object') {
+            for (const [headerKey, headerVal] of Object.entries(probeHeaders)) {
+                if (headerKey && headerVal) {
+                    try {
+                        xhr.setRequestHeader(headerKey, headerVal);
+                    } catch (_) {
+                        // Ignore XHR header errors on older Chromium engines
+                    }
+                }
+            }
+        }
+
         xhr.send();
     });
 }
@@ -3038,7 +3220,9 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
  * @returns {boolean} True if running under Tauri runtime.
  */
 function _isTauriRuntime() {
-    return typeof window !== 'undefined' && !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+    return (
+        typeof window !== 'undefined' && !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__)
+    );
 }
 
 /**
@@ -3304,7 +3488,7 @@ async function _discoverViaLunaService(onServerFound) {
                                 settled = true;
                                 try {
                                     request && request.cancel();
-                                } catch (_) { }
+                                } catch (_) {}
                                 resolve(foundServers);
                             }
                         }, DISCOVERY_WINDOW_MS);
@@ -3379,7 +3563,13 @@ export async function sendWakeOnLan(macAddress) {
     }
 
     // 2. WebOS implementation: dispatch Luna request to the background service
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Must strictly verify webOS platform identity and PalmServiceBridge presence
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         log.info('Platform WebOS: Dispatching WOL request to Luna service org.litefin.app.service');
 
         const sendLunaRequest = () =>
@@ -3460,7 +3650,10 @@ export async function sendWakeOnLan(macAddress) {
                     return true;
                 }
             } catch (fetchErr) {
-                log.warn(`WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`, fetchErr.message || fetchErr);
+                log.warn(
+                    `WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`,
+                    fetchErr.message || fetchErr
+                );
                 if (attempt < maxHttpRetries) {
                     await new Promise((resolve) => setTimeout(resolve, httpRetryDelayMs));
                 }
@@ -3489,7 +3682,13 @@ export function hasBackgroundDiscoveryService() {
     }
 
     // 2. WebOS Luna Service check
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Validate that the app is actually running on webOS and has native service bridge access
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         return true;
     }
 
@@ -3519,9 +3718,10 @@ export function hasBackgroundDiscoveryService() {
 export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
     // Parse options object or boolean flag for backwards compatibility
     const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
-    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
-        ? !!options.allowHttpFallback
-        : isManual;
+    const allowHttpFallback =
+        typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+            ? !!options.allowHttpFallback
+            : isManual;
 
     // Cancel any existing scan first
     cancelDiscovery();
@@ -3595,7 +3795,13 @@ export async function discoverServers(onProgress = null, onServerFound = null, o
      * to the standard HTTP scan below.
      * =========================================================================
      */
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Check for webOS platform identity and PalmServiceBridge before dispatching Luna discovery
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         log.info('WebOS detected — trying Luna discovery service first...');
 
         const lunaServers = await _discoverViaLunaService(onServerFound);

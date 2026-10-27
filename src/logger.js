@@ -29,6 +29,9 @@
     // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
     var BL_MAX_STORE = 6000;
 
+    // Global in-memory buffer holding pre-boot log events until DebugOverlay initializes
+    window.__earlyLogs = window.__earlyLogs || [];
+
     /* ---------------------------------------------------------------------- */
     /* CREATE THE RAW DOM PANEL                                                 */
     /* Using var to avoid ES6 block scope errors on older WebKit engines       */
@@ -107,19 +110,46 @@
             }
         }
 
-        /* 
-         * Persist to localStorage — survives crashes/reboots.
-         * Checked with standard try-catch in case localStorage is disabled or full.
+        // Format timestamp safely for log line construction
+        // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+        var timeStr = new Date().toLocaleTimeString();
+        // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+        var formattedLine = '[' + timeStr + '] [' + level + '] [EarlyBoot] ' + msg;
+
+        /*
+         * In-Memory Early Log Buffer:
+         * Retains early boot diagnostic messages in RAM without triggering synchronous
+         * LevelDB/SQLite disk writes on the TV's slow flash storage. DebugOverlay drains
+         * this buffer into its export queue once the UI initialization sequence runs.
          */
-        try {
-            // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
-            var stored = localStorage.getItem('bl_log') || '';
-            stored += new Date().toLocaleTimeString() + ' [' + level + '] ' + msg + '\n';
-            if (stored.length > BL_MAX_STORE) {
-                stored = stored.slice(stored.length - BL_MAX_STORE);
+        if (window.__earlyLogs) {
+            window.__earlyLogs.push({
+                level: level,
+                message: msg,
+                timeStr: timeStr,
+                formatted: formattedLine
+            });
+            if (window.__earlyLogs.length > BL_MAX_LINES) {
+                window.__earlyLogs.shift();
             }
-            localStorage.setItem('bl_log', stored);
-        } catch (e) {}
+        }
+
+        /*
+         * Conditional Persistence:
+         * Only write to localStorage if the debug overlay has been explicitly enabled
+         * by the user or an error level is logged. Normal boots bypass flash disk I/O.
+         */
+        if (_debugActive || level === 'ERR') {
+            try {
+                // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
+                var stored = localStorage.getItem('bl_log') || '';
+                stored += timeStr + ' [' + level + '] ' + msg + '\n';
+                if (stored.length > BL_MAX_STORE) {
+                    stored = stored.slice(stored.length - BL_MAX_STORE);
+                }
+                localStorage.setItem('bl_log', stored);
+            } catch (e) {}
+        }
 
         /* Render a row to the DOM panel */
         // eslint-disable-next-line no-var -- ES5-only: file runs raw (never Babel-transpiled)
@@ -164,7 +194,7 @@
             if (_origLog) _origLog.apply(console, arguments);
         } catch (e) {}
     };
-    
+
     /* Patch console.info */
     console.info = function () {
         _write('INF', arguments);
@@ -172,7 +202,7 @@
             if (_origInfo) _origInfo.apply(console, arguments);
         } catch (e) {}
     };
-    
+
     /* Patch console.warn */
     console.warn = function () {
         _write('WARN', arguments);
@@ -180,7 +210,7 @@
             if (_origWarn) _origWarn.apply(console, arguments);
         } catch (e) {}
     };
-    
+
     /* Patch console.error */
     console.error = function () {
         _write('ERR', arguments);

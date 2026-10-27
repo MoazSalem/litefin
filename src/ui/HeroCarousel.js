@@ -16,10 +16,10 @@ import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
 import { shouldShowScore } from '../utils/visibility.js';
-import { platformInfo } from '../utils/PlatformInfo.js';
 import { detailsIcons } from '../utils/Icons.js';
 import { escapeHtml } from '../utils/Utils.js';
 import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratingsFormatter.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -72,7 +72,8 @@ class HeroCarousel {
         const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
         // BlurHash ambient color fill is exclusive to Immersive (Performance) mode and disabled by default
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        const isBlurhashFill =
+            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
         const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
         let navArrowsHtml = '';
@@ -110,14 +111,15 @@ class HeroCarousel {
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
-                    ${this._items.length > 1
-                ? `
+                    ${
+                        this._items.length > 1
+                            ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
                     `
-                : ''
-            }
+                            : ''
+                    }
                 </div>
                 ${navArrowsHtml}
             </div>
@@ -139,8 +141,8 @@ class HeroCarousel {
             item.BackdropImageTags && item.BackdropImageTags.length > 0
                 ? item.BackdropImageTags[0]
                 : item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0
-                    ? item.ParentBackdropImageTags[0]
-                    : item.ImageTags?.Backdrop;
+                  ? item.ParentBackdropImageTags[0]
+                  : item.ImageTags?.Backdrop;
 
         // Fall back to parent backdrop ID when the child item lacks its own artwork
         const backdropItemId =
@@ -217,7 +219,8 @@ class HeroCarousel {
         // Resolve BlurHash for the hero backdrop and ambient fill background
         const blurHash = this._resolveBlurHash(item);
         // Ambient BlurHash fill is exclusive to the Immersive (Performance) style and off by default
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        const isBlurhashFill =
+            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
 
         // ---------------------------------------------------------------------
         // Lazy Backdrop & BlurHash Texture Allocation
@@ -227,17 +230,25 @@ class HeroCarousel {
         // 1820px backdrop at once, starving the main thread during page load.
         // We set background-image exclusively for the active slide (index 0).
         // Inactive slides store the URL in data-backdrop and load just-in-time.
+        // When reverse proxy headers are active, check the cached Blob URL first.
         // ---------------------------------------------------------------------
-        const backdropStyle = isActive ? ` style="background-image: url('${backdropUrl}')"` : '';
+        const initialBackdrop = customHeaders?.hasCustomHeaders?.()
+            ? customHeaders.getCachedBlobUrl(backdropUrl) || null
+            : backdropUrl;
+        const backdropStyle = isActive && initialBackdrop ? ` style="background-image: url('${initialBackdrop}')"` : '';
 
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
-                ${isBlurhashFill && blurHash ? `
+                ${
+                    isBlurhashFill && blurHash
+                        ? `
                     <div class="hero-blurhash-fill-wrap">
                         <canvas class="hero-blurhash-fill-canvas" data-blurhash="${blurHash}"></canvas>
                         <div class="hero-blurhash-fill-vignette"></div>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
                 <div class="hero-backdrop" data-backdrop="${backdropUrl}"${backdropStyle}>
                     ${blurHash && isActive ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
@@ -256,7 +267,7 @@ class HeroCarousel {
      * Renders MDBList Ratings and Awards for the carousel row.
      * @private
      */
-     _renderMdbMetadata(data) {
+    _renderMdbMetadata(data) {
         if (!data) return '';
 
         let html = '';
@@ -632,7 +643,8 @@ class HeroCarousel {
         // Exclusive to the Immersive (Performance) style and disabled by default.
         // Extracts ambient colors from BlurHash to fill any empty canvas area.
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        const isBlurhashFill =
+            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
         if (isBlurhashFill) {
             const activeSlide = this._container.querySelector('.hero-item.active');
             if (activeSlide) {
@@ -683,6 +695,11 @@ class HeroCarousel {
                 { threshold: [0, 0.15] }
             );
             this._intersectionObserver.observe(this._container);
+        }
+
+        // If custom reverse proxy headers are configured, trigger slide 0 preload to fetch authenticated blob
+        if (customHeaders?.hasCustomHeaders?.()) {
+            this._preloadSlide(0);
         }
 
         // ---------------------------------------------------------------------
@@ -896,7 +913,8 @@ class HeroCarousel {
         // Prepares the background ambient gradient before the slide transitions into view.
         // Exclusive to the Immersive (Performance) carousel style (disabled by default).
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        const isBlurhashFill =
+            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
         if (isBlurhashFill) {
             this._decodeBlurhashFill(item);
         }
@@ -905,28 +923,48 @@ class HeroCarousel {
         const backdrop = item.querySelector('.hero-backdrop');
         if (backdrop && backdrop.dataset.backdrop && !backdrop.style.backgroundImage) {
             const url = backdrop.dataset.backdrop;
-            const img = new Image();
-            img.onload = () => {
-                if (backdrop.dataset.backdrop === url) {
-                    backdrop.style.backgroundImage = `url('${url}')`;
-                    // Fade out blurhash canvas if present
-                    const canvas = item.querySelector('.hero-blurhash-canvas');
-                    if (canvas) {
-                        canvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                        }, 500);
+
+            /*
+             * Applies the loaded backdrop image to the hero element.
+             * Fades out and discards the BlurHash canvas once the graphic settles.
+             */
+            const applyBackdrop = (effectiveUrl) => {
+                const img = new Image();
+                img.onload = () => {
+                    if (backdrop.dataset.backdrop === url) {
+                        backdrop.style.backgroundImage = `url('${effectiveUrl}')`;
+                        // Fade out blurhash canvas if present
+                        const canvas = item.querySelector('.hero-blurhash-canvas');
+                        if (canvas) {
+                            canvas.style.opacity = '0';
+                            setTimeout(() => {
+                                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                            }, 500);
+                        }
                     }
-                }
+                };
+                img.src = effectiveUrl;
             };
-            img.src = url;
+
+            // Resolve via customHeaders if reverse proxy credentials are required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(url);
+                if (cached) {
+                    applyBackdrop(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(url)
+                        .then(applyBackdrop)
+                        .catch(() => applyBackdrop(url));
+                }
+            } else {
+                applyBackdrop(url);
+            }
         }
 
         // Load logo image if deferred
         const logo = item.querySelector('.hero-logo');
         if (logo && logo.dataset.src && !logo.src) {
-            logo.src = logo.dataset.src;
-
             // Recalculate natural aspect ratio container height once deferred logo loads
             const adjustLogoHeight = () => {
                 const container = logo.closest('.hero-logo-container');
@@ -943,10 +981,32 @@ class HeroCarousel {
                 }
             };
 
-            if (logo.complete) {
-                adjustLogoHeight();
+            /*
+             * Applies the resolved logo source URL and adjusts container height.
+             * Binds onload handler if image is still decoding asynchronously.
+             */
+            const applyLogo = (effectiveUrl) => {
+                logo.src = effectiveUrl;
+                if (logo.complete) {
+                    adjustLogoHeight();
+                } else {
+                    logo.onload = adjustLogoHeight;
+                }
+            };
+
+            // Resolve via customHeaders if reverse proxy credentials are required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(logo.dataset.src);
+                if (cached) {
+                    applyLogo(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(logo.dataset.src)
+                        .then(applyLogo)
+                        .catch(() => applyLogo(logo.dataset.src));
+                }
             } else {
-                logo.onload = adjustLogoHeight;
+                applyLogo(logo.dataset.src);
             }
         }
     }

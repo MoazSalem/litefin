@@ -23,9 +23,10 @@ function setup({ authenticated = true, count = 2, path = '/home', preference = '
         }
     };
     const storage = { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) };
-    vm.runInNewContext(listener, {
+    const context = {
         document,
         storage,
+        wasBackgrounded: true,
         platformInfo: { isTizen: true, isWebOS: false },
         log: { info() {}, debug() {} },
         eventBus: { emit: (name) => calls.push(name) },
@@ -43,12 +44,17 @@ function setup({ authenticated = true, count = 2, path = '/home', preference = '
             },
             reload: () => calls.push('reload')
         }
-    });
+    };
+    vm.runInNewContext(listener, context);
     return {
         calls,
         saved,
         storage,
-        resume: callback,
+        resume() {
+            context.wasBackgrounded = true;
+            document.hidden = false;
+            callback();
+        },
         hide() {
             document.hidden = true;
             callback();
@@ -115,7 +121,7 @@ test('remembering the startup user is independent of resume selection', () => {
 
 test('controls toggle persists and affects the next resume without restarting', () => {
     const { calls, saved, storage, resume } = setup();
-    const source = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8');
     const block = source.slice(
         source.indexOf('        const profilesOnResumeToggle ='),
         source.indexOf('        const rememberLastUserToggle =')

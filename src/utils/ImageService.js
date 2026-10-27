@@ -500,8 +500,7 @@ class ImageService {
 
         // 1.5 Intercept and map to modern/expanded/modern-posters layout card sizes if active
         const mediaLayout =
-            typeof document !== 'undefined' &&
-            document.documentElement
+            typeof document !== 'undefined' && document.documentElement
                 ? document.documentElement.getAttribute('data-layout-media-rows')
                 : 'classic';
         const isModern = mediaLayout === 'modern';
@@ -567,17 +566,17 @@ class ImageService {
                 type !== 'logo' &&
                 type !== 'backdrop';
             if (isRowCard) {
-                const layoutDefaultScale = (isExpanded || isModernPosters) ? 1.2 : 1.0;
+                const layoutDefaultScale = isExpanded || isModernPosters ? 1.2 : 1.0;
                 const scale =
                     parseFloat(
                         storage.getItem(
                             isExpanded
                                 ? 'pref:expandedCardSizeScale'
                                 : isModernPosters
-                                    ? 'pref:modernPostersCardSizeScale'
-                                    : isModern
-                                        ? 'pref:modernCardSizeScale'
-                                        : 'pref:classicCardSizeScale'
+                                  ? 'pref:modernPostersCardSizeScale'
+                                  : isModern
+                                    ? 'pref:modernCardSizeScale'
+                                    : 'pref:classicCardSizeScale'
                         )
                     ) || layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {

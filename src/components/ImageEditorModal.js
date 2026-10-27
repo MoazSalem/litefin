@@ -105,10 +105,11 @@ export class ImageEditorModal {
                     focusManager.focusElement(prevFocus);
                 } else {
                     // Fallback to primary action buttons on the details page (Play, Resume, or More button)
-                    const fallbackEl = detailsPage.$('.more-btn') ||
-                                       detailsPage.$('.resume-btn') ||
-                                       detailsPage.$('.play-btn') ||
-                                       detailsPage.$('#actions button');
+                    const fallbackEl =
+                        detailsPage.$('.more-btn') ||
+                        detailsPage.$('.resume-btn') ||
+                        detailsPage.$('.play-btn') ||
+                        detailsPage.$('#actions button');
                     if (fallbackEl) {
                         focusManager.focusElement(fallbackEl);
                     } else {
@@ -262,9 +263,7 @@ export class ImageEditorModal {
                     : [];
 
                 // Extract remote candidates
-                remoteImages = (remoteRes && Array.isArray(remoteRes.Images))
-                    ? remoteRes.Images
-                    : [];
+                remoteImages = remoteRes && Array.isArray(remoteRes.Images) ? remoteRes.Images : [];
 
                 // Render content panels preserving focus where appropriate
                 renderContentPanels(focusOptions);
@@ -302,7 +301,9 @@ export class ImageEditorModal {
                                     const isPrimary = imgIndex === 0;
                                     const indexParam = img.ImageIndex !== undefined ? `/${img.ImageIndex}` : '';
                                     const tagParam = img.ImageTag ? `?tag=${img.ImageTag}` : '';
-                                    const imgSrc = api.buildUrl(`/Items/${itemId}/Images/${activeType}${indexParam}${tagParam}`);
+                                    const imgSrc = api.buildUrl(
+                                        `/Items/${itemId}/Images/${activeType}${indexParam}${tagParam}`
+                                    );
                                     const dimText = img.Width && img.Height ? `${img.Width} × ${img.Height}` : '';
 
                                     // Render prioritization / move buttons when multiple images exist for this type
@@ -312,13 +313,15 @@ export class ImageEditorModal {
                                             ? `<button class="image-card-action-btn prioritize-btn" data-index="${imgIndex}" data-new-index="0" tabindex="0">${i18n.t('SetAsPrimary') || 'Set as Primary'}</button>`
                                             : '';
 
-                                        const moveLeftBtn = imgIndex > 0
-                                            ? `<button class="image-card-action-btn move-btn move-left-btn" data-index="${imgIndex}" data-new-index="${imgIndex - 1}" tabindex="0">${i18n.t('MoveLeft') || 'Move Left'}</button>`
-                                            : '';
+                                        const moveLeftBtn =
+                                            imgIndex > 0
+                                                ? `<button class="image-card-action-btn move-btn move-left-btn" data-index="${imgIndex}" data-new-index="${imgIndex - 1}" tabindex="0">${i18n.t('MoveLeft') || 'Move Left'}</button>`
+                                                : '';
 
-                                        const moveRightBtn = imgIndex < currentItemImages.length - 1
-                                            ? `<button class="image-card-action-btn move-btn move-right-btn" data-index="${imgIndex}" data-new-index="${imgIndex + 1}" tabindex="0">${i18n.t('MoveRight') || 'Move Right'}</button>`
-                                            : '';
+                                        const moveRightBtn =
+                                            imgIndex < currentItemImages.length - 1
+                                                ? `<button class="image-card-action-btn move-btn move-right-btn" data-index="${imgIndex}" data-new-index="${imgIndex + 1}" tabindex="0">${i18n.t('MoveRight') || 'Move Right'}</button>`
+                                                : '';
 
                                         reorderButtonsHtml = `
                                             ${setPrimaryBtn}
@@ -378,15 +381,16 @@ export class ImageEditorModal {
                             ${remoteImages
                                 .map((remote, idx) => {
                                     const thumbSrc = remote.ThumbnailUrl || remote.Url;
-                                    const dimText = remote.Width && remote.Height ? `${remote.Width} × ${remote.Height}` : '';
+                                    const dimText =
+                                        remote.Width && remote.Height ? `${remote.Width} × ${remote.Height}` : '';
                                     const provider = remote.ProviderName || 'Remote';
                                     const lang = remote.Language ? remote.Language.toUpperCase() : '';
 
                                     // Backdrop allows multiple images (Download), while other types update/replace the image (Update Image)
                                     const isBackdrop = activeType === 'Backdrop';
                                     const actionBtnText = isBackdrop
-                                        ? (i18n.t('ButtonDownload') || i18n.t('Download') || 'Download')
-                                        : (i18n.t('UpdateImage') || 'Update Image');
+                                        ? i18n.t('ButtonDownload') || i18n.t('Download') || 'Download'
+                                        : i18n.t('UpdateImage') || 'Update Image';
 
                                     return `
                                         <div class="image-card type-${activeType.toLowerCase()}">
@@ -443,27 +447,36 @@ export class ImageEditorModal {
                 // Target a specific current image card by index (e.g. after reordering or deleting)
                 const safeTargetIndex = Math.min(Math.max(0, focusOptions.targetIndex), currentItemImages.length - 1);
                 const targetCard = currentGrid?.children[safeTargetIndex];
-                resolvedTarget = targetCard?.querySelector('.prioritize-btn') ||
-                                 targetCard?.querySelector('.move-btn') ||
-                                 targetCard?.querySelector('.image-card-action-btn') ||
-                                 currentGrid?.querySelector('.image-card-action-btn');
+                resolvedTarget =
+                    targetCard?.querySelector('.prioritize-btn') ||
+                    targetCard?.querySelector('.move-btn') ||
+                    targetCard?.querySelector('.image-card-action-btn') ||
+                    currentGrid?.querySelector('.image-card-action-btn');
             } else if (focusOptions?.remoteIndex !== undefined && remoteImages.length > 0) {
                 // Target the remote candidate card that was just downloaded or updated
                 const safeRemoteIndex = Math.min(Math.max(0, focusOptions.remoteIndex), remoteImages.length - 1);
                 const targetRemoteCard = remoteGrid?.children[safeRemoteIndex];
-                resolvedTarget = targetRemoteCard?.querySelector('.download-btn') ||
-                                 remoteGrid?.querySelector('.download-btn');
+                resolvedTarget =
+                    targetRemoteCard?.querySelector('.download-btn') || remoteGrid?.querySelector('.download-btn');
             }
 
             // Fallback 1: If target was intended for content or content section was active, pick first available content button
-            if (!resolvedTarget && (focusOptions?.focusSection === 'image-editor-content' || focusOptions?.remoteIndex !== undefined || focusOptions?.targetIndex !== undefined)) {
-                resolvedTarget = currentGrid?.querySelector('.image-card-action-btn') ||
-                                 remoteGrid?.querySelector('.download-btn');
+            if (
+                !resolvedTarget &&
+                (focusOptions?.focusSection === 'image-editor-content' ||
+                    focusOptions?.remoteIndex !== undefined ||
+                    focusOptions?.targetIndex !== undefined)
+            ) {
+                resolvedTarget =
+                    currentGrid?.querySelector('.image-card-action-btn') || remoteGrid?.querySelector('.download-btn');
             }
 
             // Fallback 2: If focus was already sitting on a valid modal tab button, keep it intact
             const currentFocused = focusManager.getFocused();
-            const isTabFocused = currentFocused && document.contains(currentFocused) && currentFocused.classList.contains('image-tab-btn');
+            const isTabFocused =
+                currentFocused &&
+                document.contains(currentFocused) &&
+                currentFocused.classList.contains('image-tab-btn');
 
             if (!resolvedTarget && isTabFocused) {
                 resolvedTarget = currentFocused;
@@ -596,9 +609,10 @@ export class ImageEditorModal {
                 invalidateAllCaches();
 
                 // Confirm success with contextual toast feedback
-                const successMsg = type === 'Backdrop'
-                    ? (i18n.t('ImageDownloadedSuccessfully') || 'Artwork downloaded successfully')
-                    : (i18n.t('ImageUpdatedSuccessfully') || 'Image updated successfully');
+                const successMsg =
+                    type === 'Backdrop'
+                        ? i18n.t('ImageDownloadedSuccessfully') || 'Artwork downloaded successfully'
+                        : i18n.t('ImageUpdatedSuccessfully') || 'Image updated successfully';
                 toast.show(successMsg);
 
                 // Reload active tab images and keep focus on the remote candidate card

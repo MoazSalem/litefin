@@ -250,3 +250,47 @@ test('Login Layout: android-mobile.css contains no mobile login overrides for la
     assert.ok(portraitLoginMatches && portraitLoginMatches.length > 0, 'Mobile login overrides must be conditioned on data-litefin-portrait');
 });
 
+/**
+ * ============================================================================
+ * Android TV OSD Playback Info Overlay Isolation Test
+ * ============================================================================
+ * Confirms that:
+ *   1. android-mobile.css does not target #osdPlaybackInfoOverlay with an
+ *      unconditional html[data-platform="android"] selector, preventing Android TV
+ *      from receiving mobile full-screen height rules.
+ *   2. Television hardware retains the standard OSD panel height limits defined
+ *      in player-osd.css instead of stretching to full viewport height.
+ * ============================================================================
+ */
+test('OSD Playback Info: android-mobile.css excludes TV hardware and avoids unconditional android selector', async () => {
+    // Dynamically load filesystem modules for test execution
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    // Resolve absolute path to mobile stylesheet
+    const cssPath = path.resolve(process.cwd(), 'src/styles/android-mobile.css');
+    // Load stylesheet contents as utf-8 string
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+    // Check for any unconditional html[data-platform="android"] targeting #osdPlaybackInfoOverlay
+    const hasUnconditionalAndroidOsd = /html\[data-platform=["']android["']\]\s+#osdPlaybackInfoOverlay/.test(cssContent);
+    // Ensure unconditional targeting is absent to protect 1080p television panels
+    assert.strictEqual(
+        hasUnconditionalAndroidOsd,
+        false,
+        'android-mobile.css must not target #osdPlaybackInfoOverlay with unconditional html[data-platform="android"]'
+    );
+
+    // Ensure all mobile overrides for #osdPlaybackInfoOverlay explicitly exclude television hardware
+    const osdRulesMatches = cssContent.match(/html\[[^\]]*\](?::not\(\[data-device-type="tv"\]\))?\s+#osdPlaybackInfoOverlay/g) || [];
+    assert.ok(osdRulesMatches.length > 0, 'Expected mobile overrides for #osdPlaybackInfoOverlay to exist');
+
+    // Validate that every matching selector enforces TV exclusion
+    for (const rule of osdRulesMatches) {
+        assert.ok(
+            rule.includes(':not([data-device-type="tv"])'),
+            `Selector "${rule}" must contain :not([data-device-type="tv"]) to safeguard television displays`
+        );
+    }
+});
+

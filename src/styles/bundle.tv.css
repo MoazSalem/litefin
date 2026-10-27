@@ -1,0 +1,83 @@
+/**
+ * ============================================================================
+ * Litefin - TV Stylesheet Bundle (Tizen / webOS tiers)
+ * ============================================================================
+ * Identical to bundle.css except it EXCLUDES the mobile-only stylesheets:
+ *   - android-mobile.css (touch/portrait restyle stacks, inert on TVs)
+ *   - mobile-nav.css     (MobileNav is never mounted on TVs)
+ * and includes scroll-compositing.css, whose rules were previously defined
+ * inside android-mobile.css but apply on televisions too (ScrollController
+ * stamps html[data-horizontal-scroll] on every platform).
+ *
+ * Wired at build time via webpack NormalModuleReplacementPlugin: every TV
+ * tier (modern, debug, normal, normal-oblong, legacy, ultra-legacy) swaps
+ * bundle.css -> this file. Desktop/web tiers keep the full bundle.css.
+ *
+ * LayoutManager guarantees TVs never carry html[data-litefin-portrait],
+ * html[data-litefin-scaled] or html[data-litefin-touch], so the excluded
+ * rules could never match on these builds regardless.
+ * ============================================================================
+ */
+
+/* Core typography, font face definitions, and resets */
+@import './fonts.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+
+/* Application view layouts and structural grids */
+@import './library.css';
+@import './library_rows.css';
+@import './sidebar.css';
+@import './login.css';
+@import './home.css';
+@import './details.css';
+@import './search.css';
+@import './discover.css';
+
+/* Media playback, OSD overlays, and dialog modals */
+@import './player-page.css';
+@import './player-osd.css';
+@import './upnext.css';
+@import './player-modals.css';
+@import './syncplay-menu.css';
+@import './admin-modals.css';
+@import './description-modal.css';
+
+/* Configuration settings, overlay dialogs, and screensaver */
+@import './settings.css';
+@import './lock-overlay.css';
+@import './season.css';
+@import './offline.css';
+@import './profiles.css';
+@import './pin-dialog.css';
+@import './screensaver.css';
+@import './hero-carousel.css';
+@import './livetv.css';
+@import './slideshow.css';
+@import './rtl.css';
+
+/* Shared color theme palettes and contrast variations */
+@import '../themes/classic-dark.css';
+@import '../themes/classic-light.css';
+@import '../themes/black.css';
+@import '../themes/tinted.css';
+@import '../themes/ambient.css';
+@import '../themes/ember.css';
+@import '../themes/sunset.css';
+@import '../themes/frost.css';
+@import '../themes/paper.css';
+@import '../themes/nocturne.css';
+@import '../themes/abyss.css';
+@import '../themes/cyberpunk.css';
+
+/* Modern interface layers and mobile viewport enhancements */
+@import './modern/core.css';
+@import './modern/server.css';
+@import './modern/manual.css';
+@import './modern/users.css';
+@import './modern/home.css';
+@import './modern/sidebar.css';
+
+/* TV-shared GPU/instant row scroll compositing (kept on all tiers) */
+@import './scroll-compositing.css';

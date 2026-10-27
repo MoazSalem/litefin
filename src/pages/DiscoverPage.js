@@ -13,7 +13,6 @@
 
 import Page from './Page.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
-import CardRenderer from '../utils/CardRenderer.js';
 import { seerr } from '../api/seerrClient.js';
 import { api } from '../api/ApiClient.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -36,18 +35,90 @@ const PAGE_CACHE_TTL = 10 * 60 * 1000;
  * Defines the canonical vertical sequence, localization keys, and fetch queries.
  */
 const ROW_DEFINITIONS = [
-    { key: 'recentlyAdded', titleKey: 'SeerrRecentlyAdded', defaultTitle: 'Recently Added', cardType: 'poster', fetch: () => seerr.recentlyAdded() },
-    { key: 'requests', titleKey: 'SeerrMyRequests', defaultTitle: 'My Requests', cardType: 'poster', fetch: () => seerr.requests() },
-    { key: 'watchlist', titleKey: 'SeerrWatchlist', defaultTitle: 'Watchlist', cardType: 'poster', fetch: () => seerr.watchlist() },
-    { key: 'trending', titleKey: 'SeerrTrending', defaultTitle: 'Trending', cardType: 'poster', fetch: () => seerr.discoverTrending() },
-    { key: 'movies', titleKey: 'SeerrPopularMovies', defaultTitle: 'Popular Movies', cardType: 'poster', fetch: () => seerr.discoverMovies() },
-    { key: 'genreMovies', titleKey: 'SeerrMovieGenres', defaultTitle: 'Movie Genres', cardType: 'landscape', fetch: () => seerr.genreSliderMovies() },
-    { key: 'upcomingMovies', titleKey: 'SeerrUpcomingMovies', defaultTitle: 'Upcoming Movies', cardType: 'poster', fetch: () => seerr.upcomingMovies() },
-    { key: 'studios', titleKey: 'SeerrStudios', defaultTitle: 'Studios', cardType: 'landscape', fetch: () => seerr.studios() },
-    { key: 'series', titleKey: 'SeerrPopularSeries', defaultTitle: 'Popular Series', cardType: 'poster', fetch: () => seerr.discoverTv() },
-    { key: 'genreSeries', titleKey: 'SeerrSeriesGenres', defaultTitle: 'Series Genres', cardType: 'landscape', fetch: () => seerr.genreSliderTv() },
-    { key: 'upcomingSeries', titleKey: 'SeerrUpcomingSeries', defaultTitle: 'Upcoming Series', cardType: 'poster', fetch: () => seerr.upcomingTv() },
-    { key: 'networks', titleKey: 'SeerrNetworks', defaultTitle: 'Networks', cardType: 'landscape', fetch: () => seerr.networks() }
+    {
+        key: 'recentlyAdded',
+        titleKey: 'SeerrRecentlyAdded',
+        defaultTitle: 'Recently Added',
+        cardType: 'poster',
+        fetch: () => seerr.recentlyAdded()
+    },
+    {
+        key: 'requests',
+        titleKey: 'SeerrMyRequests',
+        defaultTitle: 'My Requests',
+        cardType: 'poster',
+        fetch: () => seerr.requests()
+    },
+    {
+        key: 'watchlist',
+        titleKey: 'SeerrWatchlist',
+        defaultTitle: 'Watchlist',
+        cardType: 'poster',
+        fetch: () => seerr.watchlist()
+    },
+    {
+        key: 'trending',
+        titleKey: 'SeerrTrending',
+        defaultTitle: 'Trending',
+        cardType: 'poster',
+        fetch: () => seerr.discoverTrending()
+    },
+    {
+        key: 'movies',
+        titleKey: 'SeerrPopularMovies',
+        defaultTitle: 'Popular Movies',
+        cardType: 'poster',
+        fetch: () => seerr.discoverMovies()
+    },
+    {
+        key: 'genreMovies',
+        titleKey: 'SeerrMovieGenres',
+        defaultTitle: 'Movie Genres',
+        cardType: 'landscape',
+        fetch: () => seerr.genreSliderMovies()
+    },
+    {
+        key: 'upcomingMovies',
+        titleKey: 'SeerrUpcomingMovies',
+        defaultTitle: 'Upcoming Movies',
+        cardType: 'poster',
+        fetch: () => seerr.upcomingMovies()
+    },
+    {
+        key: 'studios',
+        titleKey: 'SeerrStudios',
+        defaultTitle: 'Studios',
+        cardType: 'landscape',
+        fetch: () => seerr.studios()
+    },
+    {
+        key: 'series',
+        titleKey: 'SeerrPopularSeries',
+        defaultTitle: 'Popular Series',
+        cardType: 'poster',
+        fetch: () => seerr.discoverTv()
+    },
+    {
+        key: 'genreSeries',
+        titleKey: 'SeerrSeriesGenres',
+        defaultTitle: 'Series Genres',
+        cardType: 'landscape',
+        fetch: () => seerr.genreSliderTv()
+    },
+    {
+        key: 'upcomingSeries',
+        titleKey: 'SeerrUpcomingSeries',
+        defaultTitle: 'Upcoming Series',
+        cardType: 'poster',
+        fetch: () => seerr.upcomingTv()
+    },
+    {
+        key: 'networks',
+        titleKey: 'SeerrNetworks',
+        defaultTitle: 'Networks',
+        cardType: 'landscape',
+        fetch: () => seerr.networks()
+    }
 ];
 
 /**
@@ -110,12 +181,11 @@ class DiscoverPage extends Page {
         this._attachDelegatedListeners();
 
         // Check if there is a pending focus restoration target (back navigation)
-        const savedFocusObj = storage.getItem('pref:disableFocusRestore') !== 'true'
-            ? state.get('discover:lastFocusedItem')
-            : null;
-        const targetRowKey = savedFocusObj ? savedFocusObj.rowId : (
-            this._pendingNavState?.focusSectionName?.replace('discover-row-', '') || null
-        );
+        const savedFocusObj =
+            storage.getItem('pref:disableFocusRestore') !== 'true' ? state.get('discover:lastFocusedItem') : null;
+        const targetRowKey = savedFocusObj
+            ? savedFocusObj.rowId
+            : this._pendingNavState?.focusSectionName?.replace('discover-row-', '') || null;
         const hasFocusTarget = Boolean(targetRowKey || this._pendingNavState);
 
         // Check if a valid in-memory page cache exists for instant back-navigation
@@ -204,9 +274,7 @@ class DiscoverPage extends Page {
         this._nextRowIndexToLoad = cache.nextRowIndexToLoad || INITIAL_ROW_COUNT;
 
         // Sort keys by their original defIndex so rows are mounted in exact sequence
-        const sortedEntries = Object.entries(cachedRows).sort(
-            (a, b) => (a[1].defIndex || 0) - (b[1].defIndex || 0)
-        );
+        const sortedEntries = Object.entries(cachedRows).sort((a, b) => (a[1].defIndex || 0) - (b[1].defIndex || 0));
 
         // Mount each cached row into the DOM without making API requests
         for (const [key, data] of sortedEntries) {
@@ -299,9 +367,7 @@ class DiscoverPage extends Page {
         const initialBatch = ROW_DEFINITIONS.slice(0, initialTargetCount);
         this._nextRowIndexToLoad = initialTargetCount;
 
-        const results = await Promise.all(
-            initialBatch.map((def, idx) => safeFetch(def, idx))
-        );
+        const results = await Promise.all(initialBatch.map((def, idx) => safeFetch(def, idx)));
 
         if (this._isDestroyed) {
             this._isLoadingMore = false;
@@ -370,7 +436,9 @@ class DiscoverPage extends Page {
             let targetIdx = savedFocusObj?.index;
             if (targetIdx == null && savedFocusObj?.itemId) {
                 const foundIdx = rowEntry.virtualRow.items.findIndex(
-                    (item) => String(item.Id) === String(savedFocusObj.itemId) || String(item._tmdbId) === String(savedFocusObj.itemId)
+                    (item) =>
+                        String(item.Id) === String(savedFocusObj.itemId) ||
+                        String(item._tmdbId) === String(savedFocusObj.itemId)
                 );
                 if (foundIdx !== -1) targetIdx = foundIdx;
             }
@@ -390,7 +458,8 @@ class DiscoverPage extends Page {
             this.setActiveSection(sectionName, false);
 
             // Directly focus target node with instantScroll
-            const cardNode = rowEntry.virtualRow.domNodes.get(targetIdx) ||
+            const cardNode =
+                rowEntry.virtualRow.domNodes.get(targetIdx) ||
                 rowEntry.sectionEl.querySelector(`[data-virtual-index="${targetIdx}"]`);
             if (cardNode) {
                 focusManager.focusElement(cardNode, { instantScroll: true });
@@ -447,9 +516,7 @@ class DiscoverPage extends Page {
         };
 
         // Fetch the batch in parallel
-        const results = await Promise.all(
-            batchDefs.map((def, i) => safeFetch(def, startIndex + i))
-        );
+        const results = await Promise.all(batchDefs.map((def, i) => safeFetch(def, startIndex + i)));
 
         if (this._isDestroyed) {
             this._isLoadingMore = false;
@@ -514,7 +581,7 @@ class DiscoverPage extends Page {
     /**
      * Renders a single row, mounts its VirtualCardRow instance, and inserts it
      * into the DOM in correct descriptor order.
-     * 
+     *
      * @param {Object} def - The row descriptor definition.
      * @param {Array} items - The normalized item list.
      * @param {number} defIndex - The canonical descriptor sequence index.
@@ -527,10 +594,7 @@ class DiscoverPage extends Page {
 
         const isLandscape = def.cardType === 'landscape';
         const hasNoCardLabels =
-            def.key === 'genreMovies' ||
-            def.key === 'studios' ||
-            def.key === 'genreSeries' ||
-            def.key === 'networks';
+            def.key === 'genreMovies' || def.key === 'studios' || def.key === 'genreSeries' || def.key === 'networks';
 
         // Create the section container for the row
         const sectionEl = document.createElement('section');
@@ -549,9 +613,7 @@ class DiscoverPage extends Page {
 
         // Insert section into DOM in correct sequence order by finding the first following section
         const existingSections = Array.from(container.querySelectorAll('section[data-def-index]'));
-        const nextSibling = existingSections.find(
-            (el) => parseInt(el.getAttribute('data-def-index'), 10) > defIndex
-        );
+        const nextSibling = existingSections.find((el) => parseInt(el.getAttribute('data-def-index'), 10) > defIndex);
 
         if (nextSibling) {
             container.insertBefore(sectionEl, nextSibling);
@@ -567,8 +629,7 @@ class DiscoverPage extends Page {
             visibleCount: 10,
             initialWindow: Math.min(items.length, 12),
             focusSectionId: `discover-row-${def.key}`,
-            renderCard: (item) =>
-                this._renderMediaCard(item, isLandscape, def.cardType || 'poster', 'discover')
+            renderCard: (item) => this._renderMediaCard(item, isLandscape, def.cardType || 'poster', 'discover')
         });
 
         // Register focus section for horizontal D-pad navigation within the row
@@ -624,9 +685,7 @@ class DiscoverPage extends Page {
 
         // Query the live DOM order of all mounted discovery rows
         const currentSections = Array.from(container.querySelectorAll('section[data-row-id]'));
-        this._orderedRowKeys = currentSections
-            .map((el) => el.getAttribute('data-row-id'))
-            .filter(Boolean);
+        this._orderedRowKeys = currentSections.map((el) => el.getAttribute('data-row-id')).filter(Boolean);
 
         const rowCount = this._orderedRowKeys.length;
 
@@ -736,11 +795,17 @@ class DiscoverPage extends Page {
 
             // Route based on item entity type
             if (found._isGenreCard) {
-                router.navigate(`/library/seerr?seerrType=genre&mediaType=${found._mediaType}&genreId=${found._genreId}&name=${encodeURIComponent(found.Name)}`);
+                router.navigate(
+                    `/library/seerr?seerrType=genre&mediaType=${found._mediaType}&genreId=${found._genreId}&name=${encodeURIComponent(found.Name)}`
+                );
             } else if (found._isStudioCard) {
-                router.navigate(`/library/seerr?seerrType=studio&studioId=${found._studioId}&name=${encodeURIComponent(found.Name)}`);
+                router.navigate(
+                    `/library/seerr?seerrType=studio&studioId=${found._studioId}&name=${encodeURIComponent(found.Name)}`
+                );
             } else if (found._isNetworkCard) {
-                router.navigate(`/library/seerr?seerrType=network&networkId=${found._networkId}&name=${encodeURIComponent(found.Name)}`);
+                router.navigate(
+                    `/library/seerr?seerrType=network&networkId=${found._networkId}&name=${encodeURIComponent(found.Name)}`
+                );
             } else if (found._mediaType && found._tmdbId) {
                 router.navigate(`/seerr/${found._mediaType}/${found._tmdbId}`);
             }
@@ -806,13 +871,14 @@ class DiscoverPage extends Page {
         if (!el) return;
         el.innerHTML = `
             <p>${text}</p>
-            ${withSettingsButton
-                ? `<div class="discover-message-actions">
+            ${
+                withSettingsButton
+                    ? `<div class="discover-message-actions">
                            <button class="btn btn-secondary focusable" id="btn-discover-settings" tabindex="0">
                                ${i18n.t('SeerrOpenSettings')}
                            </button>
                        </div>`
-                : ''
+                    : ''
             }
         `;
         el.classList.remove('hidden');
@@ -831,7 +897,6 @@ class DiscoverPage extends Page {
     _hideMessage() {
         this.$('#discover-message')?.classList.add('hidden');
     }
-
 
     // ========================================================================
     // Lifecycle & Cleanup

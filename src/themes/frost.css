@@ -1,0 +1,609 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Frost Theme
+ * ============================================================================
+ * A cool light mode the opposite of Classic Light: pale glacier gradients,
+ * crisp frosted-glass surfaces with cool bluish shadows and dark slate
+ * typography. The only pure light mode whose canvas is a sky gradient.
+ * ============================================================================
+ */
+
+[data-theme-mode="frost"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so ice bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(226, 238, 245, 0.92);
+
+    --jf-text-primary: #1b2c38;
+    --jf-text-secondary: #466171;
+    --jf-text-tertiary: #7d96a6;
+    --jf-text-disabled: rgba(27, 44, 56, 0.3);
+
+    /* Light-canvas ink tokens for the chrome correction layers below */
+    --light-ink: #1b2c38;
+    --light-ink-soft: rgba(27, 44, 56, 0.62);
+    --light-ink-strong: rgba(27, 44, 56, 0.92);
+
+    --jf-success: #2e9e6b;
+    --jf-warning: #f0a13a;
+    --jf-error: #e25746;
+    --jf-info: #3d9bd1;
+
+    /* Cool frosted-glass chrome */
+    --jf-input-bg: rgba(27, 44, 56, 0.06);
+    --jf-input-border: rgba(27, 44, 56, 0.16);
+    --jf-button-bg: rgba(27, 44, 56, 0.09);
+    --jf-button-hover: rgba(27, 44, 56, 0.16);
+    --jf-switch-bg: rgba(27, 44, 56, 0.14);
+    --jf-switch-handle: var(--jf-accent-content-color, #ffffff);
+
+    /* Cool bluish shadows — frost Glass depth */
+    --jf-shadow-sm: 0 2px 6px rgba(70, 110, 140, 0.12);
+    --jf-shadow-md: 0 4px 14px rgba(70, 110, 140, 0.18);
+    --jf-shadow-lg: 0 10px 36px rgba(70, 110, 140, 0.26);
+
+    --jf-scrollbar: rgba(27, 44, 56, 0.22);
+    --jf-scrollbar-hover: rgba(27, 44, 56, 0.4);
+
+    --jf-button-border-focus: #1b2c38;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(27, 44, 56, 0.08);
+    --jf-action-btn-border: rgba(27, 44, 56, 0.18);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Icy baseline painted on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="frost"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="frost"] body {
+    /* body must stay transparent so the ice gradient shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * GLACIER ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders the glacier
+ * canvas: a near-white zenith settling into pale ice with a cold blue pond
+ * glow at the base and a soft accent-tinted daylight bloom up top.
+ */
+[data-theme-mode="frost"] body::before,
+html[data-theme-mode="frost"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Soft daylight bloom from the top edge (follows the accent color) */
+        radial-gradient(90% 42% at 88% -8%,
+                rgba(var(--jf-accent-rgb), 0.12) 0%,
+                transparent 58%),
+        /* Cold pond glow settling at the base */
+        radial-gradient(75% 42% at 12% 112%,
+                rgba(130, 190, 225, 0.28) 0%,
+                rgba(130, 190, 225, 0.1) 38%,
+                transparent 62%),
+        /* The glacier sky: near-white zenith into pale ice */
+        linear-gradient(180deg, #f5fafd 0%, #e8f1f6 48%, #d9e9f2 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="frost"] .page {
+    /* Reset the opaque page paint so the glacier shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the glacier layer during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="frost"],
+[data-theme-mode="frost"] body.player-active,
+html.player-active[data-theme-mode="frost"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="frost"] body.player-active::before,
+html.player-active[data-theme-mode="frost"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="frost"] body.player-active .page,
+html.player-active[data-theme-mode="frost"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * LIGHT CANVAS TEXT & SIDEBAR CORRECTIONS
+ * ============================================================================
+ * The sidebar system and several chrome elements are tuned for dark canvases.
+ * On Frost's light glacier canvas, white/grey icon presets, accent-contrast
+ * focus text, and dark-translucent chrome render nearly invisible. These
+ * scoped rules remap them to the frost ink hierarchy.
+ */
+
+/* Selected sidebar 'white' preset becomes ink */
+html[data-theme-mode="frost"][data-sidebar-selected-color="white"] .sidebar-item.active,
+html[data-theme-mode="frost"][data-sidebar-selected-color="white"] .sidebar-item.active .item-icon {
+    color: #1b2c38 !important;
+}
+
+/* Unselected icon-level mirrors: icons get explicit ink even when a surface
+ * elsewhere sets a direct icon color. Deliberate 'accent' presets excluded. */
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon {
+    color: var(--light-ink-soft) !important;
+}
+
+/* Hover on unselected rows and icons: brighter white becomes full ink */
+html[data-theme-mode="frost"] [data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-theme-mode="frost"] [data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active) .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active) .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon {
+    color: var(--light-ink) !important;
+}
+
+/* Unselected sidebar 'white'/'grey' preset icon mirrors become ink */
+html[data-theme-mode="frost"][data-sidebar-unselected-color="white"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[data-theme-mode="frost"][data-sidebar-unselected-color="grey"] .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon {
+    color: #466171 !important;
+}
+
+/* Selected logo 'white' preset becomes ink */
+html[data-theme-mode="frost"][data-sidebar-logo-color="white"] #sidebar-logo-header:not(:focus):not(.focused) .logo-icon,
+html[data-theme-mode="frost"][data-sidebar-logo-color="white"] .sidebar-header:not(:focus):not(.focused) .logo-icon {
+    color: #1b2c38 !important;
+}
+
+/*
+ * Note: focused sidebar items intentionally KEEP accent-contrast text —
+ * the classic focus indicator and modern focus pills/squircles paint the
+ * accent color behind focused items on every layout, so white-on-accent
+ * remains correct on the light canvas.
+ */
+
+/* Sidebar back button chrome: translucent white capsule becomes ink glass */
+html[data-theme-mode="frost"] .sidebar-back-btn .back-icon svg {
+    color: #1b2c38;
+    background: rgba(27, 44, 56, 0.08);
+    border-color: rgba(27, 44, 56, 0.16);
+    /* Flat resting state by default */
+    box-shadow: none;
+}
+
+/* Optional icon shadows override for Frost theme */
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar-back-btn .back-icon svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar-back-btn .back-icon svg,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .sidebar-back-btn .back-icon svg {
+    box-shadow: 0 4px 12px rgba(70, 110, 140, 0.15);
+    -webkit-filter: none;
+    filter: none;
+}
+
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar .item-icon svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar .item-icon svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar .logo-icon svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar .logo-icon svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar-logo-img,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar-logo-img,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar .sidebar-chevron svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar .sidebar-chevron svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar .user-avatar-container img,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar .user-avatar-container img,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="true"] .sidebar .user-avatar-container svg,
+html[data-theme-mode="frost"][data-sidebar-icon-shadows="shadow"] .sidebar .user-avatar-container svg,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .item-icon svg,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .logo-icon svg,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .sidebar-logo-img,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .sidebar-chevron svg,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .user-avatar-container img,
+html[data-theme-mode="frost"] .sidebar.has-icon-shadows .user-avatar-container svg {
+    -webkit-filter: drop-shadow(0 2px 6px rgba(70, 110, 140, 0.25));
+    filter: drop-shadow(0 2px 6px rgba(70, 110, 140, 0.25));
+}
+
+html[data-theme-mode="frost"] .sidebar-back-btn:hover .back-icon svg,
+html[data-theme-mode="frost"] .sidebar-back-btn:focus .back-icon svg,
+html[data-theme-mode="frost"] .sidebar-back-btn.focused .back-icon svg {
+    color: #1b2c38;
+    background: rgba(27, 44, 56, 0.15);
+    border-color: rgba(27, 44, 56, 0.28);
+}
+
+html[data-theme-mode="frost"] .sidebar-back-btn .back-text {
+    color: #466171;
+}
+
+html[data-theme-mode="frost"] .sidebar-back-btn:hover .back-text,
+html[data-theme-mode="frost"] .sidebar-back-btn:focus .back-text,
+html[data-theme-mode="frost"] .sidebar-back-btn.focused .back-text {
+    color: #1b2c38;
+}
+
+/* Toast chrome: white border and jet-black shadow become cool ink tones */
+html[data-theme-mode="frost"] .toast {
+    border-color: rgba(27, 44, 56, 0.18) !important;
+    box-shadow: 0 12px 40px rgba(70, 110, 140, 0.3) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * MODERN SIDEBAR LIGHT-CANVAS FIXES (default collapsed rail + floating rail)
+ * The modern rail hard-codes translucent white icon/label tones tuned for
+ * dark canvases. Re-inked here for the glacier light canvas.
+ * -------------------------------------------------------------------------- */
+
+/* Unselected items and labels: translucent white becomes muted ink.
+ * Deliberate 'accent' unselected presets are left untouched. */
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) [data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: var(--light-ink-soft) !important;
+}
+
+/* Hover on unselected rows: brighter white becomes full ink */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-item:hover:not(:focus):not(.focused):not(.active),
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover {
+    color: var(--light-ink) !important;
+}
+
+/* ========================================================================
+ * BULLETPROOF GUARANTEES: anchoring at #main-sidebar gives these rules ID-level
+ * specificity, so no class/attribute/duplicate-stylesheet competitor can ever
+ * paint hovered unselected items white — regardless of bundle order.
+ * ======================================================================== */
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) #main-sidebar .sidebar-item:not(.active):not(:focus):not(.focused),
+html[data-theme-mode="frost"]:not([data-sidebar-unselected-color="accent"]) #main-sidebar .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) {
+    color: var(--light-ink-soft) !important;
+}
+
+html[data-theme-mode="frost"] #main-sidebar .sidebar-item:not(.active):not(:focus):not(.focused):hover,
+html[data-theme-mode="frost"] #main-sidebar .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon {
+    color: var(--light-ink) !important;
+}
+
+html[data-theme-mode="frost"] #main-sidebar .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon::before {
+    background: rgba(27, 44, 56, 0.07) !important;
+}
+
+/* Translucent white hover capsules become faint ink tints */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item:hover .item-icon::before,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar-item:hover:not(:focus):not(.focused):not(.active)::after,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar-item:not(.active):not(:focus):not(.focused):hover .item-icon::before {
+    background: rgba(27, 44, 56, 0.07) !important;
+}
+
+/* Active (not focused) icon: crisp white becomes ink unless a custom
+ * accent or black selection preset is active. */
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar^="modern"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-buttons"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-island"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar^="modern"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon {
+    color: var(--light-ink) !important;
+}
+
+/* Active icon svg mirror: the svg paints with fill: currentColor, so its own
+ * color must be ink too (belt-and-suspenders against direct svg rules). */
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar^="modern"] .sidebar-item.active:not(:focus):not(.focused) .item-icon svg,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-buttons"] .sidebar-item.active:not(:focus):not(.focused) .item-icon svg,
+html[data-theme-mode="frost"]:not([data-sidebar-selected-color="accent"]):not([data-sidebar-selected-color="black"]) [data-layout-sidebar="floating-island"] .sidebar-item.active:not(:focus):not(.focused) .item-icon svg,
+html[data-theme-mode="frost"][data-sidebar-selected-color="white"] .sidebar-item.active .item-icon svg,
+html[data-theme-mode="frost"][data-sidebar-selected-color="grey"] .sidebar-item.active .item-icon svg {
+    color: var(--light-ink) !important;
+    fill: currentColor !important;
+}
+
+/* Active capsule highlight: near-white becomes ink tint */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover) .sidebar-item.active:not(:focus):not(.focused) .item-icon::before,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.active:not(:focus):not(.focused) .item-icon::before,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar-item.active::after {
+    background: rgba(27, 44, 56, 0.1) !important;
+    border-color: rgba(27, 44, 56, 0.05) !important;
+}
+
+/* Libraries accordion chevron */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar-chevron {
+    color: var(--light-ink-soft);
+}
+
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] #sidebar-libraries.open .sidebar-chevron,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] #sidebar-libraries:hover:not(:focus):not(.focused) .sidebar-chevron {
+    color: var(--light-ink);
+}
+
+/* Sub-library rows and their labels */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item .item-text {
+    color: var(--light-ink-soft) !important;
+}
+
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.active .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.active .item-icon {
+    color: var(--light-ink) !important;
+}
+
+/* Focused sub-library rows are painted on the rail (no accent pill), so
+ * accent-contrast text must flip to ink. */
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-text,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar.expanded .sidebar-sub-libraries .library-item.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="modern"] .sidebar:hover .sidebar-sub-libraries .library-item.focused .item-icon {
+    color: var(--light-ink) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * FLOATING ISLAND FOCUSED ITEMS
+ * The floating-island layout suppresses every focus squircle/pill on rail
+ * items (see modern/sidebar.css: focus ::before is display:none there), so
+ * focused items render accent-contrast white floating directly on the light
+ * glacier canvas. Flipped to ink. Accented surfaces are untouched: tooltip
+ * pills keep accent-contrast text, and the #sidebar-sub-libraries popover
+ * stays a dark glass panel, so its accent-painted rows keep white.
+ * -------------------------------------------------------------------------- */
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item:focus,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.focused,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content .sidebar-item:focus,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content .sidebar-item.focused {
+    color: var(--light-ink) !important;
+}
+
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.active:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-content .sidebar-item.active.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content .sidebar-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content .sidebar-item.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar-footer .sidebar-item.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item:focus .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer .sidebar-item.focused .item-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[data-theme-mode="frost"] [data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+    color: var(--light-ink) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * HOME HERO CAROUSEL
+ * The hero vignette scrim and typography are tuned for dark canvases. On
+ * Frost the scrim flips to a pale ice wash so ink typography stays legible
+ * over backdrop imagery, and the text hierarchy re-inks.
+ * -------------------------------------------------------------------------- */
+html[data-theme-mode="frost"] .hero-item::before {
+    --hero-vignette-start: rgba(245, 250, 253, 0.94);
+    --hero-vignette-mid: rgba(240, 248, 252, 0.6);
+    --hero-vignette-end: rgba(240, 248, 252, 0);
+}
+
+html[data-theme-mode="frost"] .hero-item-title {
+    color: var(--light-ink);
+    text-shadow: 0 2px 10px rgba(120, 160, 190, 0.28);
+}
+
+html[data-theme-mode="frost"] .hero-meta-row {
+    color: rgba(27, 44, 56, 0.85);
+}
+
+html[data-theme-mode="frost"] .hero-meta-badge {
+    background: rgba(27, 44, 56, 0.12);
+}
+
+html[data-theme-mode="frost"] .hero-mdb-value {
+    color: var(--light-ink);
+}
+
+html[data-theme-mode="frost"] .hero-description {
+    color: rgba(27, 44, 56, 0.78);
+}
+
+/* Movie title logos render as near-white images; give them a cool contrast
+ * shadow so they stay legible over the pale scrim and light artwork */
+html[data-theme-mode="frost"] .hero-logo {
+    -webkit-filter: drop-shadow(0 2px 10px rgba(27, 44, 56, 0.4));
+    filter: drop-shadow(0 2px 10px rgba(27, 44, 56, 0.4));
+}
+
+/* Carousel chrome keeps dark glass so white glyphs and logos stay legible */
+html[data-theme-mode="frost"] .hero-arrow {
+    background: rgba(27, 44, 56, 0.55);
+    color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(70, 110, 140, 0.25);
+}
+
+html[data-theme-mode="frost"] .hero-arrow:hover {
+    background: rgba(27, 44, 56, 0.75);
+    color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+ * DETAILS PAGE CHROME
+ * Quality/tech pills and the official-rating badge use white-alpha chrome
+ * tuned for dark canvases; re-inked for the glacier canvas.
+ * -------------------------------------------------------------------------- */
+html[data-theme-mode="frost"] .meta-badge {
+    background: rgba(27, 44, 56, 0.1);
+    color: rgba(27, 44, 56, 0.92);
+}
+
+html[data-theme-mode="frost"] .tech-pill {
+    background: rgba(27, 44, 56, 0.06);
+    border-color: rgba(27, 44, 56, 0.15);
+    color: var(--jf-text-primary);
+}
+
+html[data-theme-mode="frost"] .tech-pill-res,
+html[data-theme-mode="frost"] .tech-pill-codec {
+    color: var(--jf-text-primary);
+}
+
+/* Colored feature pills: dark-canvas pastel text deepens for light canvas */
+html[data-theme-mode="frost"] .tech-pill-dovi {
+    color: #46235f;
+    text-shadow: none;
+}
+
+html[data-theme-mode="frost"] .tech-pill-hdr {
+    color: #7a4a0f;
+    text-shadow: none;
+}
+
+html[data-theme-mode="frost"] .tech-pill-atmos {
+    color: #0a3d66;
+}
+
+/* Rich metadata chips: idle white-alpha chrome becomes ink-alpha */
+html[data-theme-mode="frost"] .meta-chip {
+    background: rgba(27, 44, 56, 0.05);
+    border-color: rgba(27, 44, 56, 0.16) !important;
+}
+
+/* Rich metadata table: dark accent-rgb focus tint becomes a light wash */
+html[data-theme-mode="frost"] .details-rich-meta:focus,
+html[data-theme-mode="frost"] .details-rich-meta.active-table,
+html[data-theme-mode="frost"] .details-rich-meta.focused {
+    background-color: rgba(var(--jf-accent-rgb, 107, 110, 222), 0.07) !important;
+}
+
+/* ========================================================================
+   Media row cards (modern/expanded/modern-posters) — title & subtitle text
+   renders below the poster directly on the light canvas, so the hardcoded
+   whites must be re-inked.
+   ======================================================================== */
+html[data-theme-mode="frost"] [data-layout-media-rows="modern"] .media-card .card-title,
+html[data-theme-mode="frost"] [data-layout-media-rows="expanded"] .media-card .card-title,
+html[data-theme-mode="frost"] [data-layout-media-rows="modern-posters"] .media-card .card-title {
+    color: var(--light-ink-strong) !important;
+}
+
+html[data-theme-mode="frost"] [data-layout-media-rows="modern"] .media-card .card-subtitle,
+html[data-theme-mode="frost"] [data-layout-media-rows="expanded"] .media-card .card-subtitle,
+html[data-theme-mode="frost"] [data-layout-media-rows="modern-posters"] .media-card .card-subtitle {
+    color: var(--light-ink-soft) !important;
+}
+
+/* ========================================================================
+   Row scroll arrows: the circular button keeps its dark rgba(0,0,0,0.5)
+   chrome by design, so the glyph must be white (source uses
+   --jf-text-secondary, which is ink on light themes → dark-on-dark).
+   ======================================================================== */
+html[data-theme-mode="frost"] .scroll-arrow {
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Hover: accent-content-color becomes the button background (white-ish), so
+   the glyph flips back to the accent for visibility. Restated explicitly
+   because unscoped hover loses to our theme-scoped resting rule. */
+html[data-theme-mode="frost"] .scroll-arrow:hover {
+    color: var(--jf-accent, #6b6ede) !important;
+}
+
+/* ========================================================================
+   PLAYER CHROME (in-playback) — stays dark with white text on light themes.
+   The video-first dark chrome is intentional; the only real problem is that
+   the app's ink text/button variables bleed into the player on light themes.
+   Map those variables back to white inside player surfaces only. Accent
+   bars/buttons and focused items keep their colored surfaces; subtitle
+   chips are unaffected (they already render white on dark).
+   ======================================================================== */
+html[data-theme-mode="frost"] .player-osd,
+html[data-theme-mode="frost"] .osd-main,
+html[data-theme-mode="frost"] .track-menu-overlay,
+html[data-theme-mode="frost"] .chapters-modal-overlay,
+html[data-theme-mode="frost"] .queue-modal-overlay,
+html[data-theme-mode="frost"] .confirm-exit-overlay,
+html[data-theme-mode="frost"] .player-media-info-overlay,
+html[data-theme-mode="frost"] .player-subtitle-download-overlay,
+html[data-theme-mode="frost"] .description-modal-overlay,
+html[data-theme-mode="frost"] .resume-profiles-overlay,
+html[data-theme-mode="frost"] .osd-modal,
+html[data-theme-mode="frost"] .chapters-modal,
+html[data-theme-mode="frost"] .queue-modal,
+html[data-theme-mode="frost"] .confirm-exit-modal,
+html[data-theme-mode="frost"] .player-error,
+html[data-theme-mode="frost"] .reconnect-card,
+html[data-theme-mode="frost"] .upnext-dialog,
+html[data-theme-mode="frost"] .subtitle-overlay {
+    --osd-text-color: #ffffff;
+    --osd-btn-hover: rgba(255, 255, 255, 0.1);
+    --jf-text-primary: rgba(255, 255, 255, 0.95);
+    --jf-text-secondary: rgba(255, 255, 255, 0.7);
+    --jf-text-tertiary: rgba(255, 255, 255, 0.55);
+    --jf-text-disabled: rgba(255, 255, 255, 0.35);
+    --jf-button-hover: rgba(255, 255, 255, 0.12);
+    --jf-action-btn-color: rgba(255, 255, 255, 0.92);
+    --jf-action-btn-bg: rgba(255, 255, 255, 0.08);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.16);
+}
+/* Notes:
+ * - In-player overlays use player-specific classes (.confirm-exit-overlay,
+ *   .player-media-info-overlay, .player-subtitle-download-overlay) instead of
+ *   the generic .modal-overlay, which is shared by app-level modals.
+ * - .track-menu-overlay hosts the quality/speed/settings/track/aspect menus.
+ * - Scrims/gradients/panels/slider track/thumb/res/codec chrome: untouched —
+ *   the dark player design already ships appropriate dark values.
+ * - .upnext-badge keeps its dark chip: it overlaps the thumbnail image.
+ * - Player option attributes (data-osd-* colors) remain fully in control.
+ */

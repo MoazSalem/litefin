@@ -49,8 +49,8 @@ function getVideoTranscodeAudioCodecs(profile) {
     const videoTranscodeProfiles = profile.TranscodingProfiles.filter(
         (p) => p.Type === 'Video' && p.Context === 'Streaming'
     );
-    // Return array of distinct AudioCodec values
-    return Array.from(new Set(videoTranscodeProfiles.map((p) => p.AudioCodec)));
+    // Return array of distinct AudioCodec values (supporting paired/comma-separated codecs like eac3,ac3)
+    return Array.from(new Set(videoTranscodeProfiles.flatMap((p) => (p.AudioCodec || '').split(','))));
 }
 
 // ============================================================================

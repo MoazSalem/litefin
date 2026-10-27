@@ -1,6 +1,7 @@
 import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { storage } from '../../utils/StorageService.js';
 import { playQueue } from '../../core/PlayQueue.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
@@ -9,6 +10,8 @@ import { TrickplayManager } from './TrickplayManager.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { desktopAdapter } from '../../desktop/DesktopAdapter.js';
 import { webAdapter } from '../../web/WebAdapter.js';
+import { timeManager } from '../../utils/TimeManager.js';
+import MediaHelper from '../core/MediaHelper.js';
 
 import TrackMenu from './TrackMenu.js';
 import SettingsMenu from './SettingsMenu.js';
@@ -191,6 +194,13 @@ export default class OSDController extends Component {
         this._focusRestoreLockout = false;
         this._focusRestoreLockoutTimer = null;
         this._trackTransitionLockoutActive = false;
+
+        /*
+         * Timestamp gating mouse/pointer wakeups after explicit HUD dismissals.
+         * Used to filter out gyroscopic tremor and synthetic pointer jitter
+         * immediately following remote back-button presses.
+         */
+        this._mouseWakeLockoutUntil = 0;
     }
 
     _handleQueueUpdate() {
@@ -519,6 +529,7 @@ export default class OSDController extends Component {
             this._player.removeAllListeners('seeked');
             this._player.removeAllListeners('durationchange');
             this._player.removeAllListeners('loadedmetadata');
+            this._player.removeAllListeners('volumechange');
         }
 
         if (this.container) {
@@ -566,7 +577,6 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="fastForward" tabindex="0">${this._getForwardIcon()}</button>
                             <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${osdIcons.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
-                            
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
@@ -593,6 +603,19 @@ export default class OSDController extends Component {
                             <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${osdIcons.favorite}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${osdIcons.settings}</button>
                             ${(platformInfo.isDesktop || platformInfo.isWeb) ? `
+                            <!-- ====================================================================
+                                 Volume and Mute controls (Desktop and Web runtimes)
+                                 Positioned alongside secondary actions and fullscreen toggle
+                                 ==================================================================== -->
+                            <div class="osd-volume-group" id="osdVolumeGroup">
+                                <button class="osd-btn" id="osdVolumeBtn" data-action="toggleMute" tabindex="0" aria-label="${i18n.t('Mute') || 'Mute'}" title="${(i18n.t('Mute') || 'Mute') + ' (M)'}">${osdIcons.volumeUp}</button>
+                                <div class="osd-volume-slider-container" id="osdVolumeSliderContainer">
+                                    <div class="osd-volume-track">
+                                        <div class="osd-volume-fill" id="osdVolumeFill"></div>
+                                    </div>
+                                    <input type="range" class="osd-volume-slider" id="osdVolumeSlider" min="0" max="100" step="1" value="100" tabindex="0" aria-label="${i18n.t('Volume') || 'Volume'}">
+                                </div>
+                            </div>
                             <!-- Fullscreen presentation toggle button for desktop window manager and web browsers -->
                             <button class="osd-btn" id="osdFullscreenBtn" data-action="toggleFullscreen" tabindex="0" aria-label="${i18n.t('FullScreen') || 'Full Screen'}" title="${(i18n.t('FullScreen') || 'Full Screen') + ' (F)'}">${osdIcons.fullscreen}</button>
                             ` : ''}
@@ -669,6 +692,13 @@ export default class OSDController extends Component {
         /* Cache fullscreen toggle button on supported desktop and web environments */
         this._osdFullscreenBtnEl = this._osdEl.querySelector('#osdFullscreenBtn');
 
+        /* Cache volume and mute control elements for desktop and web */
+        this._osdVolumeBtnEl = this._osdEl.querySelector('#osdVolumeBtn');
+        this._osdVolumeSliderEl = this._osdEl.querySelector('#osdVolumeSlider');
+        this._osdVolumeFillEl = this._osdEl.querySelector('#osdVolumeFill');
+        this._osdVolumeGroupEl = this._osdEl.querySelector('#osdVolumeGroup');
+        this._osdVolumeSliderContainerEl = this._osdEl.querySelector('#osdVolumeSliderContainer');
+
         /*
          * ====================================================================
          * FULLSCREEN PRESENTATION EVENT SYNCHRONIZATION
@@ -698,6 +728,57 @@ export default class OSDController extends Component {
 
             // Synchronize the button's initial visual presentation
             this._updateFullscreenButton();
+
+            /*
+             * ====================================================================
+             * DESKTOP & WEB AUDIO VOLUME CONTROL INITIALIZATION
+             * ====================================================================
+             * Configures real-time volume slider scrubbing, mute toggling,
+             * player backend synchronization, and mouse wheel input handling.
+             * ====================================================================
+             */
+            // Slider drag / scrub input event
+            if (this._osdVolumeSliderEl) {
+                const handleVolInput = (e) => this._handleVolumeSliderInput(e);
+                const handleVolChange = (e) => this._handleVolumeSliderChange(e);
+                this._osdVolumeSliderEl.addEventListener('input', handleVolInput);
+                this._osdVolumeSliderEl.addEventListener('change', handleVolChange);
+
+                this._subscriptions.push(() => {
+                    this._osdVolumeSliderEl?.removeEventListener('input', handleVolInput);
+                    this._osdVolumeSliderEl?.removeEventListener('change', handleVolChange);
+                });
+            }
+
+            // Mouse wheel listener on volume group container
+            const handleVolWheel = (e) => this._handleVolumeWheel(e);
+            if (this._osdVolumeGroupEl) {
+                this._osdVolumeGroupEl.addEventListener('wheel', handleVolWheel, { passive: false });
+                this._subscriptions.push(() => {
+                    this._osdVolumeGroupEl?.removeEventListener('wheel', handleVolWheel);
+                });
+            }
+
+            // Mouse wheel listener across active player page for desktop/web viewing
+            const playerPageEl = this._playerPage?.el || (typeof document !== 'undefined' ? document.querySelector('.player-page') : null);
+            if (playerPageEl) {
+                playerPageEl.addEventListener('wheel', handleVolWheel, { passive: false });
+                this._subscriptions.push(() => {
+                    playerPageEl?.removeEventListener('wheel', handleVolWheel);
+                });
+            }
+
+            // Synchronize player backend volume events with the UI slider and icon
+            if (this._player) {
+                const onVolumeChanged = () => this._updateVolumeUI();
+                this._player.on('volumechange', onVolumeChanged);
+                this._subscriptions.push(() => {
+                    this._player?.removeListener?.('volumechange', onVolumeChanged);
+                });
+            }
+
+            // Synchronize the volume UI's initial visual presentation
+            this._updateVolumeUI();
         }
 
         // Bind slider
@@ -824,19 +905,26 @@ export default class OSDController extends Component {
                     this.show();
                     return;
                 }
-                // Route through PlayerPage remote play/pause handler to update heartbeat and UI
-                if (this._playerPage && typeof this._playerPage._onRemotePlayPause === 'function') {
-                    this._playerPage._onRemotePlayPause();
-                } else if (this._player?.togglePlay) {
-                    const wasPaused = this._player.isPaused?.();
-                    this._player.togglePlay();
-                    // Display appropriate visual feedback based on layout mode
-                    if (PlayerSettings.get('osdLayout') === 'hidden') {
-                        this.showStealthHud(wasPaused ? 'play' : 'pause');
-                    } else {
-                        this.showAndFocusPlayPause();
+
+                // Encapsulate playback toggle logic
+                const executeHiddenPlayPause = () => {
+                    // Route through PlayerPage remote play/pause handler to update heartbeat and UI
+                    if (this._playerPage && typeof this._playerPage._onRemotePlayPause === 'function') {
+                        this._playerPage._onRemotePlayPause();
+                    } else if (this._player?.togglePlay) {
+                        const wasPaused = this._player.isPaused?.();
+                        this._player.togglePlay();
+                        // Display appropriate visual feedback based on layout mode
+                        if (PlayerSettings.get('osdLayout') === 'hidden') {
+                            this.showStealthHud(wasPaused ? 'play' : 'pause');
+                        } else {
+                            this.showAndFocusPlayPause();
+                        }
                     }
-                }
+                };
+
+                // Buffer single clicks on desktop and web to distinguish double-click fullscreen
+                this._dispatchBackgroundClick(executeHiddenPlayPause, e);
                 return;
             }
 
@@ -908,6 +996,11 @@ export default class OSDController extends Component {
                 return;
             }
 
+            // If clicking inside the volume group or volume slider container, do not toggle play/pause
+            if (resolvedTarget.closest?.('.osd-volume-group') || resolvedTarget.closest?.('.osd-volume-slider-container')) {
+                return;
+            }
+
             /*
              * OSD background click: any click inside the OSD that doesn't land on a
              * specific button or the seekbar is treated as a play/pause toggle on TV/desktop.
@@ -918,9 +1011,63 @@ export default class OSDController extends Component {
                     this.hide();
                     return;
                 }
-                this._executeAction('togglePlay');
+                // Buffer single clicks on desktop and web to distinguish double-click fullscreen
+                this._dispatchBackgroundClick(() => {
+                    this._executeAction('togglePlay');
+                }, e);
             }
         });
+
+        /*
+         * ====================================================================
+         * DESKTOP & WEB DOUBLE-CLICK FULLSCREEN SHORTCUT
+         * ====================================================================
+         * Double clicking anywhere on the player video surface / background toggles
+         * between windowed and fullscreen presentation mode (enables fullscreen
+         * on the first double click, disables on the second double click).
+         * ====================================================================
+         */
+        if (platformInfo.isDesktop || platformInfo.isWeb) {
+            this._osdEl.addEventListener('dblclick', (e) => {
+                // Cancel pending background single-click toggle immediately
+                this._clearBackgroundClickTimeout();
+
+                let resolvedTarget = e.target;
+                if (resolvedTarget.classList && resolvedTarget.classList.contains('osd-overlays')) {
+                    const els = document.elementsFromPoint(e.clientX, e.clientY);
+                    for (const el of els) {
+                        if (el.classList && el.classList.contains('osd-overlays')) continue;
+                        if (el.closest?.('.osd-main') || el.closest?.('[data-action]')) {
+                            resolvedTarget = el;
+                            break;
+                        }
+                    }
+                }
+
+                // Guard: Ignore double-clicks on buttons, inputs, sliders, volume, menus, modals
+                if (
+                    resolvedTarget.closest?.('[data-action]') ||
+                    resolvedTarget.closest?.('.osd-btn') ||
+                    resolvedTarget.closest?.('button') ||
+                    resolvedTarget.closest?.('input') ||
+                    resolvedTarget.closest?.('.osd-volume-group') ||
+                    resolvedTarget.closest?.('.osd-volume-slider-container') ||
+                    resolvedTarget.closest?.('.osd-slider-container') ||
+                    resolvedTarget.closest?.('.track-menu') ||
+                    resolvedTarget.closest?.('.settings-menu') ||
+                    resolvedTarget.closest?.('.modal') ||
+                    resolvedTarget.closest?.('.osd-menu') ||
+                    resolvedTarget.closest?.('.osd-overlays > *') ||
+                    this.isModalOpen
+                ) {
+                    return;
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                this._toggleFullscreen();
+            });
+        }
 
         /*
          * Audio mode: hide buttons that only apply to video.
@@ -1085,6 +1232,24 @@ export default class OSDController extends Component {
             return;
         }
 
+        /*
+         * ====================================================================
+         * GYROSCOPIC JITTER & DISMISSAL WAKE LOCKOUT GUARD
+         * ====================================================================
+         * When the OSD is hidden (especially via physical remote Back key),
+         * air remotes (such as LG Magic Remote) transmit continuous gyroscopic
+         * jitter and synthetic mousemove events as the user's thumb clicks or
+         * releases the button.
+         *
+         * If the HUD is currently hidden and we are inside the settle window,
+         * discard the mousemove event entirely so the OSD remains hidden and
+         * subsequent Back presses reach the exit action.
+         * ====================================================================
+         */
+        if (!this._isOsdVisible && this._mouseWakeLockoutUntil && Date.now() < this._mouseWakeLockoutUntil) {
+            return;
+        }
+
         this.show();
         this.resetAutoHide();
 
@@ -1245,6 +1410,21 @@ export default class OSDController extends Component {
                 text = param ? `+${param}s` : `+${fwdSec}s`;
                 break;
             }
+            case 'volume':
+            case 'volumeUp':
+            case 'volumeDown': {
+                // Determine volume level from parameter or current player backend
+                const vol = typeof param === 'number' ? param : (parseInt(param, 10) || (this._player?.getVolume?.() ?? 100));
+                iconHtml = vol > 50 ? osdIcons.volumeUp : (vol > 0 ? osdIcons.volumeDown : osdIcons.volumeOff);
+                text = typeof param === 'string' && param.endsWith('%') ? param : `${Math.round(vol)}%`;
+                break;
+            }
+            case 'mute': {
+                // Audio muted indicator state
+                iconHtml = osdIcons.volumeOff;
+                text = i18n.t('Muted') || 'Muted';
+                break;
+            }
             default:
                 return;
         }
@@ -1375,6 +1555,9 @@ export default class OSDController extends Component {
          */
         if (this._isExiting) return;
 
+        // Reset any active dismissal lockout when the HUD is intentionally made visible
+        this._mouseWakeLockoutUntil = 0;
+
         /*
          * Cancel the pending focus-reset timer (timeout mode) if the user
          * returns to the OSD before the 10-second deadline.
@@ -1501,6 +1684,37 @@ export default class OSDController extends Component {
     restoreControlsFocus() {
         // Rebuild cache so the now-hidden widget buttons are removed
         this._cacheFocusableElements();
+
+        /*
+         * ========================================================================
+         * UP NEXT DIALOG FOCUS RETENTION:
+         * If the Up Next episode dialog is currently visible, it actively owns the
+         * overlay row (Row -1) and must retain remote focus.
+         *
+         * When an outro segment ends and its skip-outro button hides, PluginWidgetHost
+         * triggers restoreControlsFocus(). Without this check, focus is erroneously
+         * pulled away from "Play Now" down to Row 1 (Play/Pause) or the seekbar,
+         * causing subsequent OK presses to pause playback rather than starting the next episode.
+         * ========================================================================
+         */
+        if (this.upNextDialog?.isVisible) {
+            // Keep remote focus pinned on the overlay row
+            this._currentFocusRow = -1;
+
+            // Re-align focus index to the active button inside the Up Next dialog
+            if (this.upNextDialog.$el) {
+                const buttons = Array.from(this.upNextDialog.$el.querySelectorAll('.upnext-btn'));
+                const targetBtn = buttons[this.upNextDialog._focusedButton] || buttons[0];
+                const playIdx = targetBtn ? this._cachedOverlayRow.indexOf(targetBtn) : -1;
+                if (playIdx !== -1) {
+                    this._currentFocusIndex = playIdx;
+                }
+            }
+
+            // Apply focus styling and update DOM state immediately
+            this._updateFocus();
+            return;
+        }
 
         // Only restore if focus was actually in the overlay row
         if (this._currentFocusRow === -1) {
@@ -1750,12 +1964,20 @@ export default class OSDController extends Component {
     hide() {
         this._clearSeekState();
         this._cancelDownHold();
+        this._clearBackgroundClickTimeout();
         // Don't hide if a modal menu is open
         if (this.isModalOpen) return;
 
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+
+        /*
+         * Set a 1200ms cooldown window to suppress instant pointer wakeups.
+         * Prevents air-mouse gyroscopic micro-movements on physical button release
+         * from immediately undoing the dismissal action.
+         */
+        this._mouseWakeLockoutUntil = Date.now() + 1200;
 
         /*
          * ====================================================================
@@ -1820,6 +2042,16 @@ export default class OSDController extends Component {
             return;
         }
 
+        /*
+         * Exception: Do not park focus if the Up Next dialog is visible.
+         * The dialog stays visible in the corner while the main OSD controls hide.
+         * Parking focus on Play/Pause or the seekbar while Up Next is visible would cause
+         * subsequent OK/Enter remote presses to toggle playback instead of triggering Play Now.
+         */
+        if (this.upNextDialog?.isVisible) {
+            return;
+        }
+
         // Exception: Do not park focus if a plugin widget currently holds focus
         // (overlay row / Row -1). The widget stays visible even when the main OSD
         // controls hide — e.g. the skip-intro button floats above the video
@@ -1858,6 +2090,9 @@ export default class OSDController extends Component {
      * @private
      */
     _resetFocusToPlayPause() {
+        // Guard: never steal focus from Up Next dialog if it is active
+        if (this.upNextDialog?.isVisible) return;
+
         this._currentFocusRow = 1;
         const playIdx = this._findActionIndex('togglePlay');
         if (playIdx !== -1) this._currentFocusIndex = playIdx;
@@ -1871,6 +2106,9 @@ export default class OSDController extends Component {
      * @private
      */
     _resetFocusToSeekbar() {
+        // Guard: never steal focus from Up Next dialog if it is active
+        if (this.upNextDialog?.isVisible) return;
+
         this._currentFocusRow = 2; // Position Slider row
         this._currentFocusIndex = 0;
         this._updateFocus();
@@ -1882,6 +2120,52 @@ export default class OSDController extends Component {
         if (this.isModalOpen || this._seekRequiresConfirmation) return;
 
         this._autoHideTimer = setTimeout(() => this.hide(), this._config.autoHideDelay);
+    }
+
+    /**
+     * ========================================================================
+     * DYNAMIC OSD LAYOUT MODE LIVE APPLICATION
+     * ========================================================================
+     * Synchronizes the active DOM and visual presentation of the player overlay
+     * when the OSD layout mode changes dynamically at runtime (e.g. via remote
+     * button shortcut toggles between Stealth and previous layout modes).
+     *
+     * State Handlers:
+     * - 'hidden' (Stealth Mode): Immediately adds 'osd-layout-hidden' to suppress
+     *   all Layer 1 playback controls, timeline, and metadata. Aborts active
+     *   down-hold animations and forces the OSD into a hidden state.
+     * - 'left' / 'centered': Removes the 'osd-layout-hidden' suppressive styling,
+     *   re-arms the OSD visibility pipeline, and focuses the primary Play/Pause
+     *   action button to provide instant, reassuring tactile feedback.
+     * ========================================================================
+     * @param {string} newLayout - Target layout identifier ('hidden', 'left', 'centered')
+     */
+    updateLayoutMode(newLayout) {
+        // Guard against calls prior to DOM instantiation or teardown
+        if (!this._osdEl) return;
+
+        log.info(`OSDController: Dynamically applying layout mode switch to "${newLayout}"`);
+
+        // Check target presentation mode
+        if (newLayout === 'hidden') {
+            // Apply stealth suppressing class on the root OSD container element
+            this._osdEl.classList.add('osd-layout-hidden');
+
+            // Abort any ongoing 2-second hold gesture tracking cleanly
+            this._cancelDownHold();
+
+            // Dismiss the active Layer 1 display immediately if currently visible
+            if (this._isOsdVisible) {
+                this.hide();
+            }
+        } else {
+            // Remove stealth class to restore normal interactive presentation
+            this._osdEl.classList.remove('osd-layout-hidden');
+
+            // Bring up the restored controls with focus on Play/Pause for visual confirmation
+            this.show();
+            this.showAndFocusPlayPause();
+        }
     }
 
     closeMenu() {
@@ -2162,6 +2446,18 @@ export default class OSDController extends Component {
         // COLOR BUTTONS (Red, Green, Yellow, Blue)
         // Instantly reveal player controls in stealth mode without holding Down.
         const handleColorButtonReveal = (color, e) => {
+            // Suppress automatic reveal if this event was already consumed by RemoteButtonManager
+            if (e && (e.defaultPrevented || e._remoteActionHandled)) {
+                return false;
+            }
+
+            // Check if this specific color key is mapped to an intentional custom layout toggle
+            const capColor = color.charAt(0).toUpperCase() + color.slice(1);
+            const mappedAction = storage.getItem(`pref:remote${capColor}Action`) || 'none';
+            if (mappedAction === 'playerToggleOsdLayout' || mappedAction === 'playerToggleStealth') {
+                return false;
+            }
+
             if (PlayerSettings.get('osdColorButtonsReveal') !== false &&
                 PlayerSettings.get('osdLayout') === 'hidden' &&
                 !this._isOsdVisible) {
@@ -2182,6 +2478,11 @@ export default class OSDController extends Component {
         this.on('key:green', (e) => handleColorButtonReveal('green', e));
         this.on('key:yellow', (e) => handleColorButtonReveal('yellow', e));
         this.on('key:blue', (e) => handleColorButtonReveal('blue', e));
+
+        // Listen for live OSD layout preference changes triggered via shortcuts or settings
+        this.on('pref:osdLayout', (newLayout) => {
+            this.updateLayoutMode(newLayout);
+        });
         // ENTER
         this.on('key:enter', (e) => {
             // Conditionally prevent default inside handleInput based on what is focused
@@ -2930,16 +3231,41 @@ export default class OSDController extends Component {
             }
         }
 
+        /*
+         * ====================================================================
+         * FULLSCREEN ESCAPE OVERRIDE (DESKTOP & WEB)
+         * ====================================================================
+         * When in fullscreen mode on desktop or web runtimes, pressing Escape / Back
+         * overrides back navigation to exit fullscreen mode first, keeping video
+         * playback active in the windowed presentation.
+         * ====================================================================
+         */
+        if ((platformInfo.isDesktop || platformInfo.isWeb) && this._isFullscreen()) {
+            log.info('OSDController: Overriding back navigation to exit fullscreen presentation');
+            this._toggleFullscreen();
+            return true;
+        }
+
+        // ====================================================================
+        // OSD HIDE / PLAYER EXIT CHAIN
+        // ====================================================================
+        // When playback controls or seekbar are currently visible, Back dismisses
+        // the OSD first so the user can continue watching clean video without HUD.
+        // A subsequent Back press when controls are hidden triggers the exit flow.
+        // ====================================================================
         if (this._isOsdVisible) {
             this.hide();
-        } else {
-            // If confirmExitPlayer setting is enabled, show the confirmation dialog
-            if (PlayerSettings.get('confirmExitPlayer')) {
-                this.toggleConfirmExitModal(true);
-                return true;
-            }
-            this._executeAction('exit');
+            return true;
         }
+
+        // If confirmExitPlayer setting is enabled, show the confirmation dialog
+        if (PlayerSettings.get('confirmExitPlayer')) {
+            this.toggleConfirmExitModal(true);
+            return true;
+        }
+
+        // Controls are hidden and no modal is active — trigger player exit
+        this._executeAction('exit');
         return true;
     }
 
@@ -3022,6 +3348,22 @@ export default class OSDController extends Component {
                 this._cachedOverlayRow.push(...focusables);
             }
         });
+
+        /*
+         * Keep _currentFocusIndex properly aligned with the active Up Next dialog button
+         * when the dialog is visible and focus is on Row -1, preventing index shifts when
+         * preceding widgets (e.g. skip outro) hide and change the array length.
+         */
+        if (this.upNextDialog?.isVisible && this._currentFocusRow === -1 && this.upNextDialog.$el) {
+            const buttons = Array.from(this.upNextDialog.$el.querySelectorAll('.upnext-btn'));
+            const targetBtn = buttons[this.upNextDialog._focusedButton] || buttons[0];
+            if (targetBtn && this._cachedOverlayRow.length > 0) {
+                const idx = this._cachedOverlayRow.indexOf(targetBtn);
+                if (idx !== -1) {
+                    this._currentFocusIndex = idx;
+                }
+            }
+        }
 
         // Header (0)
         const backBtn = this._osdEl.querySelector('.osd-back-btn');
@@ -3476,6 +3818,10 @@ export default class OSDController extends Component {
                 // Toggle between standard viewport and OS-level fullscreen mode
                 this._toggleFullscreen();
                 break;
+            case 'toggleMute':
+                // Toggle between muted and audible sound presentation
+                this._toggleMute();
+                break;
         }
     }
 
@@ -3538,14 +3884,68 @@ export default class OSDController extends Component {
 
     /**
      * ========================================================================
+     * Background Single-Click Dispatcher
+     * ========================================================================
+     * On desktop and web runtimes, buffers single clicks landing on the player
+     * background by 250ms. If a second click arrives within this window,
+     * the pending single click is cancelled and double-click fullscreen triggers.
+     * On TV platforms, executes immediately without latency.
+     * ========================================================================
+     * @param {Function} action - Action callback to execute on single click.
+     * @param {MouseEvent} [e] - Optional DOM mouse event.
+     * @private
+     */
+    _dispatchBackgroundClick(action, e) {
+        // Enforce debouncing on desktop and browser runtimes
+        if (platformInfo.isDesktop || platformInfo.isWeb) {
+            // Cancel any previously scheduled single-click action
+            this._clearBackgroundClickTimeout();
+
+            // Discard second click in rapid succession so double click isn't overridden
+            if (e && e.detail > 1) {
+                return;
+            }
+
+            // Schedule buffered single-click action
+            this._backgroundClickTimeout = setTimeout(() => {
+                this._backgroundClickTimeout = null;
+                action();
+            }, 250);
+        } else {
+            // Instant execution on television platforms
+            action();
+        }
+    }
+
+    /**
+     * Clears any buffered background single-click timer.
+     * @private
+     */
+    _clearBackgroundClickTimeout() {
+        if (this._backgroundClickTimeout) {
+            clearTimeout(this._backgroundClickTimeout);
+            this._backgroundClickTimeout = null;
+        }
+    }
+
+    /**
+     * ========================================================================
      * Fullscreen Mode Toggle
      * ========================================================================
      * Toggles the display between windowed and fullscreen presentation mode.
      * Routes through platform adapters (DesktopAdapter, WebAdapter, or Player).
+     * Includes a 300ms debounce guard to prevent double-invocation jitter.
      * ========================================================================
      * @private
      */
     async _toggleFullscreen() {
+        // Debounce double-invocations occurring in rapid succession
+        const now = Date.now();
+        if (this._lastToggleFullscreenTime && now - this._lastToggleFullscreenTime < 300) {
+            return;
+        }
+        this._lastToggleFullscreenTime = now;
+
         try {
             // Handle native desktop shell toggling via desktopAdapter
             if (platformInfo.isDesktop && typeof desktopAdapter !== 'undefined') {
@@ -3602,6 +4002,211 @@ export default class OSDController extends Component {
 
         // Swap between enter fullscreen and exit fullscreen SVG icons
         btn.innerHTML = isFs ? osdIcons.fullscreenExit : osdIcons.fullscreen;
+    }
+
+    /**
+     * ========================================================================
+     * Audio Mute Toggle Action
+     * ========================================================================
+     * Inverts the current sound presentation state between muted and audible.
+     * Restores previous volume level when unmuting, or defaults to 50% if volume was 0%.
+     * ========================================================================
+     * @private
+     */
+    _toggleMute() {
+        const currentlyMuted = Boolean(this._player?.isMuted?.());
+        const currentVol = this._player?.getVolume ? this._player.getVolume() : (MediaHelper.getSavedVolume() * 100);
+
+        if (currentlyMuted) {
+            // Unmuting: restore audio playback presentation
+            if (this._player && typeof this._player.setMuted === 'function') {
+                this._player.setMuted(false);
+            } else if (this._player && typeof this._player.toggleMute === 'function') {
+                this._player.toggleMute();
+            } else if (this._playerPage && typeof this._playerPage._onRemoteToggleMute === 'function') {
+                this._playerPage._onRemoteToggleMute();
+            }
+
+            // If previous volume was silent, raise to audible baseline level
+            if (currentVol === 0) {
+                this._setVolume(50);
+            }
+        } else {
+            // Muting: suppress audio output cleanly
+            if (this._player && typeof this._player.setMuted === 'function') {
+                this._player.setMuted(true);
+            } else if (this._player && typeof this._player.toggleMute === 'function') {
+                this._player.toggleMute();
+            } else if (this._playerPage && typeof this._playerPage._onRemoteToggleMute === 'function') {
+                this._playerPage._onRemoteToggleMute();
+            }
+        }
+
+        // Synchronize visual state immediately across UI controls
+        this._updateVolumeUI();
+    }
+
+    /**
+     * ========================================================================
+     * Volume Adjustment Dispatch
+     * ========================================================================
+     * Clamps target volume (0-100), persists to storage, updates player backend,
+     * and automatically unmutes if volume is raised above 0.
+     * ========================================================================
+     * @param {number} volume - Target volume level between 0 and 100.
+     * @private
+     */
+    _setVolume(volume) {
+        const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+
+        // Route through active player backend
+        if (this._player && typeof this._player.setVolume === 'function') {
+            this._player.setVolume(clamped);
+
+            // Automatically unmute when setting volume > 0 so audio is audible
+            if (clamped > 0 && this._player.isMuted?.() && typeof this._player.setMuted === 'function') {
+                this._player.setMuted(false);
+            }
+        } else if (this._playerPage && typeof this._playerPage._onRemoteVolume === 'function') {
+            this._playerPage._onRemoteVolume(clamped);
+        }
+
+        // Persist volume level across sessions
+        MediaHelper.saveVolume(clamped / 100);
+
+        // Update slider and button UI
+        this._updateVolumeUI();
+    }
+
+    /**
+     * ========================================================================
+     * Volume UI Synchronization
+     * ========================================================================
+     * Synchronizes the volume button icon, slider track fill, and range input
+     * with the current player audio backend volume level and mute state.
+     * ========================================================================
+     * @private
+     */
+    _updateVolumeUI() {
+        if (!this._osdEl) return;
+
+        // Locate cached or live DOM elements
+        const btn = this._osdVolumeBtnEl || this._osdEl.querySelector('#osdVolumeBtn');
+        const slider = this._osdVolumeSliderEl || this._osdEl.querySelector('#osdVolumeSlider');
+        const fill = this._osdVolumeFillEl || this._osdEl.querySelector('#osdVolumeFill');
+
+        if (!btn && !slider) return;
+
+        // Determine mute state and volume level
+        const isMuted = Boolean(this._player?.isMuted?.());
+        const rawVol = this._player?.getVolume ? this._player.getVolume() : (MediaHelper.getSavedVolume() * 100);
+        const volume = Math.max(0, Math.min(100, Math.round(rawVol)));
+
+        // When muted, visual slider indicates silent (0%) level
+        const displayVol = isMuted ? 0 : volume;
+
+        // Synchronize native input range value
+        if (slider && Number(slider.value) !== displayVol) {
+            slider.value = displayVol;
+        }
+
+        // Synchronize track fill line width
+        if (fill) {
+            fill.style.width = `${displayVol}%`;
+        }
+
+        // Synchronize button icon, accessibility label, and shortcut tooltip
+        if (btn) {
+            let icon;
+            if (isMuted || volume === 0) {
+                icon = osdIcons.volumeOff;
+            } else if (volume <= 50) {
+                icon = osdIcons.volumeDown;
+            } else {
+                icon = osdIcons.volumeUp;
+            }
+
+            const label = isMuted ? (i18n.t('Unmute') || 'Unmute') : (i18n.t('Mute') || 'Mute');
+            btn.innerHTML = icon;
+            btn.setAttribute('aria-label', label);
+            btn.title = `${label} (M)`;
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Volume Slider Scrubbing Event Handler
+     * ========================================================================
+     * Updates visual fill line in real-time as user scrubs slider thumb.
+     * ========================================================================
+     * @param {Event} e - Input scrub event.
+     * @private
+     */
+    _handleVolumeSliderInput(e) {
+        const val = parseFloat(e.target.value);
+        if (this._osdVolumeFillEl) {
+            this._osdVolumeFillEl.style.width = `${val}%`;
+        }
+        this._setVolume(val);
+        this.resetAutoHide();
+    }
+
+    /**
+     * ========================================================================
+     * Volume Slider Release Event Handler
+     * ========================================================================
+     * Commits final volume level when user releases slider thumb.
+     * ========================================================================
+     * @param {Event} e - Change commit event.
+     * @private
+     */
+    _handleVolumeSliderChange(e) {
+        const val = parseFloat(e.target.value);
+        this._setVolume(val);
+        this.resetAutoHide();
+    }
+
+    /**
+     * ========================================================================
+     * Volume Mouse Wheel Event Handler
+     * ========================================================================
+     * Intercepts vertical mouse wheel scroll over the player or volume slider,
+     * stepping volume up or down in 5% increments.
+     * ========================================================================
+     * @param {WheelEvent} e - Mouse wheel event.
+     * @private
+     */
+    _handleVolumeWheel(e) {
+        // Suppress volume scrolling when a modal or dropdown menu is active
+        if (this.isModalOpen || (typeof document !== 'undefined' && document.querySelector('.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'))) {
+            return;
+        }
+
+        e.preventDefault();
+        const step = 5;
+        const currentVol = this._player?.getVolume ? this._player.getVolume() : (MediaHelper.getSavedVolume() * 100);
+        const isMuted = Boolean(this._player?.isMuted?.());
+
+        let newVol;
+        if (e.deltaY < 0) {
+            // Scroll Up: increase sound level and unmute if necessary
+            if (isMuted && this._player && typeof this._player.setMuted === 'function') {
+                this._player.setMuted(false);
+            }
+            newVol = Math.min(100, currentVol + step);
+        } else if (e.deltaY > 0) {
+            // Scroll Down: decrease sound level
+            newVol = Math.max(0, currentVol - step);
+        }
+
+        if (newVol !== undefined) {
+            this._setVolume(newVol);
+
+            // Display transient stealth HUD when full OSD is hidden
+            if (!this._isOsdVisible) {
+                this.showStealthHud('volume', `${Math.round(newVol)}%`);
+            }
+        }
     }
 
     _seekTimeline(direction, e) {
@@ -4041,7 +4646,8 @@ export default class OSDController extends Component {
         const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
         if (endsAtEl && duration > 0) {
             const remaining = duration - current;
-            const endTime = new Date(Date.now() + (remaining / 10000));
+            // Use timeManager.now() so offline Tizen/WebOS TVs accurately reflect local time
+            const endTime = new Date(timeManager.now().getTime() + (remaining / 10000));
             // Use 12h/24h format based on user preference via i18n helper
             const endStr = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
             if (endsAtEl.textContent !== endStr) {
@@ -4085,7 +4691,8 @@ export default class OSDController extends Component {
             return;
         }
         this._osdClockEl.style.display = '';
-        const timeStr = i18n.formatLocalTime(new Date());
+        // Use high-precision local time from TimeManager (Tizen/WebOS/Jellyfin LAN sync)
+        const timeStr = i18n.formatLocalTime(timeManager.now());
         if (this._osdClockEl.textContent !== timeStr) {
             this._osdClockEl.textContent = timeStr;
         }
@@ -4383,13 +4990,18 @@ export default class OSDController extends Component {
          * To eliminate this, if the player is actively seeking and force is not
          * asserted, we defer unpausing until the authoritative 'seeked' event
          * fires from the hardware demuxer.
+         *
+         * The webOS and HTML5 backends hold the play until the seek lands
+         * themselves (queuesPostSeekPlay). webOS carries out a seek on a paused
+         * element only once playback starts, so waiting here for 'seeked' only
+         * added the 3.5 s timeout to every scrub (LG C4, native HLS remux).
          * ====================================================================
          */
         const isSeeking = Boolean(
             (typeof this._player.isSeeking === 'function' ? this._player.isSeeking() : this._player.isSeeking) ||
             this._player._isSeeking
         );
-        if (!force && isSeeking && typeof this._player.on === 'function') {
+        if (!force && isSeeking && !this._player.queuesPostSeekPlay && typeof this._player.on === 'function') {
             log.info('OSDController: Deferring playback resume until seeked event completes');
             // Flag that playback resumption is waiting on the hardware seeked event
             this._seekPendingResume = true;
@@ -4763,6 +5375,19 @@ export default class OSDController extends Component {
         if (show) {
             // Guard: only show if there's something to preview
             if (!this.upNextDialog._nextItem) return;
+
+            /*
+             * Abort any pending focus reset or auto-hide timer immediately so
+             * delayed OSD park timers do not clobber Up Next focus asynchronously.
+             */
+            if (this._focusResetTimer) {
+                clearTimeout(this._focusResetTimer);
+                this._focusResetTimer = null;
+            }
+            if (this._autoHideTimer) {
+                clearTimeout(this._autoHideTimer);
+                this._autoHideTimer = null;
+            }
 
             /*
              * Set activeMenu so handleInput() at the Row -1 delegation gate

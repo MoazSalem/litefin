@@ -34,6 +34,7 @@ export function decorateStatusBadge(item) {
 export class SeerrClient {
     constructor() {
         this._status = null;
+        this._statusPromise = null;
         this._clearedLegacyCredentials = false;
         this._cache = new Map();
         this._cacheTtlMs = 5 * 60 * 1000;
@@ -68,6 +69,11 @@ export class SeerrClient {
 
         if (this._status && !force) return this._status;
 
+        // In-flight deduplication: return active shared probe promise
+        if (!force && this._statusPromise) {
+            return this._statusPromise;
+        }
+
         // Check session-level cache to ensure probe occurs once per session
         if (!force && typeof sessionStorage !== 'undefined') {
             try {
@@ -79,36 +85,46 @@ export class SeerrClient {
             } catch (_) {}
         }
 
-        // Verify Litefin companion server plugin is present before attempting endpoint request
-        const isLitefinAvailable = await api.isLitefinPluginAvailable();
-        if (!isLitefinAvailable) {
-            this._status = { configured: false, available: false };
-            return this._status;
-        }
-
-        try {
-            const payload = await api.get(`${API_ROOT}/Status`, {}, { silent: true, warnOnError: true });
-            this._status = {
-                configured: !!payload?.configured,
-                available: !!payload?.available
-            };
-            if (typeof sessionStorage !== 'undefined') {
-                try {
-                    sessionStorage.setItem('seerr:session_status', JSON.stringify(this._status));
-                } catch (_) {}
+        /*
+         * Wrap probing routine inside a shared promise to prevent multiple components
+         * (e.g. Sidebar, Search, Discover) from dispatching duplicate concurrent network probes.
+         */
+        this._statusPromise = (async () => {
+            // Verify Litefin companion server plugin is present before attempting endpoint request
+            const isLitefinAvailable = await api.isLitefinPluginAvailable();
+            if (!isLitefinAvailable) {
+                this._status = { configured: false, available: false };
+                return this._status;
             }
-            // Notify all components that seerr availability is now resolved so they
-            // can update their UI without an additional probe round-trip
-            eventBus.emit('seerr:statusResolved', this._status);
-        } catch (err) {
-            // Do NOT cache failure in this._status — the request may have failed due to
-            // an auth race condition (sidebar probing before session is fully restored).
-            // Leaving this._status null allows the next caller to retry cleanly.
-            log.debug('Litefin Seerr plugin endpoint is unavailable or not yet ready', err);
-            return { configured: false, available: false };
-        }
 
-        return this._status;
+            try {
+                const payload = await api.get(`${API_ROOT}/Status`, {}, { silent: true, warnOnError: true });
+                this._status = {
+                    configured: !!payload?.configured,
+                    available: !!payload?.available
+                };
+                if (typeof sessionStorage !== 'undefined') {
+                    try {
+                        sessionStorage.setItem('seerr:session_status', JSON.stringify(this._status));
+                    } catch (_) {}
+                }
+                // Notify all components that seerr availability is now resolved so they
+                // can update their UI without an additional probe round-trip
+                eventBus.emit('seerr:statusResolved', this._status);
+            } catch (err) {
+                // Do NOT cache failure in this._status — the request may have failed due to
+                // an auth race condition (sidebar probing before session is fully restored).
+                // Leaving this._status null allows the next caller to retry cleanly.
+                log.debug('Litefin Seerr plugin endpoint is unavailable or not yet ready', err);
+                return { configured: false, available: false };
+            } finally {
+                this._statusPromise = null;
+            }
+
+            return this._status;
+        })();
+
+        return this._statusPromise;
     }
 
     /**
@@ -326,7 +342,7 @@ export class SeerrClient {
     /**
      * Gets person details along with combined cast and crew filmography from Seerr.
      * Normalizes and decorates each credit item with availability badges.
-     * 
+     *
      * @param {number} personId - The TMDB person identifier.
      * @returns {Promise<Object>} Normalized person details and appearances.
      */
@@ -338,8 +354,8 @@ export class SeerrClient {
                 this._request(`/Person/${personId}/combined_credits`)
             ]);
 
-            const raw = rawPersonRes.status === 'fulfilled' ? (rawPersonRes.value || {}) : {};
-            const creditsRaw = creditsRes.status === 'fulfilled' ? (creditsRes.value || {}) : {};
+            const raw = rawPersonRes.status === 'fulfilled' ? rawPersonRes.value || {} : {};
+            const creditsRaw = creditsRes.status === 'fulfilled' ? creditsRes.value || {} : {};
 
             if (!raw && !creditsRaw) throw new Error('SeerrInvalidResponse');
 
@@ -368,12 +384,19 @@ export class SeerrClient {
 
             // Deduplicate items appearing in both cast and crew roles
             const combined = [...cast, ...crew]
-                .filter((item, index, self) =>
-                    item &&
-                    index === self.findIndex((t) => t && (t.id || t.Id) === (item.id || item.Id) && (t.mediaType || t.media_type) === (item.mediaType || item.media_type))
+                .filter(
+                    (item, index, self) =>
+                        item &&
+                        index ===
+                            self.findIndex(
+                                (t) =>
+                                    t &&
+                                    (t.id || t.Id) === (item.id || item.Id) &&
+                                    (t.mediaType || t.media_type) === (item.mediaType || item.media_type)
+                            )
                 )
                 // Order credits by popularity descending for relevant filmography presentation
-                .sort((a, b) => ((b.popularity || b.voteAverage || 0) - (a.popularity || a.voteAverage || 0)));
+                .sort((a, b) => (b.popularity || b.voteAverage || 0) - (a.popularity || a.voteAverage || 0));
 
             // Convert TMDB credit entries to standard normalized cards with status badges
             const appearances = combined
@@ -432,9 +455,12 @@ export class SeerrClient {
         // -------------------------------------------------------------------
         const requestStatusToMediaStatus = (rs) => {
             switch (rs) {
-                case 1: return SEERR_STATUS.PENDING;     // Request pending → MediaStatus PENDING (2)
-                case 2: return SEERR_STATUS.PROCESSING;  // Request approved → MediaStatus PROCESSING (3)
-                default: return 0;                        // Declined or unknown → ignore
+                case 1:
+                    return SEERR_STATUS.PENDING; // Request pending → MediaStatus PENDING (2)
+                case 2:
+                    return SEERR_STATUS.PROCESSING; // Request approved → MediaStatus PROCESSING (3)
+                default:
+                    return 0; // Declined or unknown → ignore
             }
         };
 
@@ -490,7 +516,17 @@ export class SeerrClient {
      * @param {number} [params.userId]
      * @returns {Promise<Object>}
      */
-    async createRequest({ mediaType, tmdbId, seasons, serverId, profileId, rootFolder, languageProfileId, is4k, userId }) {
+    async createRequest({
+        mediaType,
+        tmdbId,
+        seasons,
+        serverId,
+        profileId,
+        rootFolder,
+        languageProfileId,
+        is4k,
+        userId
+    }) {
         const body = { mediaType, mediaId: tmdbId };
         if (mediaType === 'tv') body.seasons = seasons || [];
         if (serverId != null) body.serverId = serverId;
@@ -499,7 +535,9 @@ export class SeerrClient {
         if (languageProfileId != null) body.languageProfileId = languageProfileId;
         if (userId != null) body.userId = userId;
         body.is4k = !!is4k;
-        log.info(`Requesting ${mediaType} ${tmdbId}${seasons ? ` seasons ${seasons.join(',')}` : ''}${userId != null ? ` for user ${userId}` : ''}`);
+        log.info(
+            `Requesting ${mediaType} ${tmdbId}${seasons ? ` seasons ${seasons.join(',')}` : ''}${userId != null ? ` for user ${userId}` : ''}`
+        );
         return this._request('/Requests', { method: 'POST', body });
     }
 
@@ -611,7 +649,8 @@ export class SeerrClient {
                 const item = normalizeSeerrItem({
                     ...media,
                     id: tmdbId,
-                    mediaType: media.mediaType || req.type || (req.type === 1 ? 'movie' : req.type === 2 ? 'tv' : 'movie'),
+                    mediaType:
+                        media.mediaType || req.type || (req.type === 1 ? 'movie' : req.type === 2 ? 'tv' : 'movie'),
                     mediaInfo: media.mediaInfo || media,
                     requests: media.requests || [req]
                 });

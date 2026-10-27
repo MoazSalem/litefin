@@ -25,10 +25,8 @@ import { eventBus } from '../core/EventBus.js';
 import { seerr } from '../api/seerrClient.js';
 import {
     getGenreNameById,
-    getGenreMediaType,
     getStudioNameById,
     getNetworkNameById,
-    getLanguageNameById,
     MOVIE_GENRES_FALLBACK,
     TV_GENRES_FALLBACK,
     SEERR_LANGUAGES,
@@ -102,8 +100,10 @@ class LibraryPage extends Page {
              * Music libraries default to 'square' (album-cover style), which maps to
              * CardRenderer type 'square' rather than adding a 6th viewMode constant.
              */
-            viewMode: 'poster',
+            // Initialize view mode with user-configured global default (fallback to 'poster')
+            viewMode: storage.getItem('pref:defaultLibraryViewMode') || 'poster',
             gridMode: 'dynamic',
+            // Default column count resolved dynamically from configured default
             gridColumns: 7
         };
 
@@ -304,6 +304,32 @@ class LibraryPage extends Page {
      * =========================================================================
      */
     _getDefaultColumnsForMode(mode) {
+        // Supported grid column options map for each distinct layout mode
+        const colOptionsMap = {
+            poster: [4, 5, 6, 7],
+            'small-poster': [8, 9, 10, 12],
+            thumb: [3, 4, 5, 6],
+            banner: [2, 3, 4, 5],
+            list: [1]
+        };
+
+        // Check if user has explicitly saved a default column preference for this layout mode
+        const savedModeCols = parseInt(storage.getItem(`pref:defaultLibraryGridColumns:${mode}`), 10);
+        const validOpts = colOptionsMap[mode] || [];
+        if (validOpts.includes(savedModeCols)) {
+            return savedModeCols;
+        }
+
+        // Check generic global default column setting if the target mode matches the active default view mode
+        const defaultViewMode = storage.getItem('pref:defaultLibraryViewMode') || 'poster';
+        if (mode === defaultViewMode) {
+            const genericSavedCols = parseInt(storage.getItem('pref:defaultLibraryGridColumns'), 10);
+            if (validOpts.includes(genericSavedCols)) {
+                return genericSavedCols;
+            }
+        }
+
+        // Fall back to native Litefin standard static column counts
         switch (mode) {
             case 'small-poster':
                 return 9;
@@ -540,7 +566,7 @@ class LibraryPage extends Page {
         // --------------------------------------------------------------------
         const activePageSize = storage.getItem('pref:libraryPageSize');
         const activeIsInfinite = activePageSize === 'unlimited';
-        const activeLimit = activeIsInfinite ? 100 : (parseInt(activePageSize, 10) || 50);
+        const activeLimit = activeIsInfinite ? 100 : parseInt(activePageSize, 10) || 50;
 
         // State Rehydration Check
         // Priority 1: Check memory state cache for full rehydration
@@ -1041,6 +1067,40 @@ class LibraryPage extends Page {
             eventBus.on('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
         }
 
+        // ---------------------------------------------------------------------
+        // Dynamic Global Default Library View Mode & Columns Preference Listener
+        // ---------------------------------------------------------------------
+        // When user modifies default view mode or default items per row in Settings,
+        // re-evaluate the active library layout ONLY if this library does not have
+        // a custom view mode explicitly configured by the user.
+        // ---------------------------------------------------------------------
+        if (!this._onDefaultLibraryViewModeChanged) {
+            this._onDefaultLibraryViewModeChanged = () => {
+                log.info('Default library view layout preference changed in settings');
+
+                // Determine whether current library or tab has an explicit custom preference
+                const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
+                const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+                const tabStorageKey = isTabSpecific
+                    ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}`
+                    : null;
+                const libStorageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
+                const hasCustomViewMode = Boolean(
+                    (tabStorageKey && storage.getItem(tabStorageKey)) || storage.getItem(libStorageKey)
+                );
+
+                // If no custom view mode is set for this library, rehydrate and re-render grid
+                if (!hasCustomViewMode) {
+                    this._loadPersistedViewMode();
+                    if (this.state.items && this.state.items.length > 0) {
+                        this._renderGrid(this.state.items);
+                    }
+                }
+            };
+            eventBus.on('pref:defaultLibraryViewMode:changed', this._onDefaultLibraryViewModeChanged);
+            eventBus.on('pref:defaultLibraryGridColumns:changed', this._onDefaultLibraryViewModeChanged);
+        }
+
         // =========================================================================
         // BACKGROUND AND SCREEN SLEEP LIFECYCLE HANDLERS
         // =========================================================================
@@ -1222,7 +1282,7 @@ class LibraryPage extends Page {
         // --------------------------------------------------------------------
         const activePageSize = storage.getItem('pref:libraryPageSize');
         const activeIsInfinite = activePageSize === 'unlimited';
-        const activeLimit = activeIsInfinite ? 100 : (parseInt(activePageSize, 10) || 50);
+        const activeLimit = activeIsInfinite ? 100 : parseInt(activePageSize, 10) || 50;
 
         const limitMismatch =
             savedState.limit != null &&
@@ -1236,7 +1296,7 @@ class LibraryPage extends Page {
             sortOrder: savedState.sortOrder || this.state.sortOrder,
             filters: savedState.filters || {},
             nameStartsWith: savedState.nameStartsWith || null,
-            startIndex: limitMismatch ? 0 : (savedState.startIndex || 0),
+            startIndex: limitMismatch ? 0 : savedState.startIndex || 0,
             limit: activeLimit,
             isInfinite: activeIsInfinite,
             // Restore view mode and column layouts from nav state
@@ -1322,6 +1382,13 @@ class LibraryPage extends Page {
         if (this._onAlphaPickerScrollModeChanged) {
             eventBus.off('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
             this._onAlphaPickerScrollModeChanged = null;
+        }
+
+        // Clean up global default library view mode and column change listeners
+        if (this._onDefaultLibraryViewModeChanged) {
+            eventBus.off('pref:defaultLibraryViewMode:changed', this._onDefaultLibraryViewModeChanged);
+            eventBus.off('pref:defaultLibraryGridColumns:changed', this._onDefaultLibraryViewModeChanged);
+            this._onDefaultLibraryViewModeChanged = null;
         }
 
         // Clean up background and sleep listeners
@@ -1707,11 +1774,12 @@ class LibraryPage extends Page {
 
         // Align limit to grid columns so the last rendered row is always full.
         // For list view, column count is always 1 (upstream fix).
-        const effectiveLimitCols = this.state.viewMode === 'list'
-            ? 1
-            : (isLandscape && this.state.viewMode !== 'thumb'
-                ? this._getDefaultColumnsForMode('thumb')
-                : this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode));
+        const effectiveLimitCols =
+            this.state.viewMode === 'list'
+                ? 1
+                : isLandscape && this.state.viewMode !== 'thumb'
+                  ? this._getDefaultColumnsForMode('thumb')
+                  : this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode);
         // ANDROID PORTRAIT: apply the portrait column override AFTER the stock
         // resolution above, so landscape and TV behavior are untouched.
         const portraitLimitCols =
@@ -2621,7 +2689,9 @@ class LibraryPage extends Page {
          * =====================================================================
          */
         const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
-        const tabStorageKey = isTabSpecific ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}` : null;
+        const tabStorageKey = isTabSpecific
+            ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}`
+            : null;
         const libStorageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
 
         // ---------------------------------------------------------------------
@@ -2646,17 +2716,24 @@ class LibraryPage extends Page {
             // Retrieve saved preference (checking tab-specific key before library-level key)
             const saved = (tabStorageKey && storage.getItem(tabStorageKey)) || storage.getItem(libStorageKey);
 
+            // Resolve fallback default layout mode from global settings
+            const configuredDefault = storage.getItem('pref:defaultLibraryViewMode');
+            const defaultMode =
+                configuredDefault && validModes.includes(configuredDefault) ? configuredDefault : 'poster';
+
             if (saved) {
-                // Validate the value is still a known picker option (guards against stale data)
+                // Validate that the persisted library-specific value is still an allowed option
                 const allowedModes = isSeerr ? ['poster', 'small-poster'] : validModes;
-                this.state.viewMode = allowedModes.includes(saved) ? saved : (isLandscape ? 'thumb' : 'poster');
+                this.state.viewMode = allowedModes.includes(saved) ? saved : isLandscape ? 'thumb' : defaultMode;
             } else {
-                // Universal default is 'thumb' for landscape collections/tabs, 'poster' for portrait
-                this.state.viewMode = isLandscape ? 'thumb' : 'poster';
+                // Universal default is 'thumb' for landscape collections/tabs, user-configured default otherwise
+                this.state.viewMode = isLandscape ? 'thumb' : defaultMode;
             }
         }
 
-        log.info(`[ViewMode] Active view mode: ${this.state.viewMode} for library ${this.state.libraryId} (tab: ${this.state.viewType || 'Items'})`);
+        log.info(
+            `[ViewMode] Active view mode: ${this.state.viewMode} for library ${this.state.libraryId} (tab: ${this.state.viewType || 'Items'})`
+        );
 
         /*
          * =========================================================================
@@ -2666,13 +2743,17 @@ class LibraryPage extends Page {
          * custom column counts selected for this viewMode.
          * =========================================================================
          */
-        const tabModeKey = isTabSpecific ? `pref:library:gridMode:${this.state.libraryId}:${this.state.viewType}` : null;
+        const tabModeKey = isTabSpecific
+            ? `pref:library:gridMode:${this.state.libraryId}:${this.state.viewType}`
+            : null;
         const libModeKey = isSeerr ? 'pref:seerr:gridMode' : `pref:library:gridMode:${this.state.libraryId}`;
         const savedMode = (tabModeKey && storage.getItem(tabModeKey)) || storage.getItem(libModeKey);
         this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
 
         const effectiveMode = this.state.viewMode;
-        const tabColsKey = isTabSpecific ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${effectiveMode}` : null;
+        const tabColsKey = isTabSpecific
+            ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${effectiveMode}`
+            : null;
         const colsKey = isSeerr
             ? `pref:seerr:gridColumns:${effectiveMode}`
             : `pref:library:gridColumns:${this.state.libraryId}:${effectiveMode}`;
@@ -3336,6 +3417,7 @@ class LibraryPage extends Page {
          * and native GPU scrolling without continuous main-thread layout thrashing.
          */
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
+        // prettier-ignore
         const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 10);
         const poolRows = Math.min(totalRows, POOL_ROWS);
 
@@ -3450,6 +3532,7 @@ class LibraryPage extends Page {
             }
         } else {
             // Register initial eager cards with image observer and lazy loader (eagerLoad = true for viewport)
+            // prettier-ignore
             this._hookGridCards(grid.querySelectorAll('.virtual-grid-row:not([data-skeleton="true"]) .media-card'), true);
 
             // Progressively hydrate remaining buffer rows frame-by-frame
@@ -3782,7 +3865,10 @@ class LibraryPage extends Page {
         const isCardLandscape =
             this.state.viewMode === 'thumb' ||
             this.state.viewMode === 'banner' ||
-            (isLandscape && this.state.viewMode !== 'list' && this.state.viewMode !== 'poster' && this.state.viewMode !== 'small-poster');
+            (isLandscape &&
+                this.state.viewMode !== 'list' &&
+                this.state.viewMode !== 'poster' &&
+                this.state.viewMode !== 'small-poster');
 
         return items
             .map((item) =>
@@ -4008,8 +4094,9 @@ class LibraryPage extends Page {
         this._lastFocusItemIndex = itemIndex;
 
         // Proactively stream next batch if approaching end of loaded array in infinite mode
-        const prefetchThreshold = this.state.items.length - (columns * 4);
-        const hasMore = this.state._hasMoreInfinite !== false &&
+        const prefetchThreshold = this.state.items.length - columns * 4;
+        const hasMore =
+            this.state._hasMoreInfinite !== false &&
             (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
         if (this.state.isInfinite && itemIndex >= prefetchThreshold && hasMore) {
             this._loadNextInfiniteBatch();
@@ -4205,7 +4292,7 @@ class LibraryPage extends Page {
         const totalRows = Math.ceil(items.length / columns);
         const isListView = this.state.viewMode === 'list';
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
-        const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 10);
+        const POOL_ROWS = isSkipLazy ? totalRows : isListView ? 22 : 10;
 
         // If total rows fit entirely within the pool (or skip lazy mode is active),
         // all cards exist in the DOM and no row recycling is needed.
@@ -4226,7 +4313,7 @@ class LibraryPage extends Page {
         }
 
         let startRow = this._currentStartRow != null ? this._currentStartRow : 0;
-        let endRow = this._currentEndRow != null ? this._currentEndRow : (startRow + poolRows - 1);
+        let endRow = this._currentEndRow != null ? this._currentEndRow : startRow + poolRows - 1;
 
         // Guard: If the pool already encompasses the ideal window, no DOM mutation needed
         if (startRow === idealStartRow && endRow === idealEndRow) {
@@ -4905,7 +4992,6 @@ class LibraryPage extends Page {
 
         const columns = this.state._gridColumns || 7;
         const isListView = this.state.viewMode === 'list';
-        const ROWS_ABOVE = isListView ? 15 : 8;
         const ROWS_BELOW = isListView ? 20 : 10;
 
         // ---------------------------------------------------------------------
@@ -5034,7 +5120,6 @@ class LibraryPage extends Page {
 
         // Invalidate spatial navigation cache so FocusManager recognizes newly mapped cards
         focusManager.invalidateCache('library-grid');
-
 
         // ---------------------------------------------------------------------
         // STEP 4: Smoothly glide viewport to target position using exact DOM coordinates
@@ -5405,7 +5490,11 @@ class LibraryPage extends Page {
 
         // If viewport is running an active scroll animation and this is a background prefetch,
         // defer the fetch until scrolling settles to keep compositor frame rates steady at 60fps.
-        if (silent && (scrollController.isVerticalAnimating || (window.__scrollController && window.__scrollController.isAnimating))) {
+        if (
+            silent &&
+            (scrollController.isVerticalAnimating ||
+                (window.__scrollController && window.__scrollController.isAnimating))
+        ) {
             const onScrollFinish = () => {
                 eventBus.off('scroll:finished', onScrollFinish);
                 if (!this._isDestroyed && !this._isLoadingMore) {
@@ -5445,16 +5534,18 @@ class LibraryPage extends Page {
                     const grid = this.$('#library-grid');
                     if (grid) {
                         const columns = this.state._gridColumns || 7;
-                        const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
+                        const rowHeight =
+                            this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
                         const totalRows = Math.ceil(this.state.items.length / columns);
 
                         // Expand container height to fit the full item count geometry
                         grid.style.height = `${totalRows * rowHeight}px`;
 
                         // Re-sync virtual row pool to ensure the forward buffer is loaded
-                        const currentRow = this._lastFocusItemIndex != null
-                            ? Math.floor(this._lastFocusItemIndex / columns)
-                            : (this._currentStartRow || 0);
+                        const currentRow =
+                            this._lastFocusItemIndex != null
+                                ? Math.floor(this._lastFocusItemIndex / columns)
+                                : this._currentStartRow || 0;
                         this._syncVirtualGrid(currentRow, this._lastFocusItemIndex);
 
                         // Invalidate spatial navigation cache
@@ -5472,7 +5563,10 @@ class LibraryPage extends Page {
                     this._schedulePreWarm(currentEnd + 1, 1);
 
                     // If collection still contains further unloaded items, schedule continuous background prefetch
-                    if (this.state._hasMoreInfinite && (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount)) {
+                    if (
+                        this.state._hasMoreInfinite &&
+                        (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount)
+                    ) {
                         this._scheduleLibraryIdlePrefetch(300);
                     }
                 }
@@ -5504,7 +5598,10 @@ class LibraryPage extends Page {
             if (this.state.totalRecordCount > 0 && this.state.items.length >= this.state.totalRecordCount) return;
 
             // Defer if scroll animation is actively in flight
-            if (scrollController.isVerticalAnimating || (window.__scrollController && window.__scrollController.isAnimating)) {
+            if (
+                scrollController.isVerticalAnimating ||
+                (window.__scrollController && window.__scrollController.isAnimating)
+            ) {
                 const onScrollFinish = () => {
                     eventBus.off('scroll:finished', onScrollFinish);
                     if (!this._isDestroyed) {
@@ -5572,10 +5669,7 @@ class LibraryPage extends Page {
             if (currentIndex < totalCards) {
                 if (typeof window.requestIdleCallback === 'function') {
                     this._idleChunkType = 'idle';
-                    this._idleChunkId = window.requestIdleCallback(
-                        () => processNextChunk(),
-                        { timeout: 100 }
-                    );
+                    this._idleChunkId = window.requestIdleCallback(() => processNextChunk(), { timeout: 100 });
                 } else {
                     this._idleChunkType = 'timer';
                     this._idleChunkId = setTimeout(processNextChunk, 50);
@@ -5589,10 +5683,7 @@ class LibraryPage extends Page {
         // Dispatch the initial deferred chunk right after initial render frame
         if (typeof window.requestIdleCallback === 'function') {
             this._idleChunkType = 'idle';
-            this._idleChunkId = window.requestIdleCallback(
-                () => processNextChunk(),
-                { timeout: 100 }
-            );
+            this._idleChunkId = window.requestIdleCallback(() => processNextChunk(), { timeout: 100 });
         } else {
             this._idleChunkType = 'timer';
             this._idleChunkId = setTimeout(processNextChunk, 50);
@@ -6144,11 +6235,16 @@ class LibraryPage extends Page {
         // otherwise default to standard column count for this mode.
         const defaultInitialCols = this._getDefaultColumnsForMode(tempMode);
         const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
-        const initialTabColsKey = isTabSpecific ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${tempMode}` : null;
+        const initialTabColsKey = isTabSpecific
+            ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${tempMode}`
+            : null;
         const initialColsKey = isSeerr
             ? `pref:seerr:gridColumns:${tempMode}`
             : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
-        const initialSavedCols = parseInt((initialTabColsKey && storage.getItem(initialTabColsKey)) || storage.getItem(initialColsKey), 10);
+        const initialSavedCols = parseInt(
+            (initialTabColsKey && storage.getItem(initialTabColsKey)) || storage.getItem(initialColsKey),
+            10
+        );
         const validInitialOpts = colOptionsMap[tempMode] || [];
 
         let tempColumns;

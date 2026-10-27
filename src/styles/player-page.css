@@ -196,6 +196,10 @@ body.lyrics-active .audio-player-center {
     z-index: 3;
 }
 
+/*
+ * Track name title typography
+ * Inherits and utilizes the globally configured Litefin UI font family
+ */
 .audio-title {
     font-size: 32px;
     font-weight: 700;
@@ -205,9 +209,14 @@ body.lyrics-active .audio-player-center {
     text-overflow: ellipsis;
     text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     letter-spacing: -0.5px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Respect global UI font preference configured in overall settings */
+    font-family: var(--jf-font-family, sans-serif);
 }
 
+/*
+ * Track metadata subtitle typography (artist, album, and release year)
+ * Inherits and utilizes the globally configured Litefin UI font family
+ */
 .audio-subtitle {
     font-size: 20px;
     font-weight: 500;
@@ -217,7 +226,8 @@ body.lyrics-active .audio-player-center {
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Respect global UI font preference configured in overall settings */
+    font-family: var(--jf-font-family, sans-serif);
 }
 
 /* ==========================================================================

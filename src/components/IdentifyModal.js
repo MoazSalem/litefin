@@ -75,10 +75,11 @@ export class IdentifyModal {
                     focusManager.focusElement(prevFocus);
                 } else {
                     // Fallback to primary action buttons on the details page
-                    const fallbackEl = detailsPage.$('.more-btn') ||
-                                       detailsPage.$('.resume-btn') ||
-                                       detailsPage.$('.play-btn') ||
-                                       detailsPage.$('#actions button');
+                    const fallbackEl =
+                        detailsPage.$('.more-btn') ||
+                        detailsPage.$('.resume-btn') ||
+                        detailsPage.$('.play-btn') ||
+                        detailsPage.$('#actions button');
                     if (fallbackEl) {
                         focusManager.focusElement(fallbackEl);
                     } else {
@@ -157,7 +158,7 @@ export class IdentifyModal {
                             <div class="identify-input-row">
                                 <button type="button" id="identify-toggle-images" class="identify-toggle-btn ${replaceAllImages ? 'active' : ''}" tabindex="0">
                                     <span>${i18n.t('ReplaceExistingImages') || 'Replace all existing images'}</span>
-                                    <span class="identify-toggle-indicator">${replaceAllImages ? (i18n.t('On') || 'ON') : (i18n.t('Off') || 'OFF')}</span>
+                                    <span class="identify-toggle-indicator">${replaceAllImages ? i18n.t('On') || 'ON' : i18n.t('Off') || 'OFF'}</span>
                                 </button>
                             </div>
                         </div>
@@ -199,7 +200,7 @@ export class IdentifyModal {
                     toggleBtn.classList.toggle('active', replaceAllImages);
                     const indicator = toggleBtn.querySelector('.identify-toggle-indicator');
                     if (indicator) {
-                        indicator.textContent = replaceAllImages ? (i18n.t('On') || 'ON') : (i18n.t('Off') || 'OFF');
+                        indicator.textContent = replaceAllImages ? i18n.t('On') || 'ON' : i18n.t('Off') || 'OFF';
                     }
                 };
             }
@@ -307,14 +308,22 @@ export class IdentifyModal {
                     <div class="identify-results-list" id="identify-results-container">
                         ${results
                             .map((res, idx) => {
-                                const posterSrc = res.ImageUrl || res.PrimaryImageTag
-                                    ? (res.ImageUrl || api.buildUrl(`/Items/${res.Id}/Images/Primary`))
-                                    : '';
+                                const posterSrc =
+                                    res.ImageUrl || res.PrimaryImageTag
+                                        ? res.ImageUrl || api.buildUrl(`/Items/${res.Id}/Images/Primary`)
+                                        : '';
                                 const posterImg = posterSrc
                                     ? `<img class="identify-result-poster" src="${posterSrc}" alt="" loading="lazy" />`
                                     : `<div class="identify-result-poster" style="display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);"></div>`;
 
-                                const providerName = res.SearchProviderName || res.ProviderIds?.Tmdb ? 'TMDB' : (res.ProviderIds?.Tvdb ? 'TVDB' : (res.ProviderIds?.Imdb ? 'IMDb' : 'Remote'));
+                                const providerName =
+                                    res.SearchProviderName || res.ProviderIds?.Tmdb
+                                        ? 'TMDB'
+                                        : res.ProviderIds?.Tvdb
+                                          ? 'TVDB'
+                                          : res.ProviderIds?.Imdb
+                                            ? 'IMDb'
+                                            : 'Remote';
 
                                 return `
                                     <button class="identify-result-card" data-index="${idx}" tabindex="0">

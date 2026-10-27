@@ -77,41 +77,52 @@ let changelog = changelogArg ? changelogArg.replace('--changelog=', '').trim() :
 const TIER_CONFIGS = {
     modern: {
         name: 'Litefin Client',
+        betaName: 'Litefin Client Beta',
         zipSuffix: '',
         webpackConfig: 'web',
         distDir: path.join(rootDir, 'dist', 'web'),
         guid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d123',
+        betaGuid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d199',
         description: 'Embedded modern Litefin client with Movi WebAssembly video player.',
         overview: 'Access Litefin directly in your browser at /litefin.'
     },
     normal: {
         name: 'Litefin Client (Normal)',
+        betaName: 'Litefin Client Beta (Normal)',
         zipSuffix: '-Normal',
         webpackConfig: 'normal',
         distDir: path.join(rootDir, 'dist', 'normal'),
         guid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d124',
+        betaGuid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d198',
         description: 'Embedded Litefin client (Normal tier for Chromium 63+ / Tizen 5.0+).',
         overview: 'Access Litefin directly in your browser at /litefin (Chromium 63+ compatible).'
     },
     legacy: {
         name: 'Litefin Client (Legacy)',
+        betaName: 'Litefin Client Beta (Legacy)',
         zipSuffix: '-Legacy',
         webpackConfig: 'legacy',
         distDir: path.join(rootDir, 'dist', 'legacy'),
         guid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d125',
+        betaGuid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d197',
         description: 'Embedded Litefin client (Legacy tier for Chromium 38+ / Tizen 3.0+ / webOS 4.0+).',
         overview: 'Access Litefin directly in your browser at /litefin (Chromium 38+ / ES5 compatible).'
     },
     'ultra-legacy': {
         name: 'Litefin Client (Ultra-Legacy)',
+        betaName: 'Litefin Client Beta (Ultra-Legacy)',
         zipSuffix: '-Ultra-Legacy',
         webpackConfig: 'ultra-legacy',
         distDir: path.join(rootDir, 'dist', 'ultra-legacy'),
         guid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d126',
+        betaGuid: 'b4a2c918-7e3f-4d92-a1b8-6e54f0a9d196',
         description: 'Embedded Litefin client (Ultra-Legacy tier for Chromium 26+ / Tizen 2.3+ / webOS 1.0+).',
         overview: 'Access Litefin directly in your browser at /litefin (Chromium 26+ / heavy polyfills).'
     }
 };
+
+// Check for beta release mode via CLI flag (--beta) or environment variable (IS_BETA)
+const isBeta = args.includes('--beta') || process.env.IS_BETA === 'true';
 
 // Parse target tier from CLI flag (--tier=...) or positional arguments
 const tierArg = args.find((a) => a.startsWith('--tier='));
@@ -178,6 +189,15 @@ if (!fs.existsSync(distClientDir) || !fs.existsSync(path.join(distClientDir, 'in
     process.exit(1);
 }
 
+// ----------------------------------------------------------------------------
+// Plugin Identity Configuration
+// ----------------------------------------------------------------------------
+// Allow environment overrides for plugin name and GUID so dev/beta workflows
+// can generate a distinct catalog entry without colliding with the stable release.
+const pluginName = process.env.PLUGIN_NAME || (isBeta ? currentConfig.betaName : currentConfig.name);
+const pluginGuid = process.env.PLUGIN_GUID || (isBeta ? currentConfig.betaGuid : currentConfig.guid);
+const timestamp = new Date().toISOString();
+
 // ============================================================================
 // 3. Compile and Publish .NET Server Plugin
 // ============================================================================
@@ -191,7 +211,7 @@ if (fs.existsSync(publishDir)) {
 
 try {
     execSync(
-        `dotnet publish "${csprojPath}" -c Release -o "${publishDir}" -p:Version=${version} -p:AssemblyVersion=${assemblyVersion} -p:FileVersion=${assemblyVersion} -p:PluginGuid=${currentConfig.guid} -p:PluginName="${currentConfig.name}" -p:PluginDescription="${currentConfig.description}"`,
+        `dotnet publish "${csprojPath}" -c Release -o "${publishDir}" -p:Version=${version} -p:AssemblyVersion=${assemblyVersion} -p:FileVersion=${assemblyVersion} -p:PluginGuid=${pluginGuid} -p:PluginName="${pluginName}" -p:PluginDescription="${currentConfig.description}"`,
         {
             cwd: rootDir,
             stdio: 'inherit'
@@ -220,15 +240,12 @@ if (fs.existsSync(iconOblongSrc)) {
 }
 
 // Write meta.json for Jellyfin plugin discovery and catalog metadata
-const pluginGuid = currentConfig.guid;
-const timestamp = new Date().toISOString();
-
 const meta = {
     category: 'General',
     changelog: changelog,
     description: currentConfig.description,
     guid: pluginGuid,
-    name: currentConfig.name,
+    name: pluginName,
     overview: currentConfig.overview,
     owner: 'MoazSalem',
     imageUrl: 'https://raw.githubusercontent.com/MoazSalem/litefin/development/assets/icon_oblong.png',
@@ -291,9 +308,12 @@ if (fs.existsSync(manifestPath)) {
 // Find existing plugin entry for this tier or create a fresh entry
 let pluginEntry = manifest.find((item) => item.guid === pluginGuid);
 if (!pluginEntry) {
+    // ------------------------------------------------------------------------
+    // Initialize New Catalog Record
+    // ------------------------------------------------------------------------
     pluginEntry = {
         guid: pluginGuid,
-        name: currentConfig.name,
+        name: pluginName,
         description: currentConfig.description,
         overview: currentConfig.overview,
         owner: 'MoazSalem',
@@ -303,8 +323,10 @@ if (!pluginEntry) {
     };
     manifest.push(pluginEntry);
 } else {
-    // Keep metadata properties up to date
-    pluginEntry.name = currentConfig.name;
+    // ------------------------------------------------------------------------
+    // Refresh Existing Catalog Metadata
+    // ------------------------------------------------------------------------
+    pluginEntry.name = pluginName;
     pluginEntry.description = currentConfig.description;
     pluginEntry.overview = currentConfig.overview;
     pluginEntry.imageUrl = 'https://raw.githubusercontent.com/MoazSalem/litefin/development/assets/icon_oblong.png';
@@ -313,16 +335,21 @@ if (!pluginEntry) {
 // Remove any existing version entry for this exact version to ensure idempotence
 pluginEntry.versions = (pluginEntry.versions || []).filter((v) => v.version !== version);
 
-// Resolve release tag name for download URL (uses CI tag if present, else fallback)
-const releaseTag = process.env.TAG_NAME || process.env.GITHUB_REF_NAME || `v${version}`;
-const tagForUrl = releaseTag.startsWith('v') ? releaseTag : `v${releaseTag}`;
+// Resolve release tag name for download URL (uses CI tag if present, else fallback to version tag)
+const releaseTag = process.env.TAG_NAME || process.env.GITHUB_REF_NAME;
+const tagForUrl = releaseTag ? releaseTag : (version.startsWith('v') ? version : `v${version}`);
 
-// Prepend the new version to the versions list
+// Target GitHub repository for download artifacts (defaults to MoazSalem/litefin)
+const targetRepo = process.env.PLUGIN_REPO || process.env.GITHUB_REPOSITORY || 'MoazSalem/litefin';
+
+// ----------------------------------------------------------------------------
+// Compile Version Manifest Entry
+// ----------------------------------------------------------------------------
 const versionEntry = {
     version: version,
     changelog: changelog,
     targetAbi: '10.10.0.0',
-    sourceUrl: `https://github.com/MoazSalem/litefin/releases/download/${tagForUrl}/${zipName}`,
+    sourceUrl: `https://github.com/${targetRepo}/releases/download/${tagForUrl}/${zipName}`,
     checksum: md5Hash,
     timestamp: timestamp
 };

@@ -20,6 +20,7 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { state } from '../core/StateManager.js';
 
 const log = logger.create('ServerPluginClient');
 
@@ -46,10 +47,7 @@ const KNOWN_PROBES = {
         },
         fallbackProbeEndpoints: (item) => {
             if (!item || item.Type !== 'Episode') return [];
-            return [
-                `/Episode/${item.Id}/Timestamps`,
-                `/Episode/${item.Id}/IntroTimestamps`
-            ];
+            return [`/Episode/${item.Id}/Timestamps`, `/Episode/${item.Id}/IntroTimestamps`];
         },
         dataEndpoint: (itemId) => `/MediaSegments/${itemId}`
     },
@@ -82,7 +80,7 @@ const KNOWN_PROBES = {
     },
 
     // Litefin Companion Server Plugin
-    'litefin': {
+    litefin: {
         probeEndpoint: () => `/Litefin/Hero?limit=1`,
         dataEndpoint: () => `/Litefin/Hero`
     }
@@ -132,6 +130,14 @@ class ServerPluginClient {
         log.info('ServerPluginClient initialized');
     }
 
+    /**
+     * Check if the client has been initialized with an active ApiClient instance.
+     * @returns {boolean} True if initialized
+     */
+    isInitialized() {
+        return !!this._api;
+    }
+
     // ========================================================================
     // Public API
     // ========================================================================
@@ -147,6 +153,21 @@ class ServerPluginClient {
         // Return cached result if we have already fetched
         if (this._adminFetchAttempted) {
             return this._installedPlugins;
+        }
+
+        // If API client is not yet configured, return null gracefully without throwing
+        if (!this._api) {
+            log.debug('ServerPluginClient: API not yet configured, skipping /Plugins admin check');
+            return null;
+        }
+
+        // Fast-path: Check if active user is known not to be an administrator
+        const userData = state.get('user:data');
+        if (userData && userData.Policy && userData.Policy.IsAdministrator === false) {
+            log.info('User is not admin (Policy.IsAdministrator=false). Skipping /Plugins check.');
+            this._installedPlugins = null;
+            this._isAdmin = false;
+            return null;
         }
 
         this._adminFetchAttempted = true;
@@ -280,7 +301,7 @@ class ServerPluginClient {
             'open-subtitles': ['open subtitles', 'opensubtitles'],
             'local-intros': ['local intros', 'localintros'],
             'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings'],
-            'litefin': ['litefin']
+            litefin: ['litefin']
         };
 
         const namesToCheck = NAME_MAP[pluginId] || [pluginId.toLowerCase()];
@@ -288,7 +309,8 @@ class ServerPluginClient {
         const match = adminList.find((plugin) => {
             const name = (plugin.Name || plugin.name || '').toLowerCase();
             const id = (plugin.Id || plugin.id || '').toLowerCase();
-            const matches = namesToCheck.some((n) => name.includes(n)) || (pluginId && id.includes(pluginId.toLowerCase()));
+            const matches =
+                namesToCheck.some((n) => name.includes(n)) || (pluginId && id.includes(pluginId.toLowerCase()));
             if (!matches) return false;
 
             // Verify plugin is active and enabled on the Jellyfin server
@@ -303,7 +325,9 @@ class ServerPluginClient {
         });
 
         const result = { available: !!match, data: match || null };
-        log.debug(`Plugin '${pluginId}' ${result.available ? 'FOUND & ACTIVE' : 'NOT FOUND OR DISABLED'} in admin list`);
+        log.debug(
+            `Plugin '${pluginId}' ${result.available ? 'FOUND & ACTIVE' : 'NOT FOUND OR DISABLED'} in admin list`
+        );
         return result;
     }
 

@@ -122,8 +122,8 @@ class I18nManager {
         this.isRTL = langCode === 'ar' || langCode === 'he' || langCode === 'fa';
 
         const url = this._localeUrl(this.currentLang);
-        log.info(`[i18n] Initializing with lang: ${this.currentLang}`);
-        log.info(`[i18n] Locale URL: ${url} (protocol: ${window.location.protocol})`);
+        log.info(`Initializing with lang: ${this.currentLang}`);
+        log.info(`Locale URL: ${url} (protocol: ${window.location.protocol})`);
 
         try {
             // Use XHR instead of fetch() — works on both Tizen and WebOS file:// contexts
@@ -131,16 +131,14 @@ class I18nManager {
             this.dictionary = data;
 
             const keyCount = Object.keys(this.dictionary).length;
-            log.info(`[i18n] Successfully loaded ${keyCount} keys for ${this.currentLang}`);
+            log.info(`Successfully loaded ${keyCount} keys for ${this.currentLang}`);
 
             // Sanity check — empty dict means url was wrong; this would cause all keys to show raw
             if (keyCount === 0) {
-                log.warn(
-                    `[i18n] WARNING: Loaded 0 keys! The locale file at "${url}" may be empty or the URL is wrong.`
-                );
+                log.warn(`WARNING: Loaded 0 keys! The locale file at "${url}" may be empty or the URL is wrong.`);
             }
         } catch (error) {
-            log.error(`[i18n] Init failed, falling back to empty dict`, {
+            log.error(`Init failed, falling back to empty dict`, {
                 url,
                 lang: this.currentLang,
                 error: error.message,
@@ -157,10 +155,10 @@ class I18nManager {
                 const data = await this._loadJson(fallbackUrl);
                 this.fallbackDictionary = data;
                 log.info(
-                    `[i18n] Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
+                    `Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
                 );
             } catch (error) {
-                log.error(`[i18n] Failed to load fallback dictionary`, error);
+                log.error(`Failed to load fallback dictionary`, error);
                 this.fallbackDictionary = {};
             }
         } else {
@@ -252,7 +250,8 @@ class I18nManager {
      * @returns {string} Formatted time string (e.g., "12:30 PM" or "12:30 م")
      */
     formatLocalTime(date) {
-        if (!date || !(date instanceof Date)) return '';
+        // Support both standard JavaScript Date objects and native platform TZDate objects
+        if (!date || (!(date instanceof Date) && typeof date.getHours !== 'function')) return '';
 
         const hours = date.getHours();
         const minutes = date.getMinutes();

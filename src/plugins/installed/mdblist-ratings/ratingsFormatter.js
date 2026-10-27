@@ -74,7 +74,9 @@ const PROVIDER_NAMES = {
  */
 export function normalizeSourceKey(source) {
     // Convert source to lowercase string for consistent matching
-    const s = String(source || '').trim().toLowerCase();
+    const s = String(source || '')
+        .trim()
+        .toLowerCase();
     return PROVIDER_ALIASES[s] || s;
 }
 
@@ -102,7 +104,7 @@ export function parseNumericValue(value) {
 
 /**
  * Formats a provider rating value with typographic precision.
- * 
+ *
  * - 0-10 Scale (IMDb, Letterboxd, Simkl, MAL, etc.): Formats with 1 decimal place (e.g. 8.5, 7.0).
  * - 0-100 / Percentage Scale (RT, Trakt, Metacritic, MDBList): Formats as rounded integer (e.g. 85%).
  * - Bidirectional Fallback: Calculates from `score` if `value` is null, and vice versa.
@@ -165,7 +167,7 @@ export function formatRatingValue(source, rawValue, rawScore) {
 
         // --- TMDb (MDBList sometimes returns 0-100, WhatsOn returns decimal 0-10) ---
         case 'tmdb': {
-            let tVal = val !== null ? val : (score !== null ? score / 10 : null);
+            let tVal = val !== null ? val : score !== null ? score / 10 : null;
             if (tVal !== null && tVal > 10) {
                 tVal = tVal / 10;
             }
@@ -180,7 +182,7 @@ export function formatRatingValue(source, rawValue, rawScore) {
 
         // --- Metacritic User (0-10 decimal or 0-100) ---
         case 'metacriticuser': {
-            let muVal = val !== null ? val : (score !== null ? score / 10 : null);
+            let muVal = val !== null ? val : score !== null ? score / 10 : null;
             if (muVal !== null && muVal > 10) {
                 muVal = muVal / 10;
             }
@@ -208,7 +210,7 @@ export function formatRatingValue(source, rawValue, rawScore) {
         case 'rogerebert':
         case 'tvmaze':
         default: {
-            let standardVal = val !== null ? val : (score !== null ? score / 10 : null);
+            let standardVal = val !== null ? val : score !== null ? score / 10 : null;
             // If the provider returned a 100-scale value unexpectedly, normalize to 10
             if (standardVal !== null && standardVal > 10) {
                 standardVal = standardVal / 10;
@@ -413,9 +415,8 @@ export function parseSourcesList(raw) {
  */
 export function normalizeWebClientSettings(cfg = {}) {
     const rawMode = cfg?.webAllRatingsMode || cfg?.WebAllRatingsMode;
-    const mode = (typeof rawMode === 'number' && rawMode === 1) || String(rawMode).toLowerCase() === 'custom'
-        ? 'custom'
-        : 'all';
+    const mode =
+        (typeof rawMode === 'number' && rawMode === 1) || String(rawMode).toLowerCase() === 'custom' ? 'custom' : 'all';
 
     const orderRaw = cfg?.webAllRatingsOrderCsv || cfg?.WebAllRatingsOrderCsv || cfg?.webAllRatingsOrder || '';
     const order = parseSourcesList(orderRaw);
@@ -493,7 +494,7 @@ export function dedupeEquivalentRatings(ratings) {
 
 /**
  * Filters and orders ratings according to user configuration from server WebClientSettings.
- * 
+ *
  * If mode is 'custom', only providers specified in settings.order are returned, in that order.
  * If mode is 'all', all deduplicated providers are returned.
  *

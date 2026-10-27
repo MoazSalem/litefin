@@ -73,7 +73,13 @@ export default class SubtitleQuickSettings extends BaseMenu {
         const shadowType = PlayerSettings.get('subtitleDropShadow');
 
         // Check if we are currently rendering ASS subtitles
-        const isASS = this.osd && this.osd.player && this.osd.player._subtitleManager && this.osd.player._subtitleManager.isASSActive();
+        const isASS = Boolean(this.osd?.player?._subtitleManager?.isASSActive?.());
+
+        // Check if we are currently rendering PGS bitmap subtitles
+        const isPGS = Boolean(this.osd?.player?._subtitleManager?.isPGSActive?.());
+
+        // Determine if standard text-rendered subtitles are active
+        const isText = !isASS && !isPGS;
 
         // Master toggle for ASS style modifications (default: false)
         const enableAssMods = PlayerSettings.get('enableAssStyleModifications') === true;
@@ -98,7 +104,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('VerticalPosition'),
                 labelKey: 'VerticalPosition',
                 key: 'subtitleVerticalPosition',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: '-1', label: i18n.t('BottomLow') },
                     { value: '-2', label: i18n.t('BottomStandard') },
@@ -115,7 +121,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'AbsolutePosition',
                 key: 'subtitleVerticalPositionCustom',
                 min: 0, max: 100, step: 1, unit: '%',
-                visible: !isASS && verticalPos === 'custom'
+                visible: isText && verticalPos === 'custom'
             },
             /*
              * -----------------------------------------------------------------
@@ -131,7 +137,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('LabelSubtitleOsdDodging') || 'Shift Text Subtitles',
                 labelKey: 'LabelSubtitleOsdDodging',
                 key: 'subtitleOsdDodging',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: true, label: i18n.t('On') },
                     { value: false, label: i18n.t('Off') }
@@ -145,7 +151,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('LabelTextSize'),
                 labelKey: 'LabelTextSize',
                 key: 'subtitleSize',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: 'small', label: i18n.t('Small') },
                     { value: 'medium', label: i18n.t('Medium') },
@@ -163,7 +169,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'CustomSize',
                 key: 'subtitleSizeCustomValue',
                 min: 1, max: 20, step: 0.1, unit: 'vh',
-                visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
+                visible: isText && PlayerSettings.get('subtitleSize') === 'custom'
             },
             {
                 id: 'font',
@@ -171,7 +177,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('FontFamily'),
                 labelKey: 'FontFamily',
                 key: 'subtitleFont',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' },
@@ -201,7 +207,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('FontWeight'),
                 labelKey: 'FontWeight',
                 key: 'subtitleWeight',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: 'normal', label: i18n.t('Normal') },
                     { value: 'bold', label: i18n.t('Bold') }
@@ -218,7 +224,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('TextColorSdr'),
                 labelKey: 'TextColorSdr',
                 key: 'subtitleTextColor',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                     { value: '#d3d3d3', label: i18n.t('LightGrey') },
@@ -240,7 +246,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('TextColorHdr'),
                 labelKey: 'TextColorHdr',
                 key: 'subtitleTextColorHdr',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                     { value: '#d3d3d3', label: i18n.t('LightGrey') },
@@ -271,7 +277,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('SubtitleOverrideColors') || 'Override Subtitle Colors',
                 labelKey: 'SubtitleOverrideColors',
                 key: 'subtitleOverrideColors',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: true, label: i18n.t('On') },
                     { value: false, label: i18n.t('Off') }
@@ -292,7 +298,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 max: 100,
                 step: 5,
                 unit: '%',
-                visible: !isASS
+                visible: isText
             },
 
             /* -------------------------------------------------------------
@@ -309,7 +315,41 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 max: 100,
                 step: 5,
                 unit: '%',
-                visible: !isASS
+                visible: isText
+            },
+
+            /* -------------------------------------------------------------
+               SDR Graphic Subtitle Opacity Slider
+               Allows precise opacity adjustments for bitmap subtitles in SDR.
+               ------------------------------------------------------------- */
+            {
+                id: 'pgsOpacitySdr',
+                type: 'slider',
+                label: i18n.t('PgsOpacitySdr'),
+                labelKey: 'PgsOpacitySdr',
+                key: 'subtitlePgsOpacity',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: isPGS
+            },
+
+            /* -------------------------------------------------------------
+               HDR Graphic Subtitle Opacity Slider
+               Allows dimming bitmap subtitles in HDR to prevent eye strain.
+               ------------------------------------------------------------- */
+            {
+                id: 'pgsOpacityHdr',
+                type: 'slider',
+                label: i18n.t('PgsOpacityHdr'),
+                labelKey: 'PgsOpacityHdr',
+                key: 'subtitlePgsOpacityHdr',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: isPGS
             },
 
             // Background
@@ -319,7 +359,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('BackgroundColor'),
                 labelKey: 'BackgroundColor',
                 key: 'subtitleTextBackground',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: 'transparent', label: i18n.t('None') },
                     { value: '#000000', label: i18n.t('SubtitleBlack') },
@@ -338,7 +378,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'BackgroundOpacity',
                 key: 'subtitleBackgroundOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: !isASS && bgColor !== 'transparent'
+                visible: isText && bgColor !== 'transparent'
             },
 
             // Shadow
@@ -348,7 +388,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('TextShadow'),
                 labelKey: 'TextShadow',
                 key: 'subtitleDropShadow',
-                visible: !isASS,
+                visible: isText,
                 options: [
                     { value: 'none', label: i18n.t('None') },
                     { value: 'uniform', label: i18n.t('Uniform') },
@@ -366,7 +406,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'BorderWidth',
                 key: 'subtitleBorderWidth',
                 min: 1, max: 20, step: 1, unit: 'px',
-                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
+                visible: isText && (shadowType === 'border' || shadowType === 'uniform_border')
             },
             {
                 id: 'borderOpacity',
@@ -375,7 +415,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'BorderOpacity',
                 key: 'subtitleBorderOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: !isASS && (shadowType === 'border' || shadowType === 'uniform_border')
+                visible: isText && (shadowType === 'border' || shadowType === 'uniform_border')
             },
             {
                 id: 'shadowColor',
@@ -394,7 +434,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#ff00ff', label: i18n.t('SubtitleMagenta') },
                     { value: '#808080', label: i18n.t('Grey') }
                 ],
-                visible: !isASS && shadowType !== 'none'
+                visible: isText && shadowType !== 'none'
             },
             {
                 id: 'shadowOpacity',
@@ -403,7 +443,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowOpacity',
                 key: 'subtitleDropShadowOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
+                visible: isText && shadowType !== 'none' && shadowType !== 'border'
             },
             {
                 id: 'shadowBlur',
@@ -412,7 +452,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowBlur',
                 key: 'subtitleDropShadowBlur',
                 min: 0, max: 20, step: 1, unit: 'px',
-                visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
+                visible: isText && shadowType !== 'none' && shadowType !== 'border'
             },
             // Master toggle: when OFF, all ASS style modifications are disabled
             // and the subtitle renders with its original embedded styling.

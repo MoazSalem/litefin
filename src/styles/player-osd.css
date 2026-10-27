@@ -422,6 +422,121 @@ html[data-osd-progress-color="theme-inverted"] {
 }
 
 /* ============================================================================
+   VOLUME & MUTE CONTROLS (DESKTOP & WEB)
+   ============================================================================ */
+
+.osd-volume-group {
+    display: -webkit-inline-flex;
+    display: inline-flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    position: relative;
+    vertical-align: middle;
+}
+
+.osd-volume-slider-container {
+    position: relative;
+    display: -webkit-inline-flex;
+    display: inline-flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    width: 86px;
+    height: 36px;
+    margin-left: 0.5em;
+    cursor: pointer;
+}
+
+.osd-volume-track {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 3px;
+    background: var(--osd-slider-bg, rgba(255, 255, 255, 0.3));
+    border-radius: 2px;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.osd-volume-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    background: var(--osd-slider-progress, var(--jf-btn-primary-bg, #00a4dc));
+    border-radius: 2px;
+    pointer-events: none;
+    transition: width 0.08s ease-out;
+}
+
+.osd-volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    outline: none;
+}
+
+.osd-volume-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+}
+
+.osd-volume-slider::-moz-range-track {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+}
+
+.osd-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--osd-slider-progress, var(--jf-btn-primary-bg, #00a4dc));
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    margin-top: 11px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.osd-volume-slider:hover::-webkit-slider-thumb,
+.osd-volume-slider:active::-webkit-slider-thumb {
+    transform: scale(1.22);
+}
+
+.osd-volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--osd-slider-progress, var(--jf-btn-primary-bg, #00a4dc));
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.osd-volume-slider:hover::-moz-range-thumb,
+.osd-volume-slider:active::-moz-range-thumb {
+    transform: scale(1.22);
+}
+
+/* ============================================================================
    BUTTONS
    ============================================================================ */
 

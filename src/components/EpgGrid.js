@@ -1041,7 +1041,7 @@ class EpgGrid {
         if (!data) return null;
 
         // Check if element is already present in DOM
-        let el = data.rowEl.querySelector(`[data-program-id="${programId}"]`);
+        const el = data.rowEl.querySelector(`[data-program-id="${programId}"]`);
         if (el) return el;
 
         // If off-screen, dynamically mount the program DOM element into the row

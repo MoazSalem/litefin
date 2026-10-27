@@ -44,7 +44,10 @@ function getUserAvatarUrl(user) {
     if (user.jellyfinUserId) {
         return api.getUserImageUrl(user.jellyfinUserId, { maxWidth: 64 });
     }
-    if (user.avatar && (user.avatar.startsWith('http://') || user.avatar.startsWith('https://') || user.avatar.startsWith('//'))) {
+    if (
+        user.avatar &&
+        (user.avatar.startsWith('http://') || user.avatar.startsWith('https://') || user.avatar.startsWith('//'))
+    ) {
         return user.avatar;
     }
     return '';
@@ -103,10 +106,11 @@ class SeerrRequestModal {
                     <div class="seerr-request-options" id="seerr-request-options"></div>
                 </div>
                 <div class="modal-actions">
-                    ${isAvailable
-                ? ''
-                : `<button class="modal-action-btn" id="btn-seerr-request" tabindex="0">${requestBtnLabel}</button>`
-            }
+                    ${
+                        isAvailable
+                            ? ''
+                            : `<button class="modal-action-btn" id="btn-seerr-request" tabindex="0">${requestBtnLabel}</button>`
+                    }
                     <button class="modal-action-btn" id="btn-seerr-close" tabindex="0">${i18n.t('ButtonBack')}</button>
                 </div>
             </div>
@@ -169,7 +173,10 @@ class SeerrRequestModal {
                             extraOptions = requestOptions() || {};
                         } catch (optErr) {
                             // Non-fatal options extraction error: log warning and proceed with default request
-                            log.warn('Could not serialize advanced request options, falling back to basic payload:', optErr);
+                            log.warn(
+                                'Could not serialize advanced request options, falling back to basic payload:',
+                                optErr
+                            );
                         }
                     }
 
@@ -215,10 +222,7 @@ class SeerrRequestModal {
         let options;
         let users = [];
         try {
-            [options, users] = await Promise.all([
-                seerr.requestOptions(item._mediaType),
-                seerr.getUsers()
-            ]);
+            [options, users] = await Promise.all([seerr.requestOptions(item._mediaType), seerr.getUsers()]);
         } catch (err) {
             log.warn('Could not load advanced request options or users', err);
             return () => ({});
@@ -243,9 +247,9 @@ class SeerrRequestModal {
         // Find this user's Seerr account by matching their Jellyfin user ID
         const currentSeerrUser = Array.isArray(users)
             ? users.find((u) => {
-                const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
-                return currentJfId && uJfId && uJfId === currentJfId;
-            }) || null
+                  const uJfId = (u.jellyfinUserId || '').replace(/-/g, '').toLowerCase();
+                  return currentJfId && uJfId && uJfId === currentJfId;
+              }) || null
             : null;
 
         // Check if the current user's Seerr permissions include ADMIN (2) or MANAGE_REQUESTS (8192)
@@ -265,15 +269,21 @@ class SeerrRequestModal {
         if (hasUsers) {
             // Primary match: exact Jellyfin user ID match (already resolved above)
             // Secondary: match by username/display name in case jellyfinUserId wasn't set
-            selectedUser = currentSeerrUser || users.find((u) => {
-                const uJfName = (u.jellyfinUsername || '').trim().toLowerCase();
-                const uName = (u.username || '').trim().toLowerCase();
-                const uDisplay = (u.displayName || '').trim().toLowerCase();
-                // Try to match against Jellyfin username from state if available
-                const profile = state.get('user:profile') || state.get('user') || {};
-                const currentUsername = (profile.Name || profile.name || '').trim().toLowerCase();
-                return currentUsername && (uJfName === currentUsername || uName === currentUsername || uDisplay === currentUsername);
-            }) || users[0];
+            selectedUser =
+                currentSeerrUser ||
+                users.find((u) => {
+                    const uJfName = (u.jellyfinUsername || '').trim().toLowerCase();
+                    const uName = (u.username || '').trim().toLowerCase();
+                    const uDisplay = (u.displayName || '').trim().toLowerCase();
+                    // Try to match against Jellyfin username from state if available
+                    const profile = state.get('user:profile') || state.get('user') || {};
+                    const currentUsername = (profile.Name || profile.name || '').trim().toLowerCase();
+                    return (
+                        currentUsername &&
+                        (uJfName === currentUsername || uName === currentUsername || uDisplay === currentUsername)
+                    );
+                }) ||
+                users[0];
         }
 
         // For non-admin users, all advanced parameters (including explicitly specifying userId)
@@ -304,7 +314,8 @@ class SeerrRequestModal {
             }
             // Fall back to default non-4K server configured in Seerr, or first available server
             if (!selectedServer) {
-                selectedServer = options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0];
+                selectedServer =
+                    options.servers.find((server) => server.isDefault && !server.is4k) || options.servers[0];
             }
         }
 
@@ -356,16 +367,16 @@ class SeerrRequestModal {
 
         if (userButton) {
             userButton.addEventListener('click', async () => {
-                const choice = await SeerrRequestModal._chooseUser(
-                    i18n.t('SeerrRequestAs'),
-                    users,
-                    selectedUser
-                );
+                const choice = await SeerrRequestModal._chooseUser(i18n.t('SeerrRequestAs'), users, selectedUser);
                 if (choice) {
                     selectedUser = choice;
                     const previewEl = userButton.querySelector('.seerr-user-preview');
                     if (previewEl) {
-                        const disp = selectedUser.displayName || selectedUser.jellyfinUsername || selectedUser.username || selectedUser.email;
+                        const disp =
+                            selectedUser.displayName ||
+                            selectedUser.jellyfinUsername ||
+                            selectedUser.username ||
+                            selectedUser.email;
                         const sub = selectedUser.email;
                         previewEl.innerHTML = `
                             <div class="seerr-user-avatar-wrap">
@@ -406,7 +417,9 @@ class SeerrRequestModal {
                 const savedProfileId = storage.getItem(`${STORAGE_KEY_DEFAULT_PROFILE}${subType}:${serverId}`);
                 const activeProfileId = (isAnime && serverObj?.activeAnimeProfileId) || serverObj?.activeProfileId;
                 selectedProfile =
-                    (savedProfileId != null ? detail?.profiles?.find((p) => String(p.id) === String(savedProfileId)) : null) ||
+                    (savedProfileId != null
+                        ? detail?.profiles?.find((p) => String(p.id) === String(savedProfileId))
+                        : null) ||
                     detail?.profiles?.find((profile) => profile.id === activeProfileId) ||
                     detail?.profiles?.[0] ||
                     null;
@@ -550,11 +563,13 @@ class SeerrRequestModal {
                     <div class="modal-header"><h2>${escapeHtml(title)}</h2></div>
                     <div class="modal-options">
                         ${users
-                    .map((user, index) => {
-                        const isSelected = selectedUser && selectedUser.id === user.id;
-                        const displayName = user.displayName || user.jellyfinUsername || user.username || user.email || 'User';
-                        const subText = user.email || (user.username && user.username !== displayName ? user.username : '');
-                        return `
+                            .map((user, index) => {
+                                const isSelected = selectedUser && selectedUser.id === user.id;
+                                const displayName =
+                                    user.displayName || user.jellyfinUsername || user.username || user.email || 'User';
+                                const subText =
+                                    user.email || (user.username && user.username !== displayName ? user.username : '');
+                                return `
                             <button class="modal-option-btn seerr-user-choice-btn ${isSelected ? 'selected' : ''}"
                                     data-index="${index}" tabindex="0">
                                 <span class="seerr-user-check">${isSelected ? '✓' : ''}</span>
@@ -566,8 +581,8 @@ class SeerrRequestModal {
                                     ${subText ? `<span class="seerr-user-sub">(${escapeHtml(subText)})</span>` : ''}
                                 </div>
                             </button>`;
-                    })
-                    .join('')}
+                            })
+                            .join('')}
                     </div>
                 </div>`;
             document.body.appendChild(subOverlay);
@@ -619,12 +634,12 @@ class SeerrRequestModal {
                     <div class="modal-header"><h2></h2></div>
                     <div class="modal-options">
                         ${choices
-                    .map(
-                        (choice, index) => `
+                            .map(
+                                (choice, index) => `
                             <button class="modal-option-btn ${choice.selected ? 'selected' : ''}"
                                     data-index="${index}" tabindex="0"></button>`
-                    )
-                    .join('')}
+                            )
+                            .join('')}
                     </div>
                 </div>`;
             subOverlay.querySelector('h2').textContent = title;
@@ -709,12 +724,11 @@ class SeerrRequestModal {
                 ${i18n.t('SeerrAllSeasons')}
             </button>
             ${seasons
-                .map(
-                    (s) => {
-                        const locked = isLocked(s);
-                        const statusKey = seerrSeasonStatusKey(s.status);
-                        const statusText = i18n.t(statusKey);
-                        return `
+                .map((s) => {
+                    const locked = isLocked(s);
+                    const statusKey = seerrSeasonStatusKey(s.status);
+                    const statusText = i18n.t(statusKey);
+                    return `
                 <button class="seerr-season-row ${locked ? 'is-locked' : ''}"
                         data-season="${s.seasonNumber}" tabindex="0" ${locked ? 'disabled' : ''}>
                     <span class="seerr-season-name">${s.name}</span>
@@ -724,8 +738,7 @@ class SeerrRequestModal {
                     </span>
                 </button>
             `;
-                    }
-                )
+                })
                 .join('')}
             <div class="seerr-season-error hidden" id="seerr-season-error">
                 <span>${i18n.t('SeerrMustSelectSeason')}</span>

@@ -15,9 +15,9 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
     <!-- Default version stamped into assembly metadata; overridden during CI packaging -->
-    <Version>2.0.20</Version>
-    <AssemblyVersion>2.0.20.0</AssemblyVersion>
-    <FileVersion>2.0.20.0</FileVersion>
+    <Version>2.0.150</Version>
+    <AssemblyVersion>2.0.150.0</AssemblyVersion>
+    <FileVersion>2.0.150.0</FileVersion>
     <!-- Ensures dependencies resolve and copy cleanly if needed -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -53,26 +53,42 @@
       <PrivateAssets>all</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <!-- ==================================================================== -->
   <!-- Embedded Resources                                                   -->
   <!-- ==================================================================== -->
-  <!-- Configuration pages embedded directly into the plugin assembly.      -->
+  <!-- Configuration pages, web injection scripts, and branding icons       -->
+  <!-- embedded directly into the plugin assembly for zero-disk-dependency. -->
   <!-- ==================================================================== -->
   <ItemGroup>
     <EmbeddedResource Include="Configuration/configPage.html">
       <LogicalName>Litefin.Web.Configuration.configPage.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Web/inject.html">
+      <LogicalName>Litefin.Web.Web.inject.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Web/loader.js">
+      <LogicalName>Litefin.Web.Web.loader.js</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\assets\icon-130.png" Link="assets\icon-130.png">
+      <LogicalName>Litefin.Web.assets.icon-130.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
   <!-- ==================================================================== -->
   <!-- Plugin Preview Artwork                                               -->
   <!-- ==================================================================== -->
-  <!-- Copies existing icon_oblong.png from assets without duplicate files.  -->
+  <!-- Copies existing icon_oblong.png and icon-130.png from assets.        -->
   <!-- ==================================================================== -->
   <ItemGroup>
     <None Include="..\assets\icon_oblong.png" Link="icon_oblong.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\assets\icon-130.png" Link="assets\icon-130.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

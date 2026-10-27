@@ -10,12 +10,7 @@
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
 import { storage } from '../../../utils/StorageService.js';
-import {
-    getMdbProviderInfo,
-    formatRatingValue,
-    normalizeWebClientSettings,
-    filterAndOrderRatings
-} from './ratingsFormatter.js';
+import { getMdbProviderInfo, normalizeWebClientSettings, filterAndOrderRatings } from './ratingsFormatter.js';
 
 export default {
     id: 'mdblist-ratings',

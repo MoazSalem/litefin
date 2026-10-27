@@ -25,6 +25,7 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { toast } from '../../ui/Toast.js';
 import { i18n } from '../../utils/i18n.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
 
 const log = logger.create('SubtitleManager');
 
@@ -98,6 +99,7 @@ export default class SubtitleManager {
         this._mediaAttachments = [];
         this._backendType = null; // 'tizen' or 'html5'
         this._videoElement = null; // Reference to real video element (or null)
+        this._isHdr = false;       // Active video stream dynamic range indicator
 
         // ====================================================================
         // Renderers
@@ -148,6 +150,26 @@ export default class SubtitleManager {
         this._secondaryOffset = 0;
 
         log.info('SubtitleManager initialized');
+    }
+
+    /**
+     * Internal fetch helper that attaches custom reverse proxy headers (e.g.
+     * Cloudflare Zero Trust, Pangolin) if the target URL is hosted on the server.
+     *
+     * @param {string} url - Target URL to fetch
+     * @param {Object} [options={}] - Fetch configuration options
+     * @returns {Promise<Response>} Native fetch response
+     * @private
+     */
+    _fetchWithHeaders(url, options = {}) {
+        const proxyHeaders = customHeaders.getHeadersForUrl(url, this._serverUrl);
+        const merged = Object.assign({}, options);
+
+        if (proxyHeaders && typeof proxyHeaders === 'object' && Object.keys(proxyHeaders).length > 0) {
+            merged.headers = Object.assign({}, merged.headers, proxyHeaders);
+        }
+
+        return fetch(url, merged);
     }
 
     // ========================================================================
@@ -202,8 +224,9 @@ export default class SubtitleManager {
         );
         this._videoElement = isRealVideo ? rawVideo : null;
         this._playMethod = context.playMethod || 'DirectPlay';
+        this._isHdr = Boolean(context.isHdr);
 
-        log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}`);
+        log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}, isHdr=${this._isHdr}`);
     }
 
     /**
@@ -534,9 +557,14 @@ export default class SubtitleManager {
     }
 
     /**
-     * Refresh subtitle styles (e.g. font override)
+     * Refresh subtitle styles across managed renderers (ASS, PGS bitmap, text).
      */
     async refreshStyles() {
+        // Forward restyling to active PGS canvas renderer
+        if (this.isPGSActive()) {
+            this.refreshPgsOpacity(this._isHdr);
+        }
+
         // =================================================================
         // Only push ASS style overrides when the primary track is actually
         // being rendered by the ASS canvas.  Checking for the _assRenderer
@@ -607,6 +635,32 @@ export default class SubtitleManager {
     isASSActive() {
         return this._primaryDelivery === DeliveryMethod.ASS_CANVAS;
     }
+
+    /**
+     * Check if the current primary subtitle is a PGS bitmap track.
+     * @returns {boolean}
+     */
+    isPGSActive() {
+        return this._primaryDelivery === DeliveryMethod.PGS_BITMAP;
+    }
+
+    /**
+     * Dynamically update opacity across active PGS bitmap renderer.
+     * Propagates active dynamic range (SDR vs HDR) and triggers renderer restyling.
+     * @param {boolean} [isHdr] - Optional updated HDR state
+     */
+    refreshPgsOpacity(isHdr) {
+        // Synchronize internal HDR state if supplied
+        if (typeof isHdr === 'boolean') {
+            this._isHdr = isHdr;
+        }
+
+        // Forward restyling command to active PGS canvas renderer
+        if (this._pgsRenderer && typeof this._pgsRenderer.updateOpacity === 'function') {
+            this._pgsRenderer.updateOpacity(this._isHdr);
+        }
+    }
+
 
     /**
      * Resets all active subtitle cues and clears all visible screen overlays immediately.
@@ -881,7 +935,7 @@ export default class SubtitleManager {
             // ================================================================
             // Start fetching subtitle content asynchronously
             // ================================================================
-            const subtitleFetchPromise = fetch(url).then(async (response) => {
+            const subtitleFetchPromise = this._fetchWithHeaders(url).then(async (response) => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.text();
             });
@@ -1185,7 +1239,7 @@ export default class SubtitleManager {
             // ================================================================
             if (track.IsExternal) {
                 log.info(`Validating external PGS subtitle URL: ${url}`);
-                const probeResponse = await fetch(url, {
+                const probeResponse = await this._fetchWithHeaders(url, {
                     headers: { Range: 'bytes=0-0' }
                 });
 
@@ -1213,7 +1267,7 @@ export default class SubtitleManager {
                     while (offset < totalBytes) {
                         if (isStale()) return;
                         const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
-                        const chunkResp = await fetch(url, {
+                        const chunkResp = await this._fetchWithHeaders(url, {
                             headers: { Range: `bytes=${offset}-${end}` }
                         });
 
@@ -1246,7 +1300,8 @@ export default class SubtitleManager {
                 videoElement: this._videoElement,
                 subUrl,
                 subBuffer,
-                timeOffset: this._primaryOffset
+                timeOffset: this._primaryOffset,
+                isHdr: this._isHdr
             });
 
         } catch (err) {
@@ -1335,7 +1390,7 @@ export default class SubtitleManager {
             // ================================================================
             // Fetch the subtitle VTT text from server asynchronously
             // ================================================================
-            const response = await fetch(url);
+            const response = await this._fetchWithHeaders(url);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }

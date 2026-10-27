@@ -157,3 +157,112 @@ test('AndroidProfile: detects 1080p viewport and reports FHD', () => {
     assert.strictEqual(caps.uhd8K, false, '1080p display must have uhd8K=false');
 });
 
+// ============================================================================
+// Test Suite: MPEG-2 and VC-1 DirectPlay Hardware Gating
+// ============================================================================
+// On Android mobile devices lacking dedicated MPEG-2 (c2.android.mpeg2.decoder
+// restricted to domain="tv") or VC-1 decoders, DirectPlay profiles must omit
+// these codecs to allow Jellyfin server transcoding rather than black screens.
+// ============================================================================
+test('AndroidProfile: excludes mpeg2video and vc1 from DirectPlay when unsupported by hardware', () => {
+    // Mock native Android interface on a mobile phone without MPEG-2 or VC-1
+    globalThis.LitefinAndroid = {
+        getSupportedVideoCodecs: () => JSON.stringify({
+            h264: true,
+            hevc: true,
+            vp9: true,
+            vp8: true,
+            av1: false,
+            mpeg2video: false,
+            vc1: false
+        })
+    };
+
+    // Invalidate cached capabilities
+    AndroidProfile.clearCapabilitiesCache();
+
+    // Build the Jellyfin device profile
+    const profile = AndroidProfile.buildJellyfinProfile();
+
+    // Verify DirectPlay video profile does not contain mpeg2video or vc1
+    const directPlayVideo = profile.DirectPlayProfiles.find((p) => p.Type === 'Video');
+    assert.ok(directPlayVideo, 'DirectPlay video profile must exist');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('mpeg2video'), false, 'DirectPlay must not advertise mpeg2video');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('vc1'), false, 'DirectPlay must not advertise vc1');
+
+    // Verify DirectStreamProfiles also omits mpeg2video and vc1
+    const directStreamVideo = profile.DirectStreamProfiles.find((p) => p.Type === 'Video');
+    if (directStreamVideo) {
+        assert.strictEqual(directStreamVideo.VideoCodec.includes('mpeg2video'), false, 'DirectStream must not advertise mpeg2video');
+        assert.strictEqual(directStreamVideo.VideoCodec.includes('vc1'), false, 'DirectStream must not advertise vc1');
+    }
+
+    // Verify capabilities map reflects decoder omission
+    const caps = AndroidProfile.getDeviceCapabilities();
+    assert.strictEqual(caps.mpeg2video, false, 'Capabilities must report mpeg2video as false');
+    assert.strictEqual(caps.vc1, false, 'Capabilities must report vc1 as false');
+});
+
+test('AndroidProfile: includes mpeg2video and vc1 in DirectPlay when supported by hardware', () => {
+    // Mock native Android interface with MPEG-2 and VC-1 decoders present
+    globalThis.LitefinAndroid = {
+        getSupportedVideoCodecs: () => JSON.stringify({
+            h264: true,
+            hevc: true,
+            vp9: true,
+            vp8: true,
+            av1: false,
+            mpeg2video: true,
+            vc1: true
+        })
+    };
+
+    // Invalidate cached capabilities
+    AndroidProfile.clearCapabilitiesCache();
+
+    // Build profile with MPEG-2 and VC-1 active
+    const profile = AndroidProfile.buildJellyfinProfile();
+
+    // Verify DirectPlay profile advertises mpeg2video and vc1
+    const directPlayVideo = profile.DirectPlayProfiles.find((p) => p.Type === 'Video');
+    assert.ok(directPlayVideo, 'DirectPlay video profile must exist');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('mpeg2video'), true, 'DirectPlay must advertise mpeg2video');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('vc1'), true, 'DirectPlay must advertise vc1');
+
+    // Verify capabilities map reflects active hardware decoders
+    const caps = AndroidProfile.getDeviceCapabilities();
+    assert.strictEqual(caps.mpeg2video, true, 'Capabilities must report mpeg2video as true');
+    assert.strictEqual(caps.vc1, true, 'Capabilities must report vc1 as true');
+});
+
+test('AndroidProfile: fallback without bridge codecs defaults mpeg2video to false on phone UA', () => {
+    // Keep bridge presence for exoplayer backend selection but omit getSupportedVideoCodecs
+    globalThis.LitefinAndroid = {};
+
+    // Ensure playerBackend setting resolves to exoplayer
+    storageMap.set('player:playerBackend', 'exoplayer');
+
+    // Set mobile phone user agent string
+    try {
+        Object.defineProperty(globalThis.navigator, 'userAgent', {
+            value: 'Mozilla/5.0 (Linux; Android 14; SM-S928B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.134 Mobile Safari/537.36',
+            configurable: true
+        });
+    } catch (_) {}
+
+    // Invalidate cached capabilities
+    AndroidProfile.clearCapabilitiesCache();
+
+    // Query capabilities
+    const caps = AndroidProfile.getDeviceCapabilities();
+    assert.strictEqual(caps.mpeg2video, false, 'Mobile phone fallback must default mpeg2video to false');
+    assert.strictEqual(caps.vc1, false, 'Mobile phone fallback must default vc1 to false');
+
+    // Build profile
+    const profile = AndroidProfile.buildJellyfinProfile();
+    const directPlayVideo = profile.DirectPlayProfiles.find((p) => p.Type === 'Video');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('mpeg2video'), false, 'DirectPlay must exclude mpeg2video on phone fallback');
+    assert.strictEqual(directPlayVideo.VideoCodec.includes('vc1'), false, 'DirectPlay must exclude vc1 on phone fallback');
+});
+
+

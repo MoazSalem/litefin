@@ -283,7 +283,7 @@ test('Sidebar._updateBackButtonState: activates back button and has-back-button 
 
 test('SettingsPage: sidebar-back-button-select is properly registered and wired in settingsMap', () => {
     // Read source code of SettingsPage.js
-    const settingsSource = readFileSync('./src/pages/SettingsPage.js', 'utf8');
+    const settingsSource = readFileSync('./src/pages/settings/SettingsPage.js', 'utf8');
 
     // Verify dropdown control is rendered in template
     assert.ok(

@@ -43,7 +43,12 @@ export function escapeHtml(value) {
  * @private
  */
 const SUBTITLE_ENTITIES = {
-    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00A0'
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: '\u00A0'
 };
 
 /**
@@ -229,53 +234,53 @@ export function sanitizeSubtitleText(text) {
         rawText = rawText.replace(/<font\b([^>]*?)(\s+color=(?:"[^"]*"|'[^']*'|[^\s>]+))([^>]*?)>/gi, '<font$1$3>');
     }
 
-    const decoded = rawText.replace(
-        /&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi,
-        (match, entity) => {
-            if (entity[0] === '#') {
-                const code = entity[1] === 'x' || entity[1] === 'X'
-                    ? parseInt(entity.slice(2), 16)
-                    : parseInt(entity.slice(1), 10);
-                return Number.isInteger(code) && code > 0 && code <= 0x10ffff
-                    ? String.fromCodePoint(code)
-                    : match;
-            }
-            return SUBTITLE_ENTITIES[entity.toLowerCase()] ?? match;
+    const decoded = rawText.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi, (match, entity) => {
+        if (entity[0] === '#') {
+            const code =
+                entity[1] === 'x' || entity[1] === 'X' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+            return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
         }
-    );
+        return SUBTITLE_ENTITIES[entity.toLowerCase()] ?? match;
+    });
 
-    return escapeHtml(decoded)
-        // HTML tag/attribute whitespace is [ \t\n\r\f] only — JS \s also
-        // matches NBSP/\u2028/\ufeff etc., which browsers treat as attribute
-        // NAME characters, so allowing \s would emit renamed/junk attributes.
-        .replace(/&lt;(\/?)(i|b|u|em|strong|br|font|span|ruby|rt)[ \t\n\r\f]*\/?&gt;/gi, '<$1$2>')
-        .replace(/&lt;font((?:[ \t\n\r\f]+(?:face|size|color)=&quot;[^&]*&quot;)+[ \t\n\r\f]*)&gt;/gi,
-            (match, attrs) => {
-                if (overrideColors) {
-                    attrs = attrs.replace(/[ \t\n\r\f]+color=&quot;[^&]*&quot;/gi, '');
+    return (
+        escapeHtml(decoded)
+            // HTML tag/attribute whitespace is [ \t\n\r\f] only — JS \s also
+            // matches NBSP/\u2028/\ufeff etc., which browsers treat as attribute
+            // NAME characters, so allowing \s would emit renamed/junk attributes.
+            .replace(/&lt;(\/?)(i|b|u|em|strong|br|font|span|ruby|rt)[ \t\n\r\f]*\/?&gt;/gi, '<$1$2>')
+            .replace(
+                /&lt;font((?:[ \t\n\r\f]+(?:face|size|color)=&quot;[^&]*&quot;)+[ \t\n\r\f]*)&gt;/gi,
+                (match, attrs) => {
+                    if (overrideColors) {
+                        attrs = attrs.replace(/[ \t\n\r\f]+color=&quot;[^&]*&quot;/gi, '');
+                    }
+                    const cleanedAttrs = attrs.replace(/&quot;/g, '"').trim();
+                    return cleanedAttrs ? `<font ${cleanedAttrs}>` : '<font>';
                 }
-                const cleanedAttrs = attrs.replace(/&quot;/g, '"').trim();
-                return cleanedAttrs ? `<font ${cleanedAttrs}>` : '<font>';
-            })
-        .replace(/&lt;span((?:[ \t\n\r\f]+(?:style|class|title)=&quot;[^&]*&quot;)+[ \t\n\r\f]*)&gt;/gi,
-            (match, attrs) => {
-                // Ensure style does not contain javascript: or unsafe expressions
-                if (/javascript:|expression\(|url\(/i.test(attrs)) {
-                    return match;
+            )
+            .replace(
+                /&lt;span((?:[ \t\n\r\f]+(?:style|class|title)=&quot;[^&]*&quot;)+[ \t\n\r\f]*)&gt;/gi,
+                (match, attrs) => {
+                    // Ensure style does not contain javascript: or unsafe expressions
+                    if (/javascript:|expression\(|url\(/i.test(attrs)) {
+                        return match;
+                    }
+                    if (overrideColors) {
+                        // Strip inline color and background-color declarations when override is active
+                        attrs = attrs.replace(/style=&quot;([^&]*)&quot;/gi, (_m, styleVal) => {
+                            const cleaned = styleVal
+                                .replace(/(?:^|;)\s*(?:background-color|background|color)\s*:[^;]*/gi, '')
+                                .trim()
+                                .replace(/^;+|;+$/g, '');
+                            return cleaned ? `style=&quot;${cleaned}&quot;` : '';
+                        });
+                    }
+                    const cleanedAttrs = attrs.replace(/&quot;/g, '"').trim();
+                    return cleanedAttrs ? `<span ${cleanedAttrs}>` : '<span>';
                 }
-                if (overrideColors) {
-                    // Strip inline color and background-color declarations when override is active
-                    attrs = attrs.replace(/style=&quot;([^&]*)&quot;/gi, (_m, styleVal) => {
-                        const cleaned = styleVal
-                            .replace(/(?:^|;)\s*(?:background-color|background|color)\s*:[^;]*/gi, '')
-                            .trim()
-                            .replace(/^;+|;+$/g, '');
-                        return cleaned ? `style=&quot;${cleaned}&quot;` : '';
-                    });
-                }
-                const cleanedAttrs = attrs.replace(/&quot;/g, '"').trim();
-                return cleanedAttrs ? `<span ${cleanedAttrs}>` : '<span>';
-            });
+            )
+    );
 }
 
 /**
@@ -428,7 +433,7 @@ export function parseSubtitleMetadata(r) {
     let cleanName = rawName.replace(/<[^>]*>/g, '').trim();
 
     // Parse ID parts if Bazarr formatted: (movie|episode)|id|provider|HI|Forced|subtitle
-    const idParts = (r.Id && typeof r.Id === 'string') ? r.Id.split('|') : [];
+    const idParts = r.Id && typeof r.Id === 'string' ? r.Id.split('|') : [];
     const isBazarrId = (idParts[0] === 'movie' || idParts[0] === 'episode') && idParts.length >= 6;
     const bazarrHi = isBazarrId && idParts[3]?.toLowerCase() === 'true';
     const bazarrForced = isBazarrId && idParts[4]?.toLowerCase() === 'true';
@@ -508,8 +513,15 @@ export function parseSubtitleMetadata(r) {
         // Check if ID is prefixed by provider key
         if (!subProvider && r.Id) {
             const knownSubbuzz = [
-                'Addic7ed', 'OpenSubtitlesCom', 'Subf2m', 'SubDl',
-                'SubSource', 'SubsSabBz', 'SubsUnacsNet', 'YifySubtitles', 'Subscene'
+                'Addic7ed',
+                'OpenSubtitlesCom',
+                'Subf2m',
+                'SubDl',
+                'SubSource',
+                'SubsSabBz',
+                'SubsUnacsNet',
+                'YifySubtitles',
+                'Subscene'
             ];
             const found = knownSubbuzz.find((p) => r.Id.startsWith(p));
             if (found) subProvider = found;
@@ -517,7 +529,7 @@ export function parseSubtitleMetadata(r) {
 
         // Extract from comment header "[Provider]" or "<b>[Provider]</b>"
         if (!subProvider) {
-            const commentMatch = rawComment.match(/\[([a-zA-Z0-9_.\-]+)\]/);
+            const commentMatch = rawComment.match(/\[([a-zA-Z0-9_.-]+)\]/);
             if (commentMatch) {
                 subProvider = commentMatch[1];
             }
@@ -542,7 +554,7 @@ export function parseSubtitleMetadata(r) {
 
     // Parse score from comment if not present on top-level object
     if (score === null && rawComment) {
-        const scoreMatch = rawComment.match(/Score:\s*([\d\.]+)%?/i);
+        const scoreMatch = rawComment.match(/Score:\s*([\d.]+)%?/i);
         if (scoreMatch) {
             const parsedScore = parseFloat(scoreMatch[1]);
             if (!isNaN(parsedScore)) {

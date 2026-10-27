@@ -397,9 +397,11 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
+    /* Unified resting state: flat by default without drop shadow */
+    box-shadow: none;
+    /* PERFORMANCE: Avoid GPU framebuffer readback blur on embedded/TV hardware */
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     -webkit-transition: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
                         border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
                         color 0.2s ease,
@@ -491,6 +493,45 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
 
 [dir="rtl"] .sidebar-back-btn:active .back-icon svg {
     transform: rotate(180deg) scale(0.92);
+}
+
+/* ============================================================================
+ * OPTIONAL SIDEBAR ICON SHADOWS
+ * ============================================================================
+ * When enabled via user settings, injects soft, unified drop shadows across all
+ * icons in the sidebar rail (navigation items, Litefin brand logo, user avatar,
+ * and circular back button capsule) for elevated visual depth and contrast.
+ * ============================================================================ */
+html[data-sidebar-icon-shadows="true"] .sidebar-back-btn .back-icon svg,
+html[data-sidebar-icon-shadows="shadow"] .sidebar-back-btn .back-icon svg,
+.sidebar.has-icon-shadows .sidebar-back-btn .back-icon svg {
+    /* Restore elevated capsule depth for the back button when shadows enabled */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    -webkit-filter: none;
+    filter: none;
+}
+
+html[data-sidebar-icon-shadows="true"] .sidebar .item-icon svg,
+html[data-sidebar-icon-shadows="shadow"] .sidebar .item-icon svg,
+html[data-sidebar-icon-shadows="true"] .sidebar .logo-icon svg,
+html[data-sidebar-icon-shadows="shadow"] .sidebar .logo-icon svg,
+html[data-sidebar-icon-shadows="true"] .sidebar-logo-img,
+html[data-sidebar-icon-shadows="shadow"] .sidebar-logo-img,
+html[data-sidebar-icon-shadows="true"] .sidebar .sidebar-chevron svg,
+html[data-sidebar-icon-shadows="shadow"] .sidebar .sidebar-chevron svg,
+html[data-sidebar-icon-shadows="true"] .sidebar .user-avatar-container img,
+html[data-sidebar-icon-shadows="shadow"] .sidebar .user-avatar-container img,
+html[data-sidebar-icon-shadows="true"] .sidebar .user-avatar-container svg,
+html[data-sidebar-icon-shadows="shadow"] .sidebar .user-avatar-container svg,
+.sidebar.has-icon-shadows .item-icon svg,
+.sidebar.has-icon-shadows .logo-icon svg,
+.sidebar.has-icon-shadows .sidebar-logo-img,
+.sidebar.has-icon-shadows .sidebar-chevron svg,
+.sidebar.has-icon-shadows .user-avatar-container img,
+.sidebar.has-icon-shadows .user-avatar-container svg {
+    /* Crisp drop shadow tailored to vector glyph geometry and PNG alpha channels */
+    -webkit-filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
 }
 
 /* Header / Logo */
@@ -820,9 +861,14 @@ html[data-layout-tier="ultra-legacy"] .item-icon svg {
  * Chrome 32 paint pipeline fails to hide transformed inline-block elements
  * when only opacity: 0 and visibility: hidden are set. Force display: none
  * while unexpanded to guarantee zero visual leakage over page content.
+ *
+ * Keep focused and currently active keyboard/d-pad navigation items visible
+ * so that spatial navigation retains accessible tooltip and label cues
+ * even while the sidebar container itself is unexpanded and unhovered.
  */
-html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *) .item-text,
-html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .logo-text,
+html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *):not(:focus):not(.focused) .item-text,
+html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) #sidebar-logo-header:not(:focus):not(.focused) .logo-text,
+html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .logo-text:not(:focus):not(.focused),
 html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) #section-header,
 html[data-layout-tier="ultra-legacy"] .sidebar:not(.expanded):not(:hover) .sidebar-section-header {
     display: none !important;
@@ -902,11 +948,17 @@ html[data-layout-tier="ultra-legacy"] .sidebar:hover .item-text {
 /*
  * Force display: none on collapsed labels across older WebKit and legacy GPU layers
  * to eradicate ghosting, bleed-through, and clipping artifacts.
+ *
+ * Exclude items that currently hold focus (:focus or .focused) so that
+ * keyboard, remote control, and spatial navigation reliably render the label
+ * tooltips across compact and modern collapsed layouts without requiring mouse hover.
  */
-.sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *) .item-text,
-.sidebar:not(.expanded):not(:hover) > .item-text,
-.sidebar:not(.expanded):not(:hover) .sidebar-user-name,
-.sidebar:not(.expanded):not(:hover) .sidebar-syncplay-label {
+.sidebar:not(.expanded):not(:hover) .sidebar-item:not(#sidebar-sub-libraries *):not(:focus):not(.focused) .item-text,
+.sidebar:not(.expanded):not(:hover) > .item-text:not(:focus):not(.focused),
+.sidebar:not(.expanded):not(:hover) .sidebar-item:not(:focus):not(.focused) .sidebar-user-name,
+.sidebar:not(.expanded):not(:hover) .sidebar-item:not(:focus):not(.focused) .sidebar-syncplay-label,
+.sidebar:not(.expanded):not(:hover) .sidebar-user-name:not(:focus):not(.focused),
+.sidebar:not(.expanded):not(:hover) .sidebar-syncplay-label:not(:focus):not(.focused) {
     display: none !important;
     opacity: 0 !important;
     visibility: hidden !important;
@@ -961,9 +1013,7 @@ html[data-layout-tier="ultra-legacy"] .sidebar:hover .item-text {
     z-index: 5;
 }
 
-html[data-layout-sidebar^="modern"] .sidebar-footer,
-html[data-layout-sidebar="floating-buttons"] .sidebar-footer,
-html[data-layout-sidebar="floating-island"] .sidebar-footer {
+html[data-sidebar-family="modern"] .sidebar-footer {
     display: flex;
     margin-top: auto;
     padding-bottom: 16px;

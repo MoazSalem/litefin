@@ -133,11 +133,11 @@ rust {
 }
 
 dependencies {
-    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.webkit:webkit:1.17.1")
     implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("androidx.activity:activity-ktx:1.10.1")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    implementation("androidx.activity:activity-ktx:1.13.0")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.11.0")
 
     // -------------------------------------------------------------------------
     // Media3 ExoPlayer Suite
@@ -147,14 +147,26 @@ dependencies {
     // Provides Direct Play for MKV, MP4, WebM, and TS containers with HEVC,
     // AV1, VP9, H.264, AC-3, E-AC-3, DTS, TrueHD, FLAC, and Opus.
     // -------------------------------------------------------------------------
-    val media3Version = "1.5.1"
+    val media3Version = "1.11.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
+
+    // -------------------------------------------------------------------------
+    // Media3 FFmpeg Audio Decoder Extension (Prebuilt Binaries via Jellyfin)
+    // -------------------------------------------------------------------------
+    // Bundles prebuilt native FFmpeg shared libraries (libffmpeg.so) across all
+    // targeted Android ABIs (armeabi-v7a, arm64-v8a, x86, x86_64).
+    // Provides seamless client-side software decoding fallback for proprietary
+    // multi-channel audio codecs (AC-3, E-AC-3, DTS, DTS-HD, and TrueHD)
+    // when native hardware MediaCodec decoders or bitstream passthrough are
+    // missing on the Android device, preventing playback failure or server transcoding.
+    // -------------------------------------------------------------------------
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")

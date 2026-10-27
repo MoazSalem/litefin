@@ -84,7 +84,7 @@ test('ApiClient.refreshItem dispatches POST with correct mode options', async ()
 
 test('SettingsPage source contains Admin Policy check and Libraries tab definition', () => {
     // Read source of SettingsPage
-    const settingsSource = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8');
+    const settingsSource = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8');
 
     // Assert administrator check is present in SettingsPage
     assert.ok(settingsSource.includes("user?.Policy?.IsAdministrator"));

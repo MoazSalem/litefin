@@ -57,12 +57,41 @@ class PersonPage extends Page {
         }
     }
 
+    /**
+     * Determine the user's preferred tooltip presentation mode for action buttons.
+     * Evaluates storage preference with fallback support for legacy boolean states.
+     *
+     * @returns {'hidden' | 'floating' | 'cards'} Resolved tooltip presentation style
+     * @private
+     */
+    _getActionTooltipsMode() {
+        // Read raw preference string from local storage
+        const pref = storage.getItem('pref:showActionTooltips');
+
+        // Check if explicitly configured to hide or legacy false flag
+        if (pref === 'hidden' || pref === 'false') {
+            return 'hidden';
+        }
+
+        // Check if configured for legacy card pill badges
+        if (pref === 'cards') {
+            return 'cards';
+        }
+
+        // Default presentation is clean floating text
+        return 'floating';
+    }
+
     render() {
-        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
-        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+        // Resolve action tooltips display mode (floating text default, name cards, or hidden)
+        const tooltipMode = this._getActionTooltipsMode();
+        // Hide tooltips class used for layout adjustments when tooltips are disabled
+        const tooltipsClass = tooltipMode === 'hidden' ? 'tooltips-disabled' : '';
+        // Modifier class indicating whether floating or card style is active
+        const tooltipModeClass = `tooltip-mode-${tooltipMode}`;
 
         return `
-            <div class="page person-page ${tooltipsClass}" id="person-page">
+            <div class="page person-page ${tooltipsClass} ${tooltipModeClass}" id="person-page">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="person-backdrop">
                     <div class="backdrop-gradient"></div>
@@ -93,7 +122,7 @@ class PersonPage extends Page {
 
                             <!-- Actions (Favorite, Seerr) -->
                             <div class="person-actions-row" id="person-fav-actions">
-                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                <div class="action-btn-tooltip-bar style-${tooltipMode}" id="action-tooltip-bar">
                                     <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
                                 </div>
                             </div>
@@ -146,8 +175,7 @@ class PersonPage extends Page {
             }
 
             const hasFocusTarget =
-                this._pendingNavState ||
-                (storage.getItem('pref:disableFocusRestore') !== 'true' && savedFocusObj);
+                this._pendingNavState || (storage.getItem('pref:disableFocusRestore') !== 'true' && savedFocusObj);
 
             // ────────────────────────────────────────────────────────────
             // 4. Load works in visual order
@@ -344,8 +372,9 @@ class PersonPage extends Page {
             // Append tooltip bar to favContainer synchronously before any async operations
             let tooltipBar = favContainer.querySelector('#action-tooltip-bar');
             if (!tooltipBar) {
+                const tooltipMode = this._getActionTooltipsMode();
                 tooltipBar = document.createElement('div');
-                tooltipBar.className = 'action-btn-tooltip-bar';
+                tooltipBar.className = `action-btn-tooltip-bar style-${tooltipMode}`;
                 tooltipBar.id = 'action-tooltip-bar';
                 tooltipBar.innerHTML = `<span class="action-btn-tooltip-text" id="action-tooltip-text"></span>`;
                 favContainer.appendChild(tooltipBar);
@@ -492,14 +521,14 @@ class PersonPage extends Page {
                 try {
                     const born = new Date(p.PremiereDate).getFullYear();
                     parts.push(i18n.t('BirthDateValue', [born]));
-                } catch (e) { }
+                } catch (e) {}
             }
 
             if (p.EndDate) {
                 try {
                     const died = new Date(p.EndDate).getFullYear();
                     parts.push(i18n.t('DeathDateValue', [died]));
-                } catch (e) { }
+                } catch (e) {}
             }
 
             if (p.ProductionLocations && p.ProductionLocations.length > 0) {
@@ -887,7 +916,8 @@ class PersonPage extends Page {
 
         // Clear only the DOM nodes that belong to appearances
         // (remove everything then re-append episodes node if it exists)
-        const episodesEl = episodesGrid?.el || worksContainer.querySelector('.person-episodes-grid')?.closest('.media-row-section');
+        const episodesEl =
+            episodesGrid?.el || worksContainer.querySelector('.person-episodes-grid')?.closest('.media-row-section');
         worksContainer.innerHTML = '';
         if (episodesEl && episodesEl.parentNode !== worksContainer) {
             // Re-attach episodes after clearing (it was detached by innerHTML reset)
@@ -1193,7 +1223,9 @@ class PersonPage extends Page {
 
     _setupTooltipListener() {
         this._onFocusChangedForTooltip = (focusedEl) => {
-            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            // Check if tooltips mode is active (either floating or cards)
+            const tooltipMode = this._getActionTooltipsMode();
+            const isEnabled = tooltipMode !== 'hidden';
             const targetEl = focusedEl || document.activeElement;
             const bar = this.$('#action-tooltip-bar');
             const txt = this.$('#action-tooltip-text');
@@ -1205,17 +1237,21 @@ class PersonPage extends Page {
 
             const actionsContainer = this.$('#person-fav-actions');
             if (actionsContainer && actionsContainer.contains(targetEl)) {
-                let text = targetEl.getAttribute('data-tooltip') || targetEl.getAttribute('aria-label') || targetEl.getAttribute('title');
+                let text =
+                    targetEl.getAttribute('data-tooltip') ||
+                    targetEl.getAttribute('aria-label') ||
+                    targetEl.getAttribute('title');
                 if (!text) {
                     const span = targetEl.querySelector('span[data-i18n], span');
                     if (span) text = span.textContent?.trim();
                 }
 
                 if (text) {
-                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnCenterX = targetEl.offsetLeft + targetEl.offsetWidth / 2;
                     const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
 
                     bar.style.left = `${btnCenterX}px`;
+                    // Both styles hang from the focused button, so a wrapped second row gets its own label
                     bar.style.top = `${btnBottomY}px`;
                     txt.textContent = text;
                     bar.classList.add('visible');
@@ -1260,9 +1296,10 @@ class PersonPage extends Page {
             if (typeof this._onFocusChangedForTooltip !== 'function') return;
             const actionsContainer = this.$('#person-fav-actions');
             const favBtn = this._favBtn?.el || this.$('.favorite-btn');
-            const targetEl = (document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement))
-                ? document.activeElement
-                : favBtn;
+            const targetEl =
+                document.activeElement && actionsContainer && actionsContainer.contains(document.activeElement)
+                    ? document.activeElement
+                    : favBtn;
             if (targetEl) {
                 this._onFocusChangedForTooltip?.(targetEl);
             }

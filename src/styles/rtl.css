@@ -227,9 +227,11 @@
     direction: ltr; /* Timelines always progress left-to-right */
 }
 
-[dir="rtl"] .volume-slider-container {
+[dir="rtl"] .volume-slider-container,
+[dir="rtl"] .osd-volume-slider-container {
     margin-left: 0;
-    margin-right: 20px;
+    margin-right: 0.5em;
+    direction: ltr;
 }
 
 [dir="rtl"] .track-option .track-option-check {
@@ -282,6 +284,159 @@
 [dir="rtl"] .played-badge {
     right: auto;
     left: 12px;
+}
+
+[dir="rtl"] .version-badge,
+[dir="rtl"] .media-source-count-badge {
+    left: auto;
+    right: 12px;
+}
+
+[dir="rtl"] .favorite-badge {
+    left: auto;
+    right: 12px;
+}
+
+[dir="rtl"] .version-badge ~ .favorite-badge,
+[dir="rtl"] .media-source-count-badge ~ .favorite-badge {
+    left: auto;
+    right: 60px;
+}
+
+html[data-media-rows-family="modern"][dir="rtl"] .played-badge {
+    right: auto;
+    left: 22px;
+}
+
+html[data-media-rows-family="modern"][dir="rtl"] .version-badge,
+html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge {
+    left: auto;
+    right: 22px;
+}
+
+html[data-media-rows-family="modern"][dir="rtl"] .favorite-badge {
+    left: auto;
+    right: 22px;
+}
+
+html[data-media-rows-family="modern"][dir="rtl"] .version-badge ~ .favorite-badge,
+html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge ~ .favorite-badge {
+    left: auto;
+    right: 74px;
+}
+
+/* RTL: Expanding layout expanded badges positioned above text */
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .favorite-badge {
+    left: auto;
+    right: 30px;
+}
+
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .played-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .played-badge {
+    right: auto;
+    left: 30px;
+}
+
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .version-badge ~ .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .media-source-count-badge ~ .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .version-badge ~ .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .media-source-count-badge ~ .favorite-badge {
+    left: auto;
+    right: 82px;
+}
+
+/* RTL: expanding posters move their badges with a mirrored transform (see modern/home.css) */
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:hover .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:hover .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:hover .favorite-badge {
+    -webkit-transform: translate(-8px, -90px) scale(1.05);
+    transform: translate(-8px, -90px) scale(1.05);
+}
+
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .played-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .played-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:hover .played-badge {
+    -webkit-transform: translate(8px, -90px) scale(1.05);
+    transform: translate(8px, -90px) scale(1.05);
+}
+
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:hover .version-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:hover .media-source-count-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:hover .favorite-badge {
+    -webkit-transform: translate(-8px, -84px) scale(1.05);
+    transform: translate(-8px, -84px) scale(1.05);
+}
+
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .played-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .played-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:hover .played-badge {
+    -webkit-transform: translate(8px, -84px) scale(1.05);
+    transform: translate(8px, -84px) scale(1.05);
+}
+
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:focus:hover .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.focused:hover .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:focus:hover .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.focused:hover .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:focus:hover .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.focused:hover .favorite-badge {
+    -webkit-transform: translate(-8px, -90px) !important;
+    transform: translate(-8px, -90px) !important;
+}
+
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion:focus .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.focused .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion:focus:hover .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.focused:hover .played-badge {
+    -webkit-transform: translate(8px, -90px) !important;
+    transform: translate(8px, -90px) !important;
+}
+
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:focus:hover .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress.focused:hover .version-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:focus:hover .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress.focused:hover .media-source-count-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:focus:hover .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress.focused:hover .favorite-badge {
+    -webkit-transform: translate(-8px, -84px) !important;
+    transform: translate(-8px, -84px) !important;
+}
+
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress:focus:hover .played-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="rtl"] .media-card.has-expansion.has-progress.focused:hover .played-badge {
+    -webkit-transform: translate(8px, -84px) !important;
+    transform: translate(8px, -84px) !important;
 }
 
 /* ================== DETAILS PAGE ================== */
@@ -718,4 +873,22 @@
     margin-right: 0;
     margin-left: 14px;
 }
+
+/* ========================================================================= */
+/* Player OSD Volume Controls RTL Flipping                                   */
+/* ========================================================================= */
+
+/* Reverse margin between mute button and horizontal volume slider track */
+[dir="rtl"] .osd-volume-slider-container {
+    margin-left: 0;
+    margin-right: 0.5em;
+}
+
+/* Anchor volume track and progress fill line to the right edge in RTL */
+[dir="rtl"] .osd-volume-track,
+[dir="rtl"] .osd-volume-fill {
+    left: auto;
+    right: 0;
+}
+
 

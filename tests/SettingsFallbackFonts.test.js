@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { getFallbackFontId, getFallbackFontName, getFallbackFontFamily } from '../src/utils/FallbackFonts.js';
 
-const source = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '')
     .replace('export default SettingsPage;', 'SettingsPage;');
 const fonts = [{ Name: 'UI & 字体.ttf' }, { Name: "Subtitle (O'Brien).otf" }];
@@ -21,6 +21,7 @@ function createSettings(storageData = {}) {
     let modal;
     const context = vm.createContext({
         Page: class {},
+        platformInfo: { isAndroid: false, isTizen: false, isWebOS: false, isDesktop: false, isWeb: true },
         availableLanguages: [],
         logger: { create: () => ({ warn() {}, debug() {}, info() {} }) },
         i18n: { t: (key) => key, ensureBiDi: (value) => value },

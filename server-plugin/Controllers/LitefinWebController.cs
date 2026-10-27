@@ -17,7 +17,8 @@ using Microsoft.Extensions.Logging;
 /// ============================================================================
 /// Hosts the modern Litefin web application bundled inside the plugin folder.
 /// Serves all client assets (HTML, CSS, JS, fonts, images, and WebAssembly)
-/// directly under the /litefin route with SPA fallback and cross-origin isolation.
+/// directly under the /litefin route with SPA fallback, cross-origin isolation,
+/// and embedded resources for stock Jellyfin Web top bar integration.
 /// ============================================================================
 /// </summary>
 [ApiController]
@@ -71,6 +72,110 @@ public class LitefinWebController : ControllerBase
     private static readonly Regex BaseHrefRegex = new Regex(
         "<base\\s+href=\"[^\"]*\"\\s*/?>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Serves the Litefin loader script bridge for stock Jellyfin Web top bar integration.
+    /// Injects the fast-access toolbar button into Jellyfin's header navigation.
+    /// </summary>
+    /// <returns>The loader.js javascript response.</returns>
+    [HttpGet("loader.js")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult GetLoaderJs()
+    {
+        // Try embedded resource first to ensure zero-disk-dependency operation
+        var resourceName = "Litefin.Web.Web.loader.js";
+        var stream = _assembly.GetManifestResourceStream(resourceName);
+        if (stream != null)
+        {
+            Response.Headers["Cache-Control"] = "no-cache, must-revalidate";
+            return File(stream, "application/javascript");
+        }
+
+        // Fallback to disk file if running unpackaged in local development
+        var webRoot = ResolveWebRoot();
+        if (!string.IsNullOrWhiteSpace(webRoot))
+        {
+            var diskPath = Path.Combine(webRoot, "loader.js");
+            if (System.IO.File.Exists(diskPath))
+            {
+                Response.Headers["Cache-Control"] = "no-cache, must-revalidate";
+                return PhysicalFile(diskPath, "application/javascript");
+            }
+        }
+
+        return NotFound(new { Error = "loader.js not found" });
+    }
+
+    /// <summary>
+    /// Serves runtime configuration consumed by the Litefin Web header launcher script.
+    /// Allows immediate client-side reaction when the administrator enables or disables the launcher.
+    /// </summary>
+    /// <returns>JSON configuration payload.</returns>
+    [HttpGet("config.json")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetRuntimeConfig()
+    {
+        var config = Plugin.Instance?.Configuration;
+        var mode = config?.HeaderButtonMode ?? (config?.EnableHeaderButton == false ? "Hidden" : "Colored");
+        var payload = new
+        {
+            headerButtonMode = mode,
+            enableHeaderButton = !string.Equals(mode, "Hidden", StringComparison.OrdinalIgnoreCase),
+            pluginMenuTitle = config?.PluginMenuTitle ?? "Litefin Client"
+        };
+
+        // Disable caching for instant admin configuration toggling
+        Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
+        return new JsonResult(payload);
+    }
+
+    /// <summary>
+    /// Serves the 130x130 Litefin launcher icon used by the top bar button.
+    /// Falls back to embedded assembly resource if not present in the physical web folder.
+    /// </summary>
+    /// <returns>The icon-130.png image stream or file.</returns>
+    [HttpGet("assets/icon-130.png")]
+    [HttpGet("icon-130.png")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult GetIcon130()
+    {
+        // 1. Check physical file in webRoot assets directory
+        var webRoot = ResolveWebRoot();
+        if (!string.IsNullOrWhiteSpace(webRoot))
+        {
+            var diskAsset = Path.Combine(webRoot, "assets", "icon-130.png");
+            if (System.IO.File.Exists(diskAsset))
+            {
+                Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+                return PhysicalFile(diskAsset, "image/png");
+            }
+
+            var diskRoot = Path.Combine(webRoot, "icon-130.png");
+            if (System.IO.File.Exists(diskRoot))
+            {
+                Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+                return PhysicalFile(diskRoot, "image/png");
+            }
+        }
+
+        // 2. Check embedded assembly resource
+        var stream = _assembly.GetManifestResourceStream("Litefin.Web.assets.icon-130.png");
+        if (stream != null)
+        {
+            Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+            return File(stream, "image/png");
+        }
+
+        return NotFound();
+    }
 
     /// <summary>
     /// Serves Litefin static assets and acts as the SPA router fallback.
@@ -382,3 +487,4 @@ public class LitefinWebController : ControllerBase
         return "application/octet-stream";
     }
 }
+

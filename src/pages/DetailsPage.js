@@ -15,7 +15,6 @@ import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
-import { imageCache } from '../utils/ImageCache.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
@@ -32,8 +31,14 @@ import DescriptionModal from '../components/DescriptionModal.js';
 import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
-import { resolveBestAudioStream, resolveSubtitleStream, isForcedStream, getEffectiveSubtitleMode } from '../player/core/JellyfinPlayer.js';
+import {
+    resolveBestAudioStream,
+    resolveSubtitleStream,
+    isForcedStream,
+    getEffectiveSubtitleMode
+} from '../player/core/StreamUtils.js';
 import { MediaHelper } from '../player/core/MediaHelper.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
@@ -41,14 +46,20 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
+import { timeManager } from '../utils/TimeManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { languageManager } from '../utils/LanguageManager.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
-import { detailsIcons, settingsIcons } from '../utils/Icons.js';
-import { escapeHtml, getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
+import { detailsIcons } from '../utils/Icons.js';
+import {
+    escapeHtml,
+    getOverviewClampClass,
+    shouldAlwaysShowOverviewButton,
+    getOverviewButtonText
+} from '../utils/Utils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -108,7 +119,7 @@ class DetailsPage extends Page {
     /**
      * Resolves the active layout mode based on the media item type.
      * Seasons and Episodes can have an independent layout mode configured.
-     * 
+     *
      * @param {Object} [item] - The media item if available
      * @returns {string} Layout mode identifier ('posterLeft', 'posterRight', 'backdropMinimal', 'backdropLeft')
      */
@@ -125,6 +136,31 @@ class DetailsPage extends Page {
         }
         // General layout preference used for Movies, Series, BoxSets, etc.
         return storage.getItem('pref:detailsLayout') || 'posterLeft';
+    }
+
+    /**
+     * Determine the user's preferred tooltip presentation mode for action buttons.
+     * Evaluates storage preference with fallback support for legacy boolean states.
+     *
+     * @returns {'hidden' | 'floating' | 'cards'} Resolved tooltip presentation style
+     * @private
+     */
+    _getActionTooltipsMode() {
+        // Read raw preference string from local storage
+        const pref = storage.getItem('pref:showActionTooltips');
+
+        // Check if explicitly configured to hide or legacy false flag
+        if (pref === 'hidden' || pref === 'false') {
+            return 'hidden';
+        }
+
+        // Check if configured for legacy card pill badges
+        if (pref === 'cards') {
+            return 'cards';
+        }
+
+        // Default presentation is clean floating text
+        return 'floating';
     }
 
     /**
@@ -173,11 +209,15 @@ class DetailsPage extends Page {
             layoutClass = 'layout-backdrop-left';
         }
 
-        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
-        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+        // Resolve action tooltips display mode (floating text default, name cards, or hidden)
+        const tooltipMode = this._getActionTooltipsMode();
+        // Hide tooltips class used for layout adjustments when tooltips are disabled
+        const tooltipsClass = tooltipMode === 'hidden' ? 'tooltips-disabled' : '';
+        // Modifier class indicating whether floating or card style is active
+        const tooltipModeClass = `tooltip-mode-${tooltipMode}`;
 
         return `
-            <div class="page details-page ${layoutClass} ${tooltipsClass}">
+            <div class="page details-page ${layoutClass} ${tooltipsClass} ${tooltipModeClass}">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>
@@ -242,7 +282,7 @@ class DetailsPage extends Page {
                                 <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}" data-tooltip="${i18n.t('MoreOptions')}">
                                     ${detailsIcons.more}
                                 </button>
-                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                <div class="action-btn-tooltip-bar style-${tooltipMode}" id="action-tooltip-bar">
                                     <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
                                 </div>
                             </section>
@@ -620,7 +660,9 @@ class DetailsPage extends Page {
             !window.matchMedia('(pointer: fine)').matches;
 
         this._onFocusChangedForTooltip = (focusedEl) => {
-            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            // Check if tooltips mode is active (either floating or cards)
+            const tooltipMode = this._getActionTooltipsMode();
+            const isEnabled = tooltipMode !== 'hidden';
             const targetEl = focusedEl || document.activeElement;
             if (!isEnabled || !targetEl) {
                 tooltipBar.classList.remove('visible');
@@ -653,10 +695,11 @@ class DetailsPage extends Page {
                     // Calculate fixed position centered under the focused button relative to actionsContainer.
                     // Uses offset metrics rather than getBoundingClientRect to prevent 1-2px vertical jitter
                     // caused by scale(1.05) focus animations.
-                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnCenterX = targetEl.offsetLeft + targetEl.offsetWidth / 2;
                     const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
 
                     tooltipBar.style.left = `${btnCenterX}px`;
+                    // Both styles hang from the focused button, so a wrapped second row gets its own label
                     tooltipBar.style.top = `${btnBottomY}px`;
                     tooltipText.textContent = text;
                     tooltipBar.classList.add('visible');
@@ -724,9 +767,10 @@ class DetailsPage extends Page {
         this._tooltipTimers = [];
         const updateInitial = () => {
             if (typeof this._onFocusChangedForTooltip !== 'function') return;
-            const targetEl = (document.activeElement && document.activeElement.closest('#actions'))
-                ? document.activeElement
-                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            const targetEl =
+                document.activeElement && document.activeElement.closest('#actions')
+                    ? document.activeElement
+                    : this.$('.resume-btn:not(.hidden)') || this.$('.play-btn');
             if (targetEl) {
                 this._onFocusChangedForTooltip?.(targetEl);
             }
@@ -747,7 +791,7 @@ class DetailsPage extends Page {
         if (!this._itemId) return;
 
         try {
-            log.info(`[DetailsPage] Re-fetching item metadata and visual assets for ${this._itemId}`);
+            log.info(`Re-fetching item metadata and visual assets for ${this._itemId}`);
 
             // 1. Build metadata fields query
             // Default to 'genres-studios-writers' to prevent loading excessive tags that bloat DOM
@@ -833,7 +877,7 @@ class DetailsPage extends Page {
                 logoContainer.innerHTML = '';
             }
         } catch (err) {
-            log.error('[DetailsPage] Failed to refresh item data:', err.message || err);
+            log.error('Failed to refresh item data:', err.message || err);
         }
     }
 
@@ -1163,7 +1207,7 @@ class DetailsPage extends Page {
             const resolvedAudio = MediaHelper.resolveSavedTrack(source, 'Audio', savedAudioTrack, this._itemId);
             if (resolvedAudio !== undefined) {
                 this._selectedAudioIndex = resolvedAudio;
-                log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${resolvedAudio}`);
+                log.info(`Restored saved audio track for ${this._itemId}: ${resolvedAudio}`);
             } else {
                 this._selectedAudioIndex = undefined;
             }
@@ -1176,9 +1220,7 @@ class DetailsPage extends Page {
             const resolvedSeriesAudio = MediaHelper.resolveSeriesTrack(source, 'Audio', this._item.SeriesId);
             if (resolvedSeriesAudio !== undefined) {
                 this._selectedAudioIndex = resolvedSeriesAudio;
-                log.info(
-                    `[DetailsPage] Restored series-level audio track for ${this._itemId}: ${resolvedSeriesAudio}`
-                );
+                log.info(`Restored series-level audio track for ${this._itemId}: ${resolvedSeriesAudio}`);
             }
         }
 
@@ -1197,7 +1239,7 @@ class DetailsPage extends Page {
             if (bestStream) {
                 this._selectedAudioIndex = bestStream.Index;
                 log.info(
-                    `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    `Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
                 );
             }
         }
@@ -1216,13 +1258,20 @@ class DetailsPage extends Page {
         // Guard: If Subtitle Mode is 'None', never restore saved tracks.
         // If Subtitle Mode is 'OnlyForced', only restore if the saved track is actually forced.
         if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined && effectiveSubtitleMode !== 'None') {
-            const resolvedSubtitle = MediaHelper.resolveSavedTrack(source, 'Subtitle', savedSubtitleTrack, this._itemId);
+            const resolvedSubtitle = MediaHelper.resolveSavedTrack(
+                source,
+                'Subtitle',
+                savedSubtitleTrack,
+                this._itemId
+            );
             if (resolvedSubtitle !== undefined) {
                 if (effectiveSubtitleMode === 'OnlyForced') {
-                    const candidateStream = source.MediaStreams?.find((s) => s.Type === 'Subtitle' && s.Index === resolvedSubtitle);
+                    const candidateStream = source.MediaStreams?.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === resolvedSubtitle
+                    );
                     if (candidateStream && isForcedStream(candidateStream)) {
                         this._selectedSubtitleIndex = resolvedSubtitle;
-                        log.info(`[DetailsPage] Restored saved forced subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
+                        log.info(`Restored saved forced subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
                     } else {
                         this._selectedSubtitleIndex = undefined;
                     }
@@ -1232,7 +1281,7 @@ class DetailsPage extends Page {
                     this._selectedSubtitleIndex = undefined;
                 } else {
                     this._selectedSubtitleIndex = resolvedSubtitle;
-                    log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
+                    log.info(`Restored saved subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
                 }
             } else {
                 this._selectedSubtitleIndex = undefined;
@@ -1257,9 +1306,7 @@ class DetailsPage extends Page {
                     this._selectedSubtitleIndex = undefined;
                 } else {
                     this._selectedSubtitleIndex = resolvedSeriesSubtitle;
-                    log.info(
-                        `[DetailsPage] Restored series-level subtitle track for ${this._itemId}: ${resolvedSeriesSubtitle}`
-                    );
+                    log.info(`Restored series-level subtitle track for ${this._itemId}: ${resolvedSeriesSubtitle}`);
                 }
             }
         }
@@ -1270,7 +1317,7 @@ class DetailsPage extends Page {
                 audioStreamIndex: this._selectedAudioIndex
             });
             log.info(
-                `[DetailsPage] Resolved subtitle track from Subtitle Mode (${effectiveSubtitleMode}): ${this._selectedSubtitleIndex}`
+                `Resolved subtitle track from Subtitle Mode (${effectiveSubtitleMode}): ${this._selectedSubtitleIndex}`
             );
         }
 
@@ -1350,7 +1397,7 @@ class DetailsPage extends Page {
                 if (bestStream) {
                     this._selectedAudioIndex = bestStream.Index;
                     log.info(
-                        `[DetailsPage] Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                        `Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
                     );
                 }
             }
@@ -1448,22 +1495,48 @@ class DetailsPage extends Page {
                     .catch((err) => log.error('Failed to decode poster blurhash', err));
             }
 
-            const img = new Image();
-            img.onload = () => {
-                img.classList.add('loaded');
-                // Fade out and remove canvas when image loads
-                if (posterCanvas) {
-                    posterCanvas.style.opacity = '0';
-                    setTimeout(() => {
-                        if (posterCanvas && posterCanvas.parentNode) {
-                            posterCanvas.parentNode.removeChild(posterCanvas);
-                        }
-                    }, 250);
-                }
+            /*
+             * ================================================================
+             * Primary Poster Artwork Presentation
+             * ================================================================
+             * Instantiates the primary poster image element. When custom headers
+             * are active (e.g. Cloudflare Access), resolves via CustomHeadersManager
+             * to fetch the authenticated blob URL so native WebViews display it.
+             * ================================================================
+             */
+            const applyPoster = (effectivePosterUrl) => {
+                const img = new Image();
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    // Fade out and remove canvas when image loads
+                    if (posterCanvas) {
+                        posterCanvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (posterCanvas && posterCanvas.parentNode) {
+                                posterCanvas.parentNode.removeChild(posterCanvas);
+                            }
+                        }, 250);
+                    }
+                };
+                img.src = effectivePosterUrl;
+                img.alt = item.Name;
+                posterContainer.appendChild(img);
             };
-            img.src = posterUrl;
-            img.alt = item.Name;
-            posterContainer.appendChild(img);
+
+            // Check if reverse proxy headers are active for the Jellyfin server
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(posterUrl);
+                if (cached) {
+                    applyPoster(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(posterUrl)
+                        .then((resolvedUrl) => applyPoster(resolvedUrl))
+                        .catch(() => applyPoster(posterUrl));
+                }
+            } else {
+                applyPoster(posterUrl);
+            }
         } else {
             // No primary image, show gradient fallback
             const isLandscape = posterType === 'landscape';
@@ -1503,12 +1576,26 @@ class DetailsPage extends Page {
     async _loadSecondaryContent() {
         // Load additional data based on type
         if (this._item.Type === 'Series') {
-            // Next Up is above Seasons visually
+            /*
+             * Visual hierarchy for TV series: Next Up episode is prioritized
+             * and positioned directly above the Seasons row.
+             */
             await this._loadNextUp();
             await this._loadSeasons();
         } else if (this._item.Type === 'Season') {
-            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
-            await this._loadEpisodes(this._item.SeriesId, this._itemId);
+            /*
+             * Resolve parent series identifier for metadata queries.
+             * Jellyfin seasons provide SeriesId directly, or ParentId as fallback.
+             */
+            const seriesId = this._item.SeriesId || this._item.ParentId;
+            this._parentSeries = state.get(`details:series:${seriesId}`);
+
+            /*
+             * Present Next Up on Season view if the upcoming episode falls within this season.
+             * Visually positioned right above the episode list to streamline resumption.
+             */
+            await this._loadNextUp();
+            await this._loadEpisodes(seriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
             this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             // More from Season is above Guest Stars visually
@@ -2168,28 +2255,6 @@ class DetailsPage extends Page {
         const item = this._item;
         const htmlParts = [];
 
-        // Helper to create row
-        const createRow = (key, items) => {
-            if (!items || items.length === 0) return '';
-            const translatedLabel = i18n.t(key);
-            const valuesHtml = items
-                .map((i) => {
-                    const name = i.Name || i; // Handle object or string
-                    const id = i.Id || '';
-                    const type = key.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
-
-                    return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
-                })
-                .join('');
-
-            return `
-                <div class="rich-meta-row">
-                    <div class="meta-label">${translatedLabel}</div>
-                    <div class="meta-value-list">${valuesHtml}</div>
-                </div>
-            `;
-        };
-
         // Genres (Prefer GenreItems for IDs, but fallback to Name strings)
         const genres = item.GenreItems && item.GenreItems.length > 0 ? item.GenreItems : item.Genres;
 
@@ -2738,7 +2803,8 @@ class DetailsPage extends Page {
         if (!activeAudio) {
             // Check if preferDirectPlayAudio auto-resolves a playable track (e.g. AC3/EAC3 over TrueHD/DTS)
             const bestAudioTrack = resolveBestAudioStream(source);
-            activeAudio = bestAudioTrack ||
+            activeAudio =
+                bestAudioTrack ||
                 audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 audioStreams[0];
@@ -2878,7 +2944,8 @@ class DetailsPage extends Page {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
             // Ends At
-            const endTime = new Date(Date.now() + item.RunTimeTicks / 10000);
+            // Use timeManager.now() so offline Tizen/WebOS TVs accurately reflect local time
+            const endTime = new Date(timeManager.now().getTime() + item.RunTimeTicks / 10000);
             const timeString = i18n.formatLocalTime(endTime);
             endsAtText = i18n.t('EndsAtValue', [timeString]);
         }
@@ -2903,14 +2970,17 @@ class DetailsPage extends Page {
         if (ttbRaw) {
             const parts = ttbRaw.split(',');
             const map = {};
-            parts.forEach((p) => { if (p.length > 1) map[p[0]] = p.substring(1); });
+            parts.forEach((p) => {
+                if (p.length > 1) map[p[0]] = p.substring(1);
+            });
             if (map.M) ttbLabel = `Main: ${map.M}h`;
             else if (map.H) ttbLabel = `Main+Extras: ${map.H}h`;
             else if (map.C) ttbLabel = `Completionist: ${map.C}h`;
         }
 
         let metaHtml = '';
-        if (gamePlatform) metaHtml += `<span class="meta-item meta-badge game-platform-pill">${escapeHtml(gamePlatform)}</span>`;
+        if (gamePlatform)
+            metaHtml += `<span class="meta-item meta-badge game-platform-pill">${escapeHtml(gamePlatform)}</span>`;
         if (ttbLabel) metaHtml += `<span class="meta-item meta-badge game-ttb-pill">${escapeHtml(ttbLabel)}</span>`;
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
         if (runtimeText) metaHtml += `<span class="meta-item">${runtimeText}</span>`;
@@ -3017,8 +3087,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                    ? item.OriginalTitle
-                    : ''
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -3249,7 +3319,7 @@ class DetailsPage extends Page {
         if (!item || !Array.isArray(item.Tags)) return '';
         // Skip generic markers, return first specific console platform tag
         const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported']);
-        return item.Tags.find(t => !skipTags.has(t)) || '';
+        return item.Tags.find((t) => !skipTags.has(t)) || '';
     }
 
     _updateButtons() {
@@ -3392,7 +3462,9 @@ class DetailsPage extends Page {
 
             // Apply localization to the formatted time label to construct the full button label text.
             const resumeLabel = i18n.t('ResumeAt', [timeString]);
-            const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+            // Check tooltip display mode
+            const tooltipMode = this._getActionTooltipsMode();
+            const showTooltips = tooltipMode !== 'hidden';
 
             if (showTooltips) {
                 // When tooltips are enabled, display timestamp only on the button pill
@@ -3564,9 +3636,10 @@ class DetailsPage extends Page {
 
         // Ensure tooltip is evaluated and displayed for whichever action button is currently active/focused (Play or Resume)
         requestAnimationFrame(() => {
-            const activeActionsBtn = (document.activeElement && document.activeElement.closest('#actions'))
-                ? document.activeElement
-                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            const activeActionsBtn =
+                document.activeElement && document.activeElement.closest('#actions')
+                    ? document.activeElement
+                    : this.$('.resume-btn:not(.hidden)') || this.$('.play-btn');
             this._onFocusChangedForTooltip?.(activeActionsBtn);
             // Balance action buttons evenly across 2 rows for mobile portrait orientation
             this._balanceMobileActionRows();
@@ -3591,6 +3664,29 @@ class DetailsPage extends Page {
         }
 
         try {
+            // =====================================================================
+            // Series Context Resolution
+            // =====================================================================
+            // Determine series identifier based on whether the active details page
+            // represents a top-level Series or an individual Season.
+            let seriesId = this._itemId;
+            if (this._item?.Type === 'Season') {
+                seriesId = this._item.SeriesId || this._item.ParentId;
+                if (!seriesId) {
+                    const parentSeries = await this._getParentSeriesItem();
+                    seriesId = parentSeries?.Id;
+                }
+            }
+
+            // Abort gracefully if series context could not be resolved
+            if (!seriesId) {
+                const nextUpSection = this.$('#next-up-section');
+                if (nextUpSection) {
+                    nextUpSection.classList.add('hidden');
+                }
+                return;
+            }
+
             let response;
 
             // Check if the current server is Emby. Emby ignores the SeriesId parameter
@@ -3599,7 +3695,7 @@ class DetailsPage extends Page {
             if (api.isEmby()) {
                 // Fetch the oldest unplayed episode of this series.
                 response = await api.getItems({
-                    ParentId: this._itemId,
+                    ParentId: seriesId,
                     Recursive: true,
                     IncludeItemTypes: 'Episode',
                     Limit: 1,
@@ -3610,14 +3706,42 @@ class DetailsPage extends Page {
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
-                response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+                response = await api.getNextUp({ SeriesId: seriesId, Limit: 1 });
             }
 
             this._nextUp = response.Items || [];
 
+            // =====================================================================
+            // Season Scope Verification
+            // =====================================================================
+            // When viewing a Season details page, only display the Next Up card
+            // if the upcoming episode actually belongs to this specific season.
+            // If the next unplayed episode is in another season (or none exists),
+            // suppress the Next Up section so the episode list takes primary focus.
+            if (this._item?.Type === 'Season' && this._nextUp.length > 0) {
+                const nextEp = this._nextUp[0];
+                const isWithinThisSeason = Boolean(
+                    (nextEp.SeasonId && nextEp.SeasonId === this._itemId) ||
+                    (nextEp.ParentId && nextEp.ParentId === this._itemId) ||
+                    (nextEp.ParentIndexNumber != null &&
+                        this._item.IndexNumber != null &&
+                        nextEp.ParentIndexNumber === this._item.IndexNumber)
+                );
+
+                if (!isWithinThisSeason) {
+                    this._nextUp = [];
+                }
+            }
+
+            // Render next up if available and eligible for this view
             if (this._nextUp.length > 0) {
                 this._renderNextUp();
                 prewarmManager.prewarm(this._nextUp[0]);
+            } else {
+                const nextUpSection = this.$('#next-up-section');
+                if (nextUpSection) {
+                    nextUpSection.classList.add('hidden');
+                }
             }
         } catch (error) {
             log.warn('Failed to load next up', error);
@@ -3661,8 +3785,8 @@ class DetailsPage extends Page {
                     ep.ParentIndexNumber && ep.IndexNumber
                         ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. `
                         : ep.IndexNumber
-                            ? `${ep.IndexNumber}. `
-                            : '';
+                          ? `${ep.IndexNumber}. `
+                          : '';
 
                 const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                 let runtimeText = '';
@@ -3672,7 +3796,7 @@ class DetailsPage extends Page {
                 }
                 let endsAtText = '';
                 if (ep.RunTimeTicks) {
-                    const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                    const endTime = new Date(timeManager.now().getTime() + ep.RunTimeTicks / 10000);
                     const timeString = i18n.formatLocalTime(endTime);
                     endsAtText = i18n.t('EndsAtValue', [timeString]);
                 }
@@ -3857,9 +3981,6 @@ class DetailsPage extends Page {
                         maxWidth: imageService.getParams('thumb').maxWidth,
                         quality: imageService.getParams('thumb').quality
                     });
-                    const episodeCode = i18n.ensureBiDi(
-                        `S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`
-                    );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
                     const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
@@ -3870,7 +3991,7 @@ class DetailsPage extends Page {
                     }
                     let endsAtText = '';
                     if (ep.RunTimeTicks) {
-                        const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                        const endTime = new Date(timeManager.now().getTime() + ep.RunTimeTicks / 10000);
                         const timeString = i18n.formatLocalTime(endTime);
                         endsAtText = i18n.t('EndsAtValue', [timeString]);
                     }
@@ -4436,12 +4557,12 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                    this._item.SeasonName.toLowerCase().startsWith('season ')
-                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                        : /^\d+$/.test(this._item.SeasonName)
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                ])
+                  ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
@@ -4653,10 +4774,7 @@ class DetailsPage extends Page {
 
         // 1. Movie handling
         if (type === 'Movie') {
-            const tmdbId =
-                this._item.ProviderIds?.Tmdb ||
-                this._item.ProviderIds?.tmdb ||
-                this._item.ProviderIds?.TMDB;
+            const tmdbId = this._item.ProviderIds?.Tmdb || this._item.ProviderIds?.tmdb || this._item.ProviderIds?.TMDB;
             if (!tmdbId) return null;
             return { mediaType: 'movie', tmdbId };
         }
@@ -5030,6 +5148,15 @@ class DetailsPage extends Page {
                 let target;
                 if (isShufflePlay) {
                     target = this._episodes[Math.floor(Math.random() * this._episodes.length)];
+                } else if (this._nextUp?.length > 0) {
+                    /*
+                     * If an upcoming episode within this season was resolved,
+                     * prioritize playing it when user triggers playback on the season.
+                     */
+                    target = this._nextUp[0];
+                    if (target.UserData?.PlaybackPositionTicks > 0) {
+                        resume = true;
+                    }
                 } else {
                     target = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
                 }
@@ -5221,7 +5348,9 @@ class DetailsPage extends Page {
             if (bestStream) {
                 currentIndex = bestStream.Index;
             } else {
-                const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
+                const defaultStream = tracks.find(
+                    (s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex
+                );
                 currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
             }
         }
@@ -5358,7 +5487,9 @@ class DetailsPage extends Page {
 
         if (isTrackSelection && languageManager.hasFavorites()) {
             if (!this._detailsShowAllTracks) {
-                const filtered = tracks.filter((t) => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t));
+                const filtered = tracks.filter(
+                    (t) => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t)
+                );
                 if (filtered.length < tracks.length) {
                     displayTracks = filtered;
                     isFiltered = true;
@@ -5571,7 +5702,8 @@ class DetailsPage extends Page {
                 this._prevFocus = currentFocused;
                 this._prevSection = focusManager.getActiveSection() || 'details-actions';
             } else {
-                this._prevFocus = this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
+                this._prevFocus =
+                    this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
                 this._prevSection = 'details-actions';
             }
         }
@@ -5623,8 +5755,6 @@ class DetailsPage extends Page {
         const isTvType =
             this._item?.Type === 'Series' || this._item?.Type === 'Season' || this._item?.Type === 'Episode';
 
-        const isMovieType = this._item?.Type === 'Movie';
-
         const isSeerrAvailable = await seerr.isAvailable();
 
         if (isSeerrAvailable && tmdbId) {
@@ -5655,7 +5785,16 @@ class DetailsPage extends Page {
                 options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') || 'Refresh metadata' });
 
                 // Identify Remote Metadata (supported on Movies, Series, BoxSets, MusicAlbums, Persons, etc.)
-                const invalidIdentifyTypes = ['Folder', 'UserRootFolder', 'CollectionFolder', 'UserView', 'TvChannel', 'Program', 'Timer', 'SeriesTimer'];
+                const invalidIdentifyTypes = [
+                    'Folder',
+                    'UserRootFolder',
+                    'CollectionFolder',
+                    'UserView',
+                    'TvChannel',
+                    'Program',
+                    'Timer',
+                    'SeriesTimer'
+                ];
                 if (!invalidIdentifyTypes.includes(i.Type)) {
                     options.push({ id: 'identify', label: i18n.t('Identify') || 'Identify' });
                 }
@@ -5712,14 +5851,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                    .map((opt, i) => {
-                        return `
+                      .map((opt, i) => {
+                          return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                    })
-                    .join('');
+                      })
+                      .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -5798,10 +5937,8 @@ class DetailsPage extends Page {
             if (this._prevFocus && document.contains(this._prevFocus)) {
                 focusManager.focusElement(this._prevFocus);
             } else {
-                const fallbackEl = this.$('.more-btn') ||
-                    this.$('.resume-btn') ||
-                    this.$('.play-btn') ||
-                    this.$('#actions button');
+                const fallbackEl =
+                    this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
                 if (fallbackEl) {
                     focusManager.focusElement(fallbackEl);
                 } else {
@@ -6088,8 +6225,8 @@ class DetailsPage extends Page {
                     // begin processing before we re-render the sections.
                     setTimeout(() => {
                         if (!this._isMounted) return;
-                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => { });
-                        this._loadMoreFromSeason().catch(() => { });
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
+                        this._loadMoreFromSeason().catch(() => {});
                     }, 500);
                 }
 
@@ -6525,9 +6662,8 @@ class DetailsPage extends Page {
                 // Build rich tooltip label
                 const seasonNum = (this._prevEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
                 const epNum = (this._prevEpisode.IndexNumber || 0).toString().padStart(2, '0');
-                const epLabel = this._prevEpisode.IndexNumber !== undefined
-                    ? `S${seasonNum}E${epNum}`
-                    : this._prevEpisode.Name;
+                const epLabel =
+                    this._prevEpisode.IndexNumber !== undefined ? `S${seasonNum}E${epNum}` : this._prevEpisode.Name;
                 const tooltipText = `${i18n.t('PreviousEpisode') || 'Previous Episode'}: ${epLabel}`;
                 prevBtn.setAttribute('data-tooltip', tooltipText);
                 prevBtn.setAttribute('aria-label', tooltipText);
@@ -6547,9 +6683,8 @@ class DetailsPage extends Page {
                 // Build rich tooltip label
                 const seasonNum = (this._nextEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
                 const epNum = (this._nextEpisode.IndexNumber || 0).toString().padStart(2, '0');
-                const epLabel = this._nextEpisode.IndexNumber !== undefined
-                    ? `S${seasonNum}E${epNum}`
-                    : this._nextEpisode.Name;
+                const epLabel =
+                    this._nextEpisode.IndexNumber !== undefined ? `S${seasonNum}E${epNum}` : this._nextEpisode.Name;
                 const tooltipText = `${i18n.t('NextEpisode') || 'Next Episode'}: ${epLabel}`;
                 nextBtn.setAttribute('data-tooltip', tooltipText);
                 nextBtn.setAttribute('aria-label', tooltipText);
@@ -6568,12 +6703,12 @@ class DetailsPage extends Page {
 
     /**
      * Navigates directly to an adjacent episode details page.
-     * 
+     *
      * @param {Object|null} targetEpisode - The destination episode object
      */
     _navigateToAdjacentEpisode(targetEpisode) {
         if (!targetEpisode?.Id) return;
-        log.info(`[DetailsPage] Navigating to adjacent episode: ${targetEpisode.Id} (${targetEpisode.Name})`);
+        log.info(`Navigating to adjacent episode: ${targetEpisode.Id} (${targetEpisode.Name})`);
         router.navigate(`/details/${targetEpisode.Id}`);
     }
 
@@ -6860,7 +6995,8 @@ class DetailsPage extends Page {
         }
 
         // Move Favorite Button BEFORE Audio, Subtitle, or More buttons if present
-        const anchorBtn = actionsContainer.querySelector('.audio-btn') ||
+        const anchorBtn =
+            actionsContainer.querySelector('.audio-btn') ||
             actionsContainer.querySelector('.subtitle-btn') ||
             actionsContainer.querySelector('.more-btn');
         if (anchorBtn && this._favBtn.el) {

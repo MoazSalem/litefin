@@ -11,6 +11,7 @@ import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { detectTizenVersion, getDeviceCapabilities } from '../../api/profiles/TizenProfile.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
 
 const log = logger.create('TizenAVPlayer');
 
@@ -153,6 +154,10 @@ export class TizenAVPlayer {
         // which calls play() — violating the contract and causing native decoder freezes.
         this._seekInProgress = false;
 
+        // Set when the last seekTo() never called back and the failsafe in _safeSeekTo()
+        // gave up on it. Such a seek has not landed, whatever a clock reports.
+        this._seekTimedOut = false;
+
         // Tracks whether onbufferingcomplete fired during an active seek.
         // When seek is in progress, onbufferingcomplete is suppressed (can't call
         // _checkNativePlay). This flag lets the seek success callback know that
@@ -235,14 +240,23 @@ export class TizenAVPlayer {
     // ========================================================================
 
     /**
-     * Retrieve active video stream dimensions from hardware stream info or media source metadata.
+     * Retrieve active video stream dimensions and display aspect ratio (DAR) from
+     * hardware stream info or Jellyfin media source metadata.
+     *
+     * Non-square pixel media (such as standard-definition DVD remuxes encoded in NTSC 720x480
+     * or PAL 720x576) have a pixel storage matrix whose aspect ratio differs significantly
+     * from the intended presentation display aspect ratio (e.g., 4:3 or 16:9 anamorphic).
+     * This method extracts both the pixel dimensions and the authoritative display aspect ratio.
      *
      * @private
-     * @returns {{width: number, height: number}} Intrinsic stream pixel width and height
+     * @returns {{width: number, height: number, aspectRatio: number, isAnamorphic: boolean}}
      */
     _getVideoDimensions() {
+        // Track pixel matrix width and height
         let vw = 0;
         let vh = 0;
+        // String representation of the presentation aspect ratio (e.g., '4:3', '16:9')
+        let aspectStr = '';
 
         // --------------------------------------------------------------------
         // 1. Hardware Stream Inspection
@@ -263,6 +277,9 @@ export class TizenAVPlayer {
                             : videoStream.extra_info;
                         vw = Number(extra.Width || extra.width || 0);
                         vh = Number(extra.Height || extra.height || 0);
+                        if (extra.AspectRatio || extra.aspect_ratio || extra.aspectRatio) {
+                            aspectStr = String(extra.AspectRatio || extra.aspect_ratio || extra.aspectRatio);
+                        }
                     }
                 }
             } catch (e) {
@@ -274,19 +291,33 @@ export class TizenAVPlayer {
         // 2. Play Options MediaSource Inspection
         // --------------------------------------------------------------------
         // Fall back to server media stream metadata supplied in playback options
-        if (!vw || !vh) {
-            const mediaSource = this._currentPlayOptions?.mediaSource;
-            if (mediaSource) {
+        const mediaSource = this._currentPlayOptions?.mediaSource;
+        if (mediaSource) {
+            // Check top-level mediaSource dimensions
+            if (!vw || !vh) {
                 if (mediaSource.Width && mediaSource.Height) {
                     vw = Number(mediaSource.Width);
                     vh = Number(mediaSource.Height);
-                } else if (Array.isArray(mediaSource.MediaStreams)) {
-                    const videoStream = mediaSource.MediaStreams.find((s) => s && s.Type === 'Video');
-                    if (videoStream && videoStream.Width && videoStream.Height) {
-                        vw = Number(videoStream.Width);
-                        vh = Number(videoStream.Height);
+                }
+            }
+
+            // Inspect detailed media streams list
+            if (Array.isArray(mediaSource.MediaStreams)) {
+                const videoStream = mediaSource.MediaStreams.find((s) => s && s.Type === 'Video');
+                if (videoStream) {
+                    if (!vw || !vh) {
+                        vw = Number(videoStream.Width || 0);
+                        vh = Number(videoStream.Height || 0);
+                    }
+                    if (!aspectStr && videoStream.AspectRatio) {
+                        aspectStr = String(videoStream.AspectRatio);
                     }
                 }
+            }
+
+            // Check container-level aspect ratio
+            if (!aspectStr && mediaSource.AspectRatio) {
+                aspectStr = String(mediaSource.AspectRatio);
             }
         }
 
@@ -294,30 +325,84 @@ export class TizenAVPlayer {
         // 3. Play Options Item Metadata Inspection
         // --------------------------------------------------------------------
         // If media source metadata is absent, check top-level item stream definitions
-        if (!vw || !vh) {
-            const item = this._currentPlayOptions?.item;
-            const streams = item?.MediaStreams || item?.MediaSources?.[0]?.MediaStreams;
+        const item = this._currentPlayOptions?.item;
+        if (item) {
+            const streams = item.MediaStreams || item.MediaSources?.[0]?.MediaStreams;
             if (Array.isArray(streams)) {
                 const videoStream = streams.find((s) => s && s.Type === 'Video');
-                if (videoStream && videoStream.Width && videoStream.Height) {
-                    vw = Number(videoStream.Width);
-                    vh = Number(videoStream.Height);
+                if (videoStream) {
+                    if (!vw || !vh) {
+                        vw = Number(videoStream.Width || 0);
+                        vh = Number(videoStream.Height || 0);
+                    }
+                    if (!aspectStr && videoStream.AspectRatio) {
+                        aspectStr = String(videoStream.AspectRatio);
+                    }
+                }
+            }
+            if (!aspectStr && item.AspectRatio) {
+                aspectStr = String(item.AspectRatio);
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Parse Display Aspect Ratio String
+        // --------------------------------------------------------------------
+        // Converts ratios like "4:3", "16:9", "2.40:1", or numeric decimals like "1.333333"
+        let parsedRatio = 0;
+        if (aspectStr && typeof aspectStr === 'string') {
+            if (aspectStr.includes(':')) {
+                const parts = aspectStr.split(':');
+                const num = parseFloat(parts[0]);
+                const den = parseFloat(parts[1]);
+                if (num > 0 && den > 0) {
+                    parsedRatio = num / den;
+                }
+            } else {
+                const val = parseFloat(aspectStr);
+                if (!isNaN(val) && val > 0) {
+                    parsedRatio = val;
                 }
             }
         }
 
-        return { width: vw, height: vh };
+        // --------------------------------------------------------------------
+        // 5. Evaluate Anamorphic / Non-Square Pixel Geometry
+        // --------------------------------------------------------------------
+        // In square-pixel content, storage matrix ratio (vw / vh) matches DAR (parsedRatio).
+        // For non-square pixel formats (NTSC DVD 720x480 -> 3:2 vs 4:3, PAL DVD 720x576 -> 5:4 vs 4:3),
+        // storage ratio diverges significantly from presentation ratio (>5% variance).
+        let isAnamorphic = false;
+        if (vw > 0 && vh > 0 && parsedRatio > 0) {
+            const storageRatio = vw / vh;
+            if (Math.abs(storageRatio - parsedRatio) > 0.05) {
+                isAnamorphic = true;
+            }
+        } else if (parsedRatio <= 0 && vw > 0 && vh > 0) {
+            parsedRatio = vw / vh;
+        }
+
+        return {
+            width: vw,
+            height: vh,
+            aspectRatio: parsedRatio > 0 ? parsedRatio : 0,
+            isAnamorphic
+        };
     }
 
     /**
      * Compute and apply hardware-backed video plane layout geometry based on active aspect ratio mode.
      *
      * Samsung Tizen AVPlay does not support CSS object-fit on its underlying hardware overlay plane.
-     * To achieve a seamless crop/zoom effect without distortion:
-     * - We calculate the uniform magnification factor using Math.max(containerWidth / videoWidth, containerHeight / videoHeight)
-     * - We center the scaled dimensions across the viewport using symmetric negative coordinate offsets
-     * - We push the calculated rectangle to AVPlay via setDisplayRect with PLAYER_DISPLAY_MODE_FULL_SCREEN
-     * - The TV hardware video subsystem naturally clips the off-screen margins at physical display edges
+     * Furthermore, AVPlay's hardware scaler strictly ignores SAR/PAR flags for non-square pixel
+     * content (such as NTSC 720x480 or PAL 720x576 DVD remuxes) when using standard letterbox mode,
+     * incorrectly displaying the raw storage grid (3:2 or 5:4).
+     *
+     * To achieve pixel-perfect presentation matching true Display Aspect Ratio (DAR):
+     * - We detect non-square pixel streams by comparing storage ratio with server DAR metadata.
+     * - For anamorphic content, we compute explicit letterbox/pillarbox geometry fitted into the display.
+     * - We apply the calculated rectangle to AVPlay via setDisplayRect with PLAYER_DISPLAY_MODE_FULL_SCREEN.
+     * - For standard square-pixel streams, native hardware letterbox or auto aspect modes are retained.
      *
      * @private
      */
@@ -349,6 +434,58 @@ export class TizenAVPlayer {
                 );
                 this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
                 log.info('Applied display geometry (stretch):', { x: cLeft, y: cTop, width: cw, height: ch });
+                return;
+            }
+
+            // Inspect video dimensions and presentation aspect ratio metadata
+            const dims = this._getVideoDimensions();
+
+            // ================================================================
+            // Anamorphic & Non-Square Pixel Handling
+            // ================================================================
+            // When playing non-square pixel media, AVPlay's letterbox mode fails because it
+            // calculates geometry from raw coded frame width/height (e.g. 720x480 -> 3:2).
+            // In addition, PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO fails on NTSC streams in Matroska containers.
+            // If the stream is anamorphic with a known DAR, compute explicit display rect coordinates
+            // and stretch within that mathematically exact bounding box.
+            if (dims.isAnamorphic && dims.aspectRatio > 0 && mode !== 'stretch') {
+                const targetRatio = dims.aspectRatio;
+                const containerRatio = cw / ch;
+                let targetW = cw;
+                let targetH = ch;
+                let targetLeft = cLeft;
+                let targetTop = cTop;
+
+                // Fit video inside container while maintaining intended presentation aspect ratio
+                if (targetRatio < containerRatio) {
+                    // Content is taller/narrower than viewport (e.g. 4:3 content on 16:9 display) -> Pillarbox
+                    targetH = Math.round(ch);
+                    targetW = Math.round(ch * targetRatio);
+                    targetLeft = Math.round(cLeft + (cw - targetW) / 2);
+                    targetTop = Math.round(cTop);
+                } else if (targetRatio > containerRatio) {
+                    // Content is wider than viewport (e.g. 21:9 Cinemascope on 16:9 display) -> Letterbox
+                    targetW = Math.round(cw);
+                    targetH = Math.round(cw / targetRatio);
+                    targetLeft = Math.round(cLeft);
+                    targetTop = Math.round(cTop + (ch - targetH) / 2);
+                }
+
+                // Push calculated coordinates directly to AVPlay overlay plane
+                this._avplay.setDisplayRect(
+                    Math.round(targetLeft),
+                    Math.round(targetTop),
+                    Math.round(targetW),
+                    Math.round(targetH)
+                );
+                this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
+                log.info('Applied display geometry (anamorphic DAR correction):', {
+                    x: targetLeft,
+                    y: targetTop,
+                    width: targetW,
+                    height: targetH,
+                    aspectRatio: targetRatio
+                });
                 return;
             }
 
@@ -532,6 +669,25 @@ export class TizenAVPlayer {
                         } catch (e2) {
                             log.warn('Failed to set USER_AGENT/USERAGENT:', e2.message || e2);
                         }
+                    }
+
+                    // ----------------------------------------------------------------
+                    // Custom Reverse Proxy Headers (Tizen AVPlay Native Engine)
+                    // If custom proxy auth headers are configured for this stream URL,
+                    // format and pass them via AVPlay's CUSTOM_MESSAGE property.
+                    // ----------------------------------------------------------------
+                    try {
+                        const targetUrl = options.url || this._currentSrc;
+                        const proxyHdrs = customHeaders.getHeadersForUrl(targetUrl, this._serverUrl);
+                        if (proxyHdrs && typeof proxyHdrs === 'object' && Object.keys(proxyHdrs).length > 0) {
+                            const headerPairs = Object.entries(proxyHdrs)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join('\r\n') + '\r\n';
+                            this._avplay.setStreamingProperty("CUSTOM_MESSAGE", headerPairs);
+                            log.info('Attached custom headers to AVPlay pipeline');
+                        }
+                    } catch (eHdr) {
+                        log.warn('Failed to set AVPlay CUSTOM_MESSAGE streaming property:', eHdr.message || eHdr);
                     }
 
                     if (!isDirectPlay) {
@@ -1181,10 +1337,17 @@ export class TizenAVPlayer {
                 // DirectPlay Seek Verification Disarm:
                 // If a DirectPlay seek verification guard is active, disarm it
                 // as soon as rendered display frames confirm arrival near the target.
+                // We evaluate absolute drift to verify the hardware demuxer landed
+                // within keyframe tolerance. We deliberately avoid checking
+                // currentTime >= (target - 15), because when seeking backwards from
+                // a later timestamp, an unexecuted or stuck seek would falsely report
+                // success and disarm the recovery watchdog prematurely.
                 // ─────────────────────────────────────────────────────────────
                 if (this._directSeekTargetSec !== null) {
+                    // Compute absolute distance between active presentation clock and seek target
                     const drift = Math.abs(currentTime - this._directSeekTargetSec);
-                    if (drift < 15 || currentTime >= (this._directSeekTargetSec - 15)) {
+                    // Disarm only when playhead position arrives within GOP keyframe tolerance
+                    if (drift < 15) {
                         log.debug(`[DirectSeekVerify] Display presentation confirmed at ${currentTime.toFixed(2)}s (target: ${this._directSeekTargetSec.toFixed(2)}s) — guard disarmed`);
                         this._clearDirectSeekVerification();
                     }
@@ -1790,6 +1953,7 @@ export class TizenAVPlayer {
         const seekStartTime = Date.now();
         // Track that a native hardware seek operation is actively in flight
         this._seekInProgress = true;
+        this._seekTimedOut = false;
 
         /*
          * ====================================================================
@@ -1807,6 +1971,7 @@ export class TizenAVPlayer {
             if (this._seekInProgress) {
                 log.warn(`[SeekTelemetry] hardware seekTo timed out after 6000ms for target=${requestedMs}ms — clearing seekInProgress flag`);
                 this._seekInProgress = false;
+                this._seekTimedOut = true;
             }
         }, 6000);
 
@@ -1947,14 +2112,32 @@ export class TizenAVPlayer {
         // 12s upper bound for high-bitrate 4K network seek & buffering on older Tizen CPUs
         const MAX_SEEK_WAIT_MS = 12000;
 
-        // Measure actual hardware decoder position vs target
-        const curSec = Math.max(
-            this.getCurrentTime(),
-            (Number(this._avplay?.getCurrentTime()) || 0) / 1000
-        );
-        const drift = Math.abs(curSec - targetSeconds);
-        // Allow 15s keyframe drift tolerance (typical max GOP length)
-        const isNear = drift < 15 || curSec >= (targetSeconds - 15);
+        // Active execution condition: Seek, cooldown, or buffer still in flight
+        const isStillWorking = this._seekInProgress ||
+                               this._deferredSeekTimerId !== null ||
+                               this._isNativeBuffering;
+
+        // Measure both clocks against the target: the presentation clock (oncurrentplaytime
+        // or the seek's landing point) and the hardware decoder clock.
+        const presentationSec = this.getCurrentTime();
+        const decoderSec = (Number(this._avplay?.getCurrentTime()) || 0) / 1000;
+        const presentationDrift = Math.abs(presentationSec - targetSeconds);
+        const decoderDrift = Math.abs(decoderSec - targetSeconds);
+        // Position reported in the logs below: the clock closest to the target
+        const curSec = presentationDrift <= decoderDrift ? presentationSec : decoderSec;
+        // Allow 15s keyframe drift tolerance (typical max GOP interval for compressed streams).
+        // Must evaluate absolute drift exclusively: checking curSec >= (targetSeconds - 15)
+        // produces a false-positive whenever seeking backwards and the hardware decoder
+        // fails to seek, remaining stuck at a later presentation timestamp.
+        const presentationNear = presentationDrift < 15;
+        const decoderNear = decoderDrift < 15;
+        // Both clocks at the target: landed. A single clock is trusted only once the seek
+        // has settled: while seekTo() is in flight some firmware already reports the
+        // requested position, and a seekTo() that never called back has not landed. Once
+        // settled, one clock still at the old position (e.g. a backward seek whose other
+        // clock has not caught up) must not flag a seek that did land.
+        const seekSettled = !isStillWorking && !this._seekTimedOut;
+        const isNear = (presentationNear && decoderNear) || ((presentationNear || decoderNear) && seekSettled);
 
         // Success condition: Playhead reached target region
         if (isNear) {
@@ -1962,11 +2145,6 @@ export class TizenAVPlayer {
             this._clearDirectSeekVerification();
             return;
         }
-
-        // Active execution condition: Seek, cooldown, or buffer still in flight
-        const isStillWorking = this._seekInProgress ||
-                               this._deferredSeekTimerId !== null ||
-                               this._isNativeBuffering;
 
         if (isStillWorking) {
             // If still within maximum allowable seek window, continue polling
@@ -2347,6 +2525,7 @@ export class TizenAVPlayer {
         // Clear seek-in-progress flag so stale state doesn't block _checkNativePlay
         // on a future playback session
         this._seekInProgress = false;
+        this._seekTimedOut = false;
         this._bufferingCompleteDuringSeek = false;
         this._isNativeBuffering = false;
         this._lastSubtitleTrackChangeTime = 0;

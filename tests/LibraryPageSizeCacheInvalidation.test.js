@@ -52,7 +52,7 @@ globalThis.__APP_VERSION__ = '1.0.0';
  */
 
 test('SettingsPage: libraryPageSize change invalidates StateManager caches and Router history', () => {
-    const settingsSource = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8')
+    const settingsSource = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8')
         .replace(/\r\n/g, '\n');
 
     // 1. Verify StateManager cache invalidation

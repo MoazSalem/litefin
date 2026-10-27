@@ -270,7 +270,18 @@ class PluginWidgetHost {
                          * Row -1 causes navigation issues or carry-over bugs on next episode.
                          * ========================================================================
                          */
-                        if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                        /*
+                         * ========================================================================
+                         * PREEMPTIVE FOCUS RESTORATION:
+                         * Shift focus back to playback controls ONLY if Up Next dialog is not
+                         * currently visible on screen. If Up Next is visible, it owns focus.
+                         * ========================================================================
+                         */
+                        if (
+                            this._osd &&
+                            !this._osd.upNextDialog?.isVisible &&
+                            typeof this._osd.restoreControlsFocus === 'function'
+                        ) {
                             this._osd.restoreControlsFocus();
                         }
                     } catch (err) {
@@ -347,10 +358,18 @@ class PluginWidgetHost {
          * recovery path taken by onTimeUpdate() when all widgets hide naturally.
          * ====================================================================
          */
-        if (hadVisibleWidget && this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+        /*
+         * Do not pull focus back to controls if Up Next episode prompt is visible.
+         */
+        if (
+            hadVisibleWidget &&
+            this._osd &&
+            !this._osd.upNextDialog?.isVisible &&
+            typeof this._osd.restoreControlsFocus === 'function'
+        ) {
             this._osd.restoreControlsFocus();
         } else {
-            // No visible widgets were removed — a plain cache refresh is sufficient
+            // No visible widgets were removed or Up Next dialog is on screen — refresh cache
             this._refreshOSDCache();
         }
 
@@ -373,7 +392,10 @@ class PluginWidgetHost {
 
         // Guard: During track transitions/lockouts, the player's position and duration
         // are unreliable and may briefly reflect the previous track's end state.
-        if (this._osd && (this._osd._trackTransitionLockoutActive || (this._osd._playerPage && this._osd._playerPage._isSwitching))) {
+        if (
+            this._osd &&
+            (this._osd._trackTransitionLockoutActive || (this._osd._playerPage && this._osd._playerPage._isSwitching))
+        ) {
             return;
         }
 
@@ -464,8 +486,12 @@ class PluginWidgetHost {
                 }
             } else if (!anyVisible) {
                 // All widgets are now hidden — return focus to the controls row
-                // and re-enable the auto-hide timer.
-                if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                // only if the Up Next dialog is not currently visible on screen.
+                if (
+                    this._osd &&
+                    !this._osd.upNextDialog?.isVisible &&
+                    typeof this._osd.restoreControlsFocus === 'function'
+                ) {
                     this._osd.restoreControlsFocus();
                 } else {
                     this._refreshOSDCache();
@@ -547,7 +573,14 @@ class PluginWidgetHost {
                          * terminating, avoiding accidental double-skips.
                          * ========================================================================
                          */
-                        if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                        /*
+                         * If the Up Next episode dialog is visible, leave focus with it.
+                         */
+                        if (
+                            this._osd &&
+                            !this._osd.upNextDialog?.isVisible &&
+                            typeof this._osd.restoreControlsFocus === 'function'
+                        ) {
                             this._osd.restoreControlsFocus();
                         }
                         return true;

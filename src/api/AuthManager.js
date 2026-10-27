@@ -36,10 +36,11 @@ import { desktopAdapter } from '../desktop/DesktopAdapter.js';
 import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
-import { buildJellyfinProfile } from './DeviceProfile.js';
+import { buildJellyfinProfile, clearCapabilitiesCache } from './DeviceProfile.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { seerr } from './seerrClient.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -318,8 +319,8 @@ class AuthManager {
         // transparently retry the connection up to 6 times (~15 seconds) to
         // allow the server sufficient time to wake up and bind its ports.
         // =====================================================================
+        // Active authenticated user object resolved from validation probe
         let user = null;
-        let serverInfoResolved = false;
 
         // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
         const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
@@ -342,7 +343,6 @@ class AuthManager {
                         .getPublicInfo()
                         .then((info) => {
                             state.set('server:info', info);
-                            serverInfoResolved = true;
                         })
                         .catch((e) => log.warn(`Failed to fetch server info on attempt ${attempt}:`, e));
 
@@ -442,12 +442,25 @@ class AuthManager {
      * time to boot up.
      * =========================================================================
      * @param {string} serverUrl - Target server URL
+     * @param {Array<{key: string, value: string, enabled: boolean}>} [headers] - Optional custom HTTP headers
      * @returns {Promise<Object>} Server public info object
      */
-    async connectToServer(serverUrl) {
+    async connectToServer(serverUrl, headers = null) {
         log.info(`Connecting to ${serverUrl}`);
 
+        // Persist custom proxy headers immediately if provided during connection flow
+        if (headers && Array.isArray(headers)) {
+            customHeaders.setServerHeaders(serverUrl, headers);
+        }
+
         api.setServer(serverUrl);
+
+        // Diagnostic log: confirm presence of active custom proxy headers
+        const activeHeaders = customHeaders.getNormalizedHeaders(serverUrl);
+        const headerKeys = Object.keys(activeHeaders);
+        if (headerKeys.length > 0) {
+            log.info(`Active reverse proxy headers for ${serverUrl}: [${headerKeys.join(', ')}]`);
+        }
 
         // =====================================================================
         // WAKE-ON-LAN (WOL) INVOCATION FOR CONNECT TO SERVER
@@ -754,7 +767,7 @@ class AuthManager {
     async loginWithUser(user, password = '', options = {}) {
         // On legacy servers HasPassword correctly indicates whether a password
         // is needed; on JF12+ it's always true so we just pass through as-is.
-        const pw = api.isJF12Plus() ? password : (user.HasPassword ? password : '');
+        const pw = api.isJF12Plus() ? password : user.HasPassword ? password : '';
         return this.login(user.Name, pw, options);
     }
 
@@ -1244,26 +1257,35 @@ class AuthManager {
     }
 
     /**
-     * Dynamically update device name when WebOS hardware capability detection
-     * completes after initial startup. Fixes "LG WebOS TV" generic names.
+     * Update the device name and capabilities once webOS reports the hardware
+     * (it arrives asynchronously after startup). Fixes "LG WebOS TV" generic
+     * names, and a profile built from the startup fallbacks: until deviceInfo
+     * arrives a 4K panel looks like 1080p (40 Mbps, H.264 level 4.1) and Dolby
+     * Vision is off. The capability cache is dropped first, so the re-report
+     * carries the real profile instead of the cached fallback one; the
+     * PrewarmManager drops a PlaybackInfo prewarmed with it on the same event.
      * @param {Object} info - Device info from webOS adapter
      * @private
      */
     _onWebosDeviceInfo(info) {
-        if (!info || !info.modelName || !platformInfo.isWebOS) return;
+        if (!info || !platformInfo.isWebOS) return;
+
+        clearCapabilitiesCache();
 
         const deviceId = storage.getItem(STORAGE_KEYS.DEVICE_ID);
-        if (deviceId) {
+        if (!deviceId) return;
+
+        if (info.modelName) {
             log.info(`Updating API device name to WebOS model: ${info.modelName}`);
             api.setDevice(deviceId, info.modelName);
+        }
 
-            // Re-report capabilities so the dashboard shows the correct device name
-            if (this.isAuthenticated()) {
-                api.reportCapabilities({
-                    ...SUPPORTED_CAPABILITIES,
-                    DeviceProfile: buildJellyfinProfile()
-                }).catch((e) => log.warn('Failed to report capabilities for late device name update:', e));
-            }
+        // Re-report so the server and dashboard see the real device name and profile
+        if (this.isAuthenticated()) {
+            api.reportCapabilities({
+                ...SUPPORTED_CAPABILITIES,
+                DeviceProfile: buildJellyfinProfile()
+            }).catch((e) => log.warn('Failed to report capabilities after webOS device info:', e));
         }
     }
 

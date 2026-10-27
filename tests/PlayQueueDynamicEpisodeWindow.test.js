@@ -225,7 +225,7 @@ test('PlayQueue: dynamic background expansion appends subsequent episodes when n
 
 test('SettingsPage: includes play-queue-episode-limit-select in Performance tab, settingsMap, and intKeys', async () => {
     const { readFileSync } = await import('node:fs');
-    const settingsSource = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8');
+    const settingsSource = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8');
 
     // Verify UI dropdown rendered in Performance tab
     assert.ok(

@@ -106,6 +106,19 @@ class DebugOverlay {
             logger.setEnabled(true);
         }
 
+        // Drain pre-boot logs buffered by logger.js before DebugOverlay initialized
+        // Ensures early boot diagnostics and telemetry appear in exported client logs
+        if (window.__earlyLogs && Array.isArray(window.__earlyLogs)) {
+            for (let i = 0; i < window.__earlyLogs.length; i++) {
+                const earlyEntry = window.__earlyLogs[i];
+                if (earlyEntry && earlyEntry.formatted) {
+                    this._uploadBuffer.push(earlyEntry.formatted);
+                }
+            }
+            // Reset buffer after transfer so duplicate lines are not retained
+            window.__earlyLogs = [];
+        }
+
         // Subscribe to Logger events
         eventBus.on('logger:log', (logEntry) => this._queueLog(logEntry));
 

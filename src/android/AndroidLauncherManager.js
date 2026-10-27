@@ -45,6 +45,7 @@ import { logger } from '../utils/Logger.js';
 import { pinManager } from '../utils/PinManager.js';
 import { storage } from '../utils/StorageService.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
 
 const log = logger.create('AndroidLauncherManager');
 
@@ -386,35 +387,10 @@ class AndroidLauncherManager {
                     })
                     .map((item) => ({ ...item, _isResume: false }));
 
-                // Query parent series activity dates for chronological sorting
-                const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
-                const seriesLastPlayedMap = {};
-
-                if (nextUpSeriesIds.length > 0) {
-                    try {
-                        const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
-                        const activeEpisodesRes = await api.getItems({
-                            SeriesIds: uniqueSeriesIds.join(','),
-                            IncludeItemTypes: 'Episode',
-                            SortBy: 'DatePlayed',
-                            SortOrder: 'Descending',
-                            Fields: 'LastPlayedDate',
-                            Recursive: true,
-                            Limit: 100
-                        });
-
-                        const activeEpisodes = activeEpisodesRes?.Items || [];
-                        for (const ep of activeEpisodes) {
-                            const seriesId = ep.SeriesId;
-                            const lastPlayed = ep.UserData?.LastPlayedDate;
-                            if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
-                                seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
-                            }
-                        }
-                    } catch (err) {
-                        log.warn('Failed querying parent series last played dates:', err);
-                    }
-                }
+                // Rank next-up items the way Jellyfin's own Next Up (and the Litefin plugin)
+                // does: by when the furthest-watched episode was played, so rewatching an
+                // earlier episode does not move the series up.
+                const seriesLastPlayedMap = await getSeriesLastWatchedDates(nextUpItems.map((item) => item.SeriesId));
 
                 // Attach sort timestamps
                 const taggedResume = resumeItems.map((item) => ({
@@ -500,7 +476,7 @@ class AndroidLauncherManager {
             if (showName) titleParts.push(showName);
             if (epName) titleParts.push(epName);
 
-            const title = titleParts.length > 0 ? titleParts.join(' - ') : (epName || showName || 'Episode');
+            const title = titleParts.length > 0 ? titleParts.join(' - ') : epName || showName || 'Episode';
 
             // Retrieve synopsis overview of the episode to display in description row
             const description = item.Overview || item.ProgramInfo?.Overview || '';
@@ -524,7 +500,8 @@ class AndroidLauncherManager {
 
         if (item.Type === 'Movie') {
             // Retrieve movie overview or release year fallback
-            const description = item.Overview || item.ProgramInfo?.Overview || (item.ProductionYear ? String(item.ProductionYear) : '');
+            const description =
+                item.Overview || item.ProgramInfo?.Overview || (item.ProductionYear ? String(item.ProductionYear) : '');
 
             return {
                 id: item.Id,
@@ -584,7 +561,7 @@ class AndroidLauncherManager {
             imgType = 'Backdrop';
             imgTag = src.ParentBackdropImageTags[0];
             itemId = src.ParentBackdropItemId;
-        // Portrait fallbacks
+            // Portrait fallbacks
         } else if (src.ImageTags?.Primary) {
             imgType = 'Primary';
             imgTag = src.ImageTags.Primary;

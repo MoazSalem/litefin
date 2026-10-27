@@ -44,18 +44,25 @@ function getRecommendedPlayerBackend() {
     // Native Android / Google TV hardware platform (verify native bridge is present)
     if (platformInfo.isAndroid) {
         // Only recommend ExoPlayer if native bridge exists (e.g. not a generic mobile browser)
-        const hasNativeBridge = typeof window !== 'undefined' && Boolean(
-            window.LitefinExoPlayer ||
-            window.LitefinAndroid ||
-            window.__TAURI_INTERNALS__?.invoke ||
-            window.__TAURI__?.core?.invoke
-        );
+        const hasNativeBridge =
+            typeof window !== 'undefined' &&
+            Boolean(
+                window.LitefinExoPlayer ||
+                window.LitefinAndroid ||
+                window.__TAURI_INTERNALS__?.invoke ||
+                window.__TAURI__?.core?.invoke
+            );
         if (hasNativeBridge || platformInfo._platform === 'android') {
             return 'exoplayer';
         }
     }
     // Modern Web browsers and Desktop shells supporting WebCodecs (excluded on TV builds)
-    if ((platformInfo.isDesktop || platformInfo.isWeb) && platformInfo.hasWebCodecsSupport && !platformInfo.isTizen && !platformInfo.isWebOS) {
+    if (
+        (platformInfo.isDesktop || platformInfo.isWeb) &&
+        platformInfo.hasWebCodecsSupport &&
+        !platformInfo.isTizen &&
+        !platformInfo.isWebOS
+    ) {
         return 'movi';
     }
     // Fallback standard HTML5 video player
@@ -109,6 +116,35 @@ const DEFAULTS = {
     // =========================================================================
     preferDirectPlayAudio: true,
 
+    // =========================================================================
+    // TUNNELED VIDEO PLAYBACK (Android ExoPlayer)
+    // =========================================================================
+    // Enables hardware audio/video synchronization tunneling in ExoPlayer.
+    // Offloads A/V sync clock timing directly to the hardware video decoder/SoC.
+    // Disabled by default to prevent black screens and audio hitching on devices
+    // with buggy vendor tunneling HAL implementations (e.g. Amlogic / Mi Box).
+    // Can be enabled on high-end hardware (e.g. Nvidia Shield TV).
+    // =========================================================================
+    enableTunneling: false,
+
+    // =========================================================================
+    // AUDIO OFFLOAD PLAYBACK (Android ExoPlayer)
+    // =========================================================================
+    // Routes audio playback directly to a dedicated hardware DSP/audio processor
+    // in the Android device (AUDIO_OFFLOAD_MODE_ENABLED), reducing CPU power
+    // consumption and preventing buffer under-runs during heavy decoding.
+    // =========================================================================
+    enableAudioOffload: true,
+
+    // =========================================================================
+    // AUTO REFRESH RATE MATCHING (Android TV / ExoPlayer)
+    // =========================================================================
+    // Automatically matches television / external HDMI display refresh rates
+    // (e.g. 23.976Hz, 24Hz, 50Hz, 59.94Hz, 60Hz) to the active media frame rate.
+    // Eliminates 3:2 pulldown judder and micro-stutter for cinematic smoothness.
+    // =========================================================================
+    autoRefreshRate: false,
+
     // -------------------------------------------------------------------------
     // EAC3 (E-AC3 / Dolby Digital Plus) FORCE STATE
     // -------------------------------------------------------------------------
@@ -161,6 +197,12 @@ const DEFAULTS = {
     // PTS). FLAC audio-only files (.flac containers) are NOT affected by this
     // setting — those always DirectPlay regardless.
     enableFlacInVideo: false,
+
+    // Allow uncompressed PCM audio in video containers (MKV, MP4, etc.) to DirectPlay on Tizen.
+    // Disabled by default: AVPlay hardware decoders fail or mute on raw uncompressed PCM
+    // inside video containers on most Samsung TVs, requiring server transcoding to AAC/AC3.
+    // Enable this setting to force PCM DirectPlay on models that support it.
+    enablePcmInVideo: false,
 
     // Audio normalization mode ('Off', 'TrackGain', 'AlbumGain')
     audioNormalization: 'TrackGain',
@@ -363,6 +405,23 @@ const DEFAULTS = {
     // 'disable' = Completely hide/ignore PGS tracks
     pgsPlaybackMode: 'client',
 
+    /* -------------------------------------------------------------------------
+       PGS / IMAGE SUBTITLE OPACITY (SDR)
+       -------------------------------------------------------------------------
+       Transparency level (0-100) applied to graphic/PGS subtitles when
+       playing standard dynamic range (SDR) content.
+       ------------------------------------------------------------------------- */
+    subtitlePgsOpacity: 100,
+
+    /* -------------------------------------------------------------------------
+       PGS / IMAGE SUBTITLE OPACITY (HDR)
+       -------------------------------------------------------------------------
+       Transparency level (0-100) applied to graphic/PGS subtitles when
+       playing High Dynamic Range (HDR / Dolby Vision) media.
+       Defaults to 80% to curb harsh peak panel luminance and reduce eye strain.
+       ------------------------------------------------------------------------- */
+    subtitlePgsOpacityHdr: 80,
+
     // =========================================================================
     // SECONDARY SUBTITLE SETTINGS
     // These override only position and size — all other styles (color, shadow, font)
@@ -444,8 +503,12 @@ const DEFAULTS = {
     // Force all content to transcode (emergency/debug fallback)
     forceTranscode: false,
 
-    // Force all content to direct play (override for testing native decoding)
-    forceDirectPlay: false,
+    // Force direct play behavior mode:
+    // 'off'   - Standard automatic server profiling and playback
+    // 'video' - Force direct play video codecs only (audio transcode allowed)
+    // 'audio' - Force direct play audio codecs only (video transcode allowed)
+    // 'all'   - Force direct play everything (strict direct play, no transcoding)
+    forceDirectPlay: 'off',
 
     // -------------------------------------------------------------------------
     // DIRECTPLAY / REMUX FAILURE AUTO-TRANSCODE ESCALATION
@@ -503,7 +566,7 @@ const DEFAULTS = {
     tizenSegmentLength: 6,
 
     // WebOS
-    webosStallRecovery: 8,
+    webosStallRecovery: 8000,
     webosBufferGate: 10,
     webosSegmentLength: 6,
 
@@ -529,7 +592,7 @@ const DEFAULTS = {
      * 'internal_iframe' (Legacy Iframe) on Web/Desktop browsers for maximum desktop
      * compatibility without requiring background proxy services.
      */
-    trailerPlaybackMode: (platformInfo.isTizen || platformInfo.isWebOS) ? 'internal_proxy' : 'internal_iframe',
+    trailerPlaybackMode: platformInfo.isTizen || platformInfo.isWebOS ? 'internal_proxy' : 'internal_iframe',
 
     /*
      * Await Tracks Before Playback
@@ -637,8 +700,14 @@ const DEFAULTS = {
     // Enable cinema mode (dim lights during playback)
     enableCinemaMode: false,
 
-    // Time format for clock and playback ('12h', '24h')
+    // Time format for clock and playback ('12h', '24h', 'none')
     timeFormat: '12h',
+
+    // Time source for clock and playback timeline calculations ('browser', 'os', 'server')
+    timeSource: 'browser',
+
+    // Timezone offset for server time sync ('auto' or minutes East of UTC as string, e.g. '120' for UTC+2)
+    timeZoneOffset: 'auto',
 
     // Instant seek when OSD is hidden using directional arrows
     seekWithArrows: true,
@@ -891,6 +960,31 @@ export const PlayerSettings = {
         }
 
         // =====================================================================
+        // FORCE DIRECT PLAY GRANULAR SELECTION & BACKWARD COMPATIBILITY
+        // =====================================================================
+        // Retain existing user preference values without altering saved state.
+        // Legacy boolean 'true' values automatically resolve to 'all' so users
+        // who previously had the feature enabled continue to force direct play
+        // for all codecs and containers seamlessly.
+        // =====================================================================
+        if (key === 'forceDirectPlay') {
+            // Check for previous boolean true or current 'all' configuration
+            if (stored === 'true' || stored === true || stored === 'all') {
+                return 'all';
+            }
+            // Check for explicit video-only force direct play
+            if (stored === 'video') {
+                return 'video';
+            }
+            // Check for explicit audio-only force direct play
+            if (stored === 'audio') {
+                return 'audio';
+            }
+            // Default inactive state
+            return 'off';
+        }
+
+        // =====================================================================
         // ASS RENDERER HARDWARE CAPABILITY FALLBACK
         // =====================================================================
         // If libass-wasm was previously stored or selected, but the current
@@ -899,7 +993,9 @@ export const PlayerSettings = {
         // automatically fallback to libjass DOM rendering to prevent player crash.
         // =====================================================================
         if (key === 'assRenderer' && stored === 'libass-wasm' && !platformInfo.hasWasmSupport) {
-            log.info('Stored assRenderer is libass-wasm, but device lacks WebAssembly support; falling back to libjass');
+            log.info(
+                'Stored assRenderer is libass-wasm, but device lacks WebAssembly support; falling back to libjass'
+            );
             return 'libjass';
         }
 
@@ -921,19 +1017,28 @@ export const PlayerSettings = {
                 return recommended;
             }
             // Fall back to html5 if movi is persisted but WebCodecs is unsupported or on TV builds
-            if (stored === 'movi' && (!platformInfo.hasWebCodecsSupport || platformInfo.isTizen || platformInfo.isWebOS)) {
-                log.warn('Stored playerBackend is movi, but not supported or included in this build; falling back to html5');
+            if (
+                stored === 'movi' &&
+                (!platformInfo.hasWebCodecsSupport || platformInfo.isTizen || platformInfo.isWebOS)
+            ) {
+                log.warn(
+                    'Stored playerBackend is movi, but not supported or included in this build; falling back to html5'
+                );
                 return 'html5';
             }
             // Fall back to html5 if exoplayer is persisted but native Android bridge is missing
-            const hasExoBridge = typeof window !== 'undefined' && Boolean(
-                window.LitefinExoPlayer ||
-                window.LitefinAndroid ||
-                window.__TAURI_INTERNALS__?.invoke ||
-                window.__TAURI__?.core?.invoke
-            );
+            const hasExoBridge =
+                typeof window !== 'undefined' &&
+                Boolean(
+                    window.LitefinExoPlayer ||
+                    window.LitefinAndroid ||
+                    window.__TAURI_INTERNALS__?.invoke ||
+                    window.__TAURI__?.core?.invoke
+                );
             if (stored === 'exoplayer' && !hasExoBridge && !platformInfo.isAndroid) {
-                log.warn('Stored playerBackend is exoplayer, but native Android bridge is missing; falling back to html5');
+                log.warn(
+                    'Stored playerBackend is exoplayer, but native Android bridge is missing; falling back to html5'
+                );
                 return 'html5';
             }
         }
@@ -952,11 +1057,29 @@ export const PlayerSettings = {
             return;
         }
 
-        storage.setItem(STORAGE_PREFIX + key, String(value));
-        log.debug(`Saved ${key}: ${value}`);
+        // Normalize forceDirectPlay values to ensure consistent storage strings
+        let normalizedValue = value;
+        if (key === 'forceDirectPlay') {
+            // Map legacy boolean true or explicit 'all' to canonical 'all'
+            if (value === true || value === 'true' || value === 'all') {
+                normalizedValue = 'all';
+            } else if (value === 'video') {
+                // Video codecs direct play only
+                normalizedValue = 'video';
+            } else if (value === 'audio') {
+                // Audio codecs direct play only
+                normalizedValue = 'audio';
+            } else {
+                // Disabled / Off
+                normalizedValue = 'off';
+            }
+        }
+
+        storage.setItem(STORAGE_PREFIX + key, String(normalizedValue));
+        log.debug(`Saved ${key}: ${normalizedValue}`);
 
         // Notify subscribers that a setting has changed
-        eventBus.emit(`pref:${key}`, value);
+        eventBus.emit(`pref:${key}`, normalizedValue);
     },
 
     /**
@@ -1030,7 +1153,7 @@ export const PlayerSettings = {
 
         log.debug(
             `[ResumeRewind] Applied offset of ${rewindLengthMs}ms (${rewindTicks} ticks): ` +
-            `raw=${positionTicks} -> adjusted=${adjustedTicks}`
+                `raw=${positionTicks} -> adjusted=${adjustedTicks}`
         );
 
         return adjustedTicks;

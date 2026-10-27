@@ -24,7 +24,7 @@ Smart TV packages come in 4 performance tiers to squeeze maximum performance out
 
 | Build Variant    | Recommended Hardware           | OS / Platform Target            | Package Format  |
 | :--------------- | :----------------------------- | :------------------------------ | :-------------- |
-| **Modern**       | High-end / Recent TVs (2021+)  | Tizen 6.5+ / webOS 22+ (6.0+)   | `.wgt` / `.ipk` |
+| **Modern**       | High-end / Recent TVs (2021+)  | Tizen 6.5+ / webOS 22+		  | `.wgt` / `.ipk` |
 | **Normal**       | Most Smart TVs (2019–2021)     | Tizen 5.0+ / webOS 5.0+         | `.wgt` / `.ipk` |
 | **Legacy**       | Mid-lifecycle TVs (2017–2018)  | Tizen 4.0+ / webOS 4.0+         | `.wgt` / `.ipk` |
 | **Ultra-Legacy** | Older & vintage TVs (Pre-2017) | Tizen 3.0 & below / webOS < 4.0 | `.wgt` / `.ipk` |

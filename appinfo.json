@@ -1,6 +1,6 @@
 {
     "id": "org.litefin.app",
-    "version": "2.0.20",
+    "version": "2.0.150",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",
@@ -15,5 +15,12 @@
     "splashBackground": "assets/splash.png",
     "bgColor": "#0f0a14",
     "iconColor": "#0f0a14",
-    "supportTouchMode": "full"
+    "supportTouchMode": "full",
+    "enablePigScreenSaver": false,
+    "screenSaverProperties": {
+        "preferredType": 2
+    },
+    "requiredPermissions": [
+        "time.query"
+    ]
 }

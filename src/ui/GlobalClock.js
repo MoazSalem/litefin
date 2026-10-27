@@ -11,6 +11,7 @@ import { eventBus } from '../core/EventBus.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { timeManager } from '../utils/TimeManager.js';
 
 const log = logger.create('GlobalClock');
 
@@ -53,6 +54,21 @@ class GlobalClock {
             this._applyFormatVisibility();
         });
 
+        eventBus.on('pref:timeSource', () => {
+            log.debug('Time source changed, updating clock...');
+            this.update();
+        });
+
+        eventBus.on('pref:timeZoneOffset', () => {
+            log.debug('Timezone offset changed, updating clock...');
+            this.update();
+        });
+
+        eventBus.on('time:synced', () => {
+            log.debug('Server time synced, updating clock...');
+            this.update();
+        });
+
         // Toggle visibility based on player states if needed
         // For now, we follow the "global" requirement.
     }
@@ -63,7 +79,9 @@ class GlobalClock {
     update() {
         if (!this._element) return;
 
-        const now = new Date();
+        // Retrieve high-precision localized wall-clock time from TimeManager
+        // which accounts for Tizen native RTC, WebOS Luna bus, and LAN server sync
+        const now = timeManager.now();
         const timeString = i18n.formatLocalTime(now);
 
         // Use a sleek format: 10:45 PM or 22:45

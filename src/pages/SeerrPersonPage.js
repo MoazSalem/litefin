@@ -127,22 +127,13 @@ class SeerrPersonPage extends Page {
 
             // Store raw cast and crew lists for interactive filtering with fallbacks
             const raw = this._person.raw || this._person;
-            const rawCredits = this._person.combinedCredits || raw.combinedCredits || raw.combined_credits || raw.credits || {};
+            const rawCredits =
+                this._person.combinedCredits || raw.combinedCredits || raw.combined_credits || raw.credits || {};
 
             this._allCast =
-                rawCredits.cast ||
-                rawCredits.Cast ||
-                raw.cast ||
-                raw.Cast ||
-                this._person.appearances ||
-                [];
+                rawCredits.cast || rawCredits.Cast || raw.cast || raw.Cast || this._person.appearances || [];
 
-            this._allCrew =
-                rawCredits.crew ||
-                rawCredits.Crew ||
-                raw.crew ||
-                raw.Crew ||
-                [];
+            this._allCrew = rawCredits.crew || rawCredits.Crew || raw.crew || raw.Crew || [];
 
             // ────────────────────────────────────────────────────────────
             // 2. Render header info and profile poster
@@ -382,7 +373,11 @@ class SeerrPersonPage extends Page {
                 DescriptionModal.show(
                     {
                         title: this._person.name || this._person.Name,
-                        overview: this._person.biography || this._person.Biography || this._person.overview || this._person.Overview
+                        overview:
+                            this._person.biography ||
+                            this._person.Biography ||
+                            this._person.overview ||
+                            this._person.Overview
                     },
                     this
                 );
@@ -455,7 +450,7 @@ class SeerrPersonPage extends Page {
                 item.mediaType ||
                 item.media_type ||
                 item._mediaType ||
-                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.Type === 'Series' ? 'tv' : item.Type === 'Movie' ? 'movie' : '') ||
                 (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
 
             // Resolve TMDB item ID
@@ -467,15 +462,15 @@ class SeerrPersonPage extends Page {
 
             // Extract the role or job name from the current credit entry
             const rawRole = isCrew
-                ? (item.job || item.department || item.Role || item._role || '')
-                : (item.character || item.Role || item._role || '');
+                ? item.job || item.department || item.Role || item._role || ''
+                : item.character || item.Role || item._role || '';
 
             // Split compound roles (e.g., "Role A / Role B") and collect distinct segments
             const roleParts = rawRole
                 ? rawRole
-                    .split('/')
-                    .map((part) => part.trim())
-                    .filter(Boolean)
+                      .split('/')
+                      .map((part) => part.trim())
+                      .filter(Boolean)
                 : [];
 
             if (!mergedMap.has(workKey)) {
@@ -566,7 +561,7 @@ class SeerrPersonPage extends Page {
                 item.mediaType ||
                 item.media_type ||
                 item._mediaType ||
-                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.Type === 'Series' ? 'tv' : item.Type === 'Movie' ? 'movie' : '') ||
                 (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
             return itemType === filter;
         };
@@ -600,9 +595,7 @@ class SeerrPersonPage extends Page {
         // 1. Process Appearances (Cast)
         // ────────────────────────────────────────────────────────────
         // Filter by media category, sort chronologically, and merge repeating titles
-        const rawFilteredCast = this._allCast
-            .filter(matchesFilter)
-            .sort(sortByDateDesc);
+        const rawFilteredCast = this._allCast.filter(matchesFilter).sort(sortByDateDesc);
 
         const mergedCast = this._mergeCredits(rawFilteredCast, false);
 
@@ -611,7 +604,7 @@ class SeerrPersonPage extends Page {
                 item._mediaType ||
                 item.mediaType ||
                 item.media_type ||
-                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.Type === 'Series' ? 'tv' : item.Type === 'Movie' ? 'movie' : '') ||
                 (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
 
             const releaseDateStr =
@@ -627,7 +620,7 @@ class SeerrPersonPage extends Page {
                 item.posterPath ||
                 item.poster_path ||
                 item.PosterPath ||
-                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^/]+/, '') : '');
 
             return {
                 Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
@@ -638,8 +631,8 @@ class SeerrPersonPage extends Page {
                 _tmdbId: item._tmdbId || item.id || item.Id,
                 Role: role,
                 _roleName: role,
-                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
-                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
+                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : item._imageUrl || '',
+                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : item._detailImageUrl || '',
                 _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
                 _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
             };
@@ -649,9 +642,7 @@ class SeerrPersonPage extends Page {
         // 2. Process Crew Credits
         // ────────────────────────────────────────────────────────────
         // Filter by media category, sort chronologically, and merge repeating titles
-        const rawFilteredCrew = this._allCrew
-            .filter(matchesFilter)
-            .sort(sortByDateDesc);
+        const rawFilteredCrew = this._allCrew.filter(matchesFilter).sort(sortByDateDesc);
 
         const mergedCrew = this._mergeCredits(rawFilteredCrew, true);
 
@@ -660,7 +651,7 @@ class SeerrPersonPage extends Page {
                 item._mediaType ||
                 item.mediaType ||
                 item.media_type ||
-                (item.Type === 'Series' ? 'tv' : (item.Type === 'Movie' ? 'movie' : '')) ||
+                (item.Type === 'Series' ? 'tv' : item.Type === 'Movie' ? 'movie' : '') ||
                 (item.title || item.releaseDate || item.release_date ? 'movie' : 'tv');
 
             const releaseDateStr =
@@ -676,7 +667,7 @@ class SeerrPersonPage extends Page {
                 item.posterPath ||
                 item.poster_path ||
                 item.PosterPath ||
-                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^\/]+/, '') : '');
+                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^/]+/, '') : '');
 
             return {
                 Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
@@ -688,8 +679,8 @@ class SeerrPersonPage extends Page {
                 _isCrew: true,
                 Role: job,
                 _roleName: job,
-                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : (item._imageUrl || ''),
-                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : (item._detailImageUrl || ''),
+                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : item._imageUrl || '',
+                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : item._detailImageUrl || '',
                 _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
                 _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
             };
@@ -797,7 +788,9 @@ class SeerrPersonPage extends Page {
         }
 
         // Search stored credits for the source item model
-        const cleanCardTmdbId = card.dataset.tmdbId || (typeof cardId === 'string' ? cardId.replace(/^tmdb-(?:movie|tv|person)-/, '') : cardId);
+        const cleanCardTmdbId =
+            card.dataset.tmdbId ||
+            (typeof cardId === 'string' ? cardId.replace(/^tmdb-(?:movie|tv|person)-/, '') : cardId);
         const found =
             [...this._allCast, ...this._allCrew].find(
                 (i) =>
@@ -812,19 +805,14 @@ class SeerrPersonPage extends Page {
             found._mediaType ||
             found.mediaType ||
             found.media_type ||
-            ((card.dataset.type === 'Series' || found.Type === 'Series') ? 'tv' : 'movie');
+            (card.dataset.type === 'Series' || found.Type === 'Series' ? 'tv' : 'movie');
 
         if (mediaType !== 'tv' && mediaType !== 'movie') {
-            mediaType = (card.dataset.type === 'Series' || found.Type === 'Series') ? 'tv' : 'movie';
+            mediaType = card.dataset.type === 'Series' || found.Type === 'Series' ? 'tv' : 'movie';
         }
 
         // Resolve clean TMDB numeric ID
-        const tmdbId =
-            card.dataset.tmdbId ||
-            found._tmdbId ||
-            found.id ||
-            found.Id ||
-            cleanCardTmdbId;
+        const tmdbId = card.dataset.tmdbId || found._tmdbId || found.id || found.Id || cleanCardTmdbId;
 
         router.navigate(`/seerr/${mediaType}/${tmdbId}`);
     }

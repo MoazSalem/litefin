@@ -17,6 +17,9 @@ Check all platforms that apply:
 - [ ] Desktop (Windows, Linux, macOS)
 - [ ] Web Plugin (Jellyfin / Emby Web)
 
+**Build Type**:
+Include the build you need for testing the feature. [e.g. webOS Modern - Tizen legacy]
+
 **Priority** (1-10):
 From a scale of 1 to 10 (1 = minor annoyance, 10 = critical crash/unusable blocker), how important is this feature?
 

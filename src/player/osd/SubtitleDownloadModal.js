@@ -128,7 +128,9 @@ export default class SubtitleDownloadModal extends BaseMenu {
             // Register cultures with languageManager for universal lookup
             languageManager.registerCultures(this._cultures);
 
-            this._langOptions = this._cultures
+            // Filter out regional dialects to retain only singular canonical languages
+            const singularCultures = languageManager.filterSingularCultures(this._cultures);
+            this._langOptions = singularCultures
                 .filter((c) => c.ThreeLetterISOLanguageName)
                 .sort((a, b) => (a.DisplayName || '').localeCompare(b.DisplayName || ''))
                 .map((c) => ({

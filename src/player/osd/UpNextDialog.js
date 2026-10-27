@@ -445,6 +445,20 @@ export default class UpNextDialog extends BaseMenu {
                 this.osd.hideUpNext();
                 return true;
 
+            case 'enter': {
+                /*
+                 * Directly trigger the focused button click when the user presses OK/Enter
+                 * on their remote. This routes to _triggerPlayNow() or hideUpNext() without
+                 * relying on OSD fallback delegation paths.
+                 */
+                const targetBtn = buttons[this._focusedButton] || buttons[0];
+                if (targetBtn) {
+                    targetBtn.click();
+                    return true;
+                }
+                return false;
+            }
+
             default:
                 return false;
         }

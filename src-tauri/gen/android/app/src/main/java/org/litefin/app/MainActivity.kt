@@ -1,10 +1,14 @@
 package org.litefin.app
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Bundle
+import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.TextureView
@@ -17,6 +21,8 @@ import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.media3.ui.AspectRatioFrameLayout
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * =============================================================================
@@ -68,6 +74,29 @@ class MainActivity : TauriActivity() {
 
   // Tracks cold-launch deep link payload until claimed by web application
   private var initialDeepLink: String? = null
+
+  // ---------------------------------------------------------------------------
+  // Display Mode & Refresh Rate State
+  // ---------------------------------------------------------------------------
+  // Stores original system display mode prior to auto-matching
+  private var originalDisplayModeId: Int = 0
+
+  // Denotes whether a custom display mode was activated during playback
+  private var isDisplayModeSwitched: Boolean = false
+
+  /**
+   * Encapsulates physical display resolution and refresh rate attributes
+   * from Android's DisplayManager subsystem.
+   */
+  data class DisplayModeInfo(
+    val modeId: Int,
+    val physicalWidth: Int,
+    val physicalHeight: Int,
+    val refreshRate: Float
+  ) {
+    // Refresh rate in thousandths (e.g. 23976 for 23.976 fps, 60000 for 60 fps)
+    val refreshRateRounded: Int = (refreshRate * 1000).roundToInt()
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     instance = this
@@ -138,7 +167,8 @@ class MainActivity : TauriActivity() {
   }
 
   override fun onDestroy() {
-    // Release screen wake lock to avoid holding display flags when activity terminates
+    // Revert custom display refresh rate and release screen wake lock
+    resetDisplayMode()
     setKeepScreenOn(false)
     if (instance == this) {
       instance = null
@@ -604,6 +634,167 @@ class MainActivity : TauriActivity() {
     return activeWebView
   }
 
+  // ===========================================================================
+  // Hardware Display Refresh Rate & Mode Matching
+  // ===========================================================================
+
+  /**
+   * Switches the window preferred display mode ID directly on the main UI thread.
+   * Prompts the Android TV display subsystem and HDMI eARC/CEC controller
+   * to adapt physical frame rates without 3:2 pulldown judder.
+   *
+   * @param modeId Target display mode identifier from Display.getMode().
+   */
+  fun changeDisplayMode(modeId: Int) {
+    runOnUiThread {
+      try {
+        if (isFinishing || isDestroyed) {
+          return@runOnUiThread
+        }
+        val attrs = window.attributes
+        if (attrs.preferredDisplayModeId != modeId) {
+          // Cache default mode before first switch
+          if (!isDisplayModeSwitched) {
+            originalDisplayModeId = attrs.preferredDisplayModeId
+          }
+          android.util.Log.i("MainActivity", "changeDisplayMode: modeId=$modeId (previous=${attrs.preferredDisplayModeId})")
+          attrs.preferredDisplayModeId = modeId
+          window.attributes = attrs
+          isDisplayModeSwitched = (modeId != 0 && modeId != originalDisplayModeId)
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed changing display mode to $modeId: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Restores original display mode when media playback stops or the player is released.
+   */
+  fun resetDisplayMode() {
+    runOnUiThread {
+      try {
+        if (isFinishing || isDestroyed) {
+          return@runOnUiThread
+        }
+        if (isDisplayModeSwitched) {
+          val attrs = window.attributes
+          android.util.Log.i("MainActivity", "resetDisplayMode: restoring default mode ($originalDisplayModeId)")
+          attrs.preferredDisplayModeId = originalDisplayModeId
+          window.attributes = attrs
+          isDisplayModeSwitched = false
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed resetting display mode: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Selects and applies the best physical display mode matching the stream frame rate and resolution.
+   *
+   * @param streamWidth Physical pixel width of video stream.
+   * @param streamHeight Physical pixel height of video stream.
+   * @param targetFrameRate Media frame rate (e.g., 23.976, 24, 25, 29.97, 50, 59.94, 60).
+   * @return True if a matching display mode was identified and applied.
+   */
+  fun matchDisplayMode(streamWidth: Int, streamHeight: Int, targetFrameRate: Float): Boolean {
+    if (targetFrameRate <= 0f) {
+      return false
+    }
+
+    try {
+      val displayManager = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return false
+      val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return false
+      val supportedModes = display.supportedModes ?: return false
+
+      // Wrap raw display modes in helper objects
+      val modes = supportedModes.map { mode ->
+        DisplayModeInfo(
+          modeId = mode.modeId,
+          physicalWidth = mode.physicalWidth,
+          physicalHeight = mode.physicalHeight,
+          refreshRate = mode.refreshRate
+        )
+      }
+
+      val streamRate = (targetFrameRate * 1000).roundToInt()
+      val currentMode = display.mode
+
+      // 1. Filter modes that satisfy the video stream resolution without downscaling
+      val sizeFiltered = modes.filter { mode ->
+        streamWidth <= 0 || streamHeight <= 0 || (mode.physicalWidth >= streamWidth && mode.physicalHeight >= streamHeight)
+      }.ifEmpty { modes }
+
+      // 2. Filter modes matching the target frame rate cadence
+      val candidates = sizeFiltered.filter { mode ->
+        frameRateMatches(mode.refreshRateRounded, streamRate)
+      }.ifEmpty { sizeFiltered }
+
+      // 3. Find target mode: exact frame rate match preferred, otherwise highest resolution
+      val targetMode = candidates.firstOrNull { mode ->
+        mode.refreshRateRounded == streamRate &&
+        (streamWidth <= 0 || (mode.physicalWidth == streamWidth && mode.physicalHeight == streamHeight))
+      } ?: candidates.filter { mode ->
+        mode.refreshRateRounded == streamRate
+      }.maxByOrNull { mode ->
+        mode.physicalWidth * mode.physicalHeight
+      } ?: candidates.maxByOrNull { mode ->
+        mode.physicalWidth * mode.physicalHeight
+      }
+
+      if (targetMode != null && targetMode.modeId != currentMode.modeId) {
+        changeDisplayMode(targetMode.modeId)
+        return true
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed matching display mode: ${e.message}")
+    }
+
+    return false
+  }
+
+  /**
+   * Determines if display refresh rate cadence is compatible with the video stream frame rate.
+   */
+  private fun frameRateMatches(modeRate: Int, streamRate: Int): Boolean {
+    if (streamRate <= 0) return false
+    // Exact multiple (e.g., 24fps -> 24Hz, 48Hz, 120Hz; 25fps -> 50Hz, 100Hz; 30fps -> 60Hz, 120Hz)
+    if (modeRate % streamRate == 0) return true
+    // 2.5x cadence (e.g., 24fps -> 60Hz)
+    if (modeRate == (streamRate * 2.5).roundToInt()) return true
+    // Fractional tolerance (e.g. 23.976 vs 24.000 or 59.94 vs 60.000)
+    if (abs(modeRate - streamRate) <= 50) return true
+    // Multiple of rounded integer frame rate
+    val intStreamRate = ((streamRate + 500) / 1000) * 1000
+    if (intStreamRate > 0 && modeRate % intStreamRate == 0) return true
+    return false
+  }
+
+  /**
+   * Queries connected display panel and serializes available modes to JSON.
+   */
+  fun getSupportedDisplayModesJson(): String {
+    return try {
+      val displayManager = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+      val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+      val supportedModes = display?.supportedModes ?: emptyArray()
+      val array = org.json.JSONArray()
+      for (mode in supportedModes) {
+        val obj = org.json.JSONObject().apply {
+          put("modeId", mode.modeId)
+          put("width", mode.physicalWidth)
+          put("height", mode.physicalHeight)
+          put("refreshRate", mode.refreshRate)
+        }
+        array.put(obj)
+      }
+      array.toString()
+    } catch (e: Exception) {
+      "[]"
+    }
+  }
+
   /**
    * ===========================================================================
    * Hardware Remote Key Event Interceptor
@@ -919,8 +1110,15 @@ class MainActivity : TauriActivity() {
     }
 
     /**
-     * Queries hardware decoder support via Android MediaCodecList.
-     * Accurately determines if device hardware supports AVC, HEVC, VP9, and AV1.
+     * =========================================================================
+     * Hardware Video Decoder Capability Probe
+     * =========================================================================
+     * Queries registered decoders via Android MediaCodecList to determine genuine
+     * hardware decoding support for AVC, HEVC, VP9, VP8, AV1, MPEG-2, and VC-1.
+     *
+     * Prevents playback black-screens on mobile chipsets that lack MPEG-2 or VC-1
+     * decoders (e.g. where c2.android.mpeg2.decoder is restricted to the TV domain).
+     * =========================================================================
      */
     @JavascriptInterface
     fun getSupportedVideoCodecs(): String {
@@ -928,8 +1126,10 @@ class MainActivity : TauriActivity() {
         // Query list of regular decoders registered with the Android media framework
         val codecList = android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS)
         val supportedMimes = mutableSetOf<String>()
+
         // Iterate available codecs and extract supported video mime types
         for (info in codecList.codecInfos) {
+          // Exclude encoders to ensure only decoder profiles are evaluated
           if (!info.isEncoder) {
             for (type in info.supportedTypes) {
               if (type.startsWith("video/", ignoreCase = true)) {
@@ -938,6 +1138,7 @@ class MainActivity : TauriActivity() {
             }
           }
         }
+
         // Package findings into JSON payload for profile evaluation
         val result = org.json.JSONObject()
         result.put("h264", supportedMimes.contains("video/avc"))
@@ -945,11 +1146,22 @@ class MainActivity : TauriActivity() {
         result.put("vp9", supportedMimes.contains("video/x-vnd.on2.vp9"))
         result.put("vp8", supportedMimes.contains("video/x-vnd.on2.vp8"))
         result.put("av1", supportedMimes.contains("video/av01"))
-        result.put("mpeg2video", supportedMimes.contains("video/mpeg2"))
+        result.put("mpeg2video", supportedMimes.contains("video/mpeg2") || supportedMimes.contains("video/mp2v"))
+
+        // Probe standard Android VC-1 mime type (video/wvc1) as well as vendor aliases
+        val hasVc1 = supportedMimes.contains("video/wvc1") ||
+                     supportedMimes.contains("video/x-ms-wmv") ||
+                     supportedMimes.contains("video/vc1")
+        result.put("vc1", hasVc1)
+
         result.toString()
       } catch (e: Exception) {
-        // Safe fallback for older Android TV devices
-        """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":true}"""
+        // Evaluate television hardware classification to configure safe fallback defaults
+        // Android TV boxes standardly support MPEG-2 decode, whereas phones frequently lack it
+        val isTv = try { this@MainActivity.isTvDevice() } catch (_: Exception) { false }
+        val mpeg2Default = isTv
+
+        """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":$mpeg2Default,"vc1":false}"""
       }
     }
 
@@ -1032,6 +1244,31 @@ class MainActivity : TauriActivity() {
       val payload = initialDeepLink
       initialDeepLink = null
       return payload
+    }
+
+    /**
+     * Matches connected display panel refresh rate and resolution to video stream parameters.
+     */
+    @JavascriptInterface
+    fun setRefreshRate(frameRate: Float, width: Int, height: Int): Boolean {
+      return this@MainActivity.matchDisplayMode(width, height, frameRate)
+    }
+
+    /**
+     * Restores default system display refresh rate and resolution.
+     */
+    @JavascriptInterface
+    fun resetRefreshRate(): Boolean {
+      this@MainActivity.resetDisplayMode()
+      return true
+    }
+
+    /**
+     * Queries connected display panel supported resolution and refresh rate modes.
+     */
+    @JavascriptInterface
+    fun getSupportedDisplayModes(): String {
+      return this@MainActivity.getSupportedDisplayModesJson()
     }
   }
 }

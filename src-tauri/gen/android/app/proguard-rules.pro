@@ -30,9 +30,13 @@
 # -----------------------------------------------------------------------------
 # Google Media3 ExoPlayer Direct-Play Suite
 # -----------------------------------------------------------------------------
-# Preserve audio decoders, video renderers, and OkHttp data sources
+# Preserve audio decoders, video renderers, and OkHttp data sources.
+# Crucial: DefaultRenderersFactory discovers and loads FfmpegAudioRenderer and
+# FfmpegLibrary via reflection at runtime. R8 must retain these classes and members.
 -keep class androidx.media3.exoplayer.** { *; }
 -keep interface androidx.media3.exoplayer.** { *; }
+-keep class androidx.media3.decoder.** { *; }
+-keep interface androidx.media3.decoder.** { *; }
 -keep class androidx.media3.datasource.** { *; }
 -keep class androidx.media3.ui.** { *; }
 -dontwarn androidx.media3.**

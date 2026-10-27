@@ -112,7 +112,7 @@ Beyond checking for errors, Litefin provides tools to automatically maintain the
 The `locale:sync` command ensures that all non-English locale files exactly match the structure, grouping, and ordering of `en-us.json`.
 
 ```sh
-# Synchronizes all 100+ locales with the English master
+# Synchronizes all locales with the English master
 npm run locale:sync
 # or
 npm run local:sync

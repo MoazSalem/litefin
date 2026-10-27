@@ -31,7 +31,7 @@ function _hexToRgba(hex, opacity) {
 
 /**
  * Resolves responsive height calculation for subtitle sizing and margins.
- * 
+ *
  * Supports modern engines and mobile viewports (where AndroidAdapter applies CSS zoom
  * and sets --litefin-app-h) by referencing var(--litefin-app-h, 100vh). This ensures
  * subtitle cues scale proportionally with the rest of the 1600px/750px UI canvas
@@ -45,7 +45,12 @@ function _hexToRgba(hex, opacity) {
  */
 function _getResponsiveHeight(fraction) {
     // Check if browser/engine natively supports CSS custom properties
-    if (typeof window !== 'undefined' && typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('--a', '0')) {
+    if (
+        typeof window !== 'undefined' &&
+        typeof CSS !== 'undefined' &&
+        typeof CSS.supports === 'function' &&
+        CSS.supports('--a', '0')
+    ) {
         return `calc(var(--litefin-app-h, 100vh) * ${fraction})`;
     }
     // Safe legacy fallback to standard viewport height

@@ -814,6 +814,14 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     position: relative;
 }
 
+/* ------------------------------------------------------------------------- */
+/* Focused Action Button Tooltip Display                                     */
+/* ------------------------------------------------------------------------- */
+/* Floating bar anchored directly below the focused button in the action row.*/
+/* Supports three operational states: hidden, floating text, and name cards. */
+/* Default presentation is pure floating text: uncluttered, no background,   */
+/* no border, and no shadow for a clean modern visual aesthetic.             */
+/* ------------------------------------------------------------------------- */
 .action-btn-tooltip-bar {
     position: absolute;
     left: 0;
@@ -824,8 +832,8 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     z-index: 10;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease-in-out, visibility 0.2s;
-    -webkit-transition: opacity 0.2s ease-in-out, visibility 0.2s;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+    -webkit-transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
     white-space: nowrap;
 }
 
@@ -836,20 +844,58 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     -webkit-transform: translate(-50%, 12px);
 }
 
+/* ------------------------------------------------------------------------- */
+/* Floating Text Tooltip Specific Positioning                                */
+/* ------------------------------------------------------------------------- */
+/* The page script sets top to the focused button's bottom edge, so the      */
+/* label follows its button onto a wrapped second row. Floating text sits    */
+/* 18px below that edge (6px lower than a name card) for spatial separation. */
+/* ------------------------------------------------------------------------- */
+.action-btn-tooltip-bar.style-floating,
+.tooltip-mode-floating .action-btn-tooltip-bar {
+    transform: translate(-50%, 18px);
+    -webkit-transform: translate(-50%, 18px);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Base Tooltip Text - Floating Text Style (Default)                         */
+/* ------------------------------------------------------------------------- */
+/* Displays the action title without box styling, background, or shadows.    */
+/* Text sits cleanly directly underneath the focused action button.          */
+/* ------------------------------------------------------------------------- */
 .action-btn-tooltip-text {
     display: inline-block;
-    padding: 6px 14px;
-    background-color: var(--jf-badge-bg, rgba(255, 255, 255, 0.14));
+    padding: 0;
+    background: transparent !important;
+    background-color: transparent !important;
     color: var(--jf-text-primary, #ffffff);
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.22));
-    border-radius: var(--jf-border-radius-md, 8px);
+    border: none !important;
+    border-radius: 0 !important;
+    -webkit-border-radius: 0 !important;
     font-size: 1.15rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    line-height: 1.3;
     box-shadow: none !important;
+    -webkit-box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     text-shadow: none !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Name Cards Tooltip Style Variant                                          */
+/* ------------------------------------------------------------------------- */
+/* Encloses the tooltip title inside a pill card container with backdrop     */
+/* tint and subtle perimeter outline border when preferred in settings.      */
+/* ------------------------------------------------------------------------- */
+.action-btn-tooltip-bar.style-cards .action-btn-tooltip-text,
+.tooltip-mode-cards .action-btn-tooltip-text {
+    padding: 6px 14px;
+    background-color: var(--jf-badge-bg, rgba(255, 255, 255, 0.14)) !important;
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.22)) !important;
+    border-radius: var(--jf-border-radius-md, 8px) !important;
+    -webkit-border-radius: var(--jf-border-radius-md, 8px) !important;
 }
 
 /* Action Buttons */

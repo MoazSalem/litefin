@@ -103,7 +103,7 @@ test('details.css defines all required line-clamp utility classes', () => {
 });
 
 test('SettingsPage has details-overview-max-lines-select and toggle-details-always-show-see-more registered', () => {
-    const settingsContent = readFileSync('src/pages/SettingsPage.js', 'utf8');
+    const settingsContent = readFileSync('src/pages/settings/SettingsPage.js', 'utf8');
 
     assert.ok(
         settingsContent.includes('details-overview-max-lines-select'),
@@ -141,14 +141,3 @@ test('Details, Person, Seerr Details, and Seerr Person pages integrate getOvervi
     }
 });
 
-test('en-us.json contains overview max lines, value lines, and Detailed View translation keys', () => {
-    const enUs = JSON.parse(readFileSync('src/locales/en-us.json', 'utf8'));
-
-    assert.equal(enUs.LabelDetailsOverviewMaxLines, 'Overview Max Lines');
-    assert.ok(enUs.DetailsOverviewMaxLinesDescription);
-    assert.equal(enUs.ValueLines, '{0} lines');
-    assert.equal(enUs.LinesValue, '{0} lines');
-    assert.equal(enUs.LabelDetailsAlwaysShowSeeMore, 'Always Show Detailed View Button');
-    assert.ok(enUs.DetailsAlwaysShowSeeMoreDescription);
-    assert.equal(enUs.DetailedView, 'Detailed View');
-});

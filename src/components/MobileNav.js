@@ -29,6 +29,7 @@ import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
 import { sidebarIcons, getLibraryIcon } from '../utils/Icons.js';
 import { seerr } from '../api/seerrClient.js';
 import { storage } from '../utils/StorageService.js';
+import { timeManager } from '../utils/TimeManager.js';
 
 const log = logger.create('MobileNav');
 
@@ -71,7 +72,7 @@ export class MobileNav extends Component {
      */
     isPortraitMode() {
         if (typeof document === 'undefined') return false;
-        
+
         // Priority 1: Direct portrait marker attribute applied by display scaler
         const hasPortraitAttr = document.documentElement.hasAttribute('data-litefin-portrait');
         if (hasPortraitAttr) return true;
@@ -93,9 +94,7 @@ export class MobileNav extends Component {
     render() {
         // Resolve initial bottom navbar background customization mode
         const navColorPref =
-            storage.getItem('pref:bottomNavBarColor') ||
-            storage.getItem('pref:collapsedSidebarColor') ||
-            'theme';
+            storage.getItem('pref:bottomNavBarColor') || storage.getItem('pref:collapsedSidebarColor') || 'theme';
         const navBgClass = `bg-${navColorPref}`;
 
         return `
@@ -286,7 +285,7 @@ export class MobileNav extends Component {
     onMounted() {
         this._bindEvents();
         this._bindGlobalEvents();
-        
+
         // Initial path inspection
         this._currentPath = router.getCurrentPath?.() || '';
         this._updateActiveTabs();
@@ -540,6 +539,9 @@ export class MobileNav extends Component {
             if (clockEl) clockEl.textContent = this._getFormattedTime();
         };
         eventBus.on('pref:timeFormat', this._boundHandlers.onTimeFormat);
+        eventBus.on('pref:timeSource', this._boundHandlers.onTimeFormat);
+        eventBus.on('pref:timeZoneOffset', this._boundHandlers.onTimeFormat);
+        eventBus.on('time:synced', this._boundHandlers.onTimeFormat);
 
         // Bottom navbar background customization listener
         this._boundHandlers.onNavColorChanged = () => {
@@ -568,18 +570,28 @@ export class MobileNav extends Component {
      */
     onDestroyed() {
         if (this._boundHandlers.onNavigate) eventBus.off('router:navigate', this._boundHandlers.onNavigate);
-        if (this._boundHandlers.onOrientationChange) eventBus.off('viewport:orientationChange', this._boundHandlers.onOrientationChange);
-        if (this._boundHandlers.onDisplayScale) eventBus.off('displayScale:changed', this._boundHandlers.onDisplayScale);
+        if (this._boundHandlers.onOrientationChange)
+            eventBus.off('viewport:orientationChange', this._boundHandlers.onOrientationChange);
+        if (this._boundHandlers.onDisplayScale)
+            eventBus.off('displayScale:changed', this._boundHandlers.onDisplayScale);
         if (this._boundHandlers.onKeyBack) eventBus.off('key:back', this._boundHandlers.onKeyBack);
         if (this._boundHandlers.onAuthChange) {
             eventBus.off('auth:login', this._boundHandlers.onAuthChange);
             eventBus.off('auth:logout', this._boundHandlers.onAuthChange);
             eventBus.off('auth:restored', this._boundHandlers.onAuthChange);
         }
-        if (this._boundHandlers.onSyncPlayEnabled) eventBus.off('syncplay:enabled', this._boundHandlers.onSyncPlayEnabled);
-        if (this._boundHandlers.onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._boundHandlers.onSyncPlayDisabled);
-        if (this._boundHandlers.onSeerrResolved) eventBus.off('seerr:statusResolved', this._boundHandlers.onSeerrResolved);
-        if (this._boundHandlers.onTimeFormat) eventBus.off('pref:timeFormat', this._boundHandlers.onTimeFormat);
+        if (this._boundHandlers.onSyncPlayEnabled)
+            eventBus.off('syncplay:enabled', this._boundHandlers.onSyncPlayEnabled);
+        if (this._boundHandlers.onSyncPlayDisabled)
+            eventBus.off('syncplay:disabled', this._boundHandlers.onSyncPlayDisabled);
+        if (this._boundHandlers.onSeerrResolved)
+            eventBus.off('seerr:statusResolved', this._boundHandlers.onSeerrResolved);
+        if (this._boundHandlers.onTimeFormat) {
+            eventBus.off('pref:timeFormat', this._boundHandlers.onTimeFormat);
+            eventBus.off('pref:timeSource', this._boundHandlers.onTimeFormat);
+            eventBus.off('pref:timeZoneOffset', this._boundHandlers.onTimeFormat);
+            eventBus.off('time:synced', this._boundHandlers.onTimeFormat);
+        }
         if (this._boundHandlers.onNavColorChanged) {
             eventBus.off('pref:bottomNavBarColor', this._boundHandlers.onNavColorChanged);
             eventBus.off('pref:collapsedSidebarColor', this._boundHandlers.onNavColorChanged);
@@ -612,9 +624,7 @@ export class MobileNav extends Component {
         if (!navbar) return;
 
         const colorPref =
-            storage.getItem('pref:bottomNavBarColor') ||
-            storage.getItem('pref:collapsedSidebarColor') ||
-            'theme';
+            storage.getItem('pref:bottomNavBarColor') || storage.getItem('pref:collapsedSidebarColor') || 'theme';
 
         navbar.classList.toggle('bg-theme', colorPref === 'theme');
         navbar.classList.toggle('bg-black', colorPref === 'black');
@@ -730,7 +740,10 @@ export class MobileNav extends Component {
             let isActive = false;
 
             if (item.id === 'mobile-nav-home') {
-                isActive = (path === '/home' || path === '/' || path === '') && !this._moreDialogOpen && !this._librariesDialogOpen;
+                isActive =
+                    (path === '/home' || path === '/' || path === '') &&
+                    !this._moreDialogOpen &&
+                    !this._librariesDialogOpen;
             } else if (item.id === 'mobile-nav-libraries') {
                 isActive = path.startsWith('/library/') || this._librariesDialogOpen;
             } else if (item.id === 'mobile-nav-more') {
@@ -854,7 +867,10 @@ export class MobileNav extends Component {
                 lib.CollectionType === 'music' ||
                 lib.CollectionType === 'musicvideos';
 
-            if (!isMediaCol && (lib.CollectionType === 'games' || /\b(games?|roms?|emulators?)\b/i.test(libNameLower))) {
+            if (
+                !isMediaCol &&
+                (lib.CollectionType === 'games' || /\b(games?|roms?|emulators?)\b/i.test(libNameLower))
+            ) {
                 iconCol = 'games';
             }
 
@@ -986,9 +1002,10 @@ export class MobileNav extends Component {
      */
     _getFormattedTime() {
         try {
-            return i18n.formatLocalTime(new Date());
+            // Retrieve accurate local wall-clock time from TimeManager
+            return i18n.formatLocalTime(timeManager.now());
         } catch (_) {
-            const now = new Date();
+            const now = timeManager.now();
             return now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         }
     }

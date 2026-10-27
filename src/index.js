@@ -10,46 +10,15 @@
 import { app } from './core/App.js';
 import { logger } from './utils/Logger.js';
 import { PlayerSettings } from './utils/PlayerSettings.js';
+// Centralized platform identification
+import { platformInfo } from './utils/PlatformInfo.js';
 
 const log = logger.create('Bootstrap');
 
-// Import styles
-import './styles/base.css';
-import './styles/fonts.css';
-import './styles/layout.css';
-import './styles/components.css';
-import './styles/library.css';
-import './styles/sidebar.css';
-import './styles/login.css';
-import './styles/home.css';
-import './styles/details.css';
-import './styles/search.css';
-import './styles/discover.css';
-import './styles/player-osd.css';
-import './styles/upnext.css';
-import './styles/player-modals.css'; /* Chapters & Queue modal panels */
-import './styles/syncplay-menu.css'; /* SyncPlay group-selection overlay */
-import './styles/admin-modals.css'; /* Admin Identify & Image Editor modals */
-import './styles/settings.css';
-import './styles/lock-overlay.css';
-import './styles/season.css';
-import './styles/offline.css';
-import './styles/profiles.css'; /* "Who's Watching" profile switcher */
-import './styles/pin-dialog.css'; /* Per-profile PIN entry keypad */
-import './styles/screensaver.css';
-import './styles/hero-carousel.css';
-import './styles/livetv.css';
-import './styles/slideshow.css'; // Full-screen photo viewer
-import './styles/rtl.css'; // Directional overrides
-import './themes/index.js'; // All shared themes
-import './styles/modern/core.css';
-import './styles/modern/server.css';
-import './styles/modern/manual.css';
-import './styles/modern/users.css';
-import './styles/modern/home.css';
-import './styles/modern/sidebar.css';
-import './styles/android-mobile.css'; // Mobile touch & scaled viewport overrides
-import './styles/mobile-nav.css'; // Mobile portrait navigation bar & top bar
+// Import consolidated stylesheet bundle
+// Inlines all layout, component, and theme styles into a single module at build time
+// Prevents repeated style-loader DOM insertions and reduces startup CSSOM parsing time
+import './styles/bundle.css';
 
 /**
  * Bootstrap the application
@@ -100,7 +69,13 @@ async function bootstrap() {
                 } catch (e) {
                     log.error('Exception launching Tizen service: ' + e.message);
                 }
-            } else if (window.webOS && window.webOS.service) {
+            } else if (
+                platformInfo.isWebOS &&
+                typeof window.PalmServiceBridge !== 'undefined' &&
+                window.webOS &&
+                window.webOS.service
+            ) {
+                // Wake up webOS background service via Luna bus strictly when running on LG webOS hardware
                 window.webOS.service.request('luna://org.litefin.app.service', {
                     method: 'discover',
                     parameters: { subscribe: false },

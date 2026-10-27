@@ -13,10 +13,13 @@
  *     guaranteeing zero touch lag and maintaining native compositor frame rates.
  *
  * Responsibilities Managed Here:
- *   1. settleToCardCenter()  — After compositor fling inertia completes, eases
+ *   1. settleToCardCenter()  — After compositor fling inertia completes, glides
  *      the row smoothly to align with the nearest card center according to
  *      ScrollController's geometric specs, allowing TV D-pad navigation to resume
- *      instantly from that precise card.
+ *      instantly from that precise card. The glide honors the opt-in
+ *      pref:scrollPhysics engine setting (spring / chase / rail / fling via
+ *      the shared SpringPhysics integrators), falling back to the classic
+ *      easeOutQuad settle when physics is disabled.
  *   2. Click suppression     — Prevents accidental selection/activation of cards
  *      upon lifting the finger after a horizontal pan or fling gesture.
  *   3. Virtual window sync   — Keeps VirtualCardRow's dynamic DOM card window
@@ -28,6 +31,23 @@
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
+import {
+    createSpring,
+    springStep,
+    chaseStep,
+    railStep,
+    flingStep,
+    normalizeScrollPhysics,
+    SPRING_SUBSTEP_MS,
+    SPRING_SETTLE_DISTANCE_PX,
+    SPRING_SETTLE_VELOCITY_PX_MS,
+    SPRING_MAX_DURATION_MS,
+    CHASE_TAU_FACTOR,
+    RAIL_DECEL_ZONE_FRACTION,
+    FLING_VELOCITY_MULTIPLIER,
+    PHYSICS_SETTLE_DISTANCE_PX
+} from '../ui/SpringPhysics.js';
 
 const log = logger.create('TouchHorizontalScroller');
 
@@ -426,13 +446,129 @@ export class TouchHorizontalScroller {
     }
 
     /**
-     * Executes easeOutQuad animation to glide smoothly onto card center geometry.
+     * Executes the card-center glide. Honors the opt-in scroll physics
+     * engines (pref:scrollPhysics) through the shared SpringPhysics
+     * integrators; the classic easeOutQuad curve remains the default path.
+     *
+     * Engine state lives in the `_settleAnims` map keyed by the row element,
+     * so `_handleDpad`, `_cancelSettle` and `destroy` keep working unchanged
+     * (they only touch `state.raf` / `state.target`).
      * @private
      */
     _animateSettle(rowItems, row, from, to, isRtl) {
         this._cancelSettle(rowItems);
-        const duration = Math.min(MAX_SETTLE_MS, Math.max(120, Math.abs(to - from) * 0.5));
-        const startTime = performance.now();
+        const engine = this._getEngine();
+        const distance = Math.abs(to - from);
+        const duration = Math.min(MAX_SETTLE_MS, Math.max(120, distance * 0.5));
+
+        // Shared position writer: drives the native scrollLeft AND keeps
+        // VirtualCardRow's virtual window synchronized mid-animation.
+        const write = (value) => {
+            this._writeScroll(rowItems, value, isRtl);
+            if (row) {
+                row.syncScrollToPosition(value);
+            }
+        };
+
+        if (engine === 'easing') {
+            // ----------------------------------------------------------------
+            // Classic path (default): time-based easeOutQuad, unchanged.
+            // ----------------------------------------------------------------
+            const startTime = performance.now();
+
+            const tick = (now) => {
+                // A new touch gesture cancels running settle animation
+                if (this._activePointerId !== null) {
+                    this._cancelSettle(rowItems);
+                    return;
+                }
+
+                const progress = Math.min((now - startTime) / duration, 1);
+                // Ease out quad equation
+                const eased = progress * (2 - progress);
+                const value = from + (to - from) * eased;
+
+                write(value);
+
+                if (progress < 1) {
+                    const state = this._settleAnims.get(rowItems);
+                    if (state) {
+                        state.raf = requestAnimationFrame(tick);
+                    }
+                } else {
+                    this._finalizeSettle(rowItems, row, to);
+                }
+            };
+
+            this._settleAnims.set(rowItems, { raf: requestAnimationFrame(tick), target: to });
+            return;
+        }
+
+        // ====================================================================
+        // SCROLL PHYSICS ENGINES (OPT-IN)
+        // ====================================================================
+        // Velocity-driven integrators from SpringPhysics, identical to the
+        // ones ScrollController drives: spring (critically damped Apple TV
+        // glide), chase (exponential follower), rail (constant velocity with
+        // linear decel tail) and fling (momentum sweep). All are
+        // frame-rate normalized, so low-fps Android panels get the same
+        // trajectory shape. Substeps: 8ms for the spring's second-order
+        // integrator, 16ms for the follower engines.
+        // ====================================================================
+        const state = {
+            engine,
+            physics: true,
+            target: to,
+            x: from,
+            v: 0,
+            elapsed: 0,
+            lastFrameTime: null,
+            raf: 0,
+            write
+        };
+
+        if (engine === 'chase') {
+            state.tau = duration / CHASE_TAU_FACTOR;
+        } else if (engine === 'rail') {
+            // Constant slope matched to the classic curve's departure speed
+            // (2·D/T), with a linear deceleration tail.
+            state.speed = (2 * distance) / duration;
+            state.decelZone = RAIL_DECEL_ZONE_FRACTION * distance;
+        } else if (engine === 'fling') {
+            state.tau = duration / CHASE_TAU_FACTOR;
+            state.vCap = Math.max((FLING_VELOCITY_MULTIPLIER * (2 * distance)) / duration, 0.3);
+        } else {
+            // Spring: derive ω/ζ from the duration budget and launch with the
+            // same initial impulse the classic curve departs with (v0 = 2·D/T).
+            const { omega, zeta, v0 } = createSpring(to - from, duration);
+            state.omega = omega;
+            state.zeta = zeta;
+            state.v = v0;
+        }
+
+        const advance = (h) => {
+            switch (engine) {
+                case 'chase':
+                    return chaseStep(state.x, state.target, state.tau, h);
+                case 'rail':
+                    return railStep(state.x, state.target, state.speed, state.decelZone, h);
+                case 'fling':
+                    return flingStep(state.x, state.v, state.target, state.tau, state.vCap, h);
+                default:
+                    return springStep(state.x, state.v, state.target, state.omega, state.zeta, h);
+            }
+        };
+
+        const settled = () => {
+            const dx = Math.abs(state.target - state.x);
+            if (engine === 'spring') {
+                return dx < SPRING_SETTLE_DISTANCE_PX && Math.abs(state.v) < SPRING_SETTLE_VELOCITY_PX_MS;
+            }
+            if (engine === 'fling') {
+                return dx < PHYSICS_SETTLE_DISTANCE_PX && Math.abs(state.v) < SPRING_SETTLE_VELOCITY_PX_MS;
+            }
+            return dx < PHYSICS_SETTLE_DISTANCE_PX;
+        };
 
         const tick = (now) => {
             // A new touch gesture cancels running settle animation
@@ -441,27 +577,44 @@ export class TouchHorizontalScroller {
                 return;
             }
 
-            const progress = Math.min((now - startTime) / duration, 1);
-            // Ease out quad equation
-            const eased = progress * (2 - progress);
-            const value = from + (to - from) * eased;
-
-            this._writeScroll(rowItems, value, isRtl);
-            if (row) {
-                row.syncScrollToPosition(value);
+            // Identity guard: only the state currently registered for this
+            // row may drive it (protects against stale frames after a swap).
+            if (this._settleAnims.get(rowItems) !== state) {
+                return;
             }
 
-            if (progress < 1) {
-                const state = this._settleAnims.get(rowItems);
-                if (state) {
-                    state.raf = requestAnimationFrame(tick);
-                }
-            } else {
-                this._finalizeSettle(rowItems, row, to);
+            if (state.lastFrameTime === null) {
+                state.lastFrameTime = now;
             }
+            let dt = Math.min(now - state.lastFrameTime, 64);
+            state.lastFrameTime = now;
+            state.elapsed += dt;
+
+            while (dt > 0) {
+                const h = Math.min(dt, engine === 'spring' ? SPRING_SUBSTEP_MS : 16);
+                const [nx, nv] = advance(h);
+                state.x = nx;
+                state.v = nv;
+                dt -= h;
+            }
+
+            write(state.x);
+
+            const timedOut = state.elapsed >= SPRING_MAX_DURATION_MS;
+            if (settled() || timedOut) {
+                // Snap exactly onto the centering target, then finalize
+                // (endTouchScroll + scroll:finished) — identical semantics
+                // to the classic path.
+                write(state.target);
+                this._finalizeSettle(rowItems, row, state.target);
+                return;
+            }
+
+            state.raf = requestAnimationFrame(tick);
         };
 
-        this._settleAnims.set(rowItems, { raf: requestAnimationFrame(tick), target: to });
+        state.raf = requestAnimationFrame(tick);
+        this._settleAnims.set(rowItems, state);
     }
 
     /**
@@ -539,6 +692,18 @@ export class TouchHorizontalScroller {
      * Helpers & Coordinate Normalization
      * ========================================================================
      */
+
+    /**
+     * Resolves the scroll physics engine from the shared pref:scrollPhysics
+     * setting (Performance tab). Uses the SpringPhysics normalizer so the
+     * valid set and fallback behavior match ScrollController exactly, without
+     * importing the ScrollController singleton (avoids cross-module coupling).
+     * @returns {'easing'|'spring'|'chase'|'rail'|'fling'}
+     * @private
+     */
+    _getEngine() {
+        return normalizeScrollPhysics(storage.getItem('pref:scrollPhysics'));
+    }
 
     /**
      * Reads current horizontal scroll position normalized to video space.

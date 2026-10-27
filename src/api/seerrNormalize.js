@@ -12,25 +12,6 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w300';
 const TMDB_POSTER_DETAIL_BASE = 'https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
 
-function extractCrewByJob(rawCrew, jobMatches) {
-    if (!Array.isArray(rawCrew)) return [];
-    const names = [];
-    const seen = new Set();
-    for (const member of rawCrew) {
-        const job = (member.job || member.known_for_department || '').toLowerCase();
-        const name = typeof member === 'string' ? member : (member && member.name);
-        if (!name) continue;
-        if (jobMatches.some((match) => job.includes(match))) {
-            const key = name.trim().toLowerCase();
-            if (!seen.has(key)) {
-                seen.add(key);
-                names.push(name.trim());
-            }
-        }
-    }
-    return names;
-}
-
 /**
  * Jellyseerr MediaStatus values. 0 does not exist server-side — it is our
  * value for "never requested", when the result carries no mediaInfo.
@@ -158,10 +139,10 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
     const isTv =
         !isPerson &&
         (result.mediaType === 'tv' ||
-        (fallbackMediaType && fallbackMediaType === 'tv') ||
-        (!result.mediaType && (!!result.firstAirDate || !!result.seasons || !!result.numberOfSeasons)));
+            (fallbackMediaType && fallbackMediaType === 'tv') ||
+            (!result.mediaType && (!!result.firstAirDate || !!result.seasons || !!result.numberOfSeasons)));
 
-    const mediaType = isPerson ? 'person' : (isTv ? 'tv' : 'movie');
+    const mediaType = isPerson ? 'person' : isTv ? 'tv' : 'movie';
 
     return {
         // Cannot collide with a Jellyfin GUID, and doubles as the CardRenderer
@@ -173,16 +154,20 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             const main = result.title || result.name || '';
             return orig !== main ? orig : '';
         })(),
-        Type: isPerson ? 'Person' : (isTv ? 'Series' : 'Movie'),
+        Type: isPerson ? 'Person' : isTv ? 'Series' : 'Movie',
         ProductionYear: extractYear(isTv ? result.firstAirDate : result.releaseDate),
         Overview: result.overview || '',
         // Read by CardRenderer to bypass Jellyfin URL building
         _imageUrl: result.posterPath
             ? `${TMDB_POSTER_BASE}${result.posterPath}`
-            : (result.profilePath ? `${TMDB_POSTER_BASE}${result.profilePath}` : ''),
+            : result.profilePath
+              ? `${TMDB_POSTER_BASE}${result.profilePath}`
+              : '',
         _detailImageUrl: result.posterPath
             ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}`
-            : (result.profilePath ? `${TMDB_POSTER_DETAIL_BASE}${result.profilePath}` : ''),
+            : result.profilePath
+              ? `${TMDB_POSTER_DETAIL_BASE}${result.profilePath}`
+              : '',
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
         WatchProviders: Array.isArray(result.watchProviders) ? result.watchProviders : [],
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
@@ -193,7 +178,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         _requestId: (() => {
             const requests = (result.mediaInfo && result.mediaInfo.requests) || result.requests || [];
             const firstReq = Array.isArray(requests) ? requests[0] : null;
-            return firstReq ? (firstReq.id || firstReq.requestId) : null;
+            return firstReq ? firstReq.id || firstReq.requestId : null;
         })(),
         _tmdbId: result.id,
         _mediaType: mediaType,
@@ -223,9 +208,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
 
             // Check contentRatings (TV shows in Overseerr / TMDB)
             const rawCr = result.contentRatings || result.content_ratings;
-            const crList = Array.isArray(rawCr)
-                ? rawCr
-                : (rawCr && Array.isArray(rawCr.results) ? rawCr.results : []);
+            const crList = Array.isArray(rawCr) ? rawCr : rawCr && Array.isArray(rawCr.results) ? rawCr.results : [];
             if (crList.length > 0) {
                 const usEntry = crList.find((r) => r && (r.iso_3166_1 === 'US' || r.iso3166_1 === 'US'));
                 if (usEntry) {
@@ -243,7 +226,9 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             const rawRel = result.releases || result.release_dates;
             const relList = Array.isArray(rawRel)
                 ? rawRel
-                : (rawRel && Array.isArray(rawRel.results) ? rawRel.results : []);
+                : rawRel && Array.isArray(rawRel.results)
+                  ? rawRel.results
+                  : [];
             if (relList.length > 0) {
                 const usEntry = relList.find((r) => r && (r.iso_3166_1 === 'US' || r.iso3166_1 === 'US'));
                 if (usEntry) {
@@ -271,10 +256,22 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         })(),
         CommunityRating: typeof result.voteAverage === 'number' ? result.voteAverage : 0,
         Genres: Array.isArray(result.genres)
-            ? result.genres.map((g) => (typeof g === 'object' && g ? { Id: g.id || g.Id || '', Name: g.name || g.Name || '' } : { Id: '', Name: String(g) })).filter((g) => g && Boolean(g.Name))
+            ? result.genres
+                  .map((g) =>
+                      typeof g === 'object' && g
+                          ? { Id: g.id || g.Id || '', Name: g.name || g.Name || '' }
+                          : { Id: '', Name: String(g) }
+                  )
+                  .filter((g) => g && Boolean(g.Name))
             : [],
         Studios: Array.isArray(result.productionCompanies)
-            ? result.productionCompanies.map((c) => (typeof c === 'object' && c ? { Id: c.id || c.Id || '', Name: c.name || c.Name || '' } : { Id: '', Name: String(c) })).filter((c) => c && Boolean(c.Name))
+            ? result.productionCompanies
+                  .map((c) =>
+                      typeof c === 'object' && c
+                          ? { Id: c.id || c.Id || '', Name: c.name || c.Name || '' }
+                          : { Id: '', Name: String(c) }
+                  )
+                  .filter((c) => c && Boolean(c.Name))
             : [],
         ProductionTeam: (() => {
             // Combine creators (for TV series) and crew members into a unified candidate pool
@@ -285,15 +282,15 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
             }));
             const rawCrew = [...rawCreators, ...((result.credits && result.credits.crew) || result.crew || [])];
             if (!Array.isArray(rawCrew) || rawCrew.length === 0) return [];
-            
+
             // Limit the maximum number of people per key production role
             const jobLimits = {
-                'creator': 2,
-                'director': 2,
-                'writer': 2,
-                'screenplay': 2,
-                'editor': 1,
-                'producer': 2,
+                creator: 2,
+                director: 2,
+                writer: 2,
+                screenplay: 2,
+                editor: 1,
+                producer: 2,
                 'co-producer': 1
             };
             const counts = {};
@@ -302,9 +299,9 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
 
             for (const member of rawCrew) {
                 const job = (member.job || '').trim().toLowerCase();
-                const name = typeof member === 'string' ? member : (member && (member.name || member.Name));
+                const name = typeof member === 'string' ? member : member && (member.name || member.Name);
                 if (!name) continue;
-                
+
                 const limit = jobLimits[job];
                 if (limit) {
                     counts[job] = counts[job] || 0;
@@ -338,18 +335,26 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         })(),
         Tags: (() => {
             const rawKw = result.keywords;
-            const kwList = Array.isArray(rawKw) ? rawKw : (rawKw && Array.isArray(rawKw.results) ? rawKw.results : (rawKw && Array.isArray(rawKw.keywords) ? rawKw.keywords : []));
-            return kwList.map((k) => {
-                if (!k) return null;
-                if (typeof k === 'object') {
-                    return { Id: k.id || k.Id || '', Name: k.name || k.Name || '' };
-                }
-                return { Id: '', Name: String(k) };
-            }).filter((k) => k && Boolean(k.Name));
+            const kwList = Array.isArray(rawKw)
+                ? rawKw
+                : rawKw && Array.isArray(rawKw.results)
+                  ? rawKw.results
+                  : rawKw && Array.isArray(rawKw.keywords)
+                    ? rawKw.keywords
+                    : [];
+            return kwList
+                .map((k) => {
+                    if (!k) return null;
+                    if (typeof k === 'object') {
+                        return { Id: k.id || k.Id || '', Name: k.name || k.Name || '' };
+                    }
+                    return { Id: '', Name: String(k) };
+                })
+                .filter((k) => k && Boolean(k.Name));
         })(),
         RemoteTrailers: (() => {
             const raw = result.relatedVideos || result.videos || [];
-            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.results) ? raw.results : [];
             return list
                 .filter((v) => {
                     const site = (v && v.site ? String(v.site) : '').toLowerCase();
@@ -358,7 +363,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 })
                 .map((v) => {
                     const key = v.key || v.url || '';
-                    const url = key.startsWith('http') ? key : (key ? `https://www.youtube.com/watch?v=${key}` : '');
+                    const url = key.startsWith('http') ? key : key ? `https://www.youtube.com/watch?v=${key}` : '';
                     return {
                         Name: v.name || `${result.title || result.name || 'Media'} Trailer`,
                         Url: url
@@ -367,15 +372,19 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 .filter((v) => Boolean(v.Url));
         })(),
         Tagline: result.tagline || '',
-        collection: result.collection || (result.belongsToCollection ? { id: result.belongsToCollection.id, name: result.belongsToCollection.name } : null),
+        collection:
+            result.collection ||
+            (result.belongsToCollection
+                ? { id: result.belongsToCollection.id, name: result.belongsToCollection.name }
+                : null),
         Similar: (() => {
             const raw = result.similar;
-            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.results) ? raw.results : [];
             return list.map((item) => normalizeSeerrItem(item, mediaType)).filter(Boolean);
         })(),
         Recommendations: (() => {
             const raw = result.recommendations;
-            const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.results) ? raw.results : []);
+            const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.results) ? raw.results : [];
             return list.map((item) => normalizeSeerrItem(item, mediaType)).filter(Boolean);
         })()
     };

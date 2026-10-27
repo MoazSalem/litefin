@@ -291,19 +291,20 @@ class SearchPage extends Page {
                     e.preventDefault();
                     // Move focus to first row's items - use RAF to ensure DOM is ready
                     requestAnimationFrame(() => {
-                        const sectionOrder = this._provider === 'seerr'
-                            ? ['seerr']
-                            : [
-                                'movies',
-                                'series',
-                                'episodes',
-                                'people',
-                                'artists',
-                                'albums',
-                                'songs',
-                                'collections',
-                                'channels'
-                            ];
+                        const sectionOrder =
+                            this._provider === 'seerr'
+                                ? ['seerr']
+                                : [
+                                      'movies',
+                                      'series',
+                                      'episodes',
+                                      'people',
+                                      'artists',
+                                      'albums',
+                                      'songs',
+                                      'collections',
+                                      'channels'
+                                  ];
                         const firstType = sectionOrder.find((type) => this._grids[type]);
                         if (firstType) {
                             const sectionId = `${this._grids[firstType].id}-items`;
@@ -424,9 +425,8 @@ class SearchPage extends Page {
             const noResultsEl = this.$('#no-results');
             const noResultsText = this.$('#no-results-text');
             if (noResultsEl && noResultsText) {
-                noResultsText.innerHTML = err.message === 'SeerrUnauthorized'
-                    ? i18n.t('SeerrSessionExpired')
-                    : i18n.t('SeerrLoadFailed');
+                noResultsText.innerHTML =
+                    err.message === 'SeerrUnauthorized' ? i18n.t('SeerrSessionExpired') : i18n.t('SeerrLoadFailed');
                 noResultsEl.classList.remove('hidden');
             }
         }
@@ -479,10 +479,7 @@ class SearchPage extends Page {
             ? (type) => api.search(this._query, { IncludeItemTypes: type, Limit: limit })
             : (type) => api.searchHints(this._query, { IncludeItemTypes: type, Limit: limit });
 
-        const requests = [
-            ...searchTypes.map((t) => searchFn(t.type)),
-            api.searchPeople(this._query, { Limit: limit })
-        ];
+        const requests = [...searchTypes.map((t) => searchFn(t.type)), api.searchPeople(this._query, { Limit: limit })];
 
         const responses = await Promise.all(requests);
 
@@ -700,19 +697,10 @@ class SearchPage extends Page {
     }
 
     _registerSearchFocus() {
-        const sectionOrder = this._provider === 'seerr'
-            ? ['seerr']
-            : [
-                'movies',
-                'series',
-                'episodes',
-                'people',
-                'artists',
-                'albums',
-                'songs',
-                'collections',
-                'channels'
-            ];
+        const sectionOrder =
+            this._provider === 'seerr'
+                ? ['seerr']
+                : ['movies', 'series', 'episodes', 'people', 'artists', 'albums', 'songs', 'collections', 'channels'];
         const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
         // Register Header Focus Section (includes input and provider toggle buttons)

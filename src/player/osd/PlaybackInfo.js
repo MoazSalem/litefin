@@ -105,7 +105,12 @@ export default class PlaybackInfo extends BaseMenu {
         if (!contentEl) return;
 
         const mediaSource = this.player.getCurrentMediaSource();
-        const playMethod = mediaSource ? MediaHelper.getPlayMethod(mediaSource) : 'DirectPlay';
+        // The player's resolved method: MediaHelper alone reads a forced remux,
+        // whose URL lists VideoCodecNotSupported, as a transcode
+        const resolvedPlayMethod = typeof this.player.getCurrentPlayMethod === 'function'
+            ? this.player.getCurrentPlayMethod()
+            : null;
+        const playMethod = mediaSource ? (resolvedPlayMethod || MediaHelper.getPlayMethod(mediaSource)) : 'DirectPlay';
         
         /*
          * -----------------------------------------------------------------
@@ -238,14 +243,19 @@ export default class PlaybackInfo extends BaseMenu {
         ]);
 
         if (playMethod !== 'DirectPlay') {
-            const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
+            const transcodeStatus = MediaHelper.getTranscodeStatus(mediaSource);
+            // A remux copies both streams, a direct stream the video
+            const isVideoDirect = playMethod === 'Remux' || playMethod === 'DirectStream' || transcodeStatus.isVideoDirect;
+            const isAudioDirect = playMethod === 'Remux' || transcodeStatus.isAudioDirect;
 
             // Parse output codec and bitrate from the TranscodingUrl query string.
             // The server always includes these params, so we use them to show what
             // the stream is actually being transcoded TO (e.g. DTS → AAC @ 256 kbps).
             const transUrl = mediaSource?.TranscodingUrl || '';
             const outVideoCodec  = (transUrl.match(/[?&]VideoCodec=([^&]+)/) || [])[1]?.split(',')[0]?.toUpperCase();
-            const outAudioCodec  = (transUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1]?.split(',')[0]?.toUpperCase();
+            // The server encodes the audio to one of the listed codecs, not always the
+            // first (AC-3 for AudioCodec=eac3,ac3 from DTS:X 7.1), so all are named
+            const outAudioCodec  = (transUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1]?.split(',').join('/').toUpperCase();
             const outAudioBpsRaw = parseFloat((transUrl.match(/[?&]AudioBitrate=([^&]+)/) || [])[1]);
             const outAudioBps    = outAudioBpsRaw ? (outAudioBpsRaw / 1000).toFixed(0) + ' kbps' : null;
 
@@ -267,12 +277,13 @@ export default class PlaybackInfo extends BaseMenu {
 
             // Parse and display the exact transcode reasons from the server
             const reasonsMatch = transUrl.match(/[?&]TranscodeReasons=([^&]+)/);
-            const reasonsDisplay = reasonsMatch
-                ? decodeURIComponent(reasonsMatch[1])
-                    .split(',')
-                    .map(r => r.trim())
-                    .join(', ')
-                : null;
+            const reasons = reasonsMatch
+                ? decodeURIComponent(reasonsMatch[1]).split(',').map(r => r.trim()).filter(Boolean)
+                : [];
+            // A forced remux asks for a video copy, which current Jellyfin drops from
+            // an HLS request and reports as VideoCodecNotSupported while it copies the video
+            const shownReasons = isVideoDirect ? reasons.filter(r => r !== 'VideoCodecNotSupported') : reasons;
+            const reasonsDisplay = shownReasons.length ? shownReasons.join(', ') : null;
 
             const transFields = [
                 { label: i18n.t('LabelVideoCodec'), value: vCodecLabel },

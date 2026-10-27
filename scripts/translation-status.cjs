@@ -119,17 +119,20 @@ function getStatus() {
             return;
         }
 
+        // Filter out languages that no longer exist in the locales folder
+        languages = languages.filter((l) => results.some((r) => r.lang === l.value));
+
         // Update completeness from results
-        languages.forEach(langObj => {
-            const match = results.find(r => r.lang === langObj.value);
+        languages.forEach((langObj) => {
+            const match = results.find((r) => r.lang === langObj.value);
             if (match) {
                 langObj.completeness = match.percent;
             }
         });
 
         // Add any missing languages from the locales folder that aren't in languages.js yet
-        results.forEach(res => {
-            if (!languages.find(l => l.value === res.lang)) {
+        results.forEach((res) => {
+            if (!languages.find((l) => l.value === res.lang)) {
                 languages.push({
                     value: res.lang,
                     label: res.lang.toUpperCase(), // Fallback label

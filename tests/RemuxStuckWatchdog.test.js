@@ -42,8 +42,9 @@ test('JellyfinPlayer: Remux stuck watchdog implementation and structure', () => 
 
     // 3. Verify resumeseekfailed arms the watchdog after remux restart
     assert.ok(
-        jellyfinSource.includes("playbackMode: 'remux'"),
-        "JellyfinPlayer must set playbackMode to 'remux' on seek failure"
+        jellyfinSource.includes("const restartMode = isAlreadyRemux || isTranscoding ? 'transcode' : 'remux';") &&
+            jellyfinSource.includes('playbackMode: restartMode'),
+        "JellyfinPlayer must restart a failed direct-play resume with playbackMode 'remux'"
     );
     assert.ok(
         jellyfinSource.includes('this._armRemuxStuckWatchdog(effectiveTicks);'),
@@ -193,7 +194,7 @@ test('HtmlVideoPlayer & JellyfinPlayer: HLS resume startup failure and transcode
         'JellyfinPlayer must determine if session is already running in DirectStream/Remux mode'
     );
     assert.ok(
-        jellyfinSource.includes("restartOptions.playbackMode = 'transcode';"),
+        jellyfinSource.includes("const restartMode = isAlreadyRemux || isTranscoding ? 'transcode' : 'remux';"),
         'JellyfinPlayer must escalate directly to transcode when already in remux mode'
     );
 
@@ -205,6 +206,13 @@ test('HtmlVideoPlayer & JellyfinPlayer: HLS resume startup failure and transcode
     assert.ok(
         jellyfinSource.includes('this._armRemuxStuckWatchdog(effectiveStartPositionTicks);'),
         'JellyfinPlayer must arm remux watchdog when resuming in DirectStream/Remux mode'
+    );
+
+    // 4. Verify _handleRemuxWatchdogTimeout respects autoTranscodeOnError
+    const handleTimeoutBody = jellyfinSource.slice(jellyfinSource.indexOf('_handleRemuxWatchdogTimeout()'));
+    assert.ok(
+        handleTimeoutBody.includes("PlayerSettings.get('autoTranscodeOnError') !== false"),
+        '_handleRemuxWatchdogTimeout must check autoTranscodeOnError before transcode restart'
     );
 });
 

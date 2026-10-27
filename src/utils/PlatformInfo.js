@@ -107,7 +107,8 @@ class PlatformInfo {
         // ---------------------------------------------------------------------
         // Check hardware namespaces (window.tizen, window.webapis) or Tizen UA token
         if (
-            (typeof window !== 'undefined' && (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined')) ||
+            (typeof window !== 'undefined' &&
+                (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined')) ||
             (typeof navigator !== 'undefined' && /Tizen/i.test(navigator.userAgent || ''))
         ) {
             return 'tizen';
@@ -138,8 +139,11 @@ class PlatformInfo {
         // ---------------------------------------------------------------------
         if (
             typeof window !== 'undefined' &&
-            (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__ ||
-             window.process?.versions?.electron || (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || '')))
+            (window.__TAURI__ ||
+                window.__TAURI_METADATA__ ||
+                window.__TAURI_INTERNALS__ ||
+                window.process?.versions?.electron ||
+                (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || '')))
         ) {
             return 'desktop';
         }
@@ -205,7 +209,8 @@ class PlatformInfo {
     get isTizen() {
         return (
             this._platform === 'tizen' ||
-            (typeof window !== 'undefined' && (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined')) ||
+            (typeof window !== 'undefined' &&
+                (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined')) ||
             (typeof navigator !== 'undefined' && /Tizen/i.test(navigator.userAgent || ''))
         );
     }
@@ -282,8 +287,13 @@ class PlatformInfo {
             }
             if (typeof navigator !== 'undefined' && navigator.userAgent) {
                 const ua = navigator.userAgent;
-                const hasTvToken = /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(ua);
-                const isNonMobileWithoutTouch = !/Mobile/i.test(ua) && (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
+                const hasTvToken =
+                    /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(
+                        ua
+                    );
+                const isNonMobileWithoutTouch =
+                    !/Mobile/i.test(ua) &&
+                    (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
                 return hasTvToken || isNonMobileWithoutTouch;
             }
         } catch (_) {}
@@ -402,7 +412,7 @@ class PlatformInfo {
 
     /**
      * Checks if the device runs an ancient Chromium build (pre-Chrome 32).
-     * This layout tier requires heavy fallback layouts, box-flex styling, 
+     * This layout tier requires heavy fallback layouts, box-flex styling,
      * and specific CSS overrides for WebOS 1.0 and Tizen 2.x platforms.
      * @returns {boolean} True if Chromium engine is < 32.
      */

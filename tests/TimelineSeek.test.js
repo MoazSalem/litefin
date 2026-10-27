@@ -381,6 +381,12 @@ for (const backend of ['WebOSPlayer', 'HtmlVideoPlayer']) {
                 _currentPlayOptions: { transcodingOffsetTicks: 20 * 10000000 },
                 onEvent() {},
                 getCurrentTime: () => time,
+                // WebOSPlayer session/resume helpers used by its seek()
+                _resumeGeneration: 0,
+                _cancelResume() {
+                    this._resumeGeneration++;
+                },
+                _timer: (fn, ms) => timerApi.setTimeout(fn, ms),
                 seek: loadSeekMethod(backend, 'seek(positionTicks) {', timerApi)
             };
             const player = {
@@ -742,6 +748,27 @@ test('OSDController: confirmed seek defers playback resumption until seeked even
 
     // Playback is now safely unpaused after the seeked target lands
     assert.equal(osd._seekPendingResume, false);
+    assert.equal(osd._player.isPaused(), false);
+});
+
+test('OSDController: a backend that holds post-seek play itself is resumed right after the seek', () => {
+    // webOS carries out a seek on a paused element only once playback starts: waiting for
+    // 'seeked' only added the 3.5 s timeout to every scrub in a native HLS remux (LG C4)
+    const { osd } = setup(true, false);
+    let isSeekingInHardware = false;
+    osd._player.on = () => {};
+    osd._player.seek = () => {
+        isSeekingInHardware = true;
+    };
+    Object.defineProperty(osd._player, 'isSeeking', { get: () => isSeekingInHardware });
+    osd._player.queuesPostSeekPlay = true;
+
+    osd.handleInput('right');
+    assert.equal(osd._player.isPaused(), true);
+    osd.handleInput('enter');
+
+    assert.equal(isSeekingInHardware, true);
+    assert.equal(osd._seekPendingResume, false, 'resume held for a seeked event webOS sends only after play');
     assert.equal(osd._player.isPaused(), false);
 });
 

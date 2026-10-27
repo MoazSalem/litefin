@@ -1,3 +1,4 @@
+/* eslint-disable no-var, no-empty */
 /**
  * ============================================================================
  * Early Boot Polyfills — DOM & ES2015 Foundation
@@ -15,7 +16,13 @@
         Element.prototype.closest = function (selector) {
             var el = this;
             while (el && el.nodeType === 1) {
-                if (el.matches ? el.matches(selector) : el.webkitMatchesSelector ? el.webkitMatchesSelector(selector) : false) {
+                if (
+                    el.matches
+                        ? el.matches(selector)
+                        : el.webkitMatchesSelector
+                          ? el.webkitMatchesSelector(selector)
+                          : false
+                ) {
                     return el;
                 }
                 el = el.parentElement || el.parentNode;
@@ -34,7 +41,7 @@
             function (selector) {
                 var matches = (this.document || this.ownerDocument).querySelectorAll(selector);
                 var i = matches.length;
-                while (--i >= 0 && matches.item(i) !== this) { }
+                while (--i >= 0 && matches.item(i) !== this) {}
                 return i > -1;
             };
     }
@@ -291,39 +298,63 @@
             // Wire Vertex Array Objects (VAO) via OES_vertex_array_object extension
             var vaoExt = gl.getExtension('OES_vertex_array_object');
             if (vaoExt) {
-                gl.createVertexArray = function () { return vaoExt.createVertexArrayOES(); };
-                gl.bindVertexArray = function (vao) { return vaoExt.bindVertexArrayOES(vao); };
-                gl.deleteVertexArray = function (vao) { return vaoExt.deleteVertexArrayOES(vao); };
-                gl.isVertexArray = function (vao) { return vaoExt.isVertexArrayOES(vao); };
+                gl.createVertexArray = function () {
+                    return vaoExt.createVertexArrayOES();
+                };
+                gl.bindVertexArray = function (vao) {
+                    return vaoExt.bindVertexArrayOES(vao);
+                };
+                gl.deleteVertexArray = function (vao) {
+                    return vaoExt.deleteVertexArrayOES(vao);
+                };
+                gl.isVertexArray = function (vao) {
+                    return vaoExt.isVertexArrayOES(vao);
+                };
             } else {
                 // Fallback no-op VAO emulation if extension is completely absent
-                gl.createVertexArray = function () { return { __fallbackVao: true }; };
+                gl.createVertexArray = function () {
+                    return { __fallbackVao: true };
+                };
                 gl.bindVertexArray = function () {};
                 gl.deleteVertexArray = function () {};
-                gl.isVertexArray = function (v) { return !!(v && v.__fallbackVao); };
+                gl.isVertexArray = function (v) {
+                    return !!(v && v.__fallbackVao);
+                };
             }
 
             // Provide color space properties expected by Chromium HDR pipelines
             if (!('drawingBufferColorSpace' in gl)) {
                 var _drawingColorSpace = 'srgb';
                 Object.defineProperty(gl, 'drawingBufferColorSpace', {
-                    get: function () { return _drawingColorSpace; },
-                    set: function (val) { _drawingColorSpace = val; },
+                    get: function () {
+                        return _drawingColorSpace;
+                    },
+                    set: function (val) {
+                        _drawingColorSpace = val;
+                    },
                     configurable: true
                 });
             }
             if (!('unpackColorSpace' in gl)) {
                 var _unpackColorSpace = 'srgb';
                 Object.defineProperty(gl, 'unpackColorSpace', {
-                    get: function () { return _unpackColorSpace; },
-                    set: function (val) { _unpackColorSpace = val; },
+                    get: function () {
+                        return _unpackColorSpace;
+                    },
+                    set: function (val) {
+                        _unpackColorSpace = val;
+                    },
                     configurable: true
                 });
             }
 
             // Expose WebGL 2 texture format constants
-            if (gl.RGBA16F === undefined) { gl.RGBA16F = 0x881A; }
-            if (gl.HALF_FLOAT === undefined) { gl.HALF_FLOAT = 0x140B; }
+            if (gl.RGBA16F === undefined) {
+                gl.RGBA16F = 0x881a;
+            }
+            if (gl.HALF_FLOAT === undefined) {
+                gl.HALF_FLOAT = 0x140b;
+            }
 
             // Intercept createShader to retain shader type
             var origCreateShader = gl.createShader;
@@ -359,12 +390,15 @@
                 var ctx = origGetContext.call(this, type, options);
                 if (!ctx && type === 'webgl2') {
                     // Fall back to WebGL 1 when WebGL 2 hardware support is missing
-                    ctx = origGetContext.call(this, 'webgl', options) ||
-                          origGetContext.call(this, 'experimental-webgl', options);
+                    ctx =
+                        origGetContext.call(this, 'webgl', options) ||
+                        origGetContext.call(this, 'experimental-webgl', options);
                     if (ctx) {
                         // Diagnostic log indicating WebGL2-to-WebGL1 bridge engagement
                         if (typeof console !== 'undefined' && console.warn) {
-                            console.warn('[EarlyPolyfills] getContext("webgl2") fallback active: bridging WebGL1 context with GLSL shader transpilation & VAO emulation');
+                            console.warn(
+                                '[EarlyPolyfills] getContext("webgl2") fallback active: bridging WebGL1 context with GLSL shader transpilation & VAO emulation'
+                            );
                         }
                         patchContextForWebGL2(ctx);
                     }
@@ -382,7 +416,10 @@
         }
 
         // Alias WebGL2RenderingContext constructor if missing
-        if (typeof window.WebGL2RenderingContext === 'undefined' && typeof window.WebGLRenderingContext !== 'undefined') {
+        if (
+            typeof window.WebGL2RenderingContext === 'undefined' &&
+            typeof window.WebGLRenderingContext !== 'undefined'
+        ) {
             window.WebGL2RenderingContext = window.WebGLRenderingContext;
         }
     })();

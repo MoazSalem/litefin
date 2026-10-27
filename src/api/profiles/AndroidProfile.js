@@ -31,9 +31,13 @@ let _cachedCapabilities = null;
  * Android MediaCodecList interface exposed on window.LitefinAndroid.
  * Accurately handles chipsets (like Amlogic S905X on Android 9) that
  * lack hardware AV1 decoders to prevent black-screen playback errors.
+ *
+ * For mobile phones and tablets lacking MPEG-2 or VC-1 decoders, ensures
+ * unsupported formats trigger server transcoding rather than silent direct play.
  */
 function detectHardwareVideoCodecs() {
     try {
+        // Query native Android interface for hardware-verified decoding capabilities
         if (typeof window !== 'undefined' && window.LitefinAndroid?.getSupportedVideoCodecs) {
             const raw = window.LitefinAndroid.getSupportedVideoCodecs();
             if (raw) {
@@ -43,17 +47,33 @@ function detectHardwareVideoCodecs() {
             }
         }
     } catch (e) {
+        // Log parse or bridge communication errors without interrupting playback initialization
         log.warn('Failed to parse hardware codecs from LitefinAndroid bridge:', e);
     }
 
-    // Default safe baseline: TV boxes running Android 9 / S905X do NOT have AV1 hardware decoders
+    // -------------------------------------------------------------------------
+    // Fallback Capabilities Resolution
+    // -------------------------------------------------------------------------
+    // Differentiate Android TV boxes (which standardly support MPEG-2) from phones
+    // and mobile devices that do not expose dedicated MPEG-2 or VC-1 decoders.
+    // -------------------------------------------------------------------------
+    const isTv =
+        (typeof window !== 'undefined' && typeof window.LitefinAndroid?.isTv === 'function' && !!window.LitefinAndroid.isTv()) ||
+        (typeof window !== 'undefined' && typeof window.AndroidBridge?.isTv === 'function' && !!window.AndroidBridge.isTv()) ||
+        (typeof navigator !== 'undefined' &&
+            navigator.userAgent &&
+            /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(navigator.userAgent)) ||
+        false;
+
+    // Return safe baseline ensuring modern codecs decode while legacy ones transcode
     return {
         h264: true,
         hevc: true,
         vp9: true,
         vp8: true,
         av1: false,
-        mpeg2video: true
+        mpeg2video: isTv,
+        vc1: false
     };
 }
 
@@ -126,15 +146,16 @@ export function getDeviceCapabilities() {
     if (_cachedCapabilities) return _cachedCapabilities;
 
     // Detect HDR display capabilities via media queries
-    const hdr10 = typeof window !== 'undefined' && window.matchMedia
-        ? window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches
-        : true; // Default true on modern Android TV displays
+    const hdr10 =
+        typeof window !== 'undefined' && window.matchMedia
+            ? window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches
+            : true; // Default true on modern Android TV displays
 
     const hlg = hdr10;
 
     // Detect actual viewport and screen resolutions
-    const screenWidth = typeof window !== 'undefined' ? (window.screen?.width || window.innerWidth || 1920) : 1920;
-    const screenHeight = typeof window !== 'undefined' ? (window.screen?.height || window.innerHeight || 1080) : 1080;
+    const screenWidth = typeof window !== 'undefined' ? window.screen?.width || window.innerWidth || 1920 : 1920;
+    const screenHeight = typeof window !== 'undefined' ? window.screen?.height || window.innerHeight || 1080 : 1080;
     const uhd8K = screenWidth >= 7680 || screenHeight >= 4320;
     const uhd = (screenWidth >= 3840 || screenHeight >= 2160) && !uhd8K;
 
@@ -162,7 +183,8 @@ export function getDeviceCapabilities() {
         av1: hwCodecs.av1 === true,
         vp9: hwCodecs.vp9 !== false,
         vp8: hwCodecs.vp8 !== false,
-        mpeg2video: hwCodecs.mpeg2video !== false,
+        mpeg2video: hwCodecs.mpeg2video === true,
+        vc1: hwCodecs.vc1 === true,
         mpegts: true,
         ac3: true,
         eac3: true,
@@ -219,9 +241,8 @@ export function buildJellyfinProfile(options = {}) {
     // If the active playback request or user preference specifies HTML5 backend,
     // delegate profile creation directly to WebProfile for Chromium WebView.
     // -------------------------------------------------------------------------
-    const isHtml5 = typeof options === 'object'
-        ? options?.backend === 'html5'
-        : (PlayerSettings.get('playerBackend') === 'html5');
+    const isHtml5 =
+        typeof options === 'object' ? options?.backend === 'html5' : PlayerSettings.get('playerBackend') === 'html5';
 
     if (isHtml5) {
         log.info('Delegating Android DeviceProfile creation to WebProfile (HTML5 backend active)');
@@ -239,6 +260,9 @@ export function buildJellyfinProfile(options = {}) {
     const enableHEVC = hwCodecs.hevc !== false;
     const enableVP9 = hwCodecs.vp9 !== false;
     const enableAV1 = hwCodecs.av1 === true;
+    const enableVP8 = hwCodecs.vp8 !== false;
+    const enableMpeg2 = hwCodecs.mpeg2video === true;
+    const enableVc1 = hwCodecs.vc1 === true;
 
     // Audio format passthrough settings
     const dtsSetting = PlayerSettings.get('enableDts');
@@ -252,17 +276,23 @@ export function buildJellyfinProfile(options = {}) {
 
     // Enforce numeric channel count for DTO serialization
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
-    const maxAudioChannelsNum = (userMaxChannels && userMaxChannels > 0) ? Number(userMaxChannels) : 8;
+    const maxAudioChannelsNum = userMaxChannels && userMaxChannels > 0 ? Number(userMaxChannels) : 8;
     const maxAudioChannelsStr = String(maxAudioChannelsNum);
 
     // -------------------------------------------------------------------------
     // Direct Play Video Codecs Suite
     // -------------------------------------------------------------------------
+    // Only advertise codecs verified on the local hardware decoder pipeline.
+    // Pushing unsupported codecs (like mpeg2video/vc1 on mobile) causes Jellyfin
+    // to stream raw unaltered streams, resulting in audio-only playback with black screens.
+    // -------------------------------------------------------------------------
     const videoCodecs = ['h264'];
     if (enableHEVC) videoCodecs.push('hevc', 'h265');
     if (enableVP9) videoCodecs.push('vp9');
     if (enableAV1) videoCodecs.push('av1');
-    videoCodecs.push('vp8', 'mpeg2video', 'vc1');
+    if (enableVP8) videoCodecs.push('vp8');
+    if (enableMpeg2) videoCodecs.push('mpeg2video');
+    if (enableVc1) videoCodecs.push('vc1');
 
     // -------------------------------------------------------------------------
     // Direct Play Audio Codecs Suite
@@ -282,9 +312,12 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     const directPlayProfiles = [];
 
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
-        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
-
+    if (
+        playbackMode !== 'transcode' &&
+        playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' &&
+        playbackMode !== 'transcodeAudio'
+    ) {
         // MKV, MP4, WebM, and MPEG-TS containers
         directPlayProfiles.push({
             Container: 'mkv,mp4,m4v,mov,webm,ts,mpegts,m2ts,avi,wmv,asf',
@@ -314,15 +347,20 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // Omitted in remux/transcode modes to ensure seekable segmented HLS delivery.
     // -------------------------------------------------------------------------
-    const directStreamProfiles = (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
-        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') ? [
-        {
-            Container: 'mp4',
-            Type: 'Video',
-            VideoCodec: videoCodecString,
-            AudioCodec: audioCodecString
-        }
-    ] : [];
+    const directStreamProfiles =
+        playbackMode !== 'transcode' &&
+        playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' &&
+        playbackMode !== 'transcodeAudio'
+            ? [
+                  {
+                      Container: 'mp4',
+                      Type: 'Video',
+                      VideoCodec: videoCodecString,
+                      AudioCodec: audioCodecString
+                  }
+              ]
+            : [];
 
     // -------------------------------------------------------------------------
     // Codec Profiles (Levels and Audio Channel Ceiling)
@@ -449,7 +487,11 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // Notice: Id is strictly omitted here to prevent server lookup validation errors.
     // -------------------------------------------------------------------------
-    const effectiveBitrate = manualBitrate || 120000000;
+    // A quality picked in the OSD, else the global limit (maxBitrateInternet), at most 120 Mbps
+    const effectiveBitrate = Math.min(
+        manualBitrate || PlayerSettings.get('maxBitrateInternet') || 120000000,
+        120000000
+    );
     const profile = {
         Name: `Litefin Android (Media3 ExoPlayer)${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: effectiveBitrate,

@@ -47,6 +47,7 @@ import { router } from '../core/Router.js';
 import { logger } from '../utils/Logger.js';
 import { pinManager } from '../utils/PinManager.js';
 import { storage } from '../utils/StorageService.js';
+import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
 
 const log = logger.create('SmartHubManager');
 
@@ -331,7 +332,10 @@ class SmartHubManager {
             // Parse configured Next Up max days filter from preferences, defaulting to 365
             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
-            const mergedParams = { limit: 10 };
+            // Ask the plugin for the same number of items as the merged home row so it
+            // selects the same candidates; the Smart Hub then shows the first 10 of them.
+            const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+            const mergedParams = { limit: Math.max(10, homeRowLimit) };
 
             // Compute cutoff timestamp if a positive days limit constraint is defined
             let cutoffIso = null;
@@ -345,8 +349,8 @@ class SmartHubManager {
             }
 
             // Query the custom endpoint provided by our Litefin plugin.
-            // When using the plugin, we fetch up to 10 pre-merged, deduplicated,
-            // and chronologically sorted items directly from the server.
+            // When using the plugin, we fetch the home row's number of pre-merged,
+            // deduplicated, and chronologically sorted items, and keep the first 10.
             try {
                 log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
                 const response = await api.getMergedRows(mergedParams);
@@ -365,23 +369,25 @@ class SmartHubManager {
                 log.warn('Litefin plugin endpoint failed or not installed. Falling back to client-side merge:', err);
             }
 
-            // ─── Phase 2: Fallback to client-side merging (5 and 5) ─────────────
+            // ─── Phase 2: Fallback to client-side merging (10 and 10) ───────────
             // If the server-side plugin didn't return any items, we perform
-            // a client-side merge by fetching 5 resume items and 5 next-up items.
+            // a client-side merge by fetching 10 resume items and 10 next-up items,
+            // then keep the 10 most recent — same approach as the home row merge,
+            // so an uneven split (e.g. 7 resume, 3 next-up) is still accurate.
             if (mergedItems.length === 0) {
-                log.info('Falling back to client-side merge (5 and 5 items)');
+                log.info('Falling back to client-side merge (10 and 10 items)');
 
                 // Fetch both lists in parallel to minimize network roundtrips
                 const [resumeRes, nextUpRes] = await Promise.all([
                     api.getResumeItems({
-                        Limit: 5,
+                        Limit: 10,
                         ImageTypeLimit: 1,
                         EnableImageTypes: 'Primary,Backdrop,Thumb',
                         EnableTotalRecordCount: false
                     }),
                     (async () => {
                         const params = {
-                            Limit: 5,
+                            Limit: 10,
                             ImageTypeLimit: 1,
                             EnableImageTypes: 'Primary,Backdrop,Thumb',
                             EnableTotalRecordCount: false
@@ -419,36 +425,10 @@ class SmartHubManager {
                         _isResume: false
                     }));
 
-                // Fetch series last played dates so next-up items can be sorted
-                // chronologically relative to when the show was last watched.
-                const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
-                const seriesLastPlayedMap = {};
-
-                if (nextUpSeriesIds.length > 0) {
-                    try {
-                        const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
-                        const activeEpisodesRes = await api.getItems({
-                            SeriesIds: uniqueSeriesIds.join(','),
-                            IncludeItemTypes: 'Episode',
-                            SortBy: 'DatePlayed',
-                            SortOrder: 'Descending',
-                            Fields: 'LastPlayedDate',
-                            Recursive: true,
-                            Limit: 100
-                        });
-
-                        const activeEpisodes = activeEpisodesRes?.Items || [];
-                        for (const ep of activeEpisodes) {
-                            const seriesId = ep.SeriesId;
-                            const lastPlayed = ep.UserData?.LastPlayedDate;
-                            if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
-                                seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
-                            }
-                        }
-                    } catch (err) {
-                        log.warn('Failed to batch-fetch next-up parent activity dates:', err);
-                    }
-                }
+                // Rank next-up items the way Jellyfin's own Next Up (and the Litefin plugin)
+                // does: by when the furthest-watched episode was played, so rewatching an
+                // earlier episode does not move the series up.
+                const seriesLastPlayedMap = await getSeriesLastWatchedDates(nextUpItems.map((item) => item.SeriesId));
 
                 // Combine both lists and remove duplicate entries by ID
                 const combined = [...resumeItems, ...nextUpItems];
@@ -486,7 +466,7 @@ class SmartHubManager {
                     return timeB - timeA;
                 });
 
-                mergedItems = deduplicated;
+                mergedItems = deduplicated.slice(0, 10);
             }
 
             /* Build the Samsung-schema JSON from the merged items list. */
@@ -498,7 +478,7 @@ class SmartHubManager {
             /* Log a human-readable summary at INFO level so the tile content is
              * always visible in device logs — no debug mode required. */
             const sectionSummary = previewJson.sections
-                .map((s) => `"${s.title}" (${s.tiles.length} tile${s.tiles.length !== 1 ? 's' : ''})`)
+                .map((s) => `"${s.title}" #${s.position} (${s.tiles.length} tile${s.tiles.length !== 1 ? 's' : ''})`)
                 .join(', ');
             log.info(`Preview JSON built — sections: [${sectionSummary || 'EMPTY — nothing to show'}]`);
 
@@ -608,14 +588,16 @@ class SmartHubManager {
             // Determine the section title based on media semantics
             // TV episodes use the parent series name; Movies use their own title
             const sectionTitle =
-                item.Type === 'Episode' && item.SeriesName
-                    ? item.SeriesName
-                    : (item.Name || 'Continue Watching');
+                item.Type === 'Episode' && item.SeriesName ? item.SeriesName : item.Name || 'Continue Watching';
 
-            // Add a dedicated section containing this item's tile
+            // Add a dedicated section containing this item's tile.
+            // Samsung only guarantees section order when 'position' is set
+            // ("sections are shown in ascending position order"); without it
+            // the home screen applies its own, cache-dependent ordering.
             sections.push({
                 title: sectionTitle,
-                tiles: [tile]
+                position: sections.length + 1,
+                tiles: [{ ...tile, position: 1 }]
             });
         }
 
@@ -771,14 +753,12 @@ class SmartHubManager {
      *   2. Launch the ytresolver service via ApplicationControl, passing the
      *      JSON as 'SmartHubPreview' AppControl data.
      *   3. The service's onRequest handler calls webapis.preview.setPreviewData()
-     *      and then calls exit() (Samsung requires the service to terminate for
-     *      the preview to be committed to the Smart Hub display).
+     *      and, on success, exits ~0.5 s later (Samsung only commits preview
+     *      tiles once the service process terminates).
      *   4. Before exiting, the service sends an ACK to 'SmartHubAck'.
      *   5. Resolve on ACK or after SERVICE_TIMEOUT_MS — never block indefinitely.
-     *
-     * The HTTP proxy restarts automatically on the next app launch because
-     * index.js calls tizen.application.launch for the ytresolver service on
-     * every boot (see the Bootstrap section in index.js).
+     *      Either way, _relaunchService() restarts the service 3 s later so the
+     *      trailer/discovery HTTP proxy keeps working.
      *
      * @param {Object} json - Samsung Preview JSON
      * @returns {Promise<void>}
@@ -807,7 +787,7 @@ class SmartHubManager {
                 if (localPort !== null && listenerId !== null) {
                     try {
                         localPort.removeMessagePortListener(listenerId);
-                    } catch (_) { }
+                    } catch (_) {}
                     listenerId = null;
                 }
             };
@@ -824,6 +804,7 @@ class SmartHubManager {
                     const status = msgData?.[0]?.value || 'unknown';
                     log.info('Smart Hub service ACK:', status);
                     cleanup();
+                    this._relaunchService(serviceId);
                     resolve();
                 });
             } catch (e) {
@@ -839,6 +820,7 @@ class SmartHubManager {
             timeoutHandle = setTimeout(() => {
                 log.warn(`Smart Hub ACK timed out after ${SERVICE_TIMEOUT_MS / 1000}s — continuing`);
                 cleanup();
+                this._relaunchService(serviceId);
                 resolve();
             }, SERVICE_TIMEOUT_MS);
 
@@ -868,6 +850,31 @@ class SmartHubManager {
                 resolve();
             }
         });
+    }
+
+    /**
+     * Relaunch the ytresolver service after it exits to commit preview data,
+     * so the trailer/discovery HTTP proxy on localhost:8123 comes back.
+     * Launching an already-running service is harmless.
+     *
+     * @param {string} serviceId - Full service application ID
+     * @private
+     */
+    _relaunchService(serviceId) {
+        /* 3 s comfortably covers the service's 500 ms exit delay plus process
+         * teardown; relaunching while it is still alive would be a no-op and
+         * leave the proxy down once it exits. */
+        setTimeout(() => {
+            try {
+                tizen.application.launch(
+                    serviceId,
+                    () => log.info('ytresolver service relaunched after preview commit'),
+                    (e) => log.warn('Service relaunch failed:', e?.message || e)
+                );
+            } catch (e) {
+                log.warn('Service relaunch threw:', e.message);
+            }
+        }, 3000);
     }
 }
 

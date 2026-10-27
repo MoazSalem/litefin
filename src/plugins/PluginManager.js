@@ -30,6 +30,7 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 import { serverPluginClient } from './ServerPluginClient.js';
 import PluginAPI from './PluginAPI.js';
 import PluginWidgetHost from './PluginWidgetHost.js';
@@ -626,7 +627,6 @@ class PluginManager {
         // ------------------------------------------------------------------
         let enabled = true;
         try {
-            const { storage } = await import('../utils/StorageService.js');
             const stored = storage.getItem(`plugin:enabled:${plugin.id}`);
 
             if (stored !== null) {
@@ -657,7 +657,6 @@ class PluginManager {
             // ------------------------------------------------------------------
             let previouslyConfirmed = false;
             try {
-                const { storage } = await import('../utils/StorageService.js');
                 previouslyConfirmed = storage.getItem(`serverPlugin:available:${plugin.serverDependency}`) === 'true';
             } catch (err) {
                 log.warn('Could not read server plugin confirmation:', err);

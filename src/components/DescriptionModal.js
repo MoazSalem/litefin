@@ -16,9 +16,6 @@
 
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
-import { logger } from '../utils/Logger.js';
-
-const log = logger.create('DescriptionModal');
 
 class DescriptionModal {
     /**
@@ -93,7 +90,8 @@ class DescriptionModal {
                     return true;
                 }
             } else if (direction === 'down') {
-                const isAtBottom = scrollableContent.scrollHeight - scrollableContent.scrollTop <= scrollableContent.clientHeight + 10;
+                const isAtBottom =
+                    scrollableContent.scrollHeight - scrollableContent.scrollTop <= scrollableContent.clientHeight + 10;
                 if (!isAtBottom) {
                     scrollableContent.scrollTop += 180;
                     return true;

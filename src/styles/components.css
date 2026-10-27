@@ -255,7 +255,11 @@
     /* Clean entrance using global animation */
     opacity: 0;
     animation: fadeIn 0.4s ease-out forwards;
-    will-change: opacity;
+    /* PERFORMANCE: no permanent will-change here. The container's only
+     * animation is a one-shot 0.4s fade-in; a permanent promotion keeps
+     * 9 compositor layers resident on HomePage, costing more VRAM and
+     * raster budget than the short fade is worth on embedded TV GPUs
+     * (on-device probe: 9 extraneous layers at rest). */
 }
 
 progress.card-progress {
@@ -318,9 +322,6 @@ progress.card-progress::-webkit-progress-value {
     text-align: center;
     padding: 20px;
     background: #1a1a1a;
-    /* Default */
-    border-radius: inherit;
-    -webkit-border-radius: inherit;
     overflow: hidden;
     z-index: 1;
 }
@@ -2064,7 +2065,11 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
 .card-subtitle span {
     display: inline-block;
     white-space: nowrap;
-    will-change: transform;
+    /* PERFORMANCE: Avoid unconditional will-change: transform on static card spans.
+     * Promoting every title and subtitle span across 50-100+ cards to a separate GPU layer
+     * exhausts texture memory and causes severe compositor hitching during navigation.
+     * Layers are only promoted when marquee animation is actively engaged on focus. */
+    will-change: auto;
     /* Use dynamic spring-like transitions for reset focus animations */
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
@@ -2077,6 +2082,8 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
 
 .media-card.focused .card-title.marquee-active span,
 .media-card.focused .card-subtitle.marquee-active span {
+    /* Promote to GPU compositing layer strictly while active marquee animation is running */
+    will-change: transform;
     animation: card-text-marquee var(--marquee-duration, 4s) linear infinite alternate;
 }
 
@@ -2089,7 +2096,6 @@ html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
         transform: translate3d(var(--scroll-dist, 0px), 0, 0);
     }
 }
-
 
 /* ==========================================================================
    Description Dialog Modal Styling
@@ -2398,6 +2404,272 @@ html[data-layout-quirks="c26"] .media-fallback {
     border-top: 1px dashed rgba(255, 255, 255, 0.2) !important;
     color: var(--jf-accent, #00a4dc) !important;
     font-weight: 600;
+}
+
+/* ============================================================================
+   Custom HTTP Headers Dialog (Lightweight / Low-Spec TV Optimized)
+   Zero backdrop-filter blur and zero box-shadows to conserve GPU memory
+   and prevent compositor frame drops on low-end Tizen and WebOS hardware.
+   ============================================================================ */
+
+.custom-headers-modal {
+    width: 860px;
+    max-width: 95vw;
+    background: #151518;
+    border: 2px solid #28282e;
+    border-radius: var(--jf-border-radius-lg, 12px);
+    box-shadow: none !important;
+}
+
+.custom-headers-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.custom-headers-dialog-header h2 {
+    margin: 0;
+    padding: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--jf-text-primary, #ffffff);
+}
+
+
+.custom-headers-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 12px;
+}
+
+.custom-headers-presets-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.custom-headers-presets-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.45);
+    margin-right: 4px;
+}
+
+.preset-pill-btn {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #e4e4e7;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.preset-pill-btn:focus,
+.preset-pill-btn.focused {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: var(--jf-accent, #00a4dc);
+    color: #ffffff;
+    outline: none;
+    transform: scale(1.04);
+}
+
+.add-header-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--jf-accent, #00a4dc);
+    border-radius: 6px;
+    color: var(--jf-accent, #00a4dc);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.add-header-action-btn .add-header-plus {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.add-header-action-btn:focus,
+.add-header-action-btn.focused {
+    background: var(--jf-accent, #00a4dc);
+    color: var(--jf-primary-btn-color, #ffffff);
+    outline: none;
+    transform: scale(1.04);
+}
+
+.custom-headers-col-headers {
+    display: flex;
+    gap: 10px;
+    padding: 12px 24px 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.custom-headers-col-headers .col-head-key {
+    flex: 2;
+}
+
+.custom-headers-col-headers .col-head-val {
+    flex: 3;
+}
+
+.custom-headers-col-headers .col-head-toggle {
+    width: 110px;
+    text-align: center;
+}
+
+.custom-headers-col-headers .col-head-delete {
+    width: 44px;
+    text-align: center;
+}
+
+.custom-headers-content {
+    max-height: 48vh;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.custom-headers-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #888892;
+    font-size: 1.05rem;
+}
+
+.custom-header-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 0 24px;
+    margin-bottom: 10px;
+}
+
+.custom-header-row input,
+.custom-header-row .custom-header-input {
+    height: 44px;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 0 14px;
+    font-size: 0.95rem;
+    line-height: normal;
+    box-shadow: none !important;
+    outline: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.custom-header-row .custom-header-key {
+    flex: 2;
+}
+
+.custom-header-row .custom-header-val {
+    flex: 3;
+}
+
+.custom-header-row input::placeholder,
+.custom-header-row .custom-header-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.custom-header-row input:focus,
+.custom-header-row input.focused,
+.custom-header-row .custom-header-input:focus,
+.custom-header-row .custom-header-input.focused {
+    border-color: var(--jf-accent, #00a4dc) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    transform: scale(1.015);
+}
+
+.custom-header-toggle {
+    width: 110px;
+    height: 44px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.custom-header-toggle .toggle-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.custom-header-toggle.btn-toggle-active {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #4ade80 !important;
+    border: 1px solid rgba(34, 197, 94, 0.4) !important;
+}
+
+.custom-header-toggle.btn-toggle-inactive {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.custom-header-toggle:focus,
+.custom-header-toggle.focused {
+    border-color: var(--jf-accent, #00a4dc) !important;
+    outline: none;
+    transform: scale(1.04);
+}
+
+.custom-header-delete {
+    width: 44px;
+    height: 44px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.28) !important;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.custom-header-delete:focus,
+.custom-header-delete.focused {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    outline: none;
+    transform: scale(1.06);
 }
 
 

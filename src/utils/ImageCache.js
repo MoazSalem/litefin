@@ -20,6 +20,7 @@
  */
 
 import { logger } from './Logger.js';
+import { customHeaders } from './CustomHeaders.js';
 
 const log = logger.create('ImageCache');
 
@@ -206,9 +207,20 @@ class ImageCache {
         img.crossOrigin = 'anonymous';
 
         // Assigning src starts the network request.
-        // The browser caches the response under this URL, so any subsequent
-        // img.src = url assignment (by LazyLoader) hits "from memory cache".
-        img.src = url;
+        // When custom reverse proxy headers are active, pre-warm via CustomHeadersManager
+        // so the Blob URL is immediately available in memory when LazyLoader visits the card.
+        if (customHeaders?.hasCustomHeaders?.()) {
+            customHeaders
+                .resolveImageUrl(url)
+                .then((resolvedUrl) => {
+                    img.src = resolvedUrl;
+                })
+                .catch(() => {
+                    img.src = url;
+                });
+        } else {
+            img.src = url;
+        }
     }
 }
 

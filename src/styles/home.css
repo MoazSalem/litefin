@@ -43,6 +43,20 @@
 }
 
 /* Static theme overrides for placeholder skeleton cards.
+   ────────────────────────────────────────────────────────────────────────
+   Skeleton cards are focusable while their row is loading (instant D-pad
+   crossing at the row boundary). Keep the focus treatment minimal so a
+   placeholder rectangle reads as loading, not as a real focused card. */
+.media-row--skeleton .media-card.focused {
+    transform: none;
+    -webkit-transform: none;
+}
+
+.media-row--skeleton .media-card.focused .card-image {
+    border-color: var(--jf-focus-border-color);
+    opacity: 0.6;
+}
+/* Static theme overrides for placeholder skeleton cards.
    Eliminates the need to dynamically inject and remove inline style tags at runtime. */
 .media-row--skeleton .card-image,
 .media-row--skeleton .skeleton-image,

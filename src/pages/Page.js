@@ -77,6 +77,23 @@ class Page extends Component {
         // Get main container
         this.container = document.getElementById('page-container') || document.getElementById('app');
 
+        // ====================================================================
+        // Container Stale Page Purge Guard
+        // ====================================================================
+        // Ensure that page-container only ever hosts a single active page element.
+        // If an aborted navigation or async race left an orphaned page element in
+        // the DOM, remove it before mounting the fresh page to prevent split-screen
+        // flex container distortion.
+        // ====================================================================
+        if (this.container && this.container.id === 'page-container') {
+            const stalePages = this.container.querySelectorAll('.page');
+            stalePages.forEach((staleEl) => {
+                if (staleEl !== this.el && staleEl.parentNode) {
+                    staleEl.parentNode.removeChild(staleEl);
+                }
+            });
+        }
+
         // Mount the page
         this.mount();
 

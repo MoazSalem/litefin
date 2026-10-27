@@ -1,0 +1,172 @@
+/**
+ * ============================================================================
+ * Litefin - Nocturne Theme
+ * ============================================================================
+ * "The Projection Booth": a booth-ink canvas lit by a single warm tungsten
+ * beam sweeping diagonally through theater haze, complete with light pool
+ * and dust motes. Glass surfaces carry a cool silver-film tint; hairline
+ * chrome reads like film splices. Buttons and focus states follow the
+ * accent color (default: projector tungsten).
+ * ============================================================================
+ */
+
+[data-theme-mode="nocturne"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so the beam bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(6, 8, 12, 0.88);
+
+    --jf-text-primary: #f6f2ea;
+    --jf-text-secondary: rgba(230, 224, 210, 0.76);
+    --jf-text-tertiary: rgba(214, 210, 196, 0.54);
+    --jf-text-disabled: rgba(214, 210, 196, 0.28);
+
+    --jf-success: #8fc7a2;
+    --jf-warning: #e8b058;
+    --jf-error: #e2705e;
+    --jf-info: #98b8d8;
+
+    /* Fixed silver-film translucent glass chrome with splice hairlines */
+    --jf-input-bg: rgba(214, 224, 240, 0.06);
+    --jf-input-border: rgba(214, 224, 240, 0.18);
+    --jf-button-bg: rgba(214, 224, 240, 0.1);
+    --jf-button-hover: rgba(214, 224, 240, 0.2);
+    --jf-switch-bg: rgba(214, 224, 240, 0.16);
+    --jf-switch-handle: var(--jf-accent-content-color, #0b0d12);
+
+    /* Booth-ink shadows: heavy, warm-edged darkness */
+    --jf-shadow-sm: 0 2px 4px rgba(3, 4, 7, 0.5);
+    --jf-shadow-md: 0 4px 14px rgba(3, 4, 7, 0.62);
+    --jf-shadow-lg: 0 12px 44px rgba(3, 4, 7, 0.72);
+
+    --jf-scrollbar: rgba(230, 234, 240, 0.16);
+    --jf-scrollbar-hover: rgba(230, 234, 240, 0.32);
+
+    --jf-button-border-focus: #f6f2ea;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(214, 224, 240, 0.1);
+    --jf-action-btn-border: rgba(214, 224, 240, 0.2);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #0b0d12);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Booth-ink baseline painted on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="nocturne"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="nocturne"] body {
+    /* body must stay transparent so the projection beam shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * PROJECTION BEAM ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders:
+ *   1. A tight warm beam core entering from the top-left corner.
+ *   2. A wider theater-haze wash along the beam path.
+ *   3. A soft light pool where the beam lands on the "screen".
+ *   4. Three dust motes drifting inside the beam.
+ *   5. The booth canvas itself: dimmed steel zenith, pooled ink base.
+ */
+[data-theme-mode="nocturne"] body::before,
+html[data-theme-mode="nocturne"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Beam core: warm tungsten light entering from the booth window */
+        linear-gradient(135deg,
+                rgba(255, 244, 224, 0.13) 0%,
+                rgba(255, 240, 212, 0.07) 14%,
+                transparent 34%),
+        /* Theater haze: the beam scattering through ambient smoke */
+        linear-gradient(142deg,
+                rgba(255, 232, 196, 0.08) 0%,
+                rgba(255, 232, 196, 0.04) 22%,
+                transparent 50%),
+        /* Light pool: where the beam lands nearer the content area */
+        radial-gradient(38% 30% at 30% 32%,
+                rgba(255, 240, 214, 0.09) 0%,
+                rgba(255, 240, 214, 0.035) 42%,
+                transparent 70%),
+        /* Dust motes: three specks drifting inside the beam path */
+        radial-gradient(0.9% 1.6% at 34% 21%,
+                rgba(255, 246, 228, 0.4) 0%,
+                transparent 100%),
+        radial-gradient(0.7% 1.2% at 27% 38%,
+                rgba(255, 246, 228, 0.3) 0%,
+                transparent 100%),
+        radial-gradient(0.55% 1% at 38% 49%,
+                rgba(255, 246, 228, 0.24) 0%,
+                transparent 100%),
+        /* Booth canvas: faintly lit steel zenith pooling into ink floor */
+        linear-gradient(to bottom,
+                #151823 0%,
+                #0e1118 52%,
+                #090b10 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="nocturne"] .page {
+    /* Reset the opaque page paint so the projection beam shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the projection beam during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="nocturne"],
+[data-theme-mode="nocturne"] body.player-active,
+html.player-active[data-theme-mode="nocturne"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="nocturne"] body.player-active::before,
+html.player-active[data-theme-mode="nocturne"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="nocturne"] body.player-active .page,
+html.player-active[data-theme-mode="nocturne"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}

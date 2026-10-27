@@ -2,6 +2,7 @@
 <html lang="en" data-theme="purplehaze" data-layout="classic">
 
 <head>
+    <script>window.__htmlStart = Date.now();</script>
     <meta charset="UTF-8">
     <style>
         /* 
@@ -85,6 +86,9 @@
                 var ua = navigator.userAgent;
                 // TV platforms run at native 1080p canvas unless explicitly scaled
                 var isNativeTv = /Tizen|Web[O0]S/i.test(ua) || (typeof isAndroidTv !== 'undefined' && isAndroidTv);
+                if (isNativeTv) {
+                    document.documentElement.setAttribute('data-device-type', 'tv');
+                }
                 var effectiveScale = 1.0;
 
                 if (savedScale === 'auto') {
@@ -114,16 +118,6 @@
     <title>Litefin</title>
     <link rel="icon" type="image/png" href="assets/icon-80.png">
     <link rel="apple-touch-icon" href="assets/icon-80.png">
-    <!--
-        WebOS SDK — must load before any app JS so that window.webOS and
-        window.webOS.service are available when ApiClient runs its Luna check.
-        Loaded dynamically to prevent PalmServiceBridge console errors on non-LG devices.
-    -->
-    <script>
-        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
-            document.write('<script src="js/webOSTV.js"><\\/script>');
-        }
-    </script>
     <script src="js/logger.js"></script>
 
     <script src="js/early-polyfills.js"></script>
@@ -304,8 +298,10 @@
                 // Restore loading indicator style to prevent flash of wrong spinner
                 var validLoaderStyles = ['dots','ring','dual-ring','orbit','satellite','triple-ring','dotted-ring','eclipse-sweep','sonar-ring','push-pulse','horizontal-dots','pulsing-grid'];
                 var savedLoaderStyle = localStorage.getItem('litefin:loaderStyle');
-                var savedSimpleLoader = localStorage.getItem('litefin:simpleLoader') === 'true';
-                var loaderStyle = validLoaderStyles.includes(savedLoaderStyle) ? savedLoaderStyle : (savedSimpleLoader ? 'ring' : 'dots');
+                // Align fallback default to 'ring' to match LayoutManager single source of truth
+                // Uses indexOf() instead of includes() to guarantee compatibility on legacy Chromium 38 runtimes
+                var isLoaderValid = savedLoaderStyle && validLoaderStyles.indexOf(savedLoaderStyle) !== -1;
+                var loaderStyle = isLoaderValid ? savedLoaderStyle : 'ring';
                 document.documentElement.setAttribute('data-loader-style', loaderStyle);
 
                 // Theme variables for early loading (must match CSS definitions)
@@ -316,7 +312,14 @@
                     'tinted-light': { accent: '#6b6ede', bg: '#2c2e59', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'black': { accent: '#6b6ede', bg: '#000000', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
                     'classic-dark': { accent: '#6b6ede', bg: '#101010', text: '#ffffff', textSec: 'rgba(255, 255, 255, 0.8)' },
-                    'classic-light': { accent: '#6b6ede', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
+                    'classic-light': { accent: '#6b6ede', bg: '#f5f5f5', text: '#101010', textSec: '#666666' },
+                    'ember': { accent: '#6b6ede', bg: '#0d0906', text: '#fff4ea', textSec: 'rgba(255, 235, 214, 0.78)' },
+                    'sunset': { accent: '#6b6ede', bg: '#1c142e', text: '#ffffff', textSec: 'rgba(255, 228, 220, 0.8)' },
+                    'frost': { accent: '#6b6ede', bg: '#e8f1f6', text: '#1b2c38', textSec: '#466171' },
+                    'paper': { accent: '#6b6ede', bg: '#f2ead9', text: '#332a1f', textSec: '#5d5245' },
+                    'nocturne': { accent: '#6b6ede', bg: '#0c0e13', text: '#f6f2ea', textSec: 'rgba(230, 224, 210, 0.76)' },
+                    'abyss': { accent: '#6b6ede', bg: '#06111c', text: '#eff7f6', textSec: 'rgba(218, 240, 238, 0.74)' },
+                    'cyberpunk': { accent: '#6b6ede', bg: '#0a0713', text: '#f2f4ff', textSec: 'rgba(228, 222, 245, 0.76)' }
                 };
 
                 // Fall back to ambient if savedTheme is not found in the dictionary
@@ -407,6 +410,31 @@
 
         .page-loading.hidden {
             display: none !important;
+        }
+
+        /* 
+         * ====================================================================
+         * STARTUP SPINNER VISIBILITY MANAGEMENT
+         * ====================================================================
+         * Keep the initial loading indicator completely hidden until user
+         * settings have finished restoring. This prevents a visible flash of the
+         * default spinner before the user-configured style and theme take effect.
+         * ====================================================================
+         */
+        #app-splash .loading-spinner {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 
+         * Reveal the loading spinner once user settings have been restored
+         * and the active loader style attribute has been populated.
+         */
+        html[data-settings-loaded="true"] #app-splash .loading-spinner,
+        body.settings-loaded #app-splash .loading-spinner {
+            opacity: 1;
+            visibility: visible;
         }
 
         .loading-spinner {
