@@ -1335,15 +1335,11 @@ html[data-alpha-picker-position="right"] .library-page .library-pagination {
  * RTL (Right-to-Left) Localization Mirroring
  * On Arabic / Hebrew layouts, mirror the vertical dock to the left side of the screen.
  */
-[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-picker-container,
 html[dir="rtl"][data-alpha-picker-position="right"] .alpha-picker-container {
     right: auto !important;
     left: 20px !important;
 }
 
-[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn:focus,
-[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn.focused,
-[dir="rtl"] html[data-alpha-picker-position="right"] .alpha-btn:hover,
 html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn:focus,
 html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn.focused,
 html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn:hover {
@@ -1351,9 +1347,6 @@ html[dir="rtl"][data-alpha-picker-position="right"] .alpha-btn:hover {
     -webkit-transform: scale(1.35) translateX(4px) !important;
 }
 
-[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-header,
-[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-content,
-[dir="rtl"] html[data-alpha-picker-position="right"] .library-page .library-pagination,
 html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-header,
 html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-content,
 html[dir="rtl"][data-alpha-picker-position="right"] .library-page .library-pagination {

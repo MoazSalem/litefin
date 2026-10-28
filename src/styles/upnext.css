@@ -493,8 +493,8 @@ html[data-litefin-touch] .upnext-dialog {
     border-radius: 16px !important;
 }
 
-[dir="rtl"] html[data-litefin-scaled] .upnext-dialog,
-[dir="rtl"] html[data-litefin-touch] .upnext-dialog {
+html[dir="rtl"][data-litefin-scaled] .upnext-dialog,
+html[dir="rtl"][data-litefin-touch] .upnext-dialog {
     right: auto !important;
     left: 1.2em !important;
 }

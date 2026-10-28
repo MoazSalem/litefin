@@ -2679,7 +2679,7 @@ html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-li
     margin-right: auto !important;
     margin-top: 4px !important;
 }
-[dir="rtl"] html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: auto !important;
     margin-right: 0 !important;
 }
@@ -2688,7 +2688,7 @@ html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line
     margin-left: auto !important;
     margin-right: 0 !important;
 }
-[dir="rtl"] html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: 0 !important;
     margin-right: auto !important;
 }

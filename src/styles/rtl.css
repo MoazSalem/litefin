@@ -95,8 +95,15 @@
     flex-direction: row-reverse !important;
 }
 
-[dir="rtl"] body:not(.sidebar-mode-hidden) .sidebar.collapsed .logo-icon,
-[dir="rtl"] body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
+/*
+ * Classic RTL keeps icons on the visible left edge because the whole row is
+ * reversed, so the LTR icon offset must be cancelled. Modern/floating layouts
+ * mirror the rail instead and rely on their own icon translate3d(-250px) rules
+ * in modern/sidebar.css, so this reset must stay classic-only or it wins the
+ * cascade (rtl.css loads last) and pushes the icons off-screen.
+ */
+html[dir="rtl"]:not([data-sidebar-family="modern"]) body:not(.sidebar-mode-hidden) .sidebar.collapsed .logo-icon,
+html[dir="rtl"]:not([data-sidebar-family="modern"]) body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
     transform: none !important;
 }
 

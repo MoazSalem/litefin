@@ -2158,20 +2158,20 @@ html[data-layout-quirks="c26"] .episode-row-overview {
 }
 
 /* RTL directional adjustments for Arabic and Hebrew locales */
-[dir="rtl"] html[data-layout-quirks="c26"] .episode-row-card {
+html[dir="rtl"][data-layout-quirks="c26"] .episode-row-card {
     text-align: right !important;
 }
 
-[dir="rtl"] html[data-layout-quirks="c26"] .episode-row-thumb {
+html[dir="rtl"][data-layout-quirks="c26"] .episode-row-thumb {
     border-radius: 0 var(--jf-border-radius, 12px) var(--jf-border-radius, 12px) 0 !important;
 }
 
-[dir="rtl"] html[data-layout-quirks="c26"] .episode-row-meta > * {
+html[dir="rtl"][data-layout-quirks="c26"] .episode-row-meta > * {
     margin-right: 0 !important;
     margin-left: 16px !important;
 }
 
-[dir="rtl"] html[data-layout-quirks="c26"] .episode-row-rating svg {
+html[dir="rtl"][data-layout-quirks="c26"] .episode-row-rating svg {
     margin-right: 0 !important;
     margin-left: 4px !important;
 }

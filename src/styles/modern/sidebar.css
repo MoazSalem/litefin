@@ -191,13 +191,13 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
 }
 
 /* RTL Support for collapsed indicator morphing */
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item::after {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item::after {
     left: 22px !important;
     right: 272px !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
     left: 12px !important;
     right: 12px !important;
 }
@@ -392,7 +392,36 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
 /* ----------------------------------------------------------------------------
    7. RTL Support for Modern Sidebar
    ---------------------------------------------------------------------------- */
-[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar {
+/*
+ * rtl.css flips every sidebar row with row-reverse so the collapsed classic
+ * rail keeps icons visible. Modern/floating rails instead mirror the whole
+ * layout: icons stay on the right edge (reading start) and are compensated with
+ * a -250px transform while the rail is collapsed. Restore normal row order so
+ * expanded rows read icon-on-right / text-on-left like a true RTL mirror.
+ */
+html[dir="rtl"][data-sidebar-family="modern"] .sidebar-item,
+html[dir="rtl"][data-sidebar-family="modern"] .sidebar-header {
+    flex-direction: row !important;
+}
+
+/*
+ * The expandable "modern" layout reuses the classic collapsed rail geometry
+ * (element translated +250px in RTL), so mirror the LTR icon compensation:
+ * pull the icons back into the visible right-hand rail while collapsed.
+ */
+html[dir="rtl"][data-layout-sidebar="modern"] body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern"] body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+}
+
+html[dir="rtl"][data-layout-sidebar^="modern"] .sidebar {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     border-top-left-radius: 20px;
@@ -406,7 +435,7 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
  * Mirrors LTR transparency logic to prevent hardcoded dark gradient bleed
  * on right-to-left layout configurations across all active themes.
  */
-[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+html[dir="rtl"][data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL rails */
     background: transparent !important;
     background-color: transparent !important;
@@ -415,7 +444,7 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
     border-left-color: transparent !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar-chevron {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar-chevron {
     margin-left: 18px;
     margin-right: auto;
 }
@@ -978,9 +1007,9 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
     box-shadow: none !important;
     border-right-color: transparent !important;
 }
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -988,11 +1017,11 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
 }
 
 /* RTL Ambient Glow mode overrides */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
+html[dir="rtl"][data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
+html[dir="rtl"][data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL layouts */
     background: transparent !important;
     background-color: transparent !important;
@@ -1090,72 +1119,74 @@ html[data-layout-sidebar="floating-buttons"] .sidebar-chevron {
 }
 
 /* RTL Support for Tooltips */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar.expanded,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar.expanded {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+    /* Icons live on the element's right edge; shift them into the visible left
+       100px once the right-anchored rail is translated +250px off-screen. */
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
     transform: translate3d(-250px, 0, 0) scale(1.08) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
     left: auto !important;
     right: 342px !important;
 }
@@ -1339,16 +1370,17 @@ html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item
 }
 
 /* RTL Support for popover */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
     left: auto !important;
-    right: calc(var(--sidebar-width-collapsed) + 12px) !important;
+    /* Mirror the LTR left: 342px anchor so the popover opens to the left of the rail */
+    right: 342px !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
     margin: 0 0 0 12px !important;
 }
 
@@ -1667,9 +1699,10 @@ html[data-layout-sidebar="floating-island"] .floating-island-pill {
     transition: top 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .floating-island-pill {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .floating-island-pill {
     left: auto !important;
-    right: 262px !important;
+    /* Mirror LTR left: 268px within the 350px rail */
+    right: 268px !important;
 }
 
 /* All middle buttons in floating island have NO background pseudo-elements */
@@ -1753,34 +1786,45 @@ html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.fo
 }
 
 /* RTL Support for Floating Island */
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+/*
+ * The floating-island rail uses align-items: flex-start. In RTL, flex-start
+ * maps to the right edge, which shrink-wraps the header to the off-screen part
+ * of the translated rail. Stretch it so the logo keeps a visible hit area in
+ * the on-screen 100px icon column (the logo icon itself is translated back in).
+ */
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-header {
+    align-self: stretch !important;
+    width: 100% !important;
+}
+
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1) !important;
     transform: translate3d(-250px, 0, 0) scale(1) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.05) !important;
     transform: translate3d(-250px, 0, 0) scale(1.05) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.22) !important;
     transform: translate3d(-250px, 0, 0) scale(1.22) !important;
 }
@@ -1828,10 +1872,7 @@ html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:fo
 /* RTL: Off-screen translation when hidden - omit :focus-within for Chromium <63 compatibility */
 html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
     -webkit-transform: translate3d(100%, 0, 0) !important;
     transform: translate3d(100%, 0, 0) !important;
 }
@@ -1848,19 +1889,7 @@ html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
@@ -1871,13 +1900,7 @@ html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collap
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .logo-icon,
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .item-icon,
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon {
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
 }

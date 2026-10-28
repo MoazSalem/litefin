@@ -1289,10 +1289,10 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
     }
 
     /* Mirrored horizontal text contrast vignette for RTL reading direction */
-    [dir="rtl"] html[data-litefin-scaled] .hero-carousel-container .hero-item::before,
-    [dir="rtl"] html[data-litefin-portrait] .hero-carousel-container .hero-item::before,
-    [dir="rtl"] html[data-litefin-scaled] .hero-carousel-container.immersive-performance .hero-item::before,
-    [dir="rtl"] html[data-litefin-portrait] .hero-carousel-container.immersive-performance .hero-item::before,
+    html[dir="rtl"][data-litefin-scaled] .hero-carousel-container .hero-item::before,
+    html[dir="rtl"][data-litefin-portrait] .hero-carousel-container .hero-item::before,
+    html[dir="rtl"][data-litefin-scaled] .hero-carousel-container.immersive-performance .hero-item::before,
+    html[dir="rtl"][data-litefin-portrait] .hero-carousel-container.immersive-performance .hero-item::before,
     [dir="rtl"][data-platform="android"] .hero-carousel-container .hero-item::before {
         left: auto !important;
         right: 0 !important;

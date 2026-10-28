@@ -96,9 +96,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-tr
     padding-right: 72px;
 }
 
-[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
-[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
-[dir="rtl"] html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
+html[dir="rtl"][data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+html[dir="rtl"][data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+html[dir="rtl"][data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }
