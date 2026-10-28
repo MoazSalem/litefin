@@ -1579,23 +1579,40 @@ class Sidebar extends Component {
         // Guard check: ensure root sidebar element exists
         if (!this.el) return;
 
-        // Only compute when layout is configured as floating-island
-        if (!layoutManager.isFloatingIslandSidebarLayout()) return;
-
         // Query the stationary pill capsule and scrolling content container
         const pill = this.el.querySelector('#floating-island-pill');
         const content = this.el.querySelector('.sidebar-content');
+
+        // Only compute when layout is configured as floating-island. Reset any
+        // geometry left behind by a previous floating-island session: in every
+        // other layout the pill has no absolute positioning, so a stale inline
+        // height would reserve space in the sidebar's flex column and push the
+        // navigation items and footer down towards the bottom.
+        if (!layoutManager.isFloatingIslandSidebarLayout()) {
+            if (pill) {
+                pill.style.top = '';
+                pill.style.height = '';
+            }
+            return;
+        }
+
         if (!pill || !content) return;
 
         // Compute relative bounding box of content inside the fixed sidebar container
         const update = () => {
             if (!this.el || !pill || !content) return;
 
-            // Measure relative coordinates between fixed sidebar container and content box
+            // Measure relative coordinates between fixed sidebar container and content box.
+            // getBoundingClientRect() reports viewport pixels (which include the root CSS
+            // zoom), while the values assigned to top/height are layout pixels that the
+            // browser zooms again. Divide by the root zoom so displays scaled away from
+            // the native 16:9 canvas (desktop auto-scale, Android) keep the capsule
+            // aligned instead of shrinking to zoom² of the content height.
+            const rootZoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
             const sidebarRect = this.el.getBoundingClientRect();
             const contentRect = content.getBoundingClientRect();
-            const top = contentRect.top - sidebarRect.top;
-            const height = contentRect.height;
+            const top = (contentRect.top - sidebarRect.top) / rootZoom;
+            const height = contentRect.height / rootZoom;
 
             // Only apply valid non-zero bounding box values
             if (height > 0) {
