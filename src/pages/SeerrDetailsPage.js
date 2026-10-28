@@ -7,6 +7,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/discover.css';
+
 import Page from './Page.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import SeerrRequestModal from '../components/SeerrRequestModal.js';

@@ -648,13 +648,16 @@ const legacyConfig = {
              *
              * Furthermore, standard 'style-loader' injects dozens of individual
              * <style> tags (one per imported CSS module), forcing the browser to
-             * rebuild its internal stylesheet rule tree 47+ times and flooding the DOM.
+             * rebuild its internal stylesheet rule tree N times.
              *
-             * By configuring 'injectType: singletonStyleTag', all bundled CSS is
-             * concatenated directly into ONE single <style id="litefin-bundled-styles">
-             * element. This eliminates multiple DOM reflows, reduces memory footprint,
-             * and allows our CSS variable transformer to process the entire stylesheet
-             * in a single pass in under 20ms.
+             * 'injectType: styleTag' keeps one <style> element per CSS module:
+             * the boot bundle injects its own set, and each lazily loaded page
+             * chunk injects its OWN separate tags at chunk-eval time. A shared
+             * singleton tag would be REWRITTEN on every chunk load (style-loader
+             * stores the raw concatenated source), which would both wipe the
+             * CssVarsPolyfill's in-place var() resolution and stale its cached
+             * raw template. The polyfill processes every tag independently
+             * (template cache per element), so per-module tags are required.
              * =======================================================================
              */
             /*
@@ -670,10 +673,7 @@ const legacyConfig = {
                     {
                         loader: 'style-loader',
                         options: {
-                            injectType: 'singletonStyleTag',
-                            attributes: {
-                                id: 'litefin-bundled-styles'
-                            }
+                            injectType: 'styleTag'
                         }
                     },
                     'css-loader',
@@ -792,18 +792,17 @@ const ultraLegacyConfig = {
             },
             /*
              * =======================================================================
-             * Consolidated Singleton CSS Inlining for Ultra-Legacy Runtimes
+             * Inline CSS Inlining for Ultra-Legacy Runtimes
              * =======================================================================
              * Ultra-legacy apps (webOS 1.x-2.x, Tizen 2.x, Chrome 26-32) run from
              * local file:// installs with strict CORS restrictions on external CSS.
              *
-             * Standard style-loader creates dozens of distinct <style> tags, causing
-             * significant memory overhead and repeated stylesheet re-parses on 512MB
-             * memory TV hardware.
-             *
-             * Using 'injectType: singletonStyleTag' bundles all CSS into a single
-             * <style id="litefin-bundled-styles"> element, eliminating DOM fragmentation
-             * and enabling near-instantaneous CSS custom property resolution.
+             * 'injectType: styleTag' keeps one <style> element per CSS module: a
+             * shared singleton tag would be REWRITTEN whenever a lazily loaded
+             * page chunk appends its CSS (style-loader stores raw concatenated
+             * source), wiping the CssVarsPolyfill's in-place var() resolution and
+             * staling its cached raw template. The polyfill resolves every tag
+             * independently, so per-module tags are safe for chunked CSS.
              * =======================================================================
              * css-minify-loader runs FIRST (use array executes bottom-up) on the raw
              * stylesheet text, before css-loader wraps it in a JS string. The injected
@@ -817,10 +816,7 @@ const ultraLegacyConfig = {
                     {
                         loader: 'style-loader',
                         options: {
-                            injectType: 'singletonStyleTag',
-                            attributes: {
-                                id: 'litefin-bundled-styles'
-                            }
+                            injectType: 'styleTag'
                         }
                     },
                     'css-loader',

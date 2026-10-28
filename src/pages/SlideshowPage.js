@@ -20,6 +20,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/slideshow.css';
+
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';

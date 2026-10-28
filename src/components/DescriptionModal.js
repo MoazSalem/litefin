@@ -14,6 +14,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/description-modal.css';
+
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 

@@ -7,6 +7,10 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../../styles/settings.css';
+import '../../styles/admin-modals.css';
+
 import Page from '../Page.js';
 import { auth, api } from '../../api/index.js';
 import { router } from '../../core/Router.js';
@@ -47,7 +51,12 @@ import { FavoriteLanguagesModal } from './modals/FavoriteLanguagesModal.js';
 import { SelectionModal } from './modals/SelectionModal.js';
 import { SettingsDropdownDispatcher } from './controllers/SettingsDropdownDispatcher.js';
 import { SettingsSlider } from './components/SettingsSlider.js';
-import { loadCultureOptions, getCachedCultures, getFontDropdownOptions, loadFallbackFontOptions } from './helpers/SettingsFontOptions.js';
+import {
+    loadCultureOptions,
+    getCachedCultures,
+    getFontDropdownOptions,
+    loadFallbackFontOptions
+} from './helpers/SettingsFontOptions.js';
 import { languageManager } from '../../utils/LanguageManager.js';
 import { SettingsResetController } from './controllers/SettingsResetController.js';
 
@@ -72,7 +81,9 @@ class SettingsPage extends Page {
         this.uiLanguages = availableLanguages;
 
         // Preference Languages (Audio/Subtitle) - fetched from server
-        this.prefLanguages = (typeof getCachedCultures !== 'undefined' ? getCachedCultures() : cachedCultures) || [{ value: 'Default', label: i18n.t('Default') }];
+        this.prefLanguages = (typeof getCachedCultures !== 'undefined' ? getCachedCultures() : cachedCultures) || [
+            { value: 'Default', label: i18n.t('Default') }
+        ];
 
         // Mobile portrait 2-page navigation state
         // When false, the full category list is displayed; when true, the active tab details are shown.
@@ -99,11 +110,14 @@ class SettingsPage extends Page {
         this.appearanceTab = typeof AppearanceTab !== 'undefined' ? new AppearanceTab(this) : null;
         this.themeColorModal = typeof ThemeColorModal !== 'undefined' ? new ThemeColorModal(this) : null;
         this.loaderStyleModal = typeof LoaderStyleModal !== 'undefined' ? new LoaderStyleModal(this) : null;
-        this.favoriteLanguagesModal = typeof FavoriteLanguagesModal !== 'undefined' ? new FavoriteLanguagesModal(this) : null;
+        this.favoriteLanguagesModal =
+            typeof FavoriteLanguagesModal !== 'undefined' ? new FavoriteLanguagesModal(this) : null;
         this.selectionModal = typeof SelectionModal !== 'undefined' ? new SelectionModal(this) : null;
-        this.dropdownDispatcher = typeof SettingsDropdownDispatcher !== 'undefined' ? new SettingsDropdownDispatcher(this) : null;
+        this.dropdownDispatcher =
+            typeof SettingsDropdownDispatcher !== 'undefined' ? new SettingsDropdownDispatcher(this) : null;
         this.sliderComponent = typeof SettingsSlider !== 'undefined' ? new SettingsSlider(this) : null;
-        this.resetController = typeof SettingsResetController !== 'undefined' ? new SettingsResetController(this) : null;
+        this.resetController =
+            typeof SettingsResetController !== 'undefined' ? new SettingsResetController(this) : null;
     }
 
     async onInit() {
@@ -396,20 +410,48 @@ class SettingsPage extends Page {
     }
 
     // Consolidated one-line forwarders delegating directly to extracted controllers
-    _renderAppearanceTab() { return this.appearanceTab ? this.appearanceTab.render() : ''; }
-    _renderLayoutTab() { return this.layoutTab ? this.layoutTab.render() : ''; }
-    _renderHomeTab() { return this.homeTab ? this.homeTab.render() : ''; }
-    _renderSidebarTab() { return this.sidebarTab ? this.sidebarTab.render() : ''; }
-    _renderPlayerTab() { return this.playerTab ? this.playerTab.render() : ''; }
-    _renderSubtitlesTab() { return this.subtitlesTab ? this.subtitlesTab.render() : ''; }
-    _renderPerformanceTab() { return this.performanceTab ? this.performanceTab.render() : ''; }
-    _renderControlsTab() { return this.controlsTab ? this.controlsTab.render() : ''; }
-    _renderPluginsTab() { return this.pluginsTab ? this.pluginsTab.render() : ''; }
-    _renderLibrariesTab() { return this.librariesTab ? this.librariesTab.render() : ''; }
-    _renderAccountTab() { return this.accountTab ? this.accountTab.render() : ''; }
-    _renderAboutTab() { return this.aboutTab ? this.aboutTab.render() : ''; }
-    _renderBackupTab() { return this.backupTab ? this.backupTab.render() : ''; }
-    _renderDebugTab() { return this.debugTab ? this.debugTab.render() : ''; }
+    _renderAppearanceTab() {
+        return this.appearanceTab ? this.appearanceTab.render() : '';
+    }
+    _renderLayoutTab() {
+        return this.layoutTab ? this.layoutTab.render() : '';
+    }
+    _renderHomeTab() {
+        return this.homeTab ? this.homeTab.render() : '';
+    }
+    _renderSidebarTab() {
+        return this.sidebarTab ? this.sidebarTab.render() : '';
+    }
+    _renderPlayerTab() {
+        return this.playerTab ? this.playerTab.render() : '';
+    }
+    _renderSubtitlesTab() {
+        return this.subtitlesTab ? this.subtitlesTab.render() : '';
+    }
+    _renderPerformanceTab() {
+        return this.performanceTab ? this.performanceTab.render() : '';
+    }
+    _renderControlsTab() {
+        return this.controlsTab ? this.controlsTab.render() : '';
+    }
+    _renderPluginsTab() {
+        return this.pluginsTab ? this.pluginsTab.render() : '';
+    }
+    _renderLibrariesTab() {
+        return this.librariesTab ? this.librariesTab.render() : '';
+    }
+    _renderAccountTab() {
+        return this.accountTab ? this.accountTab.render() : '';
+    }
+    _renderAboutTab() {
+        return this.aboutTab ? this.aboutTab.render() : '';
+    }
+    _renderBackupTab() {
+        return this.backupTab ? this.backupTab.render() : '';
+    }
+    _renderDebugTab() {
+        return this.debugTab ? this.debugTab.render() : '';
+    }
 
     /**
      * Queries the Litefin companion plugin to update status badges in the Plugins tab.

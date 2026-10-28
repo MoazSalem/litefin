@@ -2,15 +2,21 @@
  * ============================================================================
  * Litefin - Consolidated Application Stylesheet Bundle
  * ============================================================================
- * Compiles all modular subsystem stylesheets and color themes into a single
- * entry module at build time via css-loader.
+ * Compiles the boot-critical stylesheets and color themes into a single entry
+ * module at build time via css-loader.
  *
  * Performance note for low-power television hardware (LG webOS / Samsung Tizen):
- * By aggregating all individual stylesheets under this single entry point,
- * the Webpack style-loader singleton engine performs exactly ONE document
+ * By aggregating the core stylesheets under this single entry point, the
+ * Webpack style-loader singleton engine performs exactly ONE document
  * stylesheet update during initial bootstrap. This avoids multiple synchronous
  * DOM text node insertions and eliminates repetitive CSSOM re-parse freezes
  * on embedded Cortex-A53 dual-core TV CPUs.
+ *
+ * Page-specific stylesheets (settings, details, player OSD, livetv, ...) are
+ * NOT imported here: they are imported by their owning page module and load
+ * with that page's async chunk instead, keeping them out of the boot parse.
+ * On legacy engines (Chromium 38-47) the CssVarsPolyfill adopts the lazily
+ * injected style tags via ensureStylesResolved() (called by AsyncPageProxy).
  * ============================================================================
  */
 
@@ -20,36 +26,12 @@
 @import './layout.css';
 @import './components.css';
 
-/* Application view layouts and structural grids */
-@import './library.css';
-@import './library_rows.css';
+/* Application shell and shared structural styles */
 @import './sidebar.css';
-@import './login.css';
-@import './home.css';
-@import './details.css';
-@import './search.css';
-@import './discover.css';
 
-/* Media playback, OSD overlays, and dialog modals */
-@import './player-page.css';
-@import './player-osd.css';
-@import './upnext.css';
-@import './player-modals.css';
-@import './syncplay-menu.css';
-@import './admin-modals.css';
-@import './description-modal.css';
-
-/* Configuration settings, overlay dialogs, and screensaver */
-@import './settings.css';
-@import './lock-overlay.css';
-@import './season.css';
+/* Overlay dialogs that must exist before any async chunk can load */
 @import './offline.css';
-@import './profiles.css';
-@import './pin-dialog.css';
 @import './screensaver.css';
-@import './hero-carousel.css';
-@import './livetv.css';
-@import './slideshow.css';
 @import './rtl.css';
 
 /* Shared color theme palettes and contrast variations */

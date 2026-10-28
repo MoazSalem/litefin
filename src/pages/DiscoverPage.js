@@ -11,6 +11,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/discover.css';
+
 import Page from './Page.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { seerr } from '../api/seerrClient.js';

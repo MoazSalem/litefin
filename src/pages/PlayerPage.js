@@ -13,6 +13,14 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/player-page.css';
+import '../styles/player-osd.css';
+import '../styles/player-modals.css';
+import '../styles/upnext.css';
+import '../styles/syncplay-menu.css';
+import '../styles/lock-overlay.css';
+
 import Page from './Page.js';
 import { api, auth } from '../api/index.js';
 import { router } from '../core/Router.js';

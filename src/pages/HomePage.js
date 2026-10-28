@@ -27,6 +27,10 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/home.css';
+import '../styles/hero-carousel.css';
+
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -805,7 +809,9 @@ class HomePage extends Page {
                             });
 
                             if (filteredPluginItems.length > 0) {
-                                log.info('Successfully fetched and verified merged items from server-side Litefin plugin');
+                                log.info(
+                                    'Successfully fetched and verified merged items from server-side Litefin plugin'
+                                );
                                 return filteredPluginItems;
                             }
                         }

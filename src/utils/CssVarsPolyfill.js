@@ -34,9 +34,13 @@ class CssVarsPolyfill {
         /**
          * Map of tracked <style> elements to their original unparsed CSS text templates.
          * Retaining raw templates allows instantaneous theme switching without re-parsing.
-         * @type {Map<HTMLStyleElement, string>}
+         *
+         * Weak keys: page-level stylesheets are injected per async chunk and removed
+         * again when their page component is destroyed, so strong references here
+         * would leak every visited page's style element for the app's lifetime.
+         * @type {WeakMap<HTMLStyleElement, string>}
          */
-        this._styleTemplates = new Map();
+        this._styleTemplates = new WeakMap();
 
         /**
          * Cached baseline variables extracted from static :root rules.
@@ -88,6 +92,49 @@ class CssVarsPolyfill {
     }
 
     /**
+     * Incrementally resolve styles injected after boot.
+     *
+     * Async page/player chunks ship their own <style> tags (style-loader
+     * tiers) that carry var() references but were never seen by the initial
+     * pass. This processes ONLY uncached, unprocessed tags - already-tracked
+     * stylesheets keep their cached raw template and are left untouched, so
+     * the cost is proportional to the newly loaded chunk, not the whole DOM.
+     *
+     * AsyncPageProxy calls this after each chunk module resolves. No-op when
+     * native CSS custom properties are supported.
+     */
+    ensureStylesResolved() {
+        if (!this._active) return;
+
+        const startTime = Date.now();
+        const themeVars = this._extractThemeVariables();
+        const styleTags = document.querySelectorAll('style:not(#litefin-dynamic-theme-vars)');
+        let updatedCount = 0;
+
+        for (let i = 0; i < styleTags.length; i++) {
+            const styleEl = styleTags[i];
+
+            // Already tracked by a previous pass - its template is resolved
+            // wholesale by _applyTransform on the next theme update instead.
+            if (this._styleTemplates.get(styleEl)) continue;
+
+            const rawCss = styleEl.textContent || '';
+            if (rawCss.indexOf('var(--') === -1) continue;
+
+            this._styleTemplates.set(styleEl, rawCss);
+            styleEl.textContent = this._resolveCssVars(rawCss, themeVars);
+            styleEl.setAttribute('data-cssvars', 'applied');
+            updatedCount++;
+        }
+
+        if (updatedCount > 0) {
+            log.debug(
+                `Lazy style resolution complete in ${Date.now() - startTime}ms (${updatedCount} style(s) updated)`
+            );
+        }
+    }
+
+    /**
      * Executes the variable resolution pass across tracked stylesheets.
      *
      * Scans for the primary singleton bundled stylesheet (#litefin-bundled-styles)
@@ -102,17 +149,25 @@ class CssVarsPolyfill {
         // 1. Extract all active theme and :root variables
         const themeVars = this._extractThemeVariables();
 
-        // 2. Discover style tags to transform
-        // Priority: target our singleton bundled style tag if present,
-        // or discover all style tags excluding dynamic helper stylesheets.
-        let targetStyles = [];
+        // 2. Discover style tags to transform.
+        // Process ALL active inline <style> elements (excluding the dynamic
+        // theme helper tag, which LayoutManager keeps var()-free and re-writes
+        // itself on every theme change). This intentionally includes both the
+        // boot singleton (#litefin-bundled-styles) and any per-chunk styles
+        // injected later by lazily loaded pages - the template cache below
+        // makes repeat passes over already-resolved tags nearly free, so
+        // scanning wide is cheaper than tracking which pages loaded when.
+        // The bundled singleton is forced to the front so its transform (and
+        // any logging derived from it) keeps its historical ordering.
         const bundledStyle = document.getElementById('litefin-bundled-styles');
-
+        const allStyles = Array.prototype.slice.call(
+            document.querySelectorAll('style:not(#litefin-dynamic-theme-vars)')
+        );
+        const targetStyles = allStyles.filter(function (el) {
+            return el !== bundledStyle;
+        });
         if (bundledStyle) {
-            targetStyles = [bundledStyle];
-        } else {
-            const allStyles = document.querySelectorAll('style:not(#litefin-dynamic-theme-vars)');
-            targetStyles = Array.prototype.slice.call(allStyles);
+            targetStyles.unshift(bundledStyle);
         }
 
         let updatedCount = 0;
@@ -435,11 +490,17 @@ class CssVarsPolyfill {
         if (!this._cachedRootVars) {
             this._cachedRootVars = {};
             const rootBlockRegex = /:root[^{]*\{([^}]+)\}/g;
-            const bundledStyle = document.getElementById('litefin-bundled-styles');
-            const target = bundledStyle || document.querySelector('style:not(#litefin-dynamic-theme-vars)');
+            const styleTags = document.querySelectorAll('style:not(#litefin-dynamic-theme-vars)');
 
-            if (target && target.textContent) {
-                const cssText = target.textContent;
+            /*
+             * Scan every inline <style> tag: since page stylesheets load as
+             * per-chunk style tags (no boot singleton anymore), static :root
+             * declarations can live in any of them. Baseline caching still
+             * applies - this pass runs once on cold boot only.
+             */
+            for (let t = 0; t < styleTags.length; t++) {
+                const cssText = styleTags[t].textContent || '';
+                if (cssText.indexOf(':root') === -1) continue;
                 let match;
                 while ((match = rootBlockRegex.exec(cssText)) !== null) {
                     const blockContent = match[1];
@@ -449,6 +510,7 @@ class CssVarsPolyfill {
                         this._cachedRootVars[varMatch[1].trim()] = varMatch[2].trim();
                     }
                 }
+                rootBlockRegex.lastIndex = 0;
             }
         }
         Object.assign(vars, this._cachedRootVars);

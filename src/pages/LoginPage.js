@@ -7,6 +7,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/login.css';
+
 import Page from './Page.js';
 import {
     auth,

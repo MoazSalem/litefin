@@ -13,6 +13,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/profiles.css';
+
 import Page from './Page.js';
 import { auth } from '../api/index.js';
 import { api } from '../api/ApiClient.js';
