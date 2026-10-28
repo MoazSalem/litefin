@@ -92,6 +92,8 @@ function setup({ launchParams = '', library = [], seerrAvailable = true, seerrJe
         setTimeout,
         clearTimeout,
         Promise,
+        Date,
+        Math,
         JSON,
         String,
         parseInt,

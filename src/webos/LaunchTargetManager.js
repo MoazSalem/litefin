@@ -244,30 +244,57 @@ class LaunchTargetManager {
     }
 
     /**
-     * The page to open: the library item's details, else Seerr's details page.
-     * Never rejects; a slow lookup falls back to Seerr's page, which offers
-     * "Play" when Seerr knows the library item.
+     * ========================================================================
+     * Launch Target Route Resolution
+     * ========================================================================
+     * Determines target route: library item details if matched, else Seerr details.
+     * Bounded by RESOLVE_TIMEOUT_MS overall so slow queries never exceed the budget.
      *
      * @param {{ tmdbId: number, mediaType: string, title: string }} params
      * @returns {Promise<string|null>} Route path, or null when there is nothing to open
      * @private
      */
     async _resolvePath(params) {
-        const timeout = () => new Promise((resolve) => setTimeout(resolve, RESOLVE_TIMEOUT_MS, null));
-        // Probed alongside the lookup (cached once per session)
+        // Track elapsed time to enforce a strict overall timeout budget across all lookups
+        const startTime = Date.now();
+
+        // Helper to construct a cancellable timeout promise
+        const withTimeout = (promise, ms) => {
+            let timer = null;
+            const timeoutPromise = new Promise((resolve) => {
+                timer = setTimeout(() => resolve(null), Math.max(0, ms));
+            });
+            return Promise.race([promise, timeoutPromise]).finally(() => {
+                if (timer) clearTimeout(timer);
+            });
+        };
+
+        // Probed alongside the lookup (cached once per session by seerr client)
         const seerrAvailable = seerr.isAvailable().catch(() => false);
 
         let itemId = null;
         try {
-            itemId = await Promise.race([this._findLibraryItem(params), timeout()]);
+            // Race the library query against the overall timeout budget
+            itemId = await withTimeout(this._findLibraryItem(params), RESOLVE_TIMEOUT_MS);
         } catch (e) {
             log.warn('Library lookup for launch target failed:', e?.message || e);
         }
+
+        // Target found in Jellyfin/Emby library: route directly to details page
         if (itemId) {
             log.info(`Launch target found in library: ${itemId}`);
             return `/details/${itemId}`;
         }
-        if (await Promise.race([seerrAvailable, timeout()])) return `/seerr/${params.mediaType}/${params.tmdbId}`;
+
+        // Calculate remaining time budget so Seerr probe does not exceed the overall budget
+        const remainingMs = RESOLVE_TIMEOUT_MS - (Date.now() - startTime);
+        const canUseSeerr = remainingMs > 0 ? await withTimeout(seerrAvailable, remainingMs) : false;
+
+        // Target not in library, but requestable via Seerr
+        if (canUseSeerr) {
+            return `/seerr/${params.mediaType}/${params.tmdbId}`;
+        }
+
         return null;
     }
 
