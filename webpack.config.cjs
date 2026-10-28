@@ -80,6 +80,44 @@ function getMinimizers() {
     ];
 }
 
+/**
+ * Initial-chunk splitting for the TV tiers.
+ *
+ * The old TV-tier policy was total consolidation (splitChunks:false) so that
+ * a single self-contained main.js was read from package storage. As main.js
+ * grew past 2 MB that policy outlived its usefulness: a 2 MB script pays a
+ * full V8 parse ahead of first paint, and per-script compile-buffer sizing
+ * (V8's AST/bytecode zones) is friendlier to ~700-800 KB units.
+ *
+ * Policy:
+ * - chunks: 'initial'          Only boot chunks are split; the dynamically
+ *                              imported page/player chunks stay fully
+ *                              self-contained exactly as before.
+ * - minSize: 400000            Never emit a small chunk - a <400 KB fragment
+ *                              would cost another file read for trivial gain.
+ * - maxSize: 800000            Cap every initial script near ~700-800 KB so
+ *                              V8 keeps each compile cache/AST zone small.
+ * - maxInitialRequests: 3      The boot parity contract for the TV package:
+ *                              the entry chunk plus at most 2 split partners
+ *                              are ~2.4 MB, i.e. a 2.2 MB main busts into
+ *                              exactly three ~700 KB scripts.
+ *
+ * The extra initial chunks are loaded by the webpack bootstrap inside the
+ * entry chunk (runtimeChunk stays false) through the same script-injection
+ * machinery the async page chunks already use - proven working on file://
+ * package storage on Tizen/webOS.
+ *
+ * @returns {Object} splitChunks options shared by every TV tier config
+ */
+function getTvInitialSplitChunks() {
+    return {
+        chunks: 'initial',
+        minSize: 400000,
+        maxSize: 800000,
+        maxInitialRequests: 3
+    };
+}
+
 // ============================================================================
 // Shared plugins factory
 // ============================================================================
@@ -353,10 +391,11 @@ const modernConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
@@ -410,10 +449,11 @@ const debugConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
@@ -469,10 +509,11 @@ const normalConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
@@ -554,10 +595,11 @@ const legacyConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
@@ -701,10 +743,11 @@ const ultraLegacyConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
@@ -884,10 +927,11 @@ const normalOblongConfig = {
     },
 
     optimization: {
-        // Consolidated single-entry bundle for local TV package storage (file://)
-        // Disables automatic chunk fragmentation to avoid 110+ blocking script tags on slow flash memory.
-        // Explicit dynamic import() calls remain cleanly split into async chunks (such as player.js).
-        splitChunks: false,
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
         runtimeChunk: false,
         minimizer: getMinimizers()
     },
