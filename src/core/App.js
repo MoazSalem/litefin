@@ -1160,14 +1160,11 @@ class App {
             if (shouldDefer) {
                 log.info('Deferring plugin manager initialization: profiles screen or PIN gate is active');
             } else {
-                log.info('No profile switcher active or running on web: initializing plugin manager immediately');
-                pluginManager
-                    .init({
-                        api,
-                        focusManager,
-                        toast: null // Toast component reference wired up once UI is ready
-                    })
-                    .catch((err) => log.error('pluginManager.init failed:', err));
+                // Plugin initialization (1.2s+ of plugin network probes across
+                // several plugins) is DEFERRED until the splash screen hides -
+                // see the app:hideSplash handler below. During cold boot every
+                // HTTP/1.1 socket is needed by the entry page's data fetches.
+                this._pluginInitPending = true;
             }
         }
 
@@ -1189,14 +1186,16 @@ class App {
 
         /*
          * ============================================================================
-         * HYBRID TIME MANAGER SUBSYSTEM INITIALIZATION
+         * HYBRID TIME MANAGER SUBSYSTEM INITIALIZATION — DEFERRED
          * ============================================================================
-         * Initializes the high-precision platform clock driver (Tizen native time,
-         * WebOS Luna service, and Jellyfin LAN server time sync) before any visual
-         * clock components or playback timeline controllers render.
+         * TimeManager syncs the platform clock against the server (GET
+         * /GetUTCTime). That request would claim an HTTP/1.1 socket during the
+         * cold-boot window when the entry page needs every connection for its
+         * own data fetches, so initialization moves to the app:hideSplash
+         * handler below. The Global Clock renders afterwards and simply picks
+         * up the synced offset when it lands.
          * ============================================================================
          */
-        timeManager.init();
 
         // Initialize Global Clock — persistent time display above all UI
         globalClock.init();
@@ -1305,6 +1304,39 @@ class App {
 
             // Trigger auto-update check (respects user settings inside)
             versionChecker.checkAtStartup();
+
+            // ====================================================================
+            // DEFERRED BOOT SERVICES
+            // ====================================================================
+            // The splash screen is down and the entry page's data fetches are
+            // on the wire or done - now the connection pool has headroom for
+            // the handshakes and probes that used to contend with them:
+            //
+            // 1. Session capabilities POST + WebSocket open. On Chromium 38
+            //    (Tizen 3.0) the HTTP/1.1 pool has only 6 sockets; firing
+            //    these during the cold-boot window directly delayed first
+            //    paint (AuthManager used to send them mid-restore).
+            // 2. PluginManager init (plugin probes took ~1.2s across 4
+            //    plugins in boot traces). Gated by the same profiles/PIN
+            //    deferral decision made during init (this._pluginInitPending).
+            // 3. TimeManager server clock sync (GET /GetUTCTime).
+            if (state.get('user:authenticated')) {
+                auth.establishSessionTelemetry();
+
+                if (this._pluginInitPending) {
+                    this._pluginInitPending = false;
+                    log.info('Splash hidden — initializing plugin manager');
+                    pluginManager
+                        .init({
+                            api,
+                            focusManager,
+                            toast: null // Toast component reference wired up once UI is ready
+                        })
+                        .catch((err) => log.error('pluginManager.init failed:', err));
+                }
+
+                timeManager.init();
+            }
 
             // ====================================================================
             // Staged Background Prewarming
@@ -1464,6 +1496,17 @@ class App {
      * @private
      */
     _setupEventHandlers() {
+        // Optimistic session restore: if background token verification finds
+        // the server unreachable, route to the OfflinePage exactly like the
+        // old pre-route reachability check did. Registered here (before
+        // auth.init() resolves) so the event can never race the listener.
+        eventBus.on('auth:server-unreachable', () => {
+            if (window.location.hash.replace(/^#/, '') !== '/offline') {
+                log.info('Server unreachable after optimistic restore — routing to OfflinePage');
+                router.navigate('/offline', { replace: true });
+            }
+        });
+
         // Listen for OSD track menu bg opacity changes
         eventBus.on('pref:osdTrackMenuBgOpacity', (value) => {
             document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (value / 100).toFixed(2));

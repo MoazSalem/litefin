@@ -773,8 +773,10 @@ class HomePage extends Page {
                     try {
                         log.info('Attempting to fetch pre-merged continue/next-up rows from Litefin plugin');
 
-                        // Request a combined list of items limited by user's homeRowLimit setting and date cutoff
-                        const response = await api.getMergedRows(mergedParams);
+                        // Consume the in-flight request fired by _fireRowPrefetch()
+                        // (parallel with Views) instead of issuing a new one.
+                        const preflight = this._consumePrefetch('merged');
+                        const response = await (preflight || api.getMergedRows(mergedParams));
 
                         // Verify that response contains valid items and no corrupted zero IDs
                         // Older or misconfigured server plugins can return Id: "0", which causes broken routes.
@@ -1002,7 +1004,10 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
-                    const res = await api.getResumeItems({ Limit: homeRowLimit });
+                    // Consume the in-flight request fired by _fireRowPrefetch()
+                    // (parallel with Views) instead of issuing a new one.
+                    const preflight = this._consumePrefetch('resume');
+                    const res = await (preflight || api.getResumeItems({ Limit: homeRowLimit }));
                     if (!res?.Items?.length) return null;
 
                     // Defensively filter items using configured watched threshold
@@ -1062,7 +1067,10 @@ class HomePage extends Page {
                         params.NextUpDateCutoff = cutoff.toISOString();
                     }
 
-                    const res = await api.getNextUp(params);
+                    // Consume the in-flight request fired by _fireRowPrefetch()
+                    // (parallel with Views) instead of issuing a new one.
+                    const preflight = this._consumePrefetch('nextUp');
+                    const res = await (preflight || api.getNextUp(params));
                     if (!res?.Items?.length) return null;
 
                     const filtered = res.Items.filter((item) => {
@@ -1177,6 +1185,98 @@ class HomePage extends Page {
     // =========================================================================
 
     /**
+     * Fire the Continue Watching / Next Up requests in parallel with the
+     * Views request that gates the render pipeline.
+     *
+     * Views must complete before descriptors can be built (library rows need
+     * the library list), but resume / next-up data is independent - issuing
+     * those requests only after Views serializes ~2s of latency in front of
+     * the rows users actually look at first. The in-flight promises are
+     * stored here and consumed by the matching row fetchFns via
+     * _consumePrefetch(); if a row never consumes (layout config changed
+     * between fire and render), the attached no-op catch keeps the rejection
+     * from surfacing as an unhandled promise error.
+     *
+     * Respects the user's home-row visibility config: hidden rows are not
+     * prefetched. Rejected prefetches propagate into the row's own error
+     * handling exactly like a fresh request would.
+     * @private
+     */
+    _fireRowPrefetch() {
+        this._prefetched = {};
+
+        try {
+            const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
+
+            // Respect the user's row visibility config: a hidden row must not
+            // cause a wasted request.
+            const savedLayout = homeLayoutManager.getSavedLayout() || [];
+            const isHidden = (id) => savedLayout.some((c) => c.id === id && c.hidden);
+
+            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
+
+            if (mergeResumeNextUp) {
+                if (isHidden('resume')) return;
+
+                // Replicate the merged-mode params computed inside the row's
+                // fetchFn (limit / watched threshold / NextUpDateCutoff).
+                const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                const mergedParams = { limit: homeRowLimit };
+                mergedParams.watchedThreshold = Math.round(PlayerSettings.getWatchedThresholdFraction() * 100);
+                if (daysLimit > 0) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - daysLimit);
+                    const cutoffIso = cutoff.toISOString();
+                    mergedParams.nextUpDateCutoff = cutoffIso;
+                    mergedParams.NextUpDateCutoff = cutoffIso;
+                }
+
+                const p = api.getMergedRows(mergedParams);
+                p.catch(() => {});
+                this._prefetched.merged = p;
+            } else {
+                if (!isHidden('resume')) {
+                    const p = api.getResumeItems({ Limit: homeRowLimit });
+                    p.catch(() => {});
+                    this._prefetched.resume = p;
+                }
+                if (!isHidden('next-up')) {
+                    const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                    const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                    const params = { Limit: homeRowLimit };
+                    if (daysLimit > 0) {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - daysLimit);
+                        params.NextUpDateCutoff = cutoff.toISOString();
+                    }
+                    const p = api.getNextUp(params);
+                    p.catch(() => {});
+                    this._prefetched.nextUp = p;
+                }
+            }
+        } catch (err) {
+            log.warn('Home row prefetch failed:', err);
+        }
+    }
+
+    /**
+     * Consume an in-flight prefetch promise fired by _fireRowPrefetch().
+     * Returns the promise (still pending or already settled) exactly once -
+     * the key is nulled after read so a later pipeline run cannot reuse a
+     * stale response. Awaiting a rejected prefetch rethrows into the row's
+     * normal error handling.
+     * @param {string} key - 'merged' | 'resume' | 'nextUp'
+     * @returns {Promise<Object>|null}
+     * @private
+     */
+    _consumePrefetch(key) {
+        const p = this._prefetched ? this._prefetched[key] : null;
+        if (this._prefetched) this._prefetched[key] = null;
+        return p || null;
+    }
+
+    /**
      * Entry point for the progressive render pipeline.
      *
      * Flow:
@@ -1213,6 +1313,9 @@ class HomePage extends Page {
             let heroPromise = null;
             let enrichPromise = null;
 
+            // Preflight carry-over for parallel row fetches (see _fireRowPrefetch)
+            this._prefetched = null;
+
             if (cache) {
                 log.info('Restoring homepage from cache');
                 this._restoreFromCache(cache);
@@ -1225,6 +1328,15 @@ class HomePage extends Page {
                     this._initHeroCarouselFromItems(cache.heroItems);
                 }
             } else {
+                // ─── Step 0.5: Fire resume/next-up prefetch in parallel ──────
+                // The Views request below gates descriptor construction and
+                // every library row, but the Continue Watching / Next Up rows
+                // do not depend on it. Fire their requests NOW so all three
+                // overlap on the wire instead of serializing behind the ~2s
+                // Views round-trip; the row fetchFns consume the in-flight
+                // promises via _consumePrefetch().
+                this._fireRowPrefetch();
+
                 // ─── Step 1: Load core dependencies ──────────────────────────────
                 // Libraries are shared across multiple descriptors.
                 // Check in-memory state cache first to avoid redundant network calls
