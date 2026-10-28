@@ -35,13 +35,18 @@ import { customHeadersDialog } from '../ui/CustomHeadersDialog.js';
 // Base Page class for route proxies and page lifecycle coordination
 import Page from '../pages/Page.js';
 
-// Synchronous Page imports (every remaining route resolves lazily through a
-// {@link AsyncPageProxy} below). Login and Home must boot immediately in every
-// scenario (cold boot and the post-login landing path). OfflinePage is
-// required synchronously because the browser-online probe can flip to false
-// before any async chunk would have a chance to load.
-import LoginPage from '../pages/LoginPage.js';
-import HomePage from '../pages/HomePage.js';
+// Synchronous Page import: OfflinePage only. The browser-online probe can
+// flip to false before any async chunk would have a chance to load, so the
+// offline fallback must be present from boot.
+//
+// The other two entry pages load as async chunks {@link AsyncPageProxy}:
+// HomePage's chunk import() is kicked at module evaluation time, so its
+// flash-storage read and V8 parse overlap with the async boot sequence
+// (splash -> sidebar -> auth restore -> server probe) instead of serializing
+// ahead of them, and the 19:00-style launch reaches HomePage.init() and its
+// first HTTP request without paying the home-page parse serially. LoginPage's
+// chunk is fetched strictly on demand: the dominant launch path (resumed
+// session restore) never pays for the login page at all.
 import OfflinePage from '../pages/OfflinePage.js';
 
 // ============================================================================
@@ -653,6 +658,8 @@ const emulatorChunk = createPageChunkLoader(
 );
 const searchChunk = createPageChunkLoader(() => import(/* webpackChunkName: "search" */ '../pages/SearchPage.js'));
 const liveTvChunk = createPageChunkLoader(() => import(/* webpackChunkName: "livetv" */ '../pages/LiveTvPage.js'));
+const homeChunk = createPageChunkLoader(() => import(/* webpackChunkName: "home" */ '../pages/HomePage.js'));
+const loginChunk = createPageChunkLoader(() => import(/* webpackChunkName: "login" */ '../pages/LoginPage.js'));
 
 /**
  * Shared route proxy base for async page chunks. Intercepts router navigation,
@@ -795,6 +802,28 @@ class SettingsPage extends AsyncPageProxy {
 }
 
 /**
+ * Route proxy for the home view. The chunk import is kicked at module
+ * evaluation time (see {prewarmHomeChunk}) so the disk read + parse overlap
+ * with the async boot window; by the time router.navigate('/home') runs the
+ * real HomePage instance is usually created synchronously from cache.
+ */
+class HomePage extends AsyncPageProxy {
+    constructor(options) {
+        super(options, homeChunk);
+    }
+}
+
+/**
+ * Route proxy for the login view. Loaded strictly on demand so the dominant
+ * authenticated launch path never reads/parses the login module at all.
+ */
+class LoginPage extends AsyncPageProxy {
+    constructor(options) {
+        super(options, loginChunk);
+    }
+}
+
+/**
  * Route proxy for person credits / filmography views.
  */
 class PersonPage extends AsyncPageProxy {
@@ -907,6 +936,21 @@ import { remoteButtonManager } from './RemoteButtonManager.js';
 import { screensaverManager } from './ScreensaverManager.js';
 
 const log = logger.create('App');
+
+// ============================================================================
+// HOME CHUNK EARLY KICKOFF
+// ============================================================================
+// Fire the HomePage chunk import() during boot-bundle module evaluation - the
+// earliest moment App code can run. The flash read + V8 parse of home.js then
+// overlap every async step below (splash, sidebar mount, auth restore, server
+// probe) instead of serializing ahead of them: when router.navigate('/home')
+// eventually fires, the AsyncPageProxy usually instantiates the real HomePage
+// synchronously from the already-loaded chunk. Has no effect on the login
+// path beyond one background file read; LoginPage itself stays fetch-on-demand.
+homeChunk.load().then(
+    () => log.info('HomePage chunk ready (early boot prewarm)'),
+    (err) => log.warn('HomePage chunk prewarm failed:', err)
+);
 
 class App {
     constructor() {
