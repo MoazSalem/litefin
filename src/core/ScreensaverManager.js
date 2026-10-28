@@ -16,6 +16,7 @@ import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
+import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { LogoScreensaver } from './screensaver/LogoScreensaver.js';
 import { BackdropScreensaver } from './screensaver/BackdropScreensaver.js';
 import { BlackScreensaver } from './screensaver/BlackScreensaver.js';
@@ -34,6 +35,9 @@ class ScreensaverManager {
         // Screensaver settings from storage defaults
         this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10) || 0;
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
+
+        // Whether the lazy screensaver stylesheet chunk has been kicked
+        this._stylesLoaded = false;
 
         this._hideBound = this.hide.bind(this);
     }
@@ -151,6 +155,20 @@ class ScreensaverManager {
         if (isNaN(this._delaySeconds)) this._delaySeconds = 0; // default never
 
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
+
+        // Preload the screensaver stylesheet while enabled but idle - the
+        // activation is minutes away, so the small async chunk is long since
+        // arrived by the time show() renders. Never fetched when the
+        // screensaver is disabled (the default), keeping it out of boot.
+        if (this._delaySeconds > 0 && !this._stylesLoaded) {
+            this._stylesLoaded = true;
+            import(/* webpackChunkName: "screensaver-css" */ '../styles/screensaver.css')
+                .then(() => cssVarsPolyfill.ensureStylesResolved())
+                .catch((err) => {
+                    this._stylesLoaded = false;
+                    log.warn('Screensaver stylesheet chunk failed:', err);
+                });
+        }
 
         this._startPolling();
     }

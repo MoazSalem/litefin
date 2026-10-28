@@ -34,15 +34,12 @@
 /* Overlay dialogs that must exist before any async chunk can load */
 @import './offline.css';
 @import './screensaver.css';
-@import './rtl.css';
 
-/* Modern interface layers */
-@import './modern/core.css';
-@import './modern/server.css';
-@import './modern/manual.css';
-@import './modern/users.css';
-@import './modern/home.css';
-@import './modern/sidebar.css';
+/* RTL mirror rules load lazily from App.init when the resolved UI
+   direction is rtl (App.js) - not imported here. */
+
+/* Modern interface layers load lazily via modern/bundle.css
+   (LayoutManager.ensureModernStyles) - not imported here. */
 
 /* TV-shared GPU/instant row scroll compositing (kept on all tiers) */
 @import './scroll-compositing.css';

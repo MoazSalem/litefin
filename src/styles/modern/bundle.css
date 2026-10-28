@@ -1,0 +1,22 @@
+/**
+ * ============================================================================
+ * Litefin - Modern Interface Layer Bundle (lazy-loaded)
+ * ============================================================================
+ * Aggregates the six modern interface layers into ONE async CSS chunk. This
+ * module is dynamically imported by LayoutManager.ensureModernStyles() the
+ * first time any modern-gated layout dimension is active (sidebar family,
+ * media-rows family, or login page layout) - it never rides the boot bundle.
+ *
+ * Every file below is attribute-gated (html[data-sidebar-family="modern"],
+ * html[data-media-rows-family="modern"], html[data-layout-login="modern"]),
+ * so the rules are inert for classic-only users and the chunk is never
+ * fetched in that configuration.
+ * ============================================================================
+ */
+
+@import './core.css';
+@import './server.css';
+@import './manual.css';
+@import './users.css';
+@import './home.css';
+@import './sidebar.css';

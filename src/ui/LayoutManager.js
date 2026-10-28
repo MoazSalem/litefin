@@ -143,6 +143,10 @@ class LayoutManager {
         // calls (boot init always runs one; settings switches run more).
         this._themeStylePromises = {};
 
+        // In-flight/resolved modern interface layer chunk (modern/bundle.css).
+        // Single fetch across the three layout setters that may require it.
+        this._modernStylesPromise = null;
+
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
 
@@ -572,6 +576,8 @@ class LayoutManager {
             document.documentElement.setAttribute('data-badge-style', resolvedStyle);
         }
         CardRenderer.clearCache();
+        // Modern row variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
         eventBus.emit('mediaRowsLayout:changed', { layout });
     }
 
@@ -585,6 +591,8 @@ class LayoutManager {
         if (save) {
             storage.setItem('pref:loginPageLayout', layout);
         }
+        // Modern login variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
         eventBus.emit('loginPageLayout:changed', { layout });
     }
 
@@ -799,6 +807,9 @@ class LayoutManager {
             storage.setItem('pref:sidebarLayoutMode', layout);
         }
 
+        // Modern sidebar variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
+
         // Notify navigation components of layout modification
         eventBus.emit('sidebarLayout:changed', { layout });
     }
@@ -913,6 +924,43 @@ class LayoutManager {
         }
 
         return this._themeStylePromises[mode];
+    }
+
+    /**
+     * Ensure the modern interface layer stylesheet is loaded.
+     *
+     * The six modern/*.css layers (~204KB source) are attribute-gated by three
+     * independent layout dimensions (sidebar family, media-rows family, login
+     * page layout). When every dimension is 'classic' the rules could never
+     * match, so the chunk is not fetched at all; otherwise it loads once as an
+     * async CSS chunk instead of riding the boot bundle. Classic->modern
+     * runtime switches trigger the fetch; the styles stay resident after.
+     * @returns {Promise<void>|undefined}
+     */
+    ensureModernStyles() {
+        const needsModern =
+            this._sidebarLayout !== 'classic' ||
+            this._mediaRowsLayout !== 'classic' ||
+            this._loginPageLayout !== 'classic';
+
+        if (!needsModern) return undefined;
+
+        if (!this._modernStylesPromise) {
+            this._modernStylesPromise = import(/* webpackChunkName: "modern-css" */ '../styles/modern/bundle.css')
+                .then(() => {
+                    // Adopt the freshly injected layer tags (legacy engines
+                    // only; no-op when native CSS custom properties exist).
+                    cssVarsPolyfill.ensureStylesResolved();
+                    log.debug('Modern interface styles loaded');
+                })
+                .catch((err) => {
+                    // Allow retry on a later layout change
+                    this._modernStylesPromise = null;
+                    log.warn('Modern styles chunk failed:', err);
+                });
+        }
+
+        return this._modernStylesPromise;
     }
 
     /**

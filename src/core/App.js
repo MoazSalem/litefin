@@ -1081,6 +1081,18 @@ class App {
 
         document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
 
+        // RTL mirror rules are needed only when the resolved direction is rtl.
+        // Load the 29KB stylesheet as an async chunk right away so RTL users
+        // get identical timing to the old static import, while the (vast)
+        // LTR majority never reads or parses it at all. Both arrival orders
+        // are polyfill-safe: a tag injected before cssVarsPolyfill.init() is
+        // caught by its all-tags boot scan; after init, by the hook below.
+        if (isRtl) {
+            import(/* webpackChunkName: "rtl" */ '../styles/rtl.css')
+                .then(() => cssVarsPolyfill.ensureStylesResolved())
+                .catch((err) => log.warn('RTL stylesheet chunk failed:', err));
+        }
+
         // Wait for both to complete — they've been running in parallel
         await Promise.all([i18nPromise, authPromise]);
 
