@@ -10,6 +10,7 @@
 import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { router } from './Router.js';
+import { playQueue } from './PlayQueue.js';
 import { api } from '../api/ApiClient.js';
 import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
@@ -1645,7 +1646,8 @@ class App {
                 backdropUrl,
                 fromSlideshow,
                 fromBrowse,
-                ghostMode
+                ghostMode,
+                isShufflePlay
             }) => {
                 log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
@@ -1803,6 +1805,9 @@ class App {
                         return;
                     }
                 }
+
+                // Only an explicit shuffle play may keep shuffle on
+                if (!isShufflePlay) playQueue.setShuffleMode(false);
 
                 // Store playback context for play queue building (e.g. 'boxset', 'music')
                 // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
