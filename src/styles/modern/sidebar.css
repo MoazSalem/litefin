@@ -588,14 +588,9 @@ html[data-layout-sidebar="floating-island"] .sidebar:hover .back-text {
 /* ----------------------------------------------------------------------------
  * Back Button Modern Layout Tweaks & Squircle Suppression
  * ---------------------------------------------------------------------------- */
+/* Back control is rendered below the brand logo, so the logo stays top-anchored */
 html[data-sidebar-family="modern"] .sidebar-back-btn .item-icon::before {
     display: none !important;
-}
-
-/* Fluid spring push for the Litefin brand logo in modern layouts */
-html[data-sidebar-family="modern"] .sidebar.has-back-button #sidebar-logo-header {
-    margin-top: 4px;
-    margin-bottom: 12px;
 }
 
 /*

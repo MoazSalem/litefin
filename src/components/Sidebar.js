@@ -57,6 +57,16 @@ class Sidebar extends Component {
     render() {
         return `
             <nav class="sidebar collapsed" id="main-sidebar">
+                <!-- Logo Section -->
+                <!-- Kept as the first flex child so the brand logo always stays anchored to the top. -->
+                <div class="sidebar-header" id="sidebar-logo-header">
+                    <div class="logo-icon">
+                        <img src="assets/icon-130.png" class="sidebar-logo-img" alt="Litefin Logo" />
+                        ${sidebarIcons.logo}
+                    </div>
+                    <span class="logo-text">Litefin</span>
+                </div>
+
                 <!-- Native Back Navigation Control (Web & Desktop) -->
                 <!-- Displayed when viewing 2nd-level routes in desktop/web environments with spring animation -->
                 <button class="sidebar-item sidebar-back-btn" id="sidebar-back-btn" tabindex="0" aria-label="${i18n.t('Back') || 'Back'}" style="display: none;">
@@ -65,15 +75,6 @@ class Sidebar extends Component {
                     </div>
                     <span class="item-text back-text" data-i18n="Back">${i18n.t('Back') || 'Back'}</span>
                 </button>
-
-                <!-- Logo Section -->
-                <div class="sidebar-header" id="sidebar-logo-header">
-                    <div class="logo-icon">
-                        <img src="assets/icon-130.png" class="sidebar-logo-img" alt="Litefin Logo" />
-                        ${sidebarIcons.logo}
-                    </div>
-                    <span class="logo-text">Litefin</span>
-                </div>
 
                 <!-- Floating Island Stationary Capsule Track -->
                 <!-- Renders the fixed background capsule for floating-island layout during scrolling -->
@@ -1990,7 +1991,7 @@ class Sidebar extends Component {
         // Determine if back navigation is valid for the current route stack
         const canBack = isPlatformAllowed && router.canGoBack();
 
-        // Toggle state class on parent container to trigger CSS spring transition pushing logo down
+        // Toggle state class on parent container to trigger the back control's entrance animation
         this.el.classList.toggle('has-back-button', canBack);
 
         // Control interactive display and accessibility tabindex on the back button
