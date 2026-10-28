@@ -123,18 +123,45 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
 const MATRIX = { Id: 'jf-matrix', Name: 'The Matrix', ProviderIds: { Tmdb: '603' } };
 const OTHER = { Id: 'jf-other', Name: 'Another Film', ProviderIds: { Tmdb: '999' } };
 
-test('parseLaunchParams accepts movie/tv/series and rejects the rest', () => {
+test('parseLaunchParams accepts movie/tv/series, supports nested params wrapper, and rejects the rest', () => {
     const { parseLaunchParams } = setup();
     assert.deepEqual(JSON.parse(JSON.stringify(parseLaunchParams({ tmdbId: '603', mediaType: 'movie' }))), {
         tmdbId: 603,
         mediaType: 'movie',
         title: ''
     });
+    // Supports nested params wrapper as sent by luna://com.webos.applicationManager/launch
+    assert.deepEqual(
+        JSON.parse(
+            JSON.stringify(
+                parseLaunchParams({
+                    id: 'org.litefin.app',
+                    params: { tmdbId: 603, mediaType: 'movie', title: 'The Matrix' }
+                })
+            )
+        ),
+        {
+            tmdbId: 603,
+            mediaType: 'movie',
+            title: 'The Matrix'
+        }
+    );
     assert.equal(parseLaunchParams({ tmdbId: 1399, mediaType: 'series' }).mediaType, 'tv');
     assert.equal(parseLaunchParams({ tmdbId: 603, mediaType: 'person' }), null);
     assert.equal(parseLaunchParams({ mediaType: 'movie' }), null);
     assert.equal(parseLaunchParams({}), null);
     assert.equal(parseLaunchParams(null), null);
+});
+
+test('cold start: a launch with a nested params wrapper opens the title', async () => {
+    const t = setup({
+        launchParams: '{"id":"org.litefin.app","params":{"tmdbId":603,"mediaType":"movie"}}',
+        library: [MATRIX]
+    });
+    await t.manager.init();
+    assert.equal(t.manager.openStartupTarget(), true);
+    await flush();
+    assert.deepEqual(JSON.parse(JSON.stringify(t.navigations)), [{ path: '/details/jf-matrix', history: ['/home'] }]);
 });
 
 test('cold start: a title in the library opens its details page', async () => {

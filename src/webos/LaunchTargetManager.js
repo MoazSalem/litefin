@@ -319,24 +319,42 @@ class LaunchTargetManager {
 // ============================================================================
 
 /**
- * Validate launch params: { tmdbId: number|string, mediaType: 'movie'|'tv'|'series', title?: string }.
+ * ============================================================================
+ * Launch Parameters Validation & Normalization
+ * ============================================================================
+ * Validates and extracts launch parameters:
+ *   { tmdbId: number|string, mediaType: 'movie'|'tv'|'series', title?: string }
  *
- * @param {Object|null} raw - Launch params
- * @returns {{ tmdbId: number, mediaType: string, title: string }|null} Null when they name no title
+ * Supports parameters provided directly at top-level or encapsulated within a
+ * nested `params` wrapper object (standard format used by webOS applicationManager
+ * launch service requests).
+ *
+ * @param {Object|null} raw - Raw launch parameters object
+ * @returns {{ tmdbId: number, mediaType: string, title: string }|null} Normalized parameters or null
  */
 export function parseLaunchParams(raw) {
+    // Reject null or non-object arguments
     if (!raw || typeof raw !== 'object') return null;
-    const tmdbId = parseInt(raw.tmdbId, 10);
+
+    // Support both direct payloads ({ tmdbId, ... }) and nested parameters wrappers
+    // ({ params: { tmdbId, ... } }) as dispatched by webOS applicationManager launch calls
+    const payload = raw.params && typeof raw.params === 'object' ? raw.params : raw;
+
+    // Parse numeric TMDB ID ensuring positive integer value
+    const tmdbId = parseInt(payload.tmdbId, 10);
     if (!(tmdbId > 0)) return null;
-    const type = String(raw.mediaType || '').toLowerCase();
+
+    // Normalize media category identifier
+    const type = String(payload.mediaType || '').toLowerCase();
     if (type !== 'movie' && type !== 'tv' && type !== 'series') {
-        log.warn(`Launch params ignored — unknown mediaType "${raw.mediaType}"`);
+        log.warn(`Launch params ignored — unknown mediaType "${payload.mediaType}"`);
         return null;
     }
+
     return {
         tmdbId,
         mediaType: type === 'movie' ? 'movie' : 'tv',
-        title: typeof raw.title === 'string' ? raw.title : ''
+        title: typeof payload.title === 'string' ? payload.title : ''
     };
 }
 
