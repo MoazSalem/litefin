@@ -203,6 +203,16 @@ export class TouchHorizontalScroller {
     }
 
     /**
+     * Cancels any in-flight settle animation on a specific row.
+     * Public bridge for the web/desktop MouseRowScroller so wheel input can
+     * preempt a pending settle without touching private animation state.
+     * @param {HTMLElement} rowItems - Media row container
+     */
+    cancelRowSettle(rowItems) {
+        this._cancelSettle(rowItems);
+    }
+
+    /**
      * ========================================================================
      * Global Listener Setup
      * ========================================================================

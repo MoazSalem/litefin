@@ -16,6 +16,7 @@ import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { gamepadManager } from '../utils/GamepadManager.js';
+import { mouseRowScroller } from '../ui/MouseRowScroller.js';
 
 // Initialize dedicated logger for Web adapter events
 const log = logger.create('WebAdapter');
@@ -104,6 +105,9 @@ class WebAdapter {
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
         document.addEventListener('wheel', () => this.reportInput(), { passive: true });
+
+        // Enable mouse wheel / trackpad horizontal scrolling of media rows
+        mouseRowScroller.init();
 
         // Synchronize HTML5 fullscreen changes with web client state
         document.addEventListener('fullscreenchange', () => {
