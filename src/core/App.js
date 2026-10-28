@@ -902,6 +902,7 @@ import { versionChecker } from '../utils/VersionChecker.js';
 import { timeManager } from '../utils/TimeManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
+import { launchTargetManager } from '../webos/LaunchTargetManager.js';
 import { androidLauncherManager } from '../android/AndroidLauncherManager.js';
 import { remoteButtonManager } from './RemoteButtonManager.js';
 import { screensaverManager } from './ScreensaverManager.js';
@@ -1049,8 +1050,11 @@ class App {
         //      state and start their refresh cycles immediately.
         //      A Smart Hub tile launch is resolved before the router starts (max 3 s),
         //      so the default route can open the tile's page instead of /home.
+        //      On webOS, a launch with { tmdbId, mediaType } params is resolved the same way.
         if (platformInfo.isTizen) {
             await smartHubManager.init();
+        } else if (platformInfo.isWebOS) {
+            await launchTargetManager.init();
         } else if (platformInfo.isAndroid) {
             androidLauncherManager.init();
         }
@@ -2101,8 +2105,9 @@ class App {
                     );
                     router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    // Launched from a Smart Hub tile: open its page instead (Back leads to /home)
-                    if (smartHubManager.openStartupTarget()) return;
+                    // Launched from a Smart Hub tile or with webOS launch params: open its page
+                    // instead (Back leads to /home)
+                    if (smartHubManager.openStartupTarget() || launchTargetManager.openStartupTarget()) return;
 
                     // Single user, no PIN, rememberLastUser active, or skipped once — skip the profiles screen and go straight home
                     log.info('Initial route: Authenticated, navigating to HomePage');
