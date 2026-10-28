@@ -248,13 +248,9 @@ class ScrollController {
             return stored;
         }
 
-        // On Android (both Android TV and mobile shells), default to high-performance
-        // GPU mode ('gpu') so vertical scrolling delegates to hardware compositor transforms
-        // rather than CPU main-thread scrollTop reflows.
-        if (platformInfo.isAndroid) {
-            return 'gpu';
-        }
-
+        // Default to smooth native scrolling across all platforms
+        // for unified, fluid, and predictable vertical viewport transitions.
+        // Native mode ensures consistent scroll dynamics without compositor quirks.
         return 'native';
     }
 
@@ -276,12 +272,10 @@ class ScrollController {
 
         /*
          * Default horizontal scrolling animation behavior:
-         * - On Android platforms, default to hardware-accelerated 'gpu' mode
-         *   for swift, responsive media row navigation.
-         * - On all other platforms (Smart TVs like Tizen/webOS, Desktop browsers, Tauri),
-         *   default to 'native' for smooth and continuous fluid container scrolling.
+         * - Defaults to 'native' (Smooth) across all platforms for unified,
+         *   consistent, and fluid media row scrolling.
          */
-        return platformInfo.isAndroid ? 'gpu' : 'native';
+        return 'native';
     }
 
     /**

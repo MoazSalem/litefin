@@ -54,15 +54,15 @@ export class PerformanceTab {
         const reloadOnResumeEnabled = savedReloadPref !== null ? savedReloadPref === 'true' : isTv;
 
         const vertScrollMode =
-            storage.getItem('pref:verticalScrollMode') || (platformInfo.isAndroid ? 'gpu' : 'native');
+            storage.getItem('pref:verticalScrollMode') || 'native';
         /*
          * Horizontal scrolling mode resolution.
-         * Defaults to 'gpu' on Android targets for hardware acceleration.
-         * On all other environments (Tizen, webOS, Desktop, etc.), defaults to 'native' (Smooth).
+         * Defaults to 'native' (Smooth) across all environments.
+         * Eliminates platform-specific fragmentation so all targets share smooth scrolling.
          */
         const horizScrollMode =
             storage.getItem('pref:horizontalScrollMode') ||
-            (platformInfo.isAndroid ? 'gpu' : 'native');
+            'native';
         /*
          * Vertical scroll smoothing duration resolution.
          * Defaults to 'smooth' for fluid navigation speed and duration.
@@ -117,8 +117,8 @@ export class PerformanceTab {
                         'horizontal-scroll-mode-select',
                         [
                             /*
-                             * Option 1: Smooth (Native container scrolling) - default for non-Android targets
-                             * Option 2: Fast (GPU Accelerated translate3d) - default for Android targets
+                             * Option 1: Smooth (Native container scrolling) - standard default for all targets
+                             * Option 2: Fast (GPU Accelerated translate3d)
                              * Option 3: Instant (Immediate jump without animation)
                              */
                             { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },

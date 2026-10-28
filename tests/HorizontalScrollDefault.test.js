@@ -5,18 +5,19 @@ import test from 'node:test';
 
 /**
  * ============================================================================
- * Horizontal Scroll Animation Mode Default Test Suite
+ * Scroll Animation Mode Default Test Suite
  * ============================================================================
  * Validates that:
  * 1. PerformanceTab places Smooth ('native') as the first option in the dropdown.
- * 2. PerformanceTab resolves fallback to 'gpu' on Android and 'native' elsewhere.
- * 3. ScrollController resolves fallback to 'gpu' on Android and 'native' elsewhere.
- * 4. VirtualCardRow resolves fallback to 'gpu' on Android and 'native' elsewhere.
+ * 2. PerformanceTab resolves horizontal and vertical scroll fallback to 'native' (Smooth)
+ *    across all targets without platform-specific divergence.
+ * 3. ScrollController resolves vertical and horizontal fallback to 'native' on all platforms.
+ * 4. VirtualCardRow resolves horizontal scroll fallback to 'native' on all platforms.
  * ============================================================================
  */
 
 test('PerformanceTab: horizontal scroll dropdown has smooth as first option and platform defaults', () => {
-    // Read source code of PerformanceTab
+    // Read source code of PerformanceTab for structural inspection
     const tabPath = path.resolve('src/pages/settings/tabs/PerformanceTab.js');
     const tabSource = readFileSync(tabPath, 'utf8');
 
@@ -27,36 +28,50 @@ test('PerformanceTab: horizontal scroll dropdown has smooth as first option and 
         'PerformanceTab must place Smooth (native) as the first option in the horizontal scroll dropdown'
     );
 
-    // Verify fallback resolves to 'gpu' for Android and 'native' for other platforms
+    // Verify horizontal scroll fallback resolves uniformly to 'native' for all platforms
     assert.match(
         tabSource,
-        /storage\.getItem\('pref:horizontalScrollMode'\)\s*\|\|\s*\(platformInfo\.isAndroid\s*\?\s*'gpu'\s*:\s*'native'\)/,
-        'PerformanceTab must default horizontal scroll to gpu on Android and native elsewhere'
+        /storage\.getItem\('pref:horizontalScrollMode'\)\s*\|\|\s*'native'/,
+        'PerformanceTab must default horizontal scroll to native on all platforms'
+    );
+
+    // Verify vertical scroll fallback resolves uniformly to 'native' for all platforms
+    assert.match(
+        tabSource,
+        /storage\.getItem\('pref:verticalScrollMode'\)\s*\|\|\s*'native'/,
+        'PerformanceTab must default vertical scroll to native on all platforms'
     );
 });
 
-test('ScrollController: getHorizontalScrollMode defaults to gpu on Android and native elsewhere', () => {
-    // Read source code of ScrollController
+test('ScrollController: getHorizontalScrollMode and getVerticalScrollMode default to native on all platforms', () => {
+    // Read source code of ScrollController for fallback behavior verification
     const controllerPath = path.resolve('src/ui/ScrollController.js');
     const controllerSource = readFileSync(controllerPath, 'utf8');
 
-    // Verify fallback logic
+    // Verify getHorizontalScrollMode fallback resolves to 'native'
     assert.match(
         controllerSource,
-        /return\s+platformInfo\.isAndroid\s*\?\s*'gpu'\s*:\s*'native'/,
-        'ScrollController getHorizontalScrollMode must return gpu for Android and native for other platforms'
+        /getHorizontalScrollMode\(\)\s*\{[\s\S]*?return\s+'native';/,
+        'ScrollController getHorizontalScrollMode must return native for all platforms'
+    );
+
+    // Verify getVerticalScrollMode fallback resolves to 'native'
+    assert.match(
+        controllerSource,
+        /getVerticalScrollMode\(\)\s*\{[\s\S]*?return\s+'native';/,
+        'ScrollController getVerticalScrollMode must return native for all platforms'
     );
 });
 
-test('VirtualCardRow: horizontal scroll mode defaults to gpu on Android and native elsewhere', () => {
+test('VirtualCardRow: horizontal scroll mode defaults to native on all platforms', () => {
     // Read source code of VirtualCardRow
     const rowPath = path.resolve('src/components/VirtualCardRow.js');
     const rowSource = readFileSync(rowPath, 'utf8');
 
-    // Verify fallback logic
+    // Verify fallback logic defaults to 'native'
     assert.match(
         rowSource,
-        /storage\.getItem\('pref:horizontalScrollMode'\)\s*\|\|\s*\(platformInfo\.isAndroid\s*\?\s*'gpu'\s*:\s*'native'\)/,
-        'VirtualCardRow must default horizontal scroll to gpu on Android and native elsewhere'
+        /storage\.getItem\('pref:horizontalScrollMode'\)\s*\|\|\s*'native'/,
+        'VirtualCardRow must default horizontal scroll to native across all platforms'
     );
 });

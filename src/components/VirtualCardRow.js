@@ -498,10 +498,10 @@ export class VirtualCardRow {
              * Active horizontal scroll animation mode resolution.
              * In native mode, native container scrollLeft owns position (Smooth).
              * In GPU mode, hardware CSS translate3d owns position on .row-items-track.
-             * Defaults to 'gpu' on Android platforms, and 'native' across all other targets.
+             * Defaults to 'native' (Smooth) across all targets.
              */
             const horizontalScrollMode =
-                storage.getItem('pref:horizontalScrollMode') || (platformInfo.isAndroid ? 'gpu' : 'native');
+                storage.getItem('pref:horizontalScrollMode') || 'native';
 
             if (horizontalScrollMode === 'native') {
                 requestAnimationFrame(() => {
