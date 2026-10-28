@@ -77,6 +77,8 @@ function setup({ launchParams = '', library = [], seerrAvailable = true, seerrJe
         },
         api: {
             getItems: async (q) => {
+                // 'hang': a server that never answers
+                if (library === 'hang') return new Promise(() => {});
                 queries.push(q);
                 // A server that ignores AnyProviderIdEquals still answers; only the ProviderIds count
                 const items = library.filter(
@@ -208,6 +210,14 @@ test('cold start: Seerr knowing the Jellyfin id opens the details page', async (
     t.manager.openStartupTarget();
     await flush();
     assert.equal(t.navigations[0].path, '/details/jf-got');
+});
+
+test('cold start: a library lookup that never answers still opens Seerr', async () => {
+    const t = setup({ launchParams: '{"tmdbId":1399,"mediaType":"tv"}', library: 'hang' });
+    await t.manager.init();
+    assert.equal(t.manager.openStartupTarget(), true);
+    await flush();
+    assert.equal(t.navigations[0].path, '/seerr/tv/1399');
 });
 
 test('cold start: without Seerr and without a match Litefin opens as usual', async () => {

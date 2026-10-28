@@ -286,9 +286,10 @@ class LaunchTargetManager {
             return `/details/${itemId}`;
         }
 
-        // Calculate remaining time budget so Seerr probe does not exceed the overall budget
+        // Calculate remaining time budget so Seerr probe does not exceed the overall budget.
+        // With none left it still counts when the probe (started above) has already answered.
         const remainingMs = RESOLVE_TIMEOUT_MS - (Date.now() - startTime);
-        const canUseSeerr = remainingMs > 0 ? await withTimeout(seerrAvailable, remainingMs) : false;
+        const canUseSeerr = await withTimeout(seerrAvailable, remainingMs);
 
         // Target not in library, but requestable via Seerr
         if (canUseSeerr) {
