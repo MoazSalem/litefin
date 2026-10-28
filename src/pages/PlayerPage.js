@@ -54,6 +54,7 @@ import { sanitizeSubtitleText } from '../utils/Utils.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 
 const log = logger.create('Player');
 
@@ -3243,10 +3244,16 @@ class PlayerPage extends Page {
             // is merely a standard buffer fetch in progress.
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
                 const pingUrl = `${api.serverUrl}/System/Ping`;
+                // Attach configured custom reverse proxy headers (e.g. Cloudflare Service Tokens)
+                const pingHeaders =
+                    typeof customHeaders !== 'undefined' && customHeaders && typeof customHeaders.getHeadersForUrl === 'function'
+                        ? customHeaders.getHeadersForUrl(pingUrl, api.serverUrl)
+                        : {};
                 const response = await fetch(pingUrl, {
                     method: 'GET',
+                    headers: pingHeaders,
                     signal: controller.signal,
                     cache: 'no-store'
                 });
@@ -3419,10 +3426,16 @@ class PlayerPage extends Page {
             // Ping Jellyfin server directly
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 1800);
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
                 const pingUrl = `${api.serverUrl}/System/Ping`;
+                // Attach configured custom reverse proxy headers (e.g. Cloudflare Service Tokens)
+                const pingHeaders =
+                    typeof customHeaders !== 'undefined' && customHeaders && typeof customHeaders.getHeadersForUrl === 'function'
+                        ? customHeaders.getHeadersForUrl(pingUrl, api.serverUrl)
+                        : {};
                 const response = await fetch(pingUrl, {
                     method: 'GET',
+                    headers: pingHeaders,
                     signal: controller.signal,
                     cache: 'no-store'
                 });
@@ -4398,7 +4411,8 @@ class PlayerPage extends Page {
             if (!this.el || !this.el.classList.contains('loading')) return;
 
             // Apply linear gradient over image; base loader remains solidly #000000
-            backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
+            const displayUrl = img.src || backdropUrl;
+            backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${displayUrl}')`;
 
             // Fade in gracefully on the next animation frame
             requestAnimationFrame(() => {
@@ -4411,7 +4425,19 @@ class PlayerPage extends Page {
             log.warn('Backdrop image failed to load, maintaining solid black loading background');
         };
 
-        img.src = backdropUrl;
+        // When custom reverse proxy headers are active, resolve through CustomHeadersManager
+        if (typeof customHeaders !== 'undefined' && customHeaders && customHeaders.hasCustomHeaders()) {
+            customHeaders
+                .resolveImageUrl(backdropUrl)
+                .then((resolvedUrl) => {
+                    img.src = resolvedUrl;
+                })
+                .catch(() => {
+                    img.src = backdropUrl;
+                });
+        } else {
+            img.src = backdropUrl;
+        }
         this._loadingBackdrop = backdropLayer;
     }
 

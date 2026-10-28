@@ -282,3 +282,20 @@ test('CustomHeaders: authenticated image resolution, caching, and cleanup', asyn
         customHeaders.clearCache();
     }
 });
+
+test('CustomHeaders: server ping URLs (/System/Ping) receive custom proxy headers', () => {
+    const serverUrl = 'https://ma.eatingheads.com';
+    const testHeaders = [
+        { key: 'CF-Access-Client-Id', value: 'client-id-watchdog', enabled: true },
+        { key: 'CF-Access-Client-Secret', value: 'secret-key-watchdog', enabled: true }
+    ];
+
+    customHeaders.setServerHeaders(serverUrl, testHeaders);
+
+    // System ping endpoint used by playback watchdog and auto-recovery
+    const pingUrl = serverUrl + '/System/Ping';
+    const headers = customHeaders.getHeadersForUrl(pingUrl, serverUrl);
+
+    assert.strictEqual(headers['CF-Access-Client-Id'], 'client-id-watchdog');
+    assert.strictEqual(headers['CF-Access-Client-Secret'], 'secret-key-watchdog');
+});
