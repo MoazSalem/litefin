@@ -66,6 +66,40 @@ const DEFAULT_MODE_COLORS = {
     [THEME_MODES.CYBERPUNK]: '#ff2d78' // neon hot magenta — night-city sign
 };
 
+// ============================================================================
+// LAZY THEME STYLESHEETS
+// ============================================================================
+// The 12 static theme palettes no longer ride the boot bundle (~125KB of CSS
+// for a palette the user will never select). Only the active mode's palette
+// is fetched as an async CSS chunk the first time its mode is applied (boot
+// init or a settings switch); already-fetched palettes stay resident and the
+// CssVarsPolyfill re-resolves them on later switches via its per-tag
+// template cache.
+//
+// On legacy engines (Chromium 38-47) this is visually lossless: the full
+// derived --jf-* palette is generated per mode into
+// #litefin-dynamic-theme-vars by _applyDynamicTheme(), and the polyfill
+// resolves the newly injected theme tag against it via
+// ensureStylesResolved(). 'tinted-light' shares tinted.css - its light
+// surface deltas are generated dynamically, and unused dark.css (the only
+// theme file with :root rules) is not part of this map.
+const THEME_STYLE_IMPORTS = {
+    [THEME_MODES.CLASSIC_DARK]: () => import(/* webpackChunkName: "theme-classic-dark" */ '../themes/classic-dark.css'),
+    [THEME_MODES.CLASSIC_LIGHT]: () =>
+        import(/* webpackChunkName: "theme-classic-light" */ '../themes/classic-light.css'),
+    [THEME_MODES.BLACK]: () => import(/* webpackChunkName: "theme-black" */ '../themes/black.css'),
+    [THEME_MODES.TINTED]: () => import(/* webpackChunkName: "theme-tinted" */ '../themes/tinted.css'),
+    [THEME_MODES.TINTED_LIGHT]: () => import(/* webpackChunkName: "theme-tinted" */ '../themes/tinted.css'),
+    [THEME_MODES.AMBIENT]: () => import(/* webpackChunkName: "theme-ambient" */ '../themes/ambient.css'),
+    [THEME_MODES.EMBER]: () => import(/* webpackChunkName: "theme-ember" */ '../themes/ember.css'),
+    [THEME_MODES.SUNSET]: () => import(/* webpackChunkName: "theme-sunset" */ '../themes/sunset.css'),
+    [THEME_MODES.FROST]: () => import(/* webpackChunkName: "theme-frost" */ '../themes/frost.css'),
+    [THEME_MODES.PAPER]: () => import(/* webpackChunkName: "theme-paper" */ '../themes/paper.css'),
+    [THEME_MODES.NOCTURNE]: () => import(/* webpackChunkName: "theme-nocturne" */ '../themes/nocturne.css'),
+    [THEME_MODES.ABYSS]: () => import(/* webpackChunkName: "theme-abyss" */ '../themes/abyss.css'),
+    [THEME_MODES.CYBERPUNK]: () => import(/* webpackChunkName: "theme-cyberpunk" */ '../themes/cyberpunk.css')
+};
+
 class LayoutManager {
     constructor() {
         // Component registries per layout
@@ -103,6 +137,11 @@ class LayoutManager {
         // Current theme mode
         // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
         this._themeMode = THEME_MODES.BLACK;
+
+        // In-flight/resolved palette chunk imports, keyed by theme mode.
+        // Guarantees a single fetch per palette across repeated setThemeMode
+        // calls (boot init always runs one; settings switches run more).
+        this._themeStylePromises = {};
 
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
@@ -820,6 +859,12 @@ class LayoutManager {
 
         document.documentElement.setAttribute('data-theme-mode', mode);
 
+        // Fetch the static palette for this mode (async chunk; no-op when
+        // already fetched). The dynamic derived variables below apply
+        // immediately regardless - the palette chunk only adds the mode's
+        // static --jf-* declarations and selector-specific styling.
+        this.loadThemeStyles(mode);
+
         // Apply dynamic styles
         this._applyDynamicTheme();
 
@@ -835,6 +880,39 @@ class LayoutManager {
             log.info(`Theme mode changed to "${mode}"`);
             eventBus.emit('themeMode:changed', { mode, previousMode: oldMode });
         }
+    }
+
+    /**
+     * Ensure the static palette stylesheet for a theme mode is loaded.
+     *
+     * Kicks the async CSS chunk import for the mode's theme file exactly once
+     * (repeated calls return the same promise). When the chunk resolves, the
+     * newly injected <style> tag is adopted by the CssVarsPolyfill so its
+     * var() references resolve on legacy engines before the next repaint.
+     * No-op for modes without a palette file.
+     * @param {string} mode Theme mode constant
+     * @returns {Promise<void>|undefined}
+     */
+    loadThemeStyles(mode) {
+        const importer = THEME_STYLE_IMPORTS[mode];
+        if (!importer) return undefined;
+
+        if (!this._themeStylePromises[mode]) {
+            this._themeStylePromises[mode] = importer()
+                .then(() => {
+                    // Adopt the freshly injected palette tag (legacy engines
+                    // only; no-op when native CSS custom properties exist).
+                    cssVarsPolyfill.ensureStylesResolved();
+                    log.debug(`Theme palette loaded: "${mode}"`);
+                })
+                .catch((err) => {
+                    // Allow retry on a later setThemeMode call
+                    this._themeStylePromises[mode] = null;
+                    log.warn(`Theme palette chunk failed for "${mode}":`, err);
+                });
+        }
+
+        return this._themeStylePromises[mode];
     }
 
     /**
@@ -920,12 +998,54 @@ class LayoutManager {
 
         // 1.25. Set Semantic Button & Control Defaults per Theme Mode
         // Ensures that CssVarsPolyfill captures the active mode's exact button and control styling.
-        const isLightMode = this._themeMode === THEME_MODES.CLASSIC_LIGHT || this._themeMode === THEME_MODES.FROST || this._themeMode === THEME_MODES.PAPER || this._themeMode === THEME_MODES.TINTED_LIGHT;
-        const buttonBg = isLightMode ? (this._themeMode === THEME_MODES.FROST ? 'rgba(27, 44, 56, 0.09)' : this._themeMode === THEME_MODES.PAPER ? 'rgba(51, 42, 31, 0.07)' : '#eeeeee') : (this._themeMode === THEME_MODES.BLACK ? '#222222' : 'rgba(255, 255, 255, 0.10)');
-        const buttonHover = isLightMode ? (this._themeMode === THEME_MODES.FROST ? 'rgba(27, 44, 56, 0.16)' : this._themeMode === THEME_MODES.PAPER ? 'rgba(51, 42, 31, 0.14)' : '#e0e0e0') : (this._themeMode === THEME_MODES.BLACK ? '#2a2a2a' : 'rgba(255, 255, 255, 0.20)');
-        const inputBg = isLightMode ? (this._themeMode === THEME_MODES.FROST ? 'rgba(27, 44, 56, 0.06)' : this._themeMode === THEME_MODES.PAPER ? 'rgba(51, 42, 31, 0.05)' : '#f0f0f0') : (this._themeMode === THEME_MODES.BLACK ? '#181818' : 'rgba(255, 255, 255, 0.08)');
-        const inputBorder = isLightMode ? (this._themeMode === THEME_MODES.FROST ? 'rgba(27, 44, 56, 0.16)' : this._themeMode === THEME_MODES.PAPER ? 'rgba(51, 42, 31, 0.16)' : '#dddddd') : (this._themeMode === THEME_MODES.BLACK ? '#222222' : 'rgba(255, 255, 255, 0.15)');
-        const errorColor = isLightMode ? (this._themeMode === THEME_MODES.FROST ? '#e25746' : this._themeMode === THEME_MODES.PAPER ? '#bf5040' : '#d32f2f') : '#f44336';
+        const isLightMode =
+            this._themeMode === THEME_MODES.CLASSIC_LIGHT ||
+            this._themeMode === THEME_MODES.FROST ||
+            this._themeMode === THEME_MODES.PAPER ||
+            this._themeMode === THEME_MODES.TINTED_LIGHT;
+        const buttonBg = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.09)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.07)'
+                  : '#eeeeee'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#222222'
+              : 'rgba(255, 255, 255, 0.10)';
+        const buttonHover = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.16)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.14)'
+                  : '#e0e0e0'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#2a2a2a'
+              : 'rgba(255, 255, 255, 0.20)';
+        const inputBg = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.06)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.05)'
+                  : '#f0f0f0'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#181818'
+              : 'rgba(255, 255, 255, 0.08)';
+        const inputBorder = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.16)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.16)'
+                  : '#dddddd'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#222222'
+              : 'rgba(255, 255, 255, 0.15)';
+        const errorColor = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? '#e25746'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? '#bf5040'
+                  : '#d32f2f'
+            : '#f44336';
 
         dynamicCss += `
             --jf-button-bg: ${buttonBg};

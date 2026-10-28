@@ -36,20 +36,6 @@
 @import './screensaver.css';
 @import './rtl.css';
 
-/* Shared color theme palettes and contrast variations */
-@import '../themes/classic-dark.css';
-@import '../themes/classic-light.css';
-@import '../themes/black.css';
-@import '../themes/tinted.css';
-@import '../themes/ambient.css';
-@import '../themes/ember.css';
-@import '../themes/sunset.css';
-@import '../themes/frost.css';
-@import '../themes/paper.css';
-@import '../themes/nocturne.css';
-@import '../themes/abyss.css';
-@import '../themes/cyberpunk.css';
-
 /* Modern interface layers */
 @import './modern/core.css';
 @import './modern/server.css';
