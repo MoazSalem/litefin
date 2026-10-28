@@ -1909,8 +1909,15 @@ class App {
                     }
                 }
 
-                // Only an explicit shuffle play may keep shuffle on
-                if (!isShufflePlay) playQueue.setShuffleMode(false);
+                // ================================================================
+                // PlayQueue Shuffle Mode Synchronization
+                // ================================================================
+                // Synchronize play queue shuffle state with the incoming playback mode.
+                // An explicit shuffle play (e.g. user selected 'Shuffle' on a show or
+                // playlist) activates shuffle mode immediately for this playback session.
+                // Any standard sequential play (normal Play, Continue Watching, or Next Up)
+                // resets shuffle mode to false so subsequent episodes play in order.
+                playQueue.setShuffleMode(Boolean(isShufflePlay));
 
                 // Store playback context for play queue building (e.g. 'boxset', 'music')
                 // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays

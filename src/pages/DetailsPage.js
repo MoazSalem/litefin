@@ -17,7 +17,6 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
@@ -5399,10 +5398,17 @@ class DetailsPage extends Page {
     }
 
     /**
-     * Start a shuffled playback. App.js keeps shuffle on only for plays that carry `isShufflePlay`.
+     * ========================================================================
+     * Shuffled Playback Entry Point
+     * ========================================================================
+     * Initiates playback in shuffle mode.
+     * The shuffle flag is forwarded directly in the `isShufflePlay` payload to
+     * the central player launcher in App.js. Shuffle mode is activated on the
+     * queue only once the item has been validated and playback starts, preventing
+     * premature state leakage if resolution fails or exits early.
      */
     _shufflePlay() {
-        playQueue.setShuffleMode(true);
+        // Delegate directly to _play with the shuffle intent enabled
         this._play({ isShufflePlay: true });
     }
 
