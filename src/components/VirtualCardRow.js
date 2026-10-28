@@ -3,6 +3,8 @@ import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
+import { scrollController } from '../ui/ScrollController.js';
+import { mouseRowScroller } from '../ui/MouseRowScroller.js';
 
 export class VirtualCardRow {
     /**
@@ -499,8 +501,7 @@ export class VirtualCardRow {
              * Defaults to 'gpu' on Android platforms, and 'native' across all other targets.
              */
             const horizontalScrollMode =
-                storage.getItem('pref:horizontalScrollMode') ||
-                (platformInfo.isAndroid ? 'gpu' : 'native');
+                storage.getItem('pref:horizontalScrollMode') || (platformInfo.isAndroid ? 'gpu' : 'native');
 
             if (horizontalScrollMode === 'native') {
                 requestAnimationFrame(() => {
@@ -594,65 +595,77 @@ export class VirtualCardRow {
         // Page size: roughly half the visible row width per click
         const pageSize = Math.max(1, Math.floor(this.visibleCount / 1.5));
 
-        /**
-         * Scroll the track to center on `targetIndex` without touching focus.
-         *
-         * We replicate the exact same translate3d formula that ScrollController uses
-         * (src/ui/ScrollController.js ~L508-L564) so the visual result is identical,
-         * but we skip focusManager.focusElement() so the keyboard/remote focus ring
-         * stays exactly where the user left it.
-         */
-        const scrollToIndex = (targetIndex) => {
-            const isRtl = document.documentElement.dir === 'rtl';
-            const clamped = Math.max(0, Math.min(this.totalItems - 1, targetIndex));
-
-            // Update virtual window so the target cards are in the DOM
-            this.currentIndex = clamped;
-            this._updateWindow(this.currentIndex);
-
-            // Compute the scroll offset (mirrors ScrollController logic exactly)
-            const elementPos = this.getItemPosition(clamped);
-
-            // -----------------------------------------------------------------
-            // Card Centering Geometry (Expanding Posters)
-            // -----------------------------------------------------------------
-            // If we are running the expanding posters layout and the cards can expand,
-            // we center the card based on its EXPANDED width (468px/600px).
-            // This prevents the card's right boundary from clipping and centers
-            // the expanded card perfectly in the middle of the viewport.
-            // -----------------------------------------------------------------
-            const isExpanding = document.documentElement.getAttribute('data-layout-media-rows') === 'expanding';
-            const canExpand =
-                isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
-            const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
-
-            const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
-            const trackWidth = this.getTrackWidth();
-
-            const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
-            const maxScroll = Math.max(0, trackWidth - containerWidth);
-            const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
-
-            // Apply smooth CSS transition — same transition the track CSS already has
-            const transformValue = isRtl
-                ? `translate3d(${finalScrollLeft}px, 0, 0)`
-                : `translate3d(-${finalScrollLeft}px, 0, 0)`;
-
-            this.track.style.webkitTransform = transformValue;
-            this.track.style.transform = transformValue;
-        };
-
         leftBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            scrollToIndex(this.currentIndex - pageSize);
+            this._scrollFromArrow(-pageSize);
         });
 
         rightBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            scrollToIndex(this.currentIndex + pageSize);
+            this._scrollFromArrow(pageSize);
         });
 
         sectionEl.appendChild(arrowContainer);
+    }
+
+    /**
+     * ========================================================================
+     * Scroll-Arrow Page Scroll
+     * ========================================================================
+     * Scrolls the row by `deltaIndex` cards without touching focus. The
+     * position writer depends on the active horizontal scroll mode:
+     *
+     * - 'native'/'instant' (Web, Desktop, TVs): the container's scrollLeft
+     *   owns position. Writing a CSS transform here STACKS with the live
+     *   scrollLeft and produced badly offset, janky jumps. Instead we hand
+     *   the target to MouseRowScroller.scrollRowTo() which animates
+     *   scrollLeft smoothly with easeOutQuad and keeps the virtual window
+     *   synchronized frame-by-frame.
+     *
+     * - 'gpu' (Android): the track transform owns position; write translate3d
+     *   directly (CSS transition provides the easing).
+     *
+     * @param {number} deltaIndex - Signed number of cards to advance (RTL-aware)
+     * @private
+     */
+    _scrollFromArrow(deltaIndex) {
+        const rowItems = this.track.parentElement;
+        if (!rowItems) return;
+
+        const clamped = Math.max(0, Math.min(this.totalItems - 1, this.currentIndex + deltaIndex));
+
+        // -----------------------------------------------------------------
+        // Centering geometry — mirrors ScrollController / settle math exactly
+        // -----------------------------------------------------------------
+        const elementPos = this.getItemPosition(clamped);
+
+        // Expanding layouts must center on the EXPANDED card width so the
+        // target card's boundaries never clip at the viewport edge
+        const isExpanding = document.documentElement.getAttribute('data-layout-media-rows') === 'expanding';
+        const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+        const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
+
+        const containerWidth = rowItems.clientWidth;
+        const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
+        const targetScroll = Math.max(0, Math.min(elementPos - containerWidth / 2 + elementWidth / 2, maxScroll));
+
+        // Update virtual window so the target cards are rendered before moving
+        this.currentIndex = clamped;
+        this._updateWindow(clamped);
+
+        const scrollMode = scrollController.getHorizontalScrollMode();
+        if (scrollMode === 'gpu') {
+            // GPU mode: transform owns position — same writer ScrollController uses
+            const isRtl = document.documentElement.dir === 'rtl';
+            const transformValue = isRtl
+                ? `translate3d(${targetScroll}px, 0, 0)`
+                : `translate3d(-${targetScroll}px, 0, 0)`;
+            this.track.style.webkitTransform = transformValue;
+            this.track.style.transform = transformValue;
+        } else {
+            // Native mode: animate scrollLeft via the shared smooth scroller
+            mouseRowScroller.scrollRowTo(rowItems, targetScroll);
+        }
     }
 
     /**
