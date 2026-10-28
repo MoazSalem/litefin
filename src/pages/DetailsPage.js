@@ -5393,10 +5393,14 @@ class DetailsPage extends Page {
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
             backdropUrl,
-            ghostMode
+            ghostMode,
+            isShufflePlay
         });
     }
 
+    /**
+     * Start a shuffled playback. App.js keeps shuffle on only for plays that carry `isShufflePlay`.
+     */
     _shufflePlay() {
         playQueue.setShuffleMode(true);
         this._play({ isShufflePlay: true });

@@ -122,7 +122,8 @@ class PlayQueue {
     }
 
     /**
-     * Toggle shuffle mode on the current queue
+     * Toggle shuffle mode on the current queue.
+     * The flag is kept across clear() and init(); App.js resets it on every play that is not a shuffle play.
      * @param {boolean} isShuffled
      */
     setShuffleMode(isShuffled) {
