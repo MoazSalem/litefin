@@ -112,8 +112,10 @@ test('Jellyfin lookups use film/series TMDB IDs and skip unsupported or unidenti
 });
 
 // Exercise the actual page loader with isolated network and DOM dependencies.
-const pageSource = readFileSync(new URL('../src/pages/DetailsPage.js', import.meta.url), 'utf8');
-const loaderBody = pageSource.split('    async _loadWatchProviders() {')[1].split('\n    async _loadDetails() {')[0];
+const pageSource = readFileSync(new URL('../src/pages/DetailsPage.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const startLoader = pageSource.indexOf('    async _loadWatchProviders() {');
+const endLoader = pageSource.indexOf('\n    }\n', startLoader);
+const loaderBody = pageSource.slice(startLoader + '    async _loadWatchProviders() {'.length, endLoader + 6);
 function pageWith(seerr, preference = 'true') {
     const classes = new Set();
     const container = {

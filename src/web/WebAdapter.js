@@ -106,8 +106,14 @@ class WebAdapter {
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
         document.addEventListener('wheel', () => this.reportInput(), { passive: true });
 
-        // Enable mouse wheel / trackpad horizontal scrolling of media rows
-        mouseRowScroller.init();
+        // ====================================================================
+        // Mouse & Trackpad Horizontal Row Scroller
+        // ====================================================================
+        // Initialize mouse wheel / trackpad horizontal scrolling of media rows
+        // when the module is present in the runtime environment.
+        if (typeof mouseRowScroller !== 'undefined' && typeof mouseRowScroller.init === 'function') {
+            mouseRowScroller.init();
+        }
 
         // Synchronize HTML5 fullscreen changes with web client state
         document.addEventListener('fullscreenchange', () => {

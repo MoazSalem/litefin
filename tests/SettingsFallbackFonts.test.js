@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import { getFallbackFontId, getFallbackFontName, getFallbackFontFamily } from '../src/utils/FallbackFonts.js';
 
 const source = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8')
-    .replace(/^import .*;\r?\n/gm, '')
+    // Strip all ES module imports (single-line, multi-line, and asset imports)
+    .replace(/import\s+[\s\S]*?;/g, '')
     .replace('export default SettingsPage;', 'SettingsPage;');
 const fonts = [{ Name: 'UI & 字体.ttf' }, { Name: "Subtitle (O'Brien).otf" }];
 const baseOptions = [
@@ -151,7 +152,8 @@ test('font selection saves the complete per-file ID and restores it on a fresh s
 test('named subtitle fonts supply their own CSS/ASS family and clear it for a bundled font', () => {
     const subtitleSource =
         readFileSync(new URL('../src/utils/SubtitleStyles.js', import.meta.url), 'utf8')
-            .replace(/^import .*;\r?\n/gm, '')
+            // Strip all ES module imports (single-line, multi-line, and asset imports)
+    .replace(/import\s+[\s\S]*?;/g, '')
             .replace(/^export function /gm, 'function ')
             .replace('export default {', 'const subtitleStyles = {') + '\nsubtitleStyles;';
     let font = getFallbackFontId(fonts[1].Name);

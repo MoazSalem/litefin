@@ -11,6 +11,12 @@ const initBlock = appSource.slice(
     appSource.indexOf('        // Initialize ScreensaverManager')
 );
 
+// Extract deferred plugin manager initialization executed when splash screen hides
+const hideSplashBlock = appSource.slice(
+    appSource.indexOf('                if (this._pluginInitPending) {'),
+    appSource.indexOf('                timeManager.init();')
+);
+
 function evaluateInitBlock({
     authenticated = true,
     sessionCount = 2,
@@ -67,7 +73,13 @@ function evaluateInitBlock({
         focusManager: { name: 'FocusManager' }
     };
 
-    vm.runInNewContext(`(function () {\n${initBlock}\n})();`, context);
+    const appScope = {};
+    context.appScope = appScope;
+    vm.runInNewContext(
+        `(function () {\n${initBlock}\n}).call(appScope);\n` +
+        `(function () {\n${hideSplashBlock}\n}).call(appScope);`,
+        context
+    );
 
     return calls;
 }

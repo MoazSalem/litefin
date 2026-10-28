@@ -206,7 +206,14 @@ export function getDeviceCapabilities() {
         if (info.hdr10 !== undefined) hdr10Hw = info.hdr10 === true || info.hdr10 === 'true';
         if (info.screenWidth) screenWidthHw = parseInt(info.screenWidth, 10);
         if (info.screenHeight) screenHeightHw = parseInt(info.screenHeight, 10);
-    } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
+    } else if (
+        typeof window !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        typeof window.webOS.deviceInfo === 'function' &&
+        // Only query webOS.deviceInfo when a real TV bridge exists (PalmServiceBridge or PalmSystem)
+        // to avoid webOSTV.js emitting Luna service failure warnings in test/browser environments
+        (typeof window.PalmServiceBridge !== 'undefined' || typeof window.PalmSystem !== 'undefined')
+    ) {
         window.webOS.deviceInfo((res) => {
             log.info('WebOSProfile: Async deviceInfo received, clearing cache');
             clearCapabilitiesCache();

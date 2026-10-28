@@ -365,6 +365,9 @@ test('PlayerPage: Back after Next also waits for the stop report of the item lef
     assert.deepStrictEqual(navigations, [], "left before A's new resume position reached the server");
 
     stopA1.resolve(null);
+    await flush();
+    // Advance mock timers past the SQLite write settle delay in _stopAndExit
+    t.mock.timers.tick(200);
     await leaving;
     assert.deepStrictEqual(navigations, ['/details/B']);
 });
@@ -382,6 +385,9 @@ test('PlayerPage: Back after Next still leaves after 2.5 s when the server does 
     const leaving = page._stopAndExit();
     await flush();
     t.mock.timers.tick(2500);
+    await flush();
+    // Advance mock timers past the SQLite write settle delay in _stopAndExit
+    t.mock.timers.tick(200);
     await leaving;
     assert.deepStrictEqual(navigations, ['/details/B']);
 });

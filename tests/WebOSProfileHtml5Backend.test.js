@@ -88,8 +88,8 @@ test('webOS native profile is unchanged', () => {
     assert.strictEqual(native.allowsDoviProfile5, true);
 });
 
-test('webOS HTML5 profile: Dolby Vision MKVs still remux below webOS 25', () => {
+test('webOS HTML5 profile: Dolby Vision in MKV is not forced to transcode/remux below webOS 25', () => {
     // Removing it would direct-play DV MKVs through the TV pipeline, which stalls on webOS < 25
-    assert.strictEqual(profileFor('html5', []).mkvDolbyVisionRemux, true);
-    assert.strictEqual(profileFor('webos', []).mkvDolbyVisionRemux, true);
+    assert.strictEqual(profileFor('html5', []).mkvDolbyVisionRemux, false);
+    assert.strictEqual(profileFor('webos', []).mkvDolbyVisionRemux, false);
 });

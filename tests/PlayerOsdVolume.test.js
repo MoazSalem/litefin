@@ -76,6 +76,8 @@ function setupAdapterTest(filePath, adapterExportName) {
         storage: mockStorage,
         logger: mockLogger,
         gamepadManager: { init() {}, update() {}, destroy() {} },
+        // Mouse and trackpad horizontal row scrolling subsystem mock
+        mouseRowScroller: { init() {} },
         console,
         Boolean,
         Date

@@ -433,6 +433,11 @@ class WebOSAdapter {
      */
     _loadDeviceInfo() {
         if (!this._isWebOS) return;
+        // Guard against calling Luna services in headless unit tests or standard browsers
+        // where native PalmServiceBridge or PalmSystem objects are not present
+        if (typeof window.PalmServiceBridge === 'undefined' && typeof window.PalmSystem === 'undefined') {
+            return;
+        }
 
         try {
             if (window.webOS && typeof window.webOS.deviceInfo === 'function') {
