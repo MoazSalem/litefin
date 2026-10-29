@@ -296,21 +296,96 @@ test('switching from native to mse stops native first', async () => {
     assert.deepEqual(created.mse[0].calls, ['load:b']);
 });
 
-test('switching from mse to flac or native fully stops the mse engine', async () => {
+function logged(created) {
+    const log = [];
+    for (const [kind, list] of Object.entries(created)) {
+        list.forEach((inner) => {
+            for (const method of ['load', 'stop', 'destroy']) {
+                const original = inner[method];
+                inner[method] = (...args) => {
+                    log.push(`${kind}.${method}`);
+                    return original(...args);
+                };
+            }
+        });
+    }
+    return log;
+}
+
+test('switching from mse destroys it before the next kind loads, and a later mse track gets a fresh engine', async () => {
     const { engine, created } = setup();
     await engine.load(mse('a'));
-    await engine.load(flac('b'));
-    assert.ok(created.mse[0].calls.includes('stop'));
+    const first = created.mse[0];
+    const log = [];
+    const loadNative = engine._factories.native;
+    engine._factories.native = (cb) => {
+        const inner = loadNative(cb);
+        const load = inner.load;
+        inner.load = (...args) => {
+            log.push('native.load');
+            return load(...args);
+        };
+        return inner;
+    };
+    const destroy = first.destroy;
+    first.destroy = () => {
+        log.push('mse.destroy');
+        destroy();
+    };
+    await engine.load(mp3('b'));
+    assert.deepEqual(log, ['mse.destroy', 'native.load']);
     await engine.load(mse('c'));
-    await engine.load(mp3('d'));
-    assert.equal(created.mse[0].calls.filter((c) => c === 'stop').length, 2);
+    assert.equal(created.mse.length, 2);
 });
 
-test('stop and destroy reach the mse engine', async () => {
+test('mse handing over to native at a track end destroys mse before native loads', async () => {
+    const { engine, created } = setup();
+    await engine.load(mse('a'));
+    engine.play();
+    await engine.preloadNext(mp3('b'));
+    const log = [];
+    const mseEngine = created.mse[0];
+    const destroy = mseEngine.destroy;
+    mseEngine.destroy = () => {
+        log.push('mse.destroy');
+        destroy();
+    };
+    const createNative = engine._factories.native;
+    engine._factories.native = (cb) => {
+        const inner = createNative(cb);
+        const load = inner.load;
+        inner.load = (...args) => {
+            log.push('native.load');
+            return load(...args);
+        };
+        return inner;
+    };
+    mseEngine.callbacks.onEnded();
+    await flush();
+    assert.deepEqual(log, ['mse.destroy', 'native.load']);
+});
+
+test('flac to mse destroys the gapless engine before mse loads', async () => {
+    const { engine, created } = setup();
+    await engine.load(flac('a'));
+    const log = logged({ gapless: created.gapless });
+    const createMse = engine._factories.mse;
+    engine._factories.mse = (cb) => {
+        const inner = createMse(cb);
+        const load = inner.load;
+        inner.load = (...args) => {
+            log.push('mse.load');
+            return load(...args);
+        };
+        return inner;
+    };
+    await engine.load(mse('b'));
+    assert.deepEqual(log, ['gapless.destroy', 'mse.load']);
+});
+
+test('stop destroys the mse engine so no media source outlives the music', async () => {
     const { engine, created } = setup();
     await engine.load(mse('a'));
     engine.stop();
-    assert.ok(created.mse[0].calls.includes('stop'));
-    engine.destroy();
     assert.ok(created.mse[0].calls.includes('destroy'));
 });

@@ -83,7 +83,7 @@ export default class HybridAudioEngine {
         this._wantsPlay = false;
         this._activeKind = null;
         if (this._engines.native) this._engines.native.stop();
-        if (this._engines.mse) this._engines.mse.stop();
+        if (this._engines.mse) this._release('mse');
         if (this._engines.flac) this._release('flac');
     }
 
@@ -100,14 +100,15 @@ export default class HybridAudioEngine {
         return this._engines[kind];
     }
 
-    /* A live AudioContext can hold webOS audio output in PCM mode and block Atmos passthrough on native tracks. */
+    /* A live AudioContext can hold webOS audio output in PCM mode and block Atmos passthrough on native tracks;
+       a MediaSource stays attached to its <audio> until destroyed, and webOS allows one active media element. */
     _release(kind) {
         const engine = this._engines[kind];
-        if (kind === 'flac') {
-            this._engines.flac = null;
-            engine.destroy();
-        } else {
+        if (kind === 'native') {
             engine.stop();
+        } else {
+            this._engines[kind] = null;
+            engine.destroy();
         }
     }
 

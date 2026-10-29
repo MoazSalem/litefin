@@ -3,10 +3,10 @@ import HybridAudioEngine from './HybridAudioEngine.js';
 import GaplessAudioEngine from './GaplessAudioEngine.js';
 import NativeAudioBackend from './NativeAudioBackend.js';
 import MseAudioEngine from './MseAudioEngine.js';
-import { buildHlsAudioUrl, buildStaticAudioUrl } from './streamUrl.js';
-import { mseSourceFor, supportsMse } from './mseFormat.js';
-import { routeTrack, supportsGaplessEngine } from './trackKind.js';
-import { webAudioAudibleOn, watchSoundOutput } from './soundOutput.js';
+import { supportsMse } from './mseFormat.js';
+import { describeMusicTrack } from './trackDescriptor.js';
+import { supportsGaplessEngine } from './trackKind.js';
+import { watchSoundOutput } from './soundOutput.js';
 import { NOW_PLAYING_PATH, wireMusicSession } from './musicWiring.js';
 import { api } from '../api/ApiClient.js';
 import { buildJellyfinProfile } from '../api/DeviceProfile.js';
@@ -32,7 +32,7 @@ if (platformInfo.isWebOS && typeof window !== 'undefined' && window.PalmServiceB
             () => new window.PalmServiceBridge(),
             (value) => {
                 soundOutput = value;
-                log.info('Sound output:', value, webAudioAudibleOn(value) ? '(gapless engine)' : '(native audio)');
+                log.info('Sound output:', value, value === 'tv_speaker' ? '(gapless engine)' : '(MSE)');
             }
         );
     } catch (err) {
@@ -48,39 +48,18 @@ function getDeviceProfile() {
 }
 
 function describeTrack(item, mediaSource) {
-    const mseSource = mseSourceFor(mediaSource);
-    const isEmby = api.isEmby();
-    const kind = routeTrack({
+    const win = typeof window === 'undefined' ? undefined : window;
+    const descriptor = describeMusicTrack({
+        item,
+        mediaSource,
         soundOutput,
-        isWebOS: platformInfo.isWebOS,
-        isEmby,
-        gaplessAvailable,
-        mseAvailable: supportsMse(typeof window === 'undefined' ? undefined : window, mseSource.mime),
-        mediaSource
+        platform: { isWebOS: platformInfo.isWebOS, isEmby: api.isEmby(), gaplessAvailable },
+        supportsMse: (mime) => supportsMse(win, mime),
+        api,
+        now: Date.now()
     });
-    log.debug(`Track ${item.Id} routed to ${kind} (sound output: ${soundOutput || 'unknown'})`);
-    if (kind === 'mse') {
-        const url = buildHlsAudioUrl({
-            serverUrl: api.serverUrl,
-            itemId: item.Id,
-            mediaSourceId: mediaSource.Id,
-            token: api.accessToken,
-            deviceId: api.deviceId,
-            playSessionId: `${api.deviceId}-${item.Id}-${Date.now()}`,
-            audioCodec: mseSource.audioCodec,
-            sampleRate: mseSource.sampleRate
-        });
-        return { url, kind, mime: mseSource.mime };
-    }
-    const url = buildStaticAudioUrl({
-        serverUrl: api.serverUrl,
-        itemId: item.Id,
-        mediaSourceId: mediaSource.Id,
-        token: api.accessToken,
-        deviceId: api.deviceId,
-        isEmby
-    });
-    return { url, kind };
+    log.debug(`Track ${item.Id} routed to ${descriptor.kind} (sound output: ${soundOutput || 'unknown'})`);
+    return descriptor;
 }
 
 function engineFactory(callbacks) {

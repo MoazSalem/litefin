@@ -16,8 +16,13 @@ test('TV speakers keep FLAC on the gapless engine and everything else native', (
     assert.equal(routeTrack({ ...base, soundOutput: 'tv_speaker', mediaSource: EAC3 }), 'native');
 });
 
-test('an unknown output keeps the Web Audio route', () => {
-    assert.equal(routeTrack({ ...base, soundOutput: null, mediaSource: FLAC }), 'flac');
+test('an unknown output on webOS routes to MSE when supported', () => {
+    assert.equal(routeTrack({ ...base, soundOutput: null, mediaSource: FLAC }), 'mse');
+    assert.equal(routeTrack({ ...base, soundOutput: null, mseAvailable: false, mediaSource: FLAC }), 'flac');
+});
+
+test('an unknown output off webOS keeps the Web Audio route', () => {
+    assert.equal(routeTrack({ ...base, isWebOS: false, soundOutput: null, mediaSource: FLAC }), 'flac');
 });
 
 test('Emby servers never use MSE', () => {

@@ -18,8 +18,7 @@ export function supportsGaplessEngine(win) {
 }
 
 export function routeTrack({ soundOutput, isWebOS, isEmby, gaplessAvailable, mseAvailable, mediaSource }) {
-    const webAudioAudible = webAudioAudibleOn(soundOutput);
-    if (isWebOS && !isEmby && mseAvailable && !webAudioAudible) return 'mse';
-    if (gaplessAvailable && webAudioAudible && audioKindOf(mediaSource) === 'flac') return 'flac';
+    if (isWebOS && !isEmby && mseAvailable && soundOutput !== 'tv_speaker') return 'mse';
+    if (gaplessAvailable && webAudioAudibleOn(soundOutput) && audioKindOf(mediaSource) === 'flac') return 'flac';
     return 'native';
 }
