@@ -33,16 +33,16 @@ function getDeviceProfile() {
     return deviceProfile;
 }
 
-function describeTrack(item, mediaSource) {
+function describeTrack(item, mediaSource, playSessionId) {
     const win = typeof window === 'undefined' ? undefined : window;
     const descriptor = describeMusicTrack({
         item,
         mediaSource,
+        playSessionId,
         soundOutput,
         platform: { isWebOS: platformInfo.isWebOS, isEmby: api.isEmby(), gaplessAvailable },
         supportsMse: (mime) => supportsMse(win, mime),
-        api,
-        now: Date.now()
+        api
     });
     log.debug(`Track ${item.Id} routed to ${descriptor.kind} (sound output: ${soundOutput || 'unknown'})`);
     return descriptor;

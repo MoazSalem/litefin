@@ -15,7 +15,7 @@ const describe = (mediaSource, overrides = {}) =>
         platform,
         supportsMse: () => true,
         api,
-        now: 1700,
+        playSessionId: 'ps-from-playbackinfo',
         ...overrides
     });
 
@@ -27,7 +27,7 @@ test('an E-AC-3 soundbar track gets an HLS copy URL with the real credentials an
     assert.match(url, /mediaSourceId=ms1/);
     assert.match(url, /deviceId=dev1/);
     assert.match(url, /ApiKey=tok%20en/);
-    assert.match(url, /PlaySessionId=dev1-item9-1700/);
+    assert.match(url, /PlaySessionId=ps-from-playbackinfo/);
     assert.match(url, /audioCodec=copy/);
     assert.doesNotMatch(url, /audioSampleRate/);
 });
@@ -56,4 +56,16 @@ test('MSE support is asked per track mime', () => {
     });
     assert.deepEqual(asked, ['audio/mp4; codecs="ec-3"']);
     assert.equal(descriptor.kind, 'native');
+});
+
+test('I4: the HLS URL carries the PlaybackInfo PlaySessionId, encoded', () => {
+    const { url } = describe(EAC3, { playSessionId: 'abc 123' });
+    assert.match(url, /PlaySessionId=abc%20123(&|$)/);
+    assert.doesNotMatch(url, /dev1-item9/);
+});
+
+test('I4: MSE tracks report DirectStream for a copied codec and Transcode for FLAC; others report nothing', () => {
+    assert.equal(describe(EAC3).playMethod, 'DirectStream');
+    assert.equal(describe(FLAC).playMethod, 'Transcode');
+    assert.equal(describe(FLAC, { soundOutput: 'tv_speaker' }).playMethod, undefined);
 });

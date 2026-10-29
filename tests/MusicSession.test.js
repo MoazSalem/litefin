@@ -600,3 +600,39 @@ test('I3: a reroute whose reload fails skips the track like an engine error', as
     assert.deepEqual(h.notified, ['Song a']);
     assert.equal(h.session.currentItem.Id, 'b');
 });
+
+test('I4: describeTrack gets the PlaybackInfo PlaySessionId, also when rerouting', async () => {
+    const h = routedSetup();
+    await h.session.playItems(h.items, 0);
+    await flush();
+    h.output.value = 'external_arc';
+    await h.session.reroute();
+    await flush();
+
+    assert.deepEqual(h.described.slice(0, 3), [
+        { id: 'a', playSessionId: 'ps-a' },
+        { id: 'b', playSessionId: 'ps-b' },
+        { id: 'a', playSessionId: 'ps-a' }
+    ]);
+});
+
+test('I4: reports carry the descriptor play method and keep DirectPlay for other tracks', async () => {
+    const h = setup({
+        describeTrack: (item) => ({
+            url: `http://srv/${item.Id}`,
+            kind: item.Id === 'a' ? 'mse' : 'native',
+            ...(item.Id === 'a' ? { playMethod: 'Transcode' } : {})
+        })
+    });
+    await h.session.playItems(h.items, 0);
+    await flush();
+    h.timers.intervals.at(-1).fn();
+    await h.session.next();
+    await flush();
+
+    assert.equal(h.api.started[0].PlayMethod, 'Transcode');
+    assert.equal(h.api.started[0].PlaySessionId, 'ps-a');
+    assert.equal(h.api.progress[0].PlayMethod, 'Transcode');
+    assert.equal(h.api.stopped[0].PlayMethod, 'Transcode');
+    assert.equal(h.api.started[1].PlayMethod, 'DirectPlay');
+});

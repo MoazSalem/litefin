@@ -134,7 +134,7 @@ export default class MusicSession {
     async reroute() {
         const current = this._current;
         if (!this._active || !current) return;
-        const descriptor = this._describeTrack(current.item, current.mediaSource);
+        const descriptor = this._describeTrack(current.item, current.mediaSource, current.playSessionId);
         if (descriptor.kind === current.track.kind) return;
         const generation = this._beginTransition();
         const wasPlaying = this._engine.isPlaying;
@@ -222,7 +222,7 @@ export default class MusicSession {
         const mediaSource = response?.MediaSources?.[0];
         if (!mediaSource) throw new Error(`No media source for ${item.Id}`);
         const runtimeTicks = mediaSource.RunTimeTicks ?? item.RunTimeTicks ?? 0;
-        const descriptor = this._describeTrack(item, mediaSource);
+        const descriptor = this._describeTrack(item, mediaSource, response.PlaySessionId);
         return {
             item,
             mediaSource,
@@ -343,7 +343,7 @@ export default class MusicSession {
             PlaySessionId: prepared.playSessionId,
             PositionTicks: Math.round(positionMs * TICKS_PER_MS),
             IsPaused: isPaused,
-            PlayMethod: 'DirectPlay'
+            PlayMethod: prepared.track.playMethod || 'DirectPlay'
         };
     }
 

@@ -2,7 +2,7 @@ import { buildHlsAudioUrl, buildStaticAudioUrl } from './streamUrl.js';
 import { mseSourceFor } from './mseFormat.js';
 import { routeTrack } from './trackKind.js';
 
-export function describeMusicTrack({ item, mediaSource, soundOutput, platform, supportsMse, api, now }) {
+export function describeMusicTrack({ item, mediaSource, playSessionId, soundOutput, platform, supportsMse, api }) {
     const mseSource = mseSourceFor(mediaSource);
     const kind = routeTrack({
         soundOutput,
@@ -19,11 +19,12 @@ export function describeMusicTrack({ item, mediaSource, soundOutput, platform, s
             mediaSourceId: mediaSource.Id,
             token: api.accessToken,
             deviceId: api.deviceId,
-            playSessionId: `${api.deviceId}-${item.Id}-${now}`,
+            playSessionId,
             audioCodec: mseSource.audioCodec,
             sampleRate: mseSource.sampleRate
         });
-        return { url, kind, mime: mseSource.mime };
+        const playMethod = mseSource.audioCodec === 'copy' ? 'DirectStream' : 'Transcode';
+        return { url, kind, mime: mseSource.mime, playMethod };
     }
     const url = buildStaticAudioUrl({
         serverUrl: api.serverUrl,
