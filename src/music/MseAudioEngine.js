@@ -1,25 +1,18 @@
 import { logger } from '../utils/Logger.js';
-import { parseHlsPlaylist, segmentIndexAt } from './hlsPlaylist.js';
-import { addTrack, closeTrack, emptyTimeline, entryAt, evictionEnd, positionMs } from './mseTimeline.js';
-import SourceBufferQueue from './sourceBufferQueue.js';
+import { segmentIndexAt } from './hlsPlaylist.js';
+import { addTrack, closeTrack, dropFrom, emptyTimeline, entryAt, evictionEnd } from './mseTimeline.js';
+import MseMediaPipeline from './MseMediaPipeline.js';
+import { FEED_STEP, nextFeedStep, nextState } from './mseFeedPlan.js';
+import { defaultFetchBytes, defaultFetchText, fetchSegment, fetchTrackStart } from './mseSegmentSource.js';
 
 export const AHEAD_SECONDS = 20;
 export const BEHIND_SECONDS = 4;
 export const TICK_MS = 250;
 const QUOTA_KEEP_BEHIND = 1;
-const OPEN_TIMEOUT_MS = 10000;
 
 const noop = () => {};
-
-async function fetchOk(url) {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response;
-}
-
-const defaultFetchText = async (url) => (await fetchOk(url)).text();
-const defaultFetchBytes = async (url) => new Uint8Array(await (await fetchOk(url)).arrayBuffer());
 const isQuotaError = (err) => Boolean(err) && err.name === 'QuotaExceededError';
+const sameTrack = (a, b) => a === b || (Boolean(a) && Boolean(b) && a.id === b.id && a.url === b.url);
 
 export default class MseAudioEngine {
     constructor({
@@ -40,20 +33,17 @@ export default class MseAudioEngine {
         log = logger.create('MseAudioEngine')
     } = {}) {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
-        this._media = { createAudio, createMediaSource, createObjectUrl, revokeObjectUrl };
         this._fetchText = fetchText;
         this._fetchBytes = fetchBytes;
-        this._timers = { setIntervalFn, clearIntervalFn, setTimeoutFn, clearTimeoutFn };
+        this._timers = { setIntervalFn, clearIntervalFn };
         this._log = log;
-        this._audio = null;
-        this._audioListeners = [];
-        this._mediaSource = null;
-        this._sourceBuffer = null;
-        this._queue = null;
-        this._objectUrl = null;
-        this._sourceOpened = false;
-        this._mediaBroken = false;
-        this._cancelOpenWait = null;
+        this._pipe = new MseMediaPipeline({
+            media: { createAudio, createMediaSource, createObjectUrl, revokeObjectUrl },
+            timers: { setTimeoutFn, clearTimeoutFn },
+            log,
+            onEnded: () => this._handleEnded(),
+            onError: () => this._handleAudioError()
+        });
         this._generation = 0;
         this._appendSeq = 0;
         this._errorReported = null;
@@ -66,11 +56,14 @@ export default class MseAudioEngine {
     }
 
     get positionMs() {
-        return this._audio ? positionMs(this._timeline, this._audio.currentTime) : 0;
+        const entry = this._currentEntry();
+        if (!this._audio || !entry) return 0;
+        const position = Math.max(0, (this._audio.currentTime - entry.origin) * 1000);
+        return this.durationMs > 0 ? Math.min(position, this.durationMs) : position;
     }
 
     get durationMs() {
-        const track = this._currentTrack();
+        const track = this._loadedTrack;
         return track && track.durationMs > 0 ? track.durationMs : 0;
     }
 
@@ -79,8 +72,15 @@ export default class MseAudioEngine {
     }
 
     get currentTrackId() {
-        const track = this._currentTrack();
-        return track ? track.id : null;
+        return this._loadedTrack ? this._loadedTrack.id : null;
+    }
+
+    get _audio() {
+        return this._pipe.audio;
+    }
+
+    get _queue() {
+        return this._pipe.queue;
     }
 
     async load(track, startMs = 0) {
@@ -95,7 +95,12 @@ export default class MseAudioEngine {
     }
 
     async preloadNext(track) {
-        this._nextTrack = track || null;
+        this._advanceTrack();
+        const next = track || null;
+        if (sameTrack(next, this._nextTrack)) return;
+        this._dropNext();
+        this._nextTrack = next;
+        this._pump(this._generation);
     }
 
     play() {
@@ -113,10 +118,18 @@ export default class MseAudioEngine {
         if (this._audio) this._audio.pause();
     }
 
+    /* relative to the current track: the buffered next track is never a seek target */
     async seek(ms) {
-        if (!this._audio || !this._loadedTrack) return;
-        const entry = entryAt(this._timeline, this._audio.currentTime);
-        this._audio.currentTime = (entry ? entry.origin : 0) + Math.max(0, ms) / 1000;
+        const track = this._loadedTrack;
+        if (!this._audio || !track) return;
+        const targetMs = Math.max(0, this.durationMs > 0 ? Math.min(ms, this.durationMs) : ms);
+        const entry = this._currentEntry();
+        const target = (entry ? entry.origin : 0) + targetMs / 1000;
+        if (entry && (entry.end === null || target < entry.end) && this._pipe.isBuffered(target)) {
+            this._audio.currentTime = target;
+            return;
+        }
+        await this._reload(track, targetMs, this._nextTrack);
     }
 
     stop() {
@@ -125,142 +138,47 @@ export default class MseAudioEngine {
         this._loadedTrack = null;
         this._nextTrack = null;
         if (this._audio) this._audio.pause();
-        if (this._queue) this._clearBuffer().catch((err) => this._log.debug('Clearing the SourceBuffer failed', err));
+        if (this._queue) this._pipe.clear().catch((err) => this._log.debug('Clearing the SourceBuffer failed', err));
     }
 
     destroy() {
         this.stop();
-        if (!this._audio) return;
-        this._audioListeners.forEach(([event, handler]) => this._audio.removeEventListener(event, handler));
-        this._audioListeners = [];
-        this._detachMediaSource();
-        try {
-            this._audio.removeAttribute('src');
-            this._audio.load();
-        } catch (err) {
-            this._log.warn('Audio element cleanup failed', err);
-        }
-        this._audio = null;
+        this._pipe.destroy();
     }
 
     async _loadInto(gen, track, startMs) {
         const fresh = () => gen === this._generation;
-        this._ensureMedia();
-        await this._whenOpen();
+        this._pipe.ensure(track.mime);
+        await this._pipe.whenOpen();
         if (!fresh()) return;
-        this._ensureSourceBuffer(track.mime);
-        await this._clearBuffer();
+        this._pipe.ensureSourceBuffer(track.mime);
+        await this._pipe.clear();
         if (!fresh()) return;
-        const text = await this._fetchText(track.url);
+        const { playlist, init } = await fetchTrackStart(this._fetchText, this._fetchBytes, track);
         if (!fresh()) return;
-        const playlist = parseHlsPlaylist(text, track.url);
-        if (playlist.segments.length === 0) throw new Error(`HLS playlist for ${track.id} has no segments`);
         const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
-        const init = await this._fetchBytes(playlist.initUrl);
-        if (!fresh()) return;
-        await this._queue.run((sb) => sb.appendBuffer(init));
+        this._currentKey = item.key;
+        await this._queue.run((sb) => {
+            this._pipe.switchType(sb, track.mime);
+            sb.appendBuffer(init);
+        });
         if (!fresh()) return;
         const offset = playlist.segments[item.index].start;
         await this._queue.run((sb) => {
             sb.timestampOffset = offset;
         });
-        if (!fresh() || !(await this._appendSegment(gen, item))) return;
+        if (!fresh() || !(await this._appendSegment(gen, item.key))) return;
         this._audio.currentTime = startMs / 1000;
+        this._ready = true;
         this._startTimer();
         this._pump(gen);
     }
 
-    // ========================================================================
-    // Media element & SourceBuffer
-    // ========================================================================
-
-    _ensureMedia() {
-        if (!this._audio) {
-            this._audio = this._media.createAudio();
-            this._listen('ended', () => this._handleEnded());
-            this._listen('error', () => this._handleAudioError());
-        }
-        const closedAfterOpen = this._sourceOpened && this._mediaSource.readyState === 'closed';
-        if (this._mediaSource && !this._mediaBroken && !closedAfterOpen) return;
-        this._detachMediaSource();
-        this._mediaBroken = false;
-        this._mediaSource = this._media.createMediaSource();
-        this._objectUrl = this._media.createObjectUrl(this._mediaSource);
-        this._audio.src = this._objectUrl;
-    }
-
-    _detachMediaSource() {
-        if (this._queue) this._queue.dispose();
-        if (this._objectUrl) {
-            try {
-                this._media.revokeObjectUrl(this._objectUrl);
-            } catch (err) {
-                this._log.warn('Revoking the MediaSource URL failed', err);
-            }
-        }
-        this._queue = null;
-        this._sourceBuffer = null;
-        this._mediaSource = null;
-        this._objectUrl = null;
-        this._sourceOpened = false;
-    }
-
-    _listen(event, handler) {
-        this._audio.addEventListener(event, handler);
-        this._audioListeners.push([event, handler]);
-    }
-
-    _whenOpen() {
-        const mediaSource = this._mediaSource;
-        if (mediaSource.readyState !== 'closed') {
-            this._sourceOpened = true;
-            return Promise.resolve();
-        }
-        const { setTimeoutFn, clearTimeoutFn } = this._timers;
-        return new Promise((resolve, reject) => {
-            const finish = (opened, err) => {
-                mediaSource.removeEventListener('sourceopen', onOpen);
-                clearTimeoutFn(timer);
-                this._cancelOpenWait = null;
-                if (opened) this._sourceOpened = true;
-                if (err) reject(err);
-                else resolve();
-            };
-            const onOpen = () => finish(true);
-            const timer = setTimeoutFn(() => {
-                this._mediaBroken = true;
-                finish(false, new Error('MediaSource did not open'));
-            }, OPEN_TIMEOUT_MS);
-            mediaSource.addEventListener('sourceopen', onOpen);
-            this._cancelOpenWait = () => finish(false);
-        });
-    }
-
-    _ensureSourceBuffer(mime) {
-        if (this._sourceBuffer) return;
-        this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
-        this._sourceBuffer.mode = 'sequence';
-        this._queue = new SourceBufferQueue(this._sourceBuffer);
-    }
-
-    _clearBuffer() {
-        return this._queue.run((sb) => {
-            if (sb.buffered.length > 0) sb.remove(0, Infinity);
-        });
-    }
-
-    _bufferedEdges() {
-        const ranges = this._sourceBuffer.buffered;
-        if (ranges.length === 0) return null;
-        return { start: ranges.start(0), end: ranges.end(ranges.length - 1) };
-    }
-
     _evict(gen, keepBehind) {
-        const end = evictionEnd(this._audio.currentTime, keepBehind);
-        return this._queue.run((sb) => {
-            if (gen !== this._generation) return;
-            if (sb.buffered.length > 0 && sb.buffered.start(0) < end) sb.remove(0, end);
-        });
+        return this._pipe.removeBefore(
+            evictionEnd(this._audio.currentTime, keepBehind),
+            () => gen === this._generation
+        );
     }
 
     // ========================================================================
@@ -271,7 +189,7 @@ export default class MseAudioEngine {
         this._generation++;
         this._stopTimer();
         this._reset();
-        if (this._cancelOpenWait) this._cancelOpenWait();
+        this._pipe.cancelOpenWait();
         return this._generation;
     }
 
@@ -279,6 +197,11 @@ export default class MseAudioEngine {
         this._timeline = emptyTimeline();
         this._tracksByKey = new Map();
         this._feedQueue = [];
+        this._currentKey = null;
+        this._nextKey = null;
+        this._nextBlocked = false;
+        this._ready = false;
+        this._repump = false;
         this._streamEnded = false;
         this._endedFired = false;
         this._feedHalted = false;
@@ -293,91 +216,166 @@ export default class MseAudioEngine {
         return item;
     }
 
+    _queued(key) {
+        return this._feedQueue.find((item) => item.key === key) || null;
+    }
+
+    _isLive(gen, key) {
+        return gen === this._generation && this._queued(key) !== null;
+    }
+
+    _replaceItem(item) {
+        this._feedQueue = this._feedQueue.map((queued) => (queued.key === item.key ? item : queued));
+    }
+
     /* bytes stay on the item until appended, so a quota retry never downloads the segment again */
-    async _appendSegment(gen, item) {
+    async _appendSegment(gen, key) {
+        let item = this._queued(key);
         if (!item.bytes) {
-            const bytes = await this._fetchBytes(item.playlist.segments[item.index].url);
-            if (gen !== this._generation) return false;
-            item.bytes = bytes;
+            const fetched = await fetchSegment({
+                fetchText: this._fetchText,
+                fetchBytes: this._fetchBytes,
+                item,
+                isLive: () => this._isLive(gen, key),
+                log: this._log
+            });
+            if (!this._isLive(gen, key)) return false;
+            item = { ...item, ...fetched };
+            this._replaceItem(item);
         }
-        await this._queue.run((sb) => sb.appendBuffer(item.bytes));
-        if (gen !== this._generation) return false;
-        item.bytes = null;
-        item.index++;
+        const { bytes } = item;
+        await this._queue.run((sb) => sb.appendBuffer(bytes));
+        if (!this._isLive(gen, key)) return false;
+        this._replaceItem({ ...item, index: item.index + 1, bytes: null });
         return true;
     }
 
     async _pump(gen) {
-        if (this._feeding === gen || this._feedHalted) return;
+        if (!this._ready || this._feedHalted || this._endedFired) return;
+        if (this._feeding === gen) {
+            this._repump = true;
+            return;
+        }
         this._feeding = gen;
+        this._repump = false;
         try {
             await this._feed(gen);
         } catch (err) {
-            if (gen === this._generation) this._failFeed(err);
+            if (gen === this._generation) this._failFeed(this.currentTrackId, err);
         } finally {
             if (this._feeding === gen) this._feeding = null;
         }
+        if (this._repump && gen === this._generation) this._pump(gen);
     }
 
     async _feed(gen) {
         while (gen === this._generation) {
-            const item = this._feedQueue[0];
-            if (!item) {
-                if (!this._nextTrack) this._endStream();
+            const head = this._feedQueue[0];
+            const step = nextFeedStep({
+                head,
+                bufferFull: this._bufferedAhead() >= AHEAD_SECONDS,
+                next: nextState({ track: this._nextTrack, key: this._nextKey, blocked: this._nextBlocked })
+            });
+            if (step === FEED_STEP.CLOSE) this._closeItem(head);
+            else if (step === FEED_STEP.START_NEXT) await this._startNext(gen);
+            else if (step === FEED_STEP.APPEND) {
+                if (!(await this._appendOrEvict(gen, head.key))) return;
+            } else {
+                if (step === FEED_STEP.END) this._endStream(gen);
                 break;
             }
-            if (item.index >= item.playlist.segments.length) {
-                this._closeItem(item);
-                continue;
-            }
-            if (this._bufferedAhead() >= AHEAD_SECONDS) break;
-            if (!(await this._appendOrEvict(gen, item))) return;
         }
         /* remove() on an ended MediaSource reopens it and the element would never fire `ended` */
         if (gen === this._generation && !this._streamEnded) await this._evict(gen, BEHIND_SECONDS);
     }
 
-    async _appendOrEvict(gen, item) {
+    async _appendOrEvict(gen, key) {
         try {
-            return await this._appendSegment(gen, item);
+            return await this._appendSegment(gen, key);
         } catch (err) {
-            if (!isQuotaError(err)) throw err;
+            if (!this._isLive(gen, key)) return false;
+            if (!isQuotaError(err)) {
+                this._failFeed(this._queued(key).track.id, err);
+                return false;
+            }
             this._log.debug('SourceBuffer full, evicting and retrying on the next tick');
             await this._evict(gen, QUOTA_KEEP_BEHIND);
             return false;
         }
     }
 
+    /* appended right after the current track with no timestampOffset change, so the junction is gapless */
+    async _startNext(gen) {
+        const next = this._nextTrack;
+        const wanted = () => gen === this._generation && this._nextTrack === next;
+        if (!this._pipe.canAppend(next.mime)) {
+            this._nextBlocked = true;
+            return;
+        }
+        let start;
+        try {
+            start = await fetchTrackStart(this._fetchText, this._fetchBytes, next);
+        } catch (err) {
+            if (!wanted()) return;
+            this._log.warn(`Preparing ${next.id} failed, it starts after the current track ends`, err);
+            this._nextBlocked = true;
+            return;
+        }
+        if (!wanted()) return;
+        const last = this._timeline.entries[this._timeline.entries.length - 1];
+        const { key } = this._enqueue(next, start.playlist, 0, last.end);
+        this._nextKey = key;
+        this._streamEnded = false;
+        await this._queue.run((sb) => {
+            if (!this._isLive(gen, key)) return;
+            this._pipe.switchType(sb, next.mime);
+            sb.appendBuffer(start.init);
+        });
+    }
+
+    _dropNext() {
+        const key = this._nextKey;
+        this._nextKey = null;
+        this._nextBlocked = false;
+        if (key === null) return;
+        const { origin } = this._timeline.entries.find((entry) => entry.trackId === key);
+        const gen = this._generation;
+        this._timeline = dropFrom(this._timeline, key);
+        this._feedQueue = this._feedQueue.filter((item) => item.key !== key);
+        this._streamEnded = false;
+        this._pipe
+            .truncateFrom(origin, () => gen === this._generation)
+            .catch((err) => this._log.warn('Dropping the next track failed', err));
+    }
+
     _bufferedAhead() {
-        const edges = this._bufferedEdges();
+        const edges = this._pipe.bufferedEdges();
         return edges ? edges.end - this._audio.currentTime : 0;
     }
 
     _closeItem(item) {
-        const edges = this._bufferedEdges();
+        const edges = this._pipe.bufferedEdges();
         this._timeline = closeTrack(this._timeline, item.key, edges ? edges.end : 0);
         this._feedQueue = this._feedQueue.slice(1);
     }
 
-    _endStream() {
-        if (this._streamEnded || this._mediaSource.readyState !== 'open') return;
+    /* skipped when an append reopened the stream before the queued endOfStream() ran */
+    _endStream(gen) {
+        if (this._streamEnded) return;
         this._streamEnded = true;
-        try {
-            this._mediaSource.endOfStream();
-        } catch (err) {
-            this._log.warn('MediaSource endOfStream() failed', err);
-        }
+        this._pipe
+            .endOfStream(() => gen === this._generation && this._streamEnded)
+            .catch((err) => this._log.warn('MediaSource endOfStream() failed', err));
     }
 
-    _failFeed(err) {
+    _failFeed(trackId, err) {
         this._feedHalted = true;
         this._log.error('MSE feeding failed', err);
-        this._reportError(err);
+        this._reportError(trackId, err);
     }
 
     /* a failed append also errors the element; report each failure once per track and load */
-    _reportError(err) {
-        const trackId = this.currentTrackId;
+    _reportError(trackId, err) {
         const key = `${this._generation}:${trackId}`;
         if (this._errorReported === key) return;
         this._errorReported = key;
@@ -388,26 +386,65 @@ export default class MseAudioEngine {
     // Playback state
     // ========================================================================
 
-    _currentTrack() {
-        const entry = this._audio ? entryAt(this._timeline, this._audio.currentTime) : null;
-        return entry ? this._tracksByKey.get(entry.trackId) : this._loadedTrack;
+    _currentEntry() {
+        return this._timeline.entries.find((entry) => entry.trackId === this._currentKey) || null;
+    }
+
+    _advanceTrack() {
+        if (this._nextKey === null || !this._audio) return;
+        const entry = entryAt(this._timeline, this._audio.currentTime);
+        if (!entry || entry.trackId !== this._nextKey) return;
+        const track = this._tracksByKey.get(entry.trackId);
+        this._currentKey = entry.trackId;
+        this._loadedTrack = track;
+        this._nextTrack = null;
+        this._nextKey = null;
+        this._callbacks.onTrackStart(track.id);
     }
 
     /* an `ended` queued before a new load arrives while that load's stream is still open */
     _handleEnded() {
         if (this._endedFired || !this._loadedTrack || !this._streamEnded) return;
         this._endedFired = true;
-        this._playing = false;
         this._stopTimer();
+        this._advanceTrack();
+        if (this._nextBlocked) {
+            this._continueWith(this._nextTrack);
+            return;
+        }
+        this._playing = false;
         this._callbacks.onEnded();
+    }
+
+    /* a next track the SourceBuffer could not take plays through a reload instead of a gapless append */
+    async _continueWith(track) {
+        if (!(await this._reload(track, 0, null))) return;
+        if (this._playing) this.play();
+        this._callbacks.onTrackStart(track.id);
+    }
+
+    /* resolves true when this reload is still the current load once it finishes */
+    async _reload(track, startMs, next) {
+        const loading = this.load(track, startMs);
+        const gen = this._generation;
+        this._nextTrack = next;
+        try {
+            await loading;
+        } catch (err) {
+            if (gen !== this._generation) return false;
+            this._playing = false;
+            this._reportError(track.id, err);
+            return false;
+        }
+        return gen === this._generation;
     }
 
     _handleAudioError() {
         if (!this._loadedTrack) return;
-        this._mediaBroken = true;
+        this._pipe.markBroken();
         this._feedHalted = true;
         const code = this._audio.error ? this._audio.error.code : 'unknown';
-        this._reportError(new Error(`Audio element error (code ${code})`));
+        this._reportError(this.currentTrackId, new Error(`Audio element error (code ${code})`));
     }
 
     _startTimer() {
@@ -422,6 +459,7 @@ export default class MseAudioEngine {
     }
 
     _tick() {
+        this._advanceTrack();
         this._pump(this._generation);
         if (this._playing) this._callbacks.onTime(this.positionMs, this.durationMs);
     }
