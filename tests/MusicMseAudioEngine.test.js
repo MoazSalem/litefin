@@ -612,6 +612,49 @@ test('QuotaExceededError evicts and retries on a later tick without surfacing an
     );
 });
 
+test('M1: a QuotaExceededError on the next track init append evicts and retries without reporting the track', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4]);
+    const b = h.addTrack('b', [3, 3]);
+    await h.engine.load(a);
+    h.engine.play();
+    await settle();
+    h.sb().quota.set('http://srv/b/init.mp4', 1);
+    h.audios[0].currentTime = 3;
+    await h.engine.preloadNext(b);
+    await settle();
+
+    assert.deepEqual(h.errors(), []);
+    assert.ok(!h.appendedUrls().includes('b/init.mp4'));
+    assert.deepEqual(h.sb().removed.at(-1), [0, 2]);
+    assert.equal(h.fetchCount('b/init.mp4'), 1);
+
+    h.tick();
+    await settle();
+    assert.deepEqual(h.appendedUrls().slice(-3), ['b/init.mp4', 'b/seg0.mp4', 'b/seg1.mp4']);
+    assert.equal(h.fetchCount('b/init.mp4'), 1);
+    assert.deepEqual(h.errors(), []);
+
+    h.audios[0].currentTime = 8.5;
+    h.tick();
+    assert.deepEqual(h.trackStarts(), ['b']);
+});
+
+test('M1: any other error on the next track init append still reports that track once', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4]);
+    const b = h.addTrack('b', [3, 3]);
+    await h.engine.load(a);
+    h.engine.play();
+    await settle();
+    h.sb().errorUrls.add('http://srv/b/init.mp4');
+    await h.engine.preloadNext(b);
+    await settle();
+
+    assert.deepEqual(h.errors(), [['error', 'b', 'SourceBuffer update failed']]);
+    assert.ok(!h.appendedUrls().includes('b/seg0.mp4'));
+});
+
 test('an empty playlist rejects load', async () => {
     const h = setup();
     const a = h.addTrack('a', []);

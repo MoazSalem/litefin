@@ -19,9 +19,11 @@ export function nextState({ track, key, blocked }) {
     return key ? NEXT_STATE.STARTED : NEXT_STATE.PENDING;
 }
 
-/* the stream ends only when nothing is left to append and no appendable next track is known */
+/* a pending init segment is appended even with a full buffer; it is tiny and announces the next track's codec.
+   The stream ends only when nothing is left to append and no appendable next track is known */
 export function nextFeedStep({ head, bufferFull, next }) {
     if (head) {
+        if (head.init) return FEED_STEP.APPEND;
         if (head.index >= head.playlist.segments.length) return FEED_STEP.CLOSE;
         return bufferFull ? FEED_STEP.WAIT : FEED_STEP.APPEND;
     }

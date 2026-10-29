@@ -28,3 +28,8 @@ test('nextState describes the known next track', () => {
     assert.equal(nextState({ track, key: 'b#2', blocked: false }), NEXT_STATE.STARTED);
     assert.equal(nextState({ track, key: null, blocked: true }), NEXT_STATE.BLOCKED);
 });
+
+test('a head item with its init segment pending appends it even when the buffer is full', () => {
+    const pending = { ...head(0, 3), init: new Uint8Array(1) };
+    assert.equal(nextFeedStep({ head: pending, bufferFull: true, next: NEXT_STATE.NONE }), FEED_STEP.APPEND);
+});

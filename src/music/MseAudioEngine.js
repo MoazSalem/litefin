@@ -159,12 +159,7 @@ export default class MseAudioEngine {
         this._pipe.ensureSourceBuffer(track.mime);
         await this._pipe.clear();
         if (!fresh()) return;
-        const { playlist, init } = await fetchTrackStart(
-            this._fetchText,
-            this._fetchBytes,
-            track,
-            this._requests.signal
-        );
+        const { playlist, init } = await this._fetchStart(track);
         if (!fresh()) return;
         const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
         this._currentKey = item.key;
@@ -182,6 +177,10 @@ export default class MseAudioEngine {
         this._ready = true;
         this._startTimer();
         this._pump(gen);
+    }
+
+    _fetchStart(track) {
+        return fetchTrackStart(this._fetchText, this._fetchBytes, track, this._requests.signal);
     }
 
     _evict(gen, keepBehind) {
@@ -219,9 +218,9 @@ export default class MseAudioEngine {
         this._feedHalted = false;
     }
 
-    _enqueue(track, playlist, index, origin) {
+    _enqueue(track, playlist, index, origin, init = null) {
         const key = `${track.id}#${++this._appendSeq}`;
-        const item = { key, track, playlist, index, bytes: null, retry: null };
+        const item = { key, track, playlist, index, init, bytes: null, retry: null };
         this._tracksByKey.set(key, track);
         this._timeline = addTrack(this._timeline, key, origin);
         this._feedQueue = [...this._feedQueue, item];
@@ -240,10 +239,10 @@ export default class MseAudioEngine {
         this._feedQueue = this._feedQueue.map((queued) => (queued.key === item.key ? item : queued));
     }
 
-    /* bytes stay on the item until appended, so a quota retry never downloads the segment again */
+    /* init and bytes stay on the item until appended, so a quota retry never downloads them again */
     async _appendSegment(gen, key) {
         let item = this._queued(key);
-        if (!item.bytes) {
+        if (!item.init && !item.bytes) {
             const clock = () => ({ now: this._now(), ahead: this._bufferedAhead() });
             if (!retryDue(item.retry, clock())) return false;
             const { _fetchText: fetchText, _fetchBytes: fetchBytes, _log: log } = this;
@@ -252,10 +251,14 @@ export default class MseAudioEngine {
             this._replaceItem(item);
             if (!item.bytes) return false;
         }
-        const { bytes } = item;
-        await this._queue.run((sb) => sb.appendBuffer(bytes));
+        const { init, bytes } = item;
+        await this._queue.run((sb) => {
+            if (!this._isLive(gen, key)) return;
+            if (init) this._pipe.switchType(sb, item.track.mime);
+            sb.appendBuffer(init || bytes);
+        });
         if (!this._isLive(gen, key)) return false;
-        this._replaceItem({ ...item, index: item.index + 1, bytes: null });
+        this._replaceItem(init ? { ...item, init: null } : { ...item, index: item.index + 1, bytes: null });
         return true;
     }
 
@@ -325,7 +328,7 @@ export default class MseAudioEngine {
         }
         let start;
         try {
-            start = await fetchTrackStart(this._fetchText, this._fetchBytes, next, this._requests.signal);
+            start = await this._fetchStart(next);
         } catch (err) {
             if (!wanted()) return;
             this._log.warn(`Preparing ${next.id} failed, it starts after the current track ends`, err);
@@ -334,18 +337,8 @@ export default class MseAudioEngine {
         }
         if (!wanted()) return;
         const last = this._timeline.entries[this._timeline.entries.length - 1];
-        const { key } = this._enqueue(next, start.playlist, 0, last.end);
-        this._nextKey = key;
+        this._nextKey = this._enqueue(next, start.playlist, 0, last.end, start.init).key;
         this._streamEnded = false;
-        try {
-            await this._queue.run((sb) => {
-                if (!this._isLive(gen, key)) return;
-                this._pipe.switchType(sb, next.mime);
-                sb.appendBuffer(start.init);
-            });
-        } catch (err) {
-            if (this._isLive(gen, key)) this._failNext(next, err);
-        }
     }
 
     /* the current track must still reach endOfStream, and the session may preload a replacement */
@@ -441,8 +434,7 @@ export default class MseAudioEngine {
         this._callbacks.onEnded();
     }
 
-    /* a next track the SourceBuffer could not take plays through a reload instead of a gapless append */
-    /* announced even when the reload fails, so the session reads the error as the current track's */
+    /* a next track the SourceBuffer could not take reloads; announced even on failure so the error is the current track's */
     async _continueWith(track) {
         const { superseded, error } = await this._reload(track, 0, null);
         if (superseded) return;
