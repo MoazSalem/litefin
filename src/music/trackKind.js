@@ -1,3 +1,5 @@
+import { webAudioAudibleOn } from './soundOutput.js';
+
 const lower = (value) => (typeof value === 'string' ? value.toLowerCase() : '');
 
 /* The gapless engine parses a raw FLAC byte stream, so FLAC wrapped in Ogg/Matroska must stay native. */
@@ -13,4 +15,11 @@ export function supportsGaplessEngine(win) {
     if (!win) return false;
     const hasWebAudio = Boolean(win.AudioContext || win.webkitAudioContext);
     return hasWebAudio && typeof win.fetch === 'function' && typeof win.ReadableStream === 'function';
+}
+
+export function routeTrack({ soundOutput, isWebOS, isEmby, gaplessAvailable, mseAvailable, mediaSource }) {
+    const webAudioAudible = webAudioAudibleOn(soundOutput);
+    if (isWebOS && !isEmby && mseAvailable && !webAudioAudible) return 'mse';
+    if (gaplessAvailable && webAudioAudible && audioKindOf(mediaSource) === 'flac') return 'flac';
+    return 'native';
 }

@@ -1,12 +1,24 @@
 const noop = () => {};
 
-const kindOf = (track) => (track && track.kind === 'flac' ? 'flac' : 'native');
+const kindOf = (track) => {
+    if (track && track.kind === 'flac') return 'flac';
+    if (track && track.kind === 'mse') return 'mse';
+    return 'native';
+};
 
 export default class HybridAudioEngine {
-    constructor({ createGapless, createNative, onTrackStart = noop, onEnded = noop, onError = noop, onTime = noop }) {
-        this._factories = { flac: createGapless, native: createNative };
+    constructor({
+        createGapless,
+        createNative,
+        createMse,
+        onTrackStart = noop,
+        onEnded = noop,
+        onError = noop,
+        onTime = noop
+    }) {
+        this._factories = { flac: createGapless, native: createNative, mse: createMse };
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
-        this._engines = { flac: null, native: null };
+        this._engines = { flac: null, native: null, mse: null };
         this._activeKind = null;
         this._pendingNext = null;
         this._wantsPlay = false;
@@ -71,13 +83,14 @@ export default class HybridAudioEngine {
         this._wantsPlay = false;
         this._activeKind = null;
         if (this._engines.native) this._engines.native.stop();
+        if (this._engines.mse) this._engines.mse.stop();
         if (this._engines.flac) this._release('flac');
     }
 
     destroy() {
         this.stop();
         this._eachEngine((engine) => engine.destroy());
-        this._engines = { flac: null, native: null };
+        this._engines = { flac: null, native: null, mse: null };
     }
 
     _activate(kind) {

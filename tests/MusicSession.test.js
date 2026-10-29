@@ -167,7 +167,8 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now } =
         bus,
         describeTrack: (item, mediaSource) => ({
             url: `http://srv/audio/${item.Id}`,
-            kind: mediaSource.Container === 'flac' ? 'flac' : 'native'
+            kind: mediaSource.Container === 'flac' ? 'flac' : 'native',
+            ...(mediaSource.Mime ? { mime: mediaSource.Mime } : {})
         }),
         notify: (name) => notified.push(name),
         log,
@@ -183,6 +184,17 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now } =
 }
 
 const eventsOf = (events, name) => events.filter((e) => e.event === name).map((e) => e.payload);
+
+test('the descriptor mime reaches the engine track', async () => {
+    const { session, items, getEngine, api } = setup();
+    api.getPlaybackInfo = async () => ({
+        PlaySessionId: 'ps',
+        MediaSources: [{ Id: 'ms', Container: 'm4a', Mime: 'audio/mp4; codecs="ec-3"', RunTimeTicks: 2000000000 }]
+    });
+    await session.playItems(items, 0);
+    await flush();
+    assert.equal(getEngine().loads[0].track.mime, 'audio/mp4; codecs="ec-3"');
+});
 
 test('playItems loads first and preloads second', async () => {
     const { session, items, getEngine, api } = setup();

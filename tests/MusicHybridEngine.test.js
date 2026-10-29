@@ -50,7 +50,7 @@ function makeInner(name, callbacks) {
 }
 
 function setup() {
-    const created = { gapless: [], native: [] };
+    const created = { gapless: [], native: [], mse: [] };
     const events = [];
     const engine = new HybridAudioEngine({
         createGapless: (callbacks) => {
@@ -61,6 +61,11 @@ function setup() {
         createNative: (callbacks) => {
             const inner = makeInner('native', callbacks);
             created.native.push(inner);
+            return inner;
+        },
+        createMse: (callbacks) => {
+            const inner = makeInner('mse', callbacks);
+            created.mse.push(inner);
             return inner;
         },
         onTrackStart: (id) => events.push(['trackStart', id]),
@@ -271,4 +276,41 @@ test('load failure propagates', async () => {
     await engine.load(mp3('a'));
     created.native[0].failLoad = new Error('bad');
     await assert.rejects(engine.load(mp3('b')), /bad/);
+});
+
+const mse = (id) => ({ id, url: `u/${id}`, kind: 'mse', mime: 'audio/mp4; codecs="flac"', durationMs: 1000 });
+
+test('mse tracks go to the mse engine with their mime', async () => {
+    const { engine, created } = setup();
+    await engine.load(mse('a'));
+    assert.equal(created.mse.length, 1);
+    assert.equal(created.mse[0].loads[0].track.mime, 'audio/mp4; codecs="flac"');
+    assert.equal(created.native.length, 0);
+});
+
+test('switching from native to mse stops native first', async () => {
+    const { engine, created, native } = setup();
+    await engine.load(mp3('a'));
+    await engine.load(mse('b'));
+    assert.deepEqual(native().calls, ['load:a', 'stop']);
+    assert.deepEqual(created.mse[0].calls, ['load:b']);
+});
+
+test('switching from mse to flac or native fully stops the mse engine', async () => {
+    const { engine, created } = setup();
+    await engine.load(mse('a'));
+    await engine.load(flac('b'));
+    assert.ok(created.mse[0].calls.includes('stop'));
+    await engine.load(mse('c'));
+    await engine.load(mp3('d'));
+    assert.equal(created.mse[0].calls.filter((c) => c === 'stop').length, 2);
+});
+
+test('stop and destroy reach the mse engine', async () => {
+    const { engine, created } = setup();
+    await engine.load(mse('a'));
+    engine.stop();
+    assert.ok(created.mse[0].calls.includes('stop'));
+    engine.destroy();
+    assert.ok(created.mse[0].calls.includes('destroy'));
 });

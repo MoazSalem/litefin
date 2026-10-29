@@ -199,12 +199,12 @@ export default class MusicSession {
         const mediaSource = response?.MediaSources?.[0];
         if (!mediaSource) throw new Error(`No media source for ${item.Id}`);
         const runtimeTicks = mediaSource.RunTimeTicks ?? item.RunTimeTicks ?? 0;
-        const { url, kind } = this._describeTrack(item, mediaSource);
+        const descriptor = this._describeTrack(item, mediaSource);
         return {
             item,
             mediaSource,
             playSessionId: response.PlaySessionId,
-            track: { id: item.Id, url, kind, durationMs: runtimeTicks / TICKS_PER_MS }
+            track: { id: item.Id, ...descriptor, durationMs: runtimeTicks / TICKS_PER_MS }
         };
     }
 
