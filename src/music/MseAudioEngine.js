@@ -4,6 +4,7 @@ import { addTrack, closeTrack, dropFrom, emptyTimeline, entryAt, evictionEnd } f
 import MseMediaPipeline from './MseMediaPipeline.js';
 import { FEED_STEP, nextFeedStep, nextState } from './mseFeedPlan.js';
 import { defaultFetchBytes, defaultFetchText, fetchSegment, fetchTrackStart } from './mseSegmentSource.js';
+import { retryDue } from './mseRetry.js';
 
 export const AHEAD_SECONDS = 20;
 export const BEHIND_SECONDS = 4;
@@ -30,6 +31,7 @@ export default class MseAudioEngine {
         clearInterval: clearIntervalFn = (handle) => globalThis.clearInterval(handle),
         setTimeout: setTimeoutFn = (fn, ms) => globalThis.setTimeout(fn, ms),
         clearTimeout: clearTimeoutFn = (handle) => globalThis.clearTimeout(handle),
+        now = () => Date.now(),
         log = logger.create('MseAudioEngine')
     } = {}) {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
@@ -37,6 +39,7 @@ export default class MseAudioEngine {
         this._fetchBytes = fetchBytes;
         this._requests = new AbortController();
         this._timers = { setIntervalFn, clearIntervalFn };
+        this._now = now;
         this._log = log;
         this._pipe = new MseMediaPipeline({
             media: { createAudio, createMediaSource, createObjectUrl, revokeObjectUrl },
@@ -218,7 +221,7 @@ export default class MseAudioEngine {
 
     _enqueue(track, playlist, index, origin) {
         const key = `${track.id}#${++this._appendSeq}`;
-        const item = { key, track, playlist, index, bytes: null };
+        const item = { key, track, playlist, index, bytes: null, retry: null };
         this._tracksByKey.set(key, track);
         this._timeline = addTrack(this._timeline, key, origin);
         this._feedQueue = [...this._feedQueue, item];
@@ -241,17 +244,13 @@ export default class MseAudioEngine {
     async _appendSegment(gen, key) {
         let item = this._queued(key);
         if (!item.bytes) {
-            const fetched = await fetchSegment({
-                fetchText: this._fetchText,
-                fetchBytes: this._fetchBytes,
-                item,
-                isLive: () => this._isLive(gen, key),
-                log: this._log,
-                signal: this._requests.signal
-            });
+            const clock = () => ({ now: this._now(), ahead: this._bufferedAhead() });
+            if (!retryDue(item.retry, clock())) return false;
+            const { _fetchText: fetchText, _fetchBytes: fetchBytes, _log: log } = this;
+            item = await fetchSegment({ fetchText, fetchBytes, item, signal: this._requests.signal, clock, log });
             if (!this._isLive(gen, key)) return false;
-            item = { ...item, ...fetched };
             this._replaceItem(item);
+            if (!item.bytes) return false;
         }
         const { bytes } = item;
         await this._queue.run((sb) => sb.appendBuffer(bytes));

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window = globalThis.window || {};
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 const { default: MseAudioEngine } = await import('../src/music/MseAudioEngine.js');
+const { RETRY_BUDGET_MS, RETRY_MAX_DELAY_MS } = await import('../src/music/mseRetry.js');
 
 const MIME = 'audio/mp4; codecs="ec-3"';
 const FLAC = 'audio/mp4; codecs="flac"';
@@ -264,6 +265,7 @@ function setup({ autoOpen = true, changeType = true } = {}) {
     const bytesByUrl = new Map();
     const gates = new Map();
     const signals = new Map();
+    const clock = { now: 0 };
     const audios = [];
     const mediaSources = [];
     const timers = [];
@@ -364,6 +366,7 @@ function setup({ autoOpen = true, changeType = true } = {}) {
         clearTimeout: (handle) => {
             timeouts[handle - 1].cleared = true;
         },
+        now: () => clock.now,
         log: { warn: noop, error: noop, info: noop, debug: noop }
     });
 
@@ -376,6 +379,14 @@ function setup({ autoOpen = true, changeType = true } = {}) {
         return d;
     };
 
+    const advance = async (ms) => {
+        clock.now += ms;
+        tick();
+        await settle();
+    };
+    const exhaustRetries = async () => {
+        for (let spent = 0; spent <= RETRY_BUDGET_MS; spent += RETRY_MAX_DELAY_MS) await advance(RETRY_MAX_DELAY_MS);
+    };
     const fetchCount = (url) => fetchCounts.get(`http://srv/${url}`) || 0;
     const playlistFetches = (track) => textFetchCounts.get(track.url) || 0;
     const failFetch = (url, times) => failures.set(`http://srv/${url}`, times);
@@ -398,6 +409,8 @@ function setup({ autoOpen = true, changeType = true } = {}) {
         sb,
         appendedUrls,
         tick,
+        advance,
+        exhaustRetries,
         gate,
         fetchCount,
         playlistFetches,
@@ -1001,33 +1014,99 @@ test('Review Focus 4: seek past the current track end clamps to it instead of ju
     assert.deepEqual(h.trackStarts(), []);
 });
 
-test('Review Focus 3: a failed segment fetch refetches the playlist once and retries the same index', async () => {
+test('Review Focus 3: a failed segment fetch refetches the playlist on the first retry and retries the same index', async () => {
     const h = setup();
     const a = h.addTrack('a', [4, 4, 4]);
     h.restartTranscode(a);
     h.failFetch('a/seg1.mp4', 1);
     await h.engine.load(a);
     await settle();
+    assert.equal(h.playlistFetches(a), 1);
+    await h.advance(500);
 
     assert.equal(h.playlistFetches(a), 2);
     assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4', 'a/seg1.mp4?job=2', 'a/seg2.mp4?job=2']);
     assert.deepEqual(h.errors(), []);
 });
 
-test('Review Focus 3: a segment that fails again after the refetch reports one error and stops feeding', async () => {
+test('Review Focus 3: a segment that keeps failing reports one error after the retries and stops feeding', async () => {
     const h = setup();
     const a = h.addTrack('a', [4, 4, 4]);
-    h.failFetch('a/seg1.mp4', 2);
+    h.failFetch('a/seg1.mp4', Infinity);
     await h.engine.load(a);
     await settle();
-    h.tick();
-    await settle();
+    await h.exhaustRetries();
+    await h.exhaustRetries();
 
     assert.deepEqual(h.errors(), [['error', 'a', 'HTTP 503']]);
     assert.equal(h.playlistFetches(a), 2);
-    assert.equal(h.fetchCount('a/seg1.mp4'), 2);
     assert.equal(h.fetchCount('a/seg2.mp4'), 0);
     assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4']);
+});
+
+test('I2: a transient segment failure with buffer ahead recovers through backoff without onError', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4, 4, 4, 4]);
+    h.failFetch('a/seg2.mp4', 3);
+    await h.engine.load(a);
+    h.engine.play();
+    await settle();
+    assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4', 'a/seg1.mp4']);
+
+    await h.advance(499);
+    assert.equal(h.fetchCount('a/seg2.mp4'), 1);
+    await h.advance(1);
+    assert.equal(h.fetchCount('a/seg2.mp4'), 2);
+    assert.equal(h.playlistFetches(a), 2);
+    await h.advance(1000);
+    assert.equal(h.fetchCount('a/seg2.mp4'), 3);
+    await h.advance(1999);
+    assert.equal(h.fetchCount('a/seg2.mp4'), 3);
+    await h.advance(1);
+
+    assert.deepEqual(h.appendedUrls().slice(3), ['a/seg2.mp4', 'a/seg3.mp4', 'a/seg4.mp4']);
+    assert.deepEqual(h.errors(), []);
+    assert.equal(h.playlistFetches(a), 2);
+});
+
+test('I2: a persistent segment failure reports once after the 30 s retry budget', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4, 4, 4, 4]);
+    h.failFetch('a/seg2.mp4', Infinity);
+    await h.engine.load(a);
+    await settle();
+
+    await h.advance(RETRY_BUDGET_MS - 1);
+    assert.deepEqual(h.errors(), []);
+    await h.exhaustRetries();
+
+    assert.deepEqual(h.errors(), [['error', 'a', 'HTTP 503']]);
+    assert.equal(h.playlistFetches(a), 2);
+});
+
+test('I2: a buffer that drains below 1 s while retrying reports at once', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4, 4, 4, 4]);
+    h.failFetch('a/seg2.mp4', Infinity);
+    await h.engine.load(a);
+    await settle();
+    await h.advance(500);
+    assert.deepEqual(h.errors(), []);
+
+    h.audios[0].currentTime = 7.5;
+    await h.advance(1);
+    assert.deepEqual(h.errors(), [['error', 'a', 'HTTP 503']]);
+});
+
+test('I2: a failure with 3 s or less buffered ahead reports without retrying', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [3, 4, 4]);
+    h.failFetch('a/seg1.mp4', Infinity);
+    await h.engine.load(a);
+    await settle();
+
+    assert.deepEqual(h.errors(), [['error', 'a', 'HTTP 503']]);
+    assert.equal(h.playlistFetches(a), 1);
 });
 
 test('Review Focus 5: a next track with another codec switches the SourceBuffer type before its init segment', async () => {
@@ -1115,7 +1194,7 @@ test('C1: a next track that fails twice, then preloadNext(null), still ends the 
     const h = setup();
     const a = h.addTrack('a', [4, 4]);
     const b = h.addTrack('b', [3, 3, 3]);
-    h.failFetch('b/seg1.mp4', 2);
+    h.failFetch('b/seg1.mp4', Infinity);
     failPreloadedLikeSession(h, 'b', null);
     await h.engine.load(a);
     h.engine.play();
@@ -1123,6 +1202,7 @@ test('C1: a next track that fails twice, then preloadNext(null), still ends the 
     assert.equal(h.mediaSources[0].endOfStreamCalls, 1);
     await h.engine.preloadNext(b);
     await settle();
+    await h.exhaustRetries();
 
     assert.deepEqual(h.errors(), [['error', 'b', 'HTTP 503']]);
     assert.deepEqual(h.sb().removed, [[8, Infinity]]);
@@ -1140,12 +1220,13 @@ test('C1: a next track that fails twice, then preloadNext(c), plays c gapless af
     const a = h.addTrack('a', [4, 4]);
     const b = h.addTrack('b', [3, 3, 3]);
     const c = h.addTrack('c', [5]);
-    h.failFetch('b/seg1.mp4', 2);
+    h.failFetch('b/seg1.mp4', Infinity);
     failPreloadedLikeSession(h, 'b', c);
     await h.engine.load(a);
     await h.engine.preloadNext(b);
     h.engine.play();
     await settle();
+    await h.exhaustRetries();
 
     assert.deepEqual(h.errors(), [['error', 'b', 'HTTP 503']]);
     const cAppends = h.sb().appended.filter((x) => x.url.includes('/c/'));
@@ -1274,9 +1355,10 @@ test('repeat-one: a failed repeated preload is dropped silently, the track ends 
     h.engine.play();
     await settle();
     assert.equal(h.mediaSources[0].endOfStreamCalls, 1);
-    h.failFetch('a/seg1.mp4', 2);
+    h.failFetch('a/seg1.mp4', Infinity);
     await h.engine.preloadNext(a);
     await settle();
+    await h.exhaustRetries();
 
     assert.deepEqual(h.errors(), []);
     assert.deepEqual(h.sb().ranges, [[0, 8]]);
@@ -1293,9 +1375,10 @@ test('repeat-one: a failed repeated preload lets the current track end with onEn
     await h.engine.load(a);
     h.engine.play();
     await settle();
-    h.failFetch('a/seg1.mp4', 2);
+    h.failFetch('a/seg1.mp4', Infinity);
     await h.engine.preloadNext(a);
     await settle();
+    await h.exhaustRetries();
 
     h.audios[0].currentTime = 8;
     h.audios[0].fire('ended');

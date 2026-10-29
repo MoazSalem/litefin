@@ -1,4 +1,5 @@
 import { parseHlsPlaylist } from './hlsPlaylist.js';
+import { nextRetry } from './mseRetry.js';
 
 export const PLAYLIST_TIMEOUT_MS = 10000;
 export const SEGMENT_TIMEOUT_MS = 20000;
@@ -71,17 +72,18 @@ export async function fetchTrackStart(fetchText, fetchBytes, track, signal) {
     return { playlist, init: await fetchBytes(playlist.initUrl, signal) };
 }
 
-/* Jellyfin restarts a transcode whose segments vanished once the playlist is requested again */
-export async function fetchSegment({ fetchText, fetchBytes, item, isLive, log, signal }) {
+/* resolves to the item as this attempt left it: with bytes, or with the retry to wait for */
+export async function fetchSegment({ fetchText, fetchBytes, item, signal, clock, log }) {
+    let { playlist } = item;
     try {
-        return { bytes: await fetchBytes(item.playlist.segments[item.index].url, signal) };
-    } catch (err) {
-        if (!isLive()) throw err;
-        log.warn(`Segment ${item.index} of ${item.track.id} failed, refetching the playlist`, err);
-        const playlist = await fetchPlaylist(fetchText, item.track, signal);
+        if (item.retry && item.retry.refetchPlaylist) playlist = await fetchPlaylist(fetchText, item.track, signal);
         const segment = playlist.segments[item.index];
-        if (!segment) throw new Error(`Refetched playlist for ${item.track.id} lacks segment ${item.index}`);
-        if (!isLive()) return { playlist };
-        return { playlist, bytes: await fetchBytes(segment.url, signal) };
+        if (!segment) throw new Error(`Playlist for ${item.track.id} lacks segment ${item.index}`);
+        return { ...item, playlist, bytes: await fetchBytes(segment.url, signal), retry: null };
+    } catch (err) {
+        const retry = nextRetry(item.retry, { ...clock(), refetched: playlist !== item.playlist });
+        if (!retry) throw err;
+        log.warn(`Segment ${item.index} of ${item.track.id} failed, retry ${retry.attempt} pending`, err);
+        return { ...item, playlist, retry };
     }
 }

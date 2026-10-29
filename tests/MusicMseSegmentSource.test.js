@@ -49,33 +49,69 @@ test('fetchPlaylist rejects a playlist without segments', async () => {
     );
 });
 
-test('a segment that loads needs no playlist refetch', async () => {
-    const s = source();
-    const result = await fetchSegment({ ...s, item: await itemAt(1), isLive: s.live, log: noopLog });
+const plenty = () => ({ now: 100, ahead: 10 });
+const fetchArgs = (s, item, clock = plenty) => ({ ...s, item, clock, log: noopLog });
 
-    assert.deepEqual(result, { bytes: 'http://srv/a/seg1.mp4' });
+test('a segment that loads needs no playlist refetch and clears the retry', async () => {
+    const s = source();
+    const item = { ...(await itemAt(1)), retry: null };
+    const result = await fetchSegment(fetchArgs(s, item));
+
+    assert.equal(result.bytes, 'http://srv/a/seg1.mp4');
+    assert.equal(result.retry, null);
     assert.deepEqual(s.texts, []);
 });
 
-test('a failed segment refetches the playlist once and retries the same index from it', async () => {
+test('a failed segment with buffer ahead resolves with a retry instead of rejecting', async () => {
     const s = source({ failures: { 'http://srv/a/seg1.mp4': 1 } });
-    const result = await fetchSegment({ ...s, item: await itemAt(1), isLive: s.live, log: noopLog });
+    const result = await fetchSegment(fetchArgs(s, { ...(await itemAt(1)), bytes: null, retry: null }));
+
+    assert.equal(result.bytes, null);
+    assert.deepEqual(result.retry, { startedAt: 100, attempt: 1, at: 600, refetchPlaylist: true });
+    assert.deepEqual(s.texts, []);
+});
+
+test('the first retry refetches the playlist and fetches the same index from it', async () => {
+    const s = source();
+    const retry = { startedAt: 100, attempt: 1, at: 600, refetchPlaylist: true };
+    const result = await fetchSegment(fetchArgs(s, { ...(await itemAt(1)), retry }));
 
     assert.equal(result.bytes, 'http://srv/a/seg1.mp4?job=2');
     assert.equal(result.playlist.segments[1].url, 'http://srv/a/seg1.mp4?job=2');
     assert.deepEqual(s.texts, [URL_A]);
 });
 
-test('a retry that fails again rejects without a second refetch', async () => {
-    const s = source({ failures: { 'http://srv/a/seg1.mp4': 1, 'http://srv/a/seg1.mp4?job=2': 1 } });
-    await assert.rejects(fetchSegment({ ...s, item: await itemAt(1), isLive: s.live, log: noopLog }), /HTTP 503/);
-    assert.deepEqual(s.texts, [URL_A]);
+test('a retry that fails after a successful refetch keeps the playlist and does not refetch again', async () => {
+    const s = source({ failures: { 'http://srv/a/seg1.mp4?job=2': 1 } });
+    const retry = { startedAt: 100, attempt: 1, at: 600, refetchPlaylist: true };
+    const result = await fetchSegment(fetchArgs(s, { ...(await itemAt(1)), retry }));
+
+    assert.equal(result.playlist.segments[1].url, 'http://srv/a/seg1.mp4?job=2');
+    assert.equal(result.retry.refetchPlaylist, false);
 });
 
-test('a failure after the item went stale rethrows without refetching', async () => {
-    const s = source({ failures: { 'http://srv/a/seg0.mp4': 1 }, live: () => false });
-    await assert.rejects(fetchSegment({ ...s, item: await itemAt(0), isLive: s.live, log: noopLog }), /HTTP 503/);
-    assert.deepEqual(s.texts, []);
+test('a failure without a retry left rejects', async () => {
+    const s = source({ failures: { 'http://srv/a/seg0.mp4': 1 } });
+    const item = { ...(await itemAt(0)), retry: null };
+    await assert.rejects(fetchSegment(fetchArgs(s, item, () => ({ now: 0, ahead: 2 }))), /HTTP 503/);
+});
+
+test('the request signal reaches every fetch', async () => {
+    const seen = [];
+    const signal = new AbortController().signal;
+    const fetchText = async (url, sig) => {
+        seen.push(sig);
+        return playlistText('');
+    };
+    const fetchBytes = async (url, sig) => {
+        seen.push(sig);
+        return url;
+    };
+    const retry = { startedAt: 0, attempt: 1, at: 0, refetchPlaylist: true };
+    await fetchSegment({ fetchText, fetchBytes, item: { ...(await itemAt(0)), retry }, signal, clock: plenty });
+    await fetchTrackStart(fetchText, fetchBytes, track, signal);
+    assert.equal(seen.length, 4);
+    assert.ok(seen.every((sig) => sig === signal));
 });
 
 test('fetchTrackStart returns the playlist with its init segment', async () => {
