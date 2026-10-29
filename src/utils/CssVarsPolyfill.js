@@ -48,6 +48,16 @@ class CssVarsPolyfill {
          * @type {Object|null}
          */
         this._cachedRootVars = null;
+
+        /**
+         * Guard for coalescing concurrent ensureStylesResolved() triggers.
+         * Multiple async CSS chunks (modern layer, theme palette, rtl,
+         * page chunks) can resolve within the same macrotask; each used to
+         * run its own full <style>-tag scan pass back-to-back on the main
+         * thread. Coalescing schedules exactly one pass per tick.
+         * @type {boolean}
+         */
+        this._resolvePassScheduled = false;
     }
 
     /**
@@ -106,6 +116,27 @@ class CssVarsPolyfill {
     ensureStylesResolved() {
         if (!this._active) return;
 
+        // Coalesce concurrent triggers into a single resolution pass.
+        // When several lazy chunks resolve in the same tick (e.g. the modern
+        // interface layer and the theme palette finishing together during
+        // boot), running the scan once after the current macrotask settles
+        // adopts all freshly injected tags in one O(new tags) sweep instead
+        // of three back-to-back full scans blocking the main thread.
+        if (this._resolvePassScheduled) return;
+        this._resolvePassScheduled = true;
+        setTimeout(() => {
+            this._resolvePassScheduled = false;
+            this._runStyleResolutionPass();
+        }, 0);
+    }
+
+    /**
+     * One incremental resolution pass over untracked style tags.
+     * Scheduled by {@link ensureStylesResolved}; never runs concurrently
+     * with another pass.
+     * @private
+     */
+    _runStyleResolutionPass() {
         const startTime = Date.now();
         const themeVars = this._extractThemeVariables();
         const styleTags = document.querySelectorAll('style:not(#litefin-dynamic-theme-vars)');

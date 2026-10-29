@@ -1063,6 +1063,19 @@ class App {
         //      CSS variables are already present on <html> when the polyfill scans the DOM.
         cssVarsPolyfill.init();
 
+        // 3.1.5. Parallel lazy-style prewarm.
+        // layoutManager.init() already kicked the modern interface layer and
+        // the active theme palette chunk imports (the layout setters call
+        // ensureModernStyles()/loadThemeStyles()). Re-invoking here is a
+        // cheap no-op when so, but guarantees both lazy CSS chunks are in
+        // flight from the earliest moment of App.init, fully overlapping the
+        // i18n / auth awaits and the home chunk prewarm instead of
+        // resolving one-after-another mid-boot and spending their CssVarsPolyfill
+        // adoption passes (coalesced via ensureStylesResolved) inside the
+        // /home navigation window.
+        layoutManager.ensureModernStyles();
+        layoutManager.loadThemeStyles(layoutManager.getThemeMode());
+
         // 3.5. Initialize translations + auth session in parallel
         // i18n and auth are completely independent — overlapping them saves a round-trip
         const appLanguage = storage.getItem('app_language') || 'en-us';
@@ -1095,7 +1108,7 @@ class App {
                 .catch((err) => log.warn('RTL stylesheet chunk failed:', err));
         }
 
-        // Wait for both to complete — they've been running in parallel
+        // Wait for both to complete - they've been running in parallel
         await Promise.all([i18nPromise, authPromise]);
 
         // Load UI font if it requires server fallback font
