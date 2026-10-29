@@ -346,7 +346,8 @@ export default class MseAudioEngine {
         this._dropNext();
         this._nextTrack = null;
         this._repump = true;
-        this._reportError(track.id, err);
+        /* a repeat-one preload shares the playing track's id; reporting it would skip the healthy track */
+        if (track.id !== this.currentTrackId) this._reportError(track.id, err);
     }
 
     _dropNext() {

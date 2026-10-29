@@ -1244,3 +1244,40 @@ test('I2: a seek racing an in-flight start of the next track re-appends it once 
     h.tick();
     assert.deepEqual(h.trackStarts(), ['b']);
 });
+
+test('repeat-one: a failed repeated preload is dropped silently, the track ends normally and a later element error still reports once', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4]);
+    await h.engine.load(a);
+    h.engine.play();
+    await settle();
+    assert.equal(h.mediaSources[0].endOfStreamCalls, 1);
+    h.failFetch('a/seg1.mp4', 2);
+    await h.engine.preloadNext(a);
+    await settle();
+
+    assert.deepEqual(h.errors(), []);
+    assert.deepEqual(h.sb().ranges, [[0, 8]]);
+    assert.equal(h.mediaSources[0].endOfStreamCalls, 2);
+
+    h.audios[0].error = { code: 3 };
+    h.audios[0].fire('error');
+    assert.deepEqual(h.errors(), [['error', 'a', 'Audio element error (code 3)']]);
+});
+
+test('repeat-one: a failed repeated preload lets the current track end with onEnded once', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4]);
+    await h.engine.load(a);
+    h.engine.play();
+    await settle();
+    h.failFetch('a/seg1.mp4', 2);
+    await h.engine.preloadNext(a);
+    await settle();
+
+    h.audios[0].currentTime = 8;
+    h.audios[0].fire('ended');
+    assert.equal(h.endedCount(), 1);
+    assert.deepEqual(h.trackStarts(), []);
+    assert.deepEqual(h.errors(), []);
+});
