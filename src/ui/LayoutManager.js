@@ -307,15 +307,15 @@ class LayoutManager {
          * SIDEBAR LAYOUT CONFIGURATION & DEFAULT SELECTION
          * ---------------------------------------------------------------------
          * Load saved sidebar navigation layout preference from persistent storage.
-         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) defaults
-         * gracefully to the lightweight 'classic' sidebar layout for maximum
-         * performance and compatibility, but users can freely select other
-         * modern or floating layout modes in Settings.
-         * Modern and legacy tiers default to 'modern-collapsed'.
+         * All hardware tiers (modern, legacy, and ultra-legacy) default
+         * to 'modern-collapsed' for a sleek, responsive, and unified navigation
+         * experience across all targets, while users remain free to choose any
+         * alternative layout mode (classic, floating buttons, etc.) in Settings.
+         *
          * ---------------------------------------------------------------------
          */
-        const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
-        const defaultSidebarLayout = isUltraLegacy ? 'classic' : 'modern-collapsed';
+        // Default sidebar navigation layout across all platforms and hardware tiers
+        const defaultSidebarLayout = 'modern-collapsed';
         const savedSidebarLayout = storage.getItem('pref:sidebarLayoutMode') || defaultSidebarLayout;
 
         // Load saved theme mode
