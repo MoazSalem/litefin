@@ -52,6 +52,7 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
 import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
+import { fireHomeRowPrefetch, consumeHomeRowPrefetch } from '../utils/HomeRowPrefetch.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('HomePage');
@@ -1185,95 +1186,30 @@ class HomePage extends Page {
     // =========================================================================
 
     /**
-     * Fire the Continue Watching / Next Up requests in parallel with the
-     * Views request that gates the render pipeline.
-     *
-     * Views must complete before descriptors can be built (library rows need
-     * the library list), but resume / next-up data is independent - issuing
-     * those requests only after Views serializes ~2s of latency in front of
-     * the rows users actually look at first. The in-flight promises are
-     * stored here and consumed by the matching row fetchFns via
-     * _consumePrefetch(); if a row never consumes (layout config changed
-     * between fire and render), the attached no-op catch keeps the rejection
-     * from surfacing as an unhandled promise error.
-     *
-     * Respects the user's home-row visibility config: hidden rows are not
-     * prefetched. Rejected prefetches propagate into the row's own error
-     * handling exactly like a fresh request would.
+     * Fire the Continue Watching / Next Up prefetch (delegates to the shared
+     * HomeRowPrefetch coordinator, which App.init also calls at the earliest
+     * boot moment so the requests overlap the HomePage chunk download and
+     * lazy style loading). Idempotent: if the requests are already in flight
+     * for this user, this is a no-op and the row fetchFns consume the
+     * in-flight promises via _consumePrefetch().
      * @private
      */
     _fireRowPrefetch() {
-        this._prefetched = {};
-
-        try {
-            const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
-
-            // Respect the user's row visibility config: a hidden row must not
-            // cause a wasted request.
-            const savedLayout = homeLayoutManager.getSavedLayout() || [];
-            const isHidden = (id) => savedLayout.some((c) => c.id === id && c.hidden);
-
-            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
-
-            if (mergeResumeNextUp) {
-                if (isHidden('resume')) return;
-
-                // Replicate the merged-mode params computed inside the row's
-                // fetchFn (limit / watched threshold / NextUpDateCutoff).
-                const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                const daysLimit = isNaN(maxDays) ? 365 : maxDays;
-                const mergedParams = { limit: homeRowLimit };
-                mergedParams.watchedThreshold = Math.round(PlayerSettings.getWatchedThresholdFraction() * 100);
-                if (daysLimit > 0) {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - daysLimit);
-                    const cutoffIso = cutoff.toISOString();
-                    mergedParams.nextUpDateCutoff = cutoffIso;
-                    mergedParams.NextUpDateCutoff = cutoffIso;
-                }
-
-                const p = api.getMergedRows(mergedParams);
-                p.catch(() => {});
-                this._prefetched.merged = p;
-            } else {
-                if (!isHidden('resume')) {
-                    const p = api.getResumeItems({ Limit: homeRowLimit });
-                    p.catch(() => {});
-                    this._prefetched.resume = p;
-                }
-                if (!isHidden('next-up')) {
-                    const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                    const daysLimit = isNaN(maxDays) ? 365 : maxDays;
-                    const params = { Limit: homeRowLimit };
-                    if (daysLimit > 0) {
-                        const cutoff = new Date();
-                        cutoff.setDate(cutoff.getDate() - daysLimit);
-                        params.NextUpDateCutoff = cutoff.toISOString();
-                    }
-                    const p = api.getNextUp(params);
-                    p.catch(() => {});
-                    this._prefetched.nextUp = p;
-                }
-            }
-        } catch (err) {
-            log.warn('Home row prefetch failed:', err);
-        }
+        fireHomeRowPrefetch(api._userId);
     }
 
     /**
-     * Consume an in-flight prefetch promise fired by _fireRowPrefetch().
-     * Returns the promise (still pending or already settled) exactly once -
-     * the key is nulled after read so a later pipeline run cannot reuse a
-     * stale response. Awaiting a rejected prefetch rethrows into the row's
-     * normal error handling.
+     * Consume an in-flight prefetch promise armed by the HomeRowPrefetch
+     * coordinator. Returns the promise (still pending or already settled)
+     * exactly once - the key is nulled after read so a later pipeline run
+     * cannot reuse a stale response. Awaiting a rejected prefetch rethrows
+     * into the row's normal error handling.
      * @param {string} key - 'merged' | 'resume' | 'nextUp'
      * @returns {Promise<Object>|null}
      * @private
      */
     _consumePrefetch(key) {
-        const p = this._prefetched ? this._prefetched[key] : null;
-        if (this._prefetched) this._prefetched[key] = null;
-        return p || null;
+        return consumeHomeRowPrefetch(key, api._userId);
     }
 
     /**
@@ -1312,9 +1248,6 @@ class HomePage extends Page {
             // so we can await them alongside P0/P1 rows in Step 6.
             let heroPromise = null;
             let enrichPromise = null;
-
-            // Preflight carry-over for parallel row fetches (see _fireRowPrefetch)
-            this._prefetched = null;
 
             if (cache) {
                 log.info('Restoring homepage from cache');

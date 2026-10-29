@@ -12,6 +12,7 @@ import { state } from './StateManager.js';
 import { router } from './Router.js';
 import { playQueue } from './PlayQueue.js';
 import { api } from '../api/ApiClient.js';
+import { fireHomeRowPrefetch } from '../utils/HomeRowPrefetch.js';
 import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
@@ -1110,6 +1111,28 @@ class App {
 
         // Wait for both to complete - they've been running in parallel
         await Promise.all([i18nPromise, authPromise]);
+
+        // Fire the home row prefetch (Resume / NextUp) at the earliest
+        // authenticated moment - right alongside the Sidebar's GET
+        // /Users/{id}/Views instead of after HomePage's chunk + lazy styles
+        // finish loading. The HomePage render pipeline later consumes the
+        // in-flight promises via the shared HomeRowPrefetch coordinator, so
+        // the network round-trips fully overlap the ~1s of chunk/CSS loading
+        // between session restore and /home mount. Skipped when the profile
+        // picker is about to gate the session (no single active user yet).
+        if (state.get('user:authenticated')) {
+            const sessionCount = state.get('user:sessionCount', 0);
+            const activeUser = auth.getCurrentUser();
+            const activeHasPin = activeUser ? pinManager.hasPin(activeUser.Id) : false;
+            const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+            const initialPath = window.location.hash.slice(1) || '/';
+            const profilesGated =
+                initialPath === '/profiles' || (sessionCount > 1 && !rememberLastUser) || activeHasPin;
+
+            if (!profilesGated && activeUser) {
+                fireHomeRowPrefetch(activeUser.Id);
+            }
+        }
 
         // Load UI font if it requires server fallback font
         if (state.get('user:authenticated') && isFallbackFont(layoutManager.getUiFont())) {
