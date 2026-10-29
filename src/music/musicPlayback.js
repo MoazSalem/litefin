@@ -4,6 +4,7 @@ import GaplessAudioEngine from './GaplessAudioEngine.js';
 import NativeAudioBackend from './NativeAudioBackend.js';
 import { buildStaticAudioUrl } from './streamUrl.js';
 import { audioKindOf, supportsGaplessEngine } from './trackKind.js';
+import { webAudioAudibleOn, watchSoundOutput } from './soundOutput.js';
 import { NOW_PLAYING_PATH, wireMusicSession } from './musicWiring.js';
 import { api } from '../api/ApiClient.js';
 import { buildJellyfinProfile } from '../api/DeviceProfile.js';
@@ -13,12 +14,29 @@ import { playQueue } from '../core/PlayQueue.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('MusicSession');
 
 export { NOW_PLAYING_PATH };
 
 const gaplessAvailable = supportsGaplessEngine(typeof window === 'undefined' ? undefined : window);
+
+let soundOutput = null;
+
+if (platformInfo.isWebOS && typeof window !== 'undefined' && window.PalmServiceBridge) {
+    try {
+        watchSoundOutput(
+            () => new window.PalmServiceBridge(),
+            (value) => {
+                soundOutput = value;
+                log.info('Sound output:', value, webAudioAudibleOn(value) ? '(gapless engine)' : '(native audio)');
+            }
+        );
+    } catch (err) {
+        log.warn('Could not watch the sound output setting:', err);
+    }
+}
 
 let deviceProfile = null;
 
@@ -36,7 +54,8 @@ function describeTrack(item, mediaSource) {
         deviceId: api.deviceId,
         isEmby: api.isEmby()
     });
-    const kind = gaplessAvailable && audioKindOf(mediaSource) === 'flac' ? 'flac' : 'native';
+    const kind =
+        gaplessAvailable && webAudioAudibleOn(soundOutput) && audioKindOf(mediaSource) === 'flac' ? 'flac' : 'native';
     return { url, kind };
 }
 
