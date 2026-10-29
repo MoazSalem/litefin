@@ -1,11 +1,13 @@
 import { logger } from '../utils/Logger.js';
 import { parseHlsPlaylist, segmentIndexAt } from './hlsPlaylist.js';
 import { addTrack, closeTrack, emptyTimeline, entryAt, evictionEnd, positionMs } from './mseTimeline.js';
+import SourceBufferQueue from './sourceBufferQueue.js';
 
 export const AHEAD_SECONDS = 20;
 export const BEHIND_SECONDS = 4;
 export const TICK_MS = 250;
 const QUOTA_KEEP_BEHIND = 1;
+const OPEN_TIMEOUT_MS = 10000;
 
 const noop = () => {};
 
@@ -33,22 +35,28 @@ export default class MseAudioEngine {
         fetchBytes = defaultFetchBytes,
         setInterval: setIntervalFn = (fn, ms) => globalThis.setInterval(fn, ms),
         clearInterval: clearIntervalFn = (handle) => globalThis.clearInterval(handle),
+        setTimeout: setTimeoutFn = (fn, ms) => globalThis.setTimeout(fn, ms),
+        clearTimeout: clearTimeoutFn = (handle) => globalThis.clearTimeout(handle),
         log = logger.create('MseAudioEngine')
     } = {}) {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
         this._media = { createAudio, createMediaSource, createObjectUrl, revokeObjectUrl };
         this._fetchText = fetchText;
         this._fetchBytes = fetchBytes;
-        this._setInterval = setIntervalFn;
-        this._clearInterval = clearIntervalFn;
+        this._timers = { setIntervalFn, clearIntervalFn, setTimeoutFn, clearTimeoutFn };
         this._log = log;
         this._audio = null;
+        this._audioListeners = [];
         this._mediaSource = null;
         this._sourceBuffer = null;
+        this._queue = null;
         this._objectUrl = null;
-        this._audioListeners = [];
+        this._sourceOpened = false;
+        this._mediaBroken = false;
+        this._cancelOpenWait = null;
         this._generation = 0;
         this._appendSeq = 0;
+        this._errorReported = null;
         this._playing = false;
         this._timer = null;
         this._feeding = null;
@@ -79,28 +87,11 @@ export default class MseAudioEngine {
         const gen = this._begin();
         this._loadedTrack = track;
         this._nextTrack = null;
-        const fresh = () => gen === this._generation;
-        this._ensureMedia();
-        await this._whenOpen();
-        if (!fresh()) return;
-        const sourceBuffer = this._ensureSourceBuffer(track.mime);
-        await this._clearBuffer();
-        if (!fresh()) return;
-        const text = await this._fetchText(track.url);
-        if (!fresh()) return;
-        const playlist = parseHlsPlaylist(text, track.url);
-        if (playlist.segments.length === 0) throw new Error(`HLS playlist for ${track.id} has no segments`);
-        const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
-        const init = await this._fetchBytes(playlist.initUrl);
-        if (!fresh()) return;
-        await this._update((sb) => sb.appendBuffer(init));
-        if (!fresh()) return;
-        sourceBuffer.timestampOffset = playlist.segments[item.index].start;
-        await this._appendSegment(gen, item);
-        if (!fresh()) return;
-        this._audio.currentTime = startMs / 1000;
-        this._startTimer();
-        this._pump(gen);
+        try {
+            await this._loadInto(gen, track, startMs);
+        } catch (err) {
+            if (gen === this._generation) throw err;
+        }
     }
 
     async preloadNext(track) {
@@ -110,6 +101,7 @@ export default class MseAudioEngine {
     play() {
         this._playing = true;
         if (!this._audio) return;
+        if (this._loadedTrack) this._startTimer();
         const result = this._audio.play();
         if (result && typeof result.catch === 'function') {
             result.catch((err) => this._log.warn('Audio play() rejected', err));
@@ -133,9 +125,7 @@ export default class MseAudioEngine {
         this._loadedTrack = null;
         this._nextTrack = null;
         if (this._audio) this._audio.pause();
-        if (this._sourceBuffer) {
-            this._clearBuffer().catch((err) => this._log.warn('Clearing the SourceBuffer failed', err));
-        }
+        if (this._queue) this._clearBuffer().catch((err) => this._log.debug('Clearing the SourceBuffer failed', err));
     }
 
     destroy() {
@@ -143,17 +133,41 @@ export default class MseAudioEngine {
         if (!this._audio) return;
         this._audioListeners.forEach(([event, handler]) => this._audio.removeEventListener(event, handler));
         this._audioListeners = [];
+        this._detachMediaSource();
         try {
-            this._media.revokeObjectUrl(this._objectUrl);
             this._audio.removeAttribute('src');
             this._audio.load();
         } catch (err) {
             this._log.warn('Audio element cleanup failed', err);
         }
         this._audio = null;
-        this._mediaSource = null;
-        this._sourceBuffer = null;
-        this._objectUrl = null;
+    }
+
+    async _loadInto(gen, track, startMs) {
+        const fresh = () => gen === this._generation;
+        this._ensureMedia();
+        await this._whenOpen();
+        if (!fresh()) return;
+        this._ensureSourceBuffer(track.mime);
+        await this._clearBuffer();
+        if (!fresh()) return;
+        const text = await this._fetchText(track.url);
+        if (!fresh()) return;
+        const playlist = parseHlsPlaylist(text, track.url);
+        if (playlist.segments.length === 0) throw new Error(`HLS playlist for ${track.id} has no segments`);
+        const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
+        const init = await this._fetchBytes(playlist.initUrl);
+        if (!fresh()) return;
+        await this._queue.run((sb) => sb.appendBuffer(init));
+        if (!fresh()) return;
+        const offset = playlist.segments[item.index].start;
+        await this._queue.run((sb) => {
+            sb.timestampOffset = offset;
+        });
+        if (!fresh() || !(await this._appendSegment(gen, item))) return;
+        this._audio.currentTime = startMs / 1000;
+        this._startTimer();
+        this._pump(gen);
     }
 
     // ========================================================================
@@ -161,13 +175,34 @@ export default class MseAudioEngine {
     // ========================================================================
 
     _ensureMedia() {
-        if (this._audio) return;
-        this._audio = this._media.createAudio();
+        if (!this._audio) {
+            this._audio = this._media.createAudio();
+            this._listen('ended', () => this._handleEnded());
+            this._listen('error', () => this._handleAudioError());
+        }
+        const closedAfterOpen = this._sourceOpened && this._mediaSource.readyState === 'closed';
+        if (this._mediaSource && !this._mediaBroken && !closedAfterOpen) return;
+        this._detachMediaSource();
+        this._mediaBroken = false;
         this._mediaSource = this._media.createMediaSource();
         this._objectUrl = this._media.createObjectUrl(this._mediaSource);
         this._audio.src = this._objectUrl;
-        this._listen('ended', () => this._handleEnded());
-        this._listen('error', () => this._handleAudioError());
+    }
+
+    _detachMediaSource() {
+        if (this._queue) this._queue.dispose();
+        if (this._objectUrl) {
+            try {
+                this._media.revokeObjectUrl(this._objectUrl);
+            } catch (err) {
+                this._log.warn('Revoking the MediaSource URL failed', err);
+            }
+        }
+        this._queue = null;
+        this._sourceBuffer = null;
+        this._mediaSource = null;
+        this._objectUrl = null;
+        this._sourceOpened = false;
     }
 
     _listen(event, handler) {
@@ -177,62 +212,41 @@ export default class MseAudioEngine {
 
     _whenOpen() {
         const mediaSource = this._mediaSource;
-        if (mediaSource.readyState !== 'closed') return Promise.resolve();
-        return new Promise((resolve) => {
-            const onOpen = () => {
+        if (mediaSource.readyState !== 'closed') {
+            this._sourceOpened = true;
+            return Promise.resolve();
+        }
+        const { setTimeoutFn, clearTimeoutFn } = this._timers;
+        return new Promise((resolve, reject) => {
+            const finish = (opened, err) => {
                 mediaSource.removeEventListener('sourceopen', onOpen);
-                resolve();
+                clearTimeoutFn(timer);
+                this._cancelOpenWait = null;
+                if (opened) this._sourceOpened = true;
+                if (err) reject(err);
+                else resolve();
             };
+            const onOpen = () => finish(true);
+            const timer = setTimeoutFn(() => {
+                this._mediaBroken = true;
+                finish(false, new Error('MediaSource did not open'));
+            }, OPEN_TIMEOUT_MS);
             mediaSource.addEventListener('sourceopen', onOpen);
+            this._cancelOpenWait = () => finish(false);
         });
     }
 
     _ensureSourceBuffer(mime) {
-        if (!this._sourceBuffer) {
-            this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
-            this._sourceBuffer.mode = 'sequence';
-        }
-        return this._sourceBuffer;
+        if (this._sourceBuffer) return;
+        this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
+        this._sourceBuffer.mode = 'sequence';
+        this._queue = new SourceBufferQueue(this._sourceBuffer);
     }
 
-    _update(run) {
-        const sourceBuffer = this._sourceBuffer;
-        return new Promise((resolve, reject) => {
-            const cleanup = () => {
-                sourceBuffer.removeEventListener('updateend', onEnd);
-                sourceBuffer.removeEventListener('error', onError);
-            };
-            const onEnd = () => {
-                cleanup();
-                resolve();
-            };
-            const onError = () => {
-                cleanup();
-                reject(new Error('SourceBuffer update failed'));
-            };
-            sourceBuffer.addEventListener('updateend', onEnd);
-            sourceBuffer.addEventListener('error', onError);
-            try {
-                run(sourceBuffer);
-            } catch (err) {
-                cleanup();
-                reject(err);
-            }
+    _clearBuffer() {
+        return this._queue.run((sb) => {
+            if (sb.buffered.length > 0) sb.remove(0, Infinity);
         });
-    }
-
-    /* abort() throws while a remove() is running; either way the pending update ends with updateend */
-    async _clearBuffer() {
-        if (this._sourceBuffer.updating) {
-            await this._update((sb) => {
-                try {
-                    sb.abort();
-                } catch (err) {
-                    this._log.debug('SourceBuffer abort() refused, waiting for the update', err);
-                }
-            });
-        }
-        if (this._sourceBuffer.buffered.length > 0) await this._update((sb) => sb.remove(0, Infinity));
     }
 
     _bufferedEdges() {
@@ -241,11 +255,12 @@ export default class MseAudioEngine {
         return { start: ranges.start(0), end: ranges.end(ranges.length - 1) };
     }
 
-    async _evict(keepBehind) {
-        const edges = this._bufferedEdges();
+    _evict(gen, keepBehind) {
         const end = evictionEnd(this._audio.currentTime, keepBehind);
-        if (!edges || edges.start >= end) return;
-        await this._update((sb) => sb.remove(0, end));
+        return this._queue.run((sb) => {
+            if (gen !== this._generation) return;
+            if (sb.buffered.length > 0 && sb.buffered.start(0) < end) sb.remove(0, end);
+        });
     }
 
     // ========================================================================
@@ -256,6 +271,7 @@ export default class MseAudioEngine {
         this._generation++;
         this._stopTimer();
         this._reset();
+        if (this._cancelOpenWait) this._cancelOpenWait();
         return this._generation;
     }
 
@@ -270,18 +286,23 @@ export default class MseAudioEngine {
 
     _enqueue(track, playlist, index, origin) {
         const key = `${track.id}#${++this._appendSeq}`;
-        const item = { key, track, playlist, index };
+        const item = { key, track, playlist, index, bytes: null };
         this._tracksByKey.set(key, track);
         this._timeline = addTrack(this._timeline, key, origin);
         this._feedQueue = [...this._feedQueue, item];
         return item;
     }
 
+    /* bytes stay on the item until appended, so a quota retry never downloads the segment again */
     async _appendSegment(gen, item) {
-        const bytes = await this._fetchBytes(item.playlist.segments[item.index].url);
+        if (!item.bytes) {
+            const bytes = await this._fetchBytes(item.playlist.segments[item.index].url);
+            if (gen !== this._generation) return false;
+            item.bytes = bytes;
+        }
+        await this._queue.run((sb) => sb.appendBuffer(item.bytes));
         if (gen !== this._generation) return false;
-        await this._update((sb) => sb.appendBuffer(bytes));
-        if (gen !== this._generation) return false;
+        item.bytes = null;
         item.index++;
         return true;
     }
@@ -313,7 +334,7 @@ export default class MseAudioEngine {
             if (!(await this._appendOrEvict(gen, item))) return;
         }
         /* remove() on an ended MediaSource reopens it and the element would never fire `ended` */
-        if (gen === this._generation && !this._streamEnded) await this._evict(BEHIND_SECONDS);
+        if (gen === this._generation && !this._streamEnded) await this._evict(gen, BEHIND_SECONDS);
     }
 
     async _appendOrEvict(gen, item) {
@@ -322,7 +343,7 @@ export default class MseAudioEngine {
         } catch (err) {
             if (!isQuotaError(err)) throw err;
             this._log.debug('SourceBuffer full, evicting and retrying on the next tick');
-            await this._evict(QUOTA_KEEP_BEHIND);
+            await this._evict(gen, QUOTA_KEEP_BEHIND);
             return false;
         }
     }
@@ -351,7 +372,16 @@ export default class MseAudioEngine {
     _failFeed(err) {
         this._feedHalted = true;
         this._log.error('MSE feeding failed', err);
-        this._callbacks.onError(this.currentTrackId, err);
+        this._reportError(err);
+    }
+
+    /* a failed append also errors the element; report each failure once per track and load */
+    _reportError(err) {
+        const trackId = this.currentTrackId;
+        const key = `${this._generation}:${trackId}`;
+        if (this._errorReported === key) return;
+        this._errorReported = key;
+        this._callbacks.onError(trackId, err);
     }
 
     // ========================================================================
@@ -363,8 +393,9 @@ export default class MseAudioEngine {
         return entry ? this._tracksByKey.get(entry.trackId) : this._loadedTrack;
     }
 
+    /* an `ended` queued before a new load arrives while that load's stream is still open */
     _handleEnded() {
-        if (this._endedFired || !this._loadedTrack) return;
+        if (this._endedFired || !this._loadedTrack || !this._streamEnded) return;
         this._endedFired = true;
         this._playing = false;
         this._stopTimer();
@@ -373,18 +404,20 @@ export default class MseAudioEngine {
 
     _handleAudioError() {
         if (!this._loadedTrack) return;
+        this._mediaBroken = true;
+        this._feedHalted = true;
         const code = this._audio.error ? this._audio.error.code : 'unknown';
-        this._callbacks.onError(this.currentTrackId, new Error(`Audio element error (code ${code})`));
+        this._reportError(new Error(`Audio element error (code ${code})`));
     }
 
     _startTimer() {
         if (this._timer !== null) return;
-        this._timer = this._setInterval(() => this._tick(), TICK_MS);
+        this._timer = this._timers.setIntervalFn(() => this._tick(), TICK_MS);
     }
 
     _stopTimer() {
         if (this._timer === null) return;
-        this._clearInterval(this._timer);
+        this._timers.clearIntervalFn(this._timer);
         this._timer = null;
     }
 

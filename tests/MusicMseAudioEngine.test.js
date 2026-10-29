@@ -8,7 +8,11 @@ const { default: MseAudioEngine } = await import('../src/music/MseAudioEngine.js
 const MIME = 'audio/mp4; codecs="ec-3"';
 const noop = () => {};
 const settle = async () => {
-    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 40; i++) await new Promise((resolve) => setImmediate(resolve));
+};
+const until = async (condition) => {
+    for (let i = 0; i < 100 && !condition(); i++) await Promise.resolve();
+    assert.ok(condition(), 'condition never became true');
 };
 
 function emitter() {
@@ -32,13 +36,23 @@ class FakeSourceBuffer {
         Object.assign(this, emitter());
         this.registry = registry;
         this.mode = 'segments';
-        this.timestampOffset = 0;
         this.updating = false;
         this.ranges = [];
         this.appended = [];
         this.removed = [];
-        this.quotaUrls = new Set();
+        this.quota = new Map();
+        this.errorUrls = new Set();
+        this._timestampOffset = 0;
         this._op = null;
+    }
+
+    get timestampOffset() {
+        return this._timestampOffset;
+    }
+
+    set timestampOffset(value) {
+        if (this.updating) throw new DOMException('busy', 'InvalidStateError');
+        this._timestampOffset = value;
     }
 
     get buffered() {
@@ -49,12 +63,20 @@ class FakeSourceBuffer {
     appendBuffer(bytes) {
         if (this.updating) throw new DOMException('busy', 'InvalidStateError');
         const { url, duration } = this.registry.get(bytes);
-        if (this.quotaUrls.delete(url)) throw new DOMException('full', 'QuotaExceededError');
-        this.appended.push({ url, offset: this.timestampOffset });
+        const quotaLeft = this.quota.get(url) || 0;
+        if (quotaLeft > 0) {
+            this.quota.set(url, quotaLeft - 1);
+            throw new DOMException('full', 'QuotaExceededError');
+        }
+        this.appended.push({ url, offset: this._timestampOffset });
+        if (this.errorUrls.has(url)) {
+            this._run(noop, true);
+            return;
+        }
         this._run(() => {
             if (duration > 0) {
-                this._addRange(this.timestampOffset, this.timestampOffset + duration);
-                this.timestampOffset += duration;
+                this._addRange(this._timestampOffset, this._timestampOffset + duration);
+                this._timestampOffset += duration;
             }
         });
     }
@@ -76,7 +98,7 @@ class FakeSourceBuffer {
         if (!this.updating) return;
         this._op = null;
         this.updating = false;
-        queueMicrotask(() => {
+        setImmediate(() => {
             this.fire('abort');
             this.fire('updateend');
         });
@@ -84,16 +106,21 @@ class FakeSourceBuffer {
 
     changeType() {}
 
-    _run(apply) {
+    _run(apply, fail = false) {
         this.updating = true;
         const op = {};
         this._op = op;
-        queueMicrotask(() => {
+        setImmediate(() => {
             if (this._op !== op) return;
             this._op = null;
             apply();
             this.updating = false;
-            this.fire('updateend');
+            if (!fail) {
+                this.fire('updateend');
+                return;
+            }
+            this.fire('error');
+            setImmediate(() => this.fire('updateend'));
         });
     }
 
@@ -163,11 +190,18 @@ function makeAudio() {
 
 function deferred() {
     let resolve;
-    const promise = new Promise((r) => (resolve = r));
-    return { promise, resolve };
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
 }
 
-function setup() {
+function setup({ autoOpen = true } = {}) {
+    const media = { autoOpen };
+    const fetchCounts = new Map();
+    const timeouts = [];
     const registry = new Map();
     const playlists = new Map();
     const bytesByUrl = new Map();
@@ -217,12 +251,13 @@ function setup() {
             return ms;
         },
         createObjectUrl: (ms) => {
-            queueMicrotask(() => ms.open());
-            return 'blob:ms';
+            if (media.autoOpen) setImmediate(() => ms.open());
+            return `blob:ms${mediaSources.length}`;
         },
         revokeObjectUrl: (url) => revoked.push(url),
         fetchText: async (url) => playlists.get(url),
         fetchBytes: async (url) => {
+            fetchCounts.set(url, (fetchCounts.get(url) || 0) + 1);
             if (gates.has(url)) await gates.get(url).promise;
             return bytesByUrl.get(url);
         },
@@ -232,6 +267,13 @@ function setup() {
         },
         clearInterval: (handle) => {
             timers[handle - 1].cleared = true;
+        },
+        setTimeout: (fn, ms) => {
+            timeouts.push({ fn, ms, cleared: false });
+            return timeouts.length;
+        },
+        clearTimeout: (handle) => {
+            timeouts[handle - 1].cleared = true;
         },
         log: { warn: noop, error: noop, info: noop, debug: noop }
     });
@@ -245,7 +287,26 @@ function setup() {
         return d;
     };
 
-    return { engine, addTrack, audios, mediaSources, timers, events, revoked, sb, appendedUrls, tick, gate };
+    const fetchCount = (url) => fetchCounts.get(`http://srv/${url}`) || 0;
+    const errors = () => events.filter((e) => e[0] === 'error');
+
+    return {
+        engine,
+        addTrack,
+        audios,
+        mediaSources,
+        timers,
+        timeouts,
+        events,
+        revoked,
+        media,
+        sb,
+        appendedUrls,
+        tick,
+        gate,
+        fetchCount,
+        errors
+    };
 }
 
 test('load appends init then segments from the start index with timestampOffset at that segment start', async () => {
@@ -280,7 +341,7 @@ test('one audio element, one MediaSource and one sequence-mode SourceBuffer acro
     assert.equal(h.mediaSources.length, 1);
     assert.deepEqual(h.mediaSources[0].mimes, [MIME]);
     assert.equal(h.sb().mode, 'sequence');
-    assert.equal(h.audios[0].src, 'blob:ms');
+    assert.equal(h.audios[0].src, 'blob:ms1');
     assert.deepEqual(h.sb().ranges, [[0, 6]]);
     assert.equal(h.engine.currentTrackId, 'b');
 });
@@ -399,7 +460,7 @@ test('QuotaExceededError evicts and retries on a later tick without surfacing an
     const h = setup();
     const a = h.addTrack('a', [6, 6, 6, 6, 6, 6]);
     await h.engine.load(a);
-    h.sb().quotaUrls.add('http://srv/a/seg2.mp4');
+    h.sb().quota.set('http://srv/a/seg2.mp4', 1);
     h.audios[0].currentTime = 3;
     await settle();
 
@@ -446,7 +507,157 @@ test('destroy also revokes the object URL and drops the element src', async () =
     h.engine.destroy();
     await settle();
 
-    assert.deepEqual(h.revoked, ['blob:ms']);
+    assert.deepEqual(h.revoked, ['blob:ms1']);
     assert.equal(h.audios[0].src, '');
     assert.ok(h.audios[0].calls.includes('remove:src'));
+});
+
+test('I1: stop() then load(b) during an in-flight append waits for it and loads b cleanly', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4]);
+    const b = h.addTrack('b', [5, 5]);
+    const gate = h.gate('a/seg1.mp4');
+    await h.engine.load(a);
+    gate.resolve();
+    await until(() => h.sb().updating);
+
+    h.engine.stop();
+    await h.engine.load(b);
+    await settle();
+
+    assert.deepEqual(h.sb().ranges, [[0, 10]]);
+    assert.equal(h.engine.currentTrackId, 'b');
+    assert.deepEqual(h.errors(), []);
+});
+
+test('I2: a quota-rejected segment is fetched once and the same bytes are retried on later ticks', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [6, 6, 6, 6, 6, 6]);
+    const gate = h.gate('a/seg1.mp4');
+    await h.engine.load(a);
+    h.sb().quota.set('http://srv/a/seg2.mp4', 2);
+    gate.resolve();
+    await settle();
+    h.tick();
+    await settle();
+    assert.ok(!h.appendedUrls().includes('a/seg2.mp4'));
+    h.tick();
+    await settle();
+
+    assert.ok(h.appendedUrls().includes('a/seg2.mp4'));
+    assert.equal(h.fetchCount('a/seg2.mp4'), 1);
+    assert.deepEqual(h.errors(), []);
+});
+
+test('I3: destroy before sourceopen settles the pending load', async () => {
+    const h = setup({ autoOpen: false });
+    const a = h.addTrack('a', [4]);
+    const loading = h.engine.load(a);
+    await settle();
+    h.engine.destroy();
+
+    const outcome = await Promise.race([
+        loading.then(
+            () => 'settled',
+            () => 'settled'
+        ),
+        settle().then(() => 'pending')
+    ]);
+    assert.equal(outcome, 'settled');
+    assert.equal(h.engine.currentTrackId, null);
+});
+
+test('I3: a MediaSource that never opens rejects load after a timeout and the next load rebuilds it', async () => {
+    const h = setup({ autoOpen: false });
+    const a = h.addTrack('a', [4]);
+    const loading = h.engine.load(a);
+    await settle();
+    h.timeouts.filter((t) => !t.cleared).forEach((t) => t.fn());
+    await assert.rejects(loading, /did not open/);
+
+    h.media.autoOpen = true;
+    await h.engine.load(a);
+
+    assert.equal(h.audios.length, 1);
+    assert.equal(h.mediaSources.length, 2);
+    assert.equal(h.audios[0].src, 'blob:ms2');
+    assert.deepEqual(h.revoked, ['blob:ms1']);
+});
+
+test('I3: after a fatal element error the next load rebuilds the MediaSource on the same element', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [5]);
+    await h.engine.load(a);
+    await settle();
+    h.audios[0].error = { code: 3 };
+    h.audios[0].fire('error');
+
+    await h.engine.load(b);
+    await settle();
+
+    assert.equal(h.audios.length, 1);
+    assert.equal(h.mediaSources.length, 2);
+    assert.deepEqual(h.revoked, ['blob:ms1']);
+    assert.equal(h.audios[0].src, 'blob:ms2');
+    assert.deepEqual(h.mediaSources[1].sourceBuffers[0].ranges, [[0, 5]]);
+    assert.equal(h.engine.currentTrackId, 'b');
+});
+
+test('I4: one failed append reports one error even when the element errors too', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4]);
+    const gate = h.gate('a/seg1.mp4');
+    await h.engine.load(a);
+    h.sb().errorUrls.add('http://srv/a/seg1.mp4');
+    gate.resolve();
+    await settle();
+    h.audios[0].error = { code: 3 };
+    h.audios[0].fire('error');
+
+    assert.deepEqual(h.errors(), [['error', 'a', 'SourceBuffer update failed']]);
+});
+
+test('M1: an ended event from the previous track during load(b) does not end b', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [5]);
+    await h.engine.load(a);
+    await settle();
+    const loading = h.engine.load(b);
+    h.audios[0].fire('ended');
+    await loading;
+
+    assert.deepEqual(
+        h.events.filter((e) => e[0] === 'ended'),
+        []
+    );
+});
+
+test('M2: a superseded load resolves even when its fetch fails afterwards', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [5]);
+    const gate = h.gate('a/seg0.mp4');
+    const loadingA = h.engine.load(a);
+    await settle();
+    const loadingB = h.engine.load(b);
+    gate.reject(new Error('network down'));
+
+    await loadingA;
+    await loadingB;
+    assert.equal(h.engine.currentTrackId, 'b');
+});
+
+test('M3: play() after ended restarts the tick timer', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4]);
+    await h.engine.load(a);
+    await settle();
+    h.engine.play();
+    h.audios[0].fire('ended');
+    assert.ok(h.timers.every((t) => t.cleared));
+
+    h.engine.play();
+    assert.equal(h.timers.filter((t) => !t.cleared).length, 1);
 });
