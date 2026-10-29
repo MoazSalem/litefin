@@ -35,6 +35,7 @@ export default class MseAudioEngine {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
         this._fetchText = fetchText;
         this._fetchBytes = fetchBytes;
+        this._requests = new AbortController();
         this._timers = { setIntervalFn, clearIntervalFn };
         this._log = log;
         this._pipe = new MseMediaPipeline({
@@ -155,7 +156,12 @@ export default class MseAudioEngine {
         this._pipe.ensureSourceBuffer(track.mime);
         await this._pipe.clear();
         if (!fresh()) return;
-        const { playlist, init } = await fetchTrackStart(this._fetchText, this._fetchBytes, track);
+        const { playlist, init } = await fetchTrackStart(
+            this._fetchText,
+            this._fetchBytes,
+            track,
+            this._requests.signal
+        );
         if (!fresh()) return;
         const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
         this._currentKey = item.key;
@@ -188,6 +194,8 @@ export default class MseAudioEngine {
 
     _begin() {
         this._generation++;
+        this._requests.abort();
+        this._requests = new AbortController();
         this._stopTimer();
         this._reset();
         this._pipe.cancelOpenWait();
@@ -238,7 +246,8 @@ export default class MseAudioEngine {
                 fetchBytes: this._fetchBytes,
                 item,
                 isLive: () => this._isLive(gen, key),
-                log: this._log
+                log: this._log,
+                signal: this._requests.signal
             });
             if (!this._isLive(gen, key)) return false;
             item = { ...item, ...fetched };
@@ -317,7 +326,7 @@ export default class MseAudioEngine {
         }
         let start;
         try {
-            start = await fetchTrackStart(this._fetchText, this._fetchBytes, next);
+            start = await fetchTrackStart(this._fetchText, this._fetchBytes, next, this._requests.signal);
         } catch (err) {
             if (!wanted()) return;
             this._log.warn(`Preparing ${next.id} failed, it starts after the current track ends`, err);

@@ -263,6 +263,7 @@ function setup({ autoOpen = true, changeType = true } = {}) {
     const playlists = new Map();
     const bytesByUrl = new Map();
     const gates = new Map();
+    const signals = new Map();
     const audios = [];
     const mediaSources = [];
     const timers = [];
@@ -338,8 +339,9 @@ function setup({ autoOpen = true, changeType = true } = {}) {
             const versions = playlists.get(url);
             return versions[Math.min(count, versions.length - 1)];
         },
-        fetchBytes: async (url) => {
+        fetchBytes: async (url, signal) => {
             fetchCounts.set(url, (fetchCounts.get(url) || 0) + 1);
+            signals.set(url, signal);
             if (gates.has(url)) await gates.get(url).promise;
             const failuresLeft = failures.get(url) || 0;
             if (failuresLeft > 0) {
@@ -401,6 +403,7 @@ function setup({ autoOpen = true, changeType = true } = {}) {
         playlistFetches,
         failFetch,
         failPlaylist,
+        signalOf: (url) => signals.get(`http://srv/${url}`),
         hooks,
         restartTranscode,
         errors,
@@ -555,6 +558,25 @@ test('Review Focus 1: load(b) during a pending first-segment fetch of load(a) ap
 
     assert.ok(!h.appendedUrls().some((url) => url.startsWith('a/seg')));
     assert.equal(h.engine.currentTrackId, 'b');
+});
+
+test('I1: a new load or stop aborts the requests of the superseded generation', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4, 4, 4]);
+    const b = h.addTrack('b', [4, 4]);
+    h.gate('a/seg1.mp4');
+    await h.engine.load(a);
+    await settle();
+    const hanging = h.signalOf('a/seg1.mp4');
+    assert.equal(hanging.aborted, false);
+
+    await h.engine.load(b);
+    assert.equal(hanging.aborted, true);
+    const current = h.signalOf('b/seg0.mp4');
+    assert.equal(current.aborted, false);
+
+    h.engine.stop();
+    assert.equal(current.aborted, true);
 });
 
 test('QuotaExceededError evicts and retries on a later tick without surfacing an error', async () => {

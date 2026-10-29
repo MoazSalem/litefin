@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchPlaylist, fetchSegment, fetchTrackStart } from '../src/music/mseSegmentSource.js';
+import {
+    PLAYLIST_TIMEOUT_MS,
+    SEGMENT_TIMEOUT_MS,
+    createHttpFetchers,
+    fetchPlaylist,
+    fetchSegment,
+    fetchTrackStart
+} from '../src/music/mseSegmentSource.js';
 
 const URL_A = 'http://srv/a/main.m3u8';
 const track = { id: 'a', url: URL_A };
@@ -77,4 +84,70 @@ test('fetchTrackStart returns the playlist with its init segment', async () => {
 
     assert.equal(start.init, 'http://srv/a/init.mp4');
     assert.equal(start.playlist.segments.length, 2);
+});
+
+function http(responder) {
+    const timers = [];
+    const requests = [];
+    const fetchers = createHttpFetchers({
+        fetchFn: (url, init) => {
+            requests.push({ url, signal: init.signal });
+            return responder(url);
+        },
+        setTimeoutFn: (fn, ms) => timers.push({ fn, ms, cleared: false }),
+        clearTimeoutFn: (handle) => {
+            timers[handle - 1].cleared = true;
+        }
+    });
+    const fire = () => timers.filter((t) => !t.cleared).forEach((t) => t.fn());
+    return { ...fetchers, timers, requests, fire };
+}
+const never = () => new Promise(() => {});
+
+test('I1: a playlist request that never answers rejects once its 10 s timeout fires', async () => {
+    const h = http(never);
+    const pending = h.fetchText('http://srv/a/main.m3u8');
+
+    assert.deepEqual(
+        h.timers.map((t) => t.ms),
+        [PLAYLIST_TIMEOUT_MS]
+    );
+    assert.equal(PLAYLIST_TIMEOUT_MS, 10000);
+    h.fire();
+    await assert.rejects(pending, /timed out after 10000 ms/);
+    assert.equal(h.requests[0].signal.aborted, true);
+});
+
+test('I1: a segment request that never answers rejects once its 20 s timeout fires', async () => {
+    const h = http(never);
+    const pending = h.fetchBytes('http://srv/a/seg0.mp4');
+
+    assert.equal(SEGMENT_TIMEOUT_MS, 20000);
+    assert.deepEqual(
+        h.timers.map((t) => t.ms),
+        [SEGMENT_TIMEOUT_MS]
+    );
+    h.fire();
+    await assert.rejects(pending, /timed out/);
+});
+
+test('I1: aborting the caller signal cancels a hanging request at once', async () => {
+    const h = http(never);
+    const owner = new AbortController();
+    const pending = h.fetchBytes('http://srv/a/seg0.mp4', owner.signal);
+
+    owner.abort();
+    await assert.rejects(pending, /aborted/);
+    assert.equal(h.requests[0].signal.aborted, true);
+    assert.equal(h.timers[0].cleared, true);
+});
+
+test('I1: an answered request clears its timeout and a non-OK status still rejects', async () => {
+    const h = http(async (url) =>
+        url.endsWith('missing') ? { ok: false, status: 404 } : { ok: true, text: async () => '#EXTM3U' }
+    );
+
+    assert.equal(await h.fetchText('http://srv/a/main.m3u8'), '#EXTM3U');
+    await assert.rejects(h.fetchText('http://srv/a/missing'), /HTTP 404/);
+    assert.ok(h.timers.every((t) => t.cleared));
 });
