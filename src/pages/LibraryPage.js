@@ -1458,7 +1458,21 @@ class LibraryPage extends Page {
         }
 
         try {
-            const item = await api.getItem(this.state.libraryId);
+            let item = null;
+
+            // Check if library metadata is already available from in-memory user views
+            const cachedLibraries = state.get('home:libraries');
+            if (Array.isArray(cachedLibraries)) {
+                const found = cachedLibraries.find((lib) => lib && lib.Id === this.state.libraryId);
+                if (found) {
+                    item = { ...found };
+                }
+            }
+
+            // Fallback to server query if library was not found in local memory cache
+            if (!item) {
+                item = await api.getItem(this.state.libraryId);
+            }
 
             // If the libraryId is a deep link to an Album/Artist/Series, it won't have a CollectionType.
             // Fake it so the LibraryPage behaves like it's inside that specific library type.
@@ -1555,6 +1569,14 @@ class LibraryPage extends Page {
             this.title = title; // Update Page title
         } catch (e) {
             log.error('Failed to fetch info', e);
+            // Ensure libraryInfo is never null or undefined on failure
+            if (!this.state.libraryInfo) {
+                this.state.libraryInfo = {
+                    Id: this.state.libraryId,
+                    Name: this.params.name || this.params.title || i18n.t('Library') || 'Library',
+                    CollectionType: this.params.collectionType || null
+                };
+            }
         }
     }
 
@@ -2558,7 +2580,12 @@ class LibraryPage extends Page {
             }
         } catch (e) {
             log.error('Failed to load items', e);
-            this.$('#library-grid').innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
+            // Clear pending navigation state so the spinner is never trapped waiting for focus
+            this._pendingNavState = null;
+            const gridEl = this.$('#library-grid');
+            if (gridEl) {
+                gridEl.innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
+            }
         } finally {
             // Keep loading active if focus restoration is pending;
             // onScrollFocusRestored or the safety timer will release it once focus settles.
