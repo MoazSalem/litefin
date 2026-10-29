@@ -133,6 +133,25 @@ class AuthManager {
         // Listen for unauthorized events from API
         eventBus.on('api:unauthorized', this._onUnauthorized);
         eventBus.on('webos:deviceInfoReady', this._onWebosDeviceInfo);
+
+        // Splash-hide coordination for deferred boot handshakes.
+        // The webOS adapter resolves device info asynchronously during boot
+        // and _onWebosDeviceInfo used to re-report session capabilities
+        // immediately - claiming an HTTP/1.1 socket in the cold-boot window
+        // when the entry page needs every connection for its data fetches.
+        // When the splash screen is still up, the report is parked and
+        // flushed by this listener (App emits app:hideSplash exactly once,
+        // after the entry page's data is on the wire).
+        this._splashHidden = false;
+        this._pendingCapsAfterSplash = false;
+        eventBus.on('app:hideSplash', () => {
+            this._splashHidden = true;
+            if (this._pendingCapsAfterSplash) {
+                this._pendingCapsAfterSplash = false;
+                log.info('Splash hidden - flushing deferred capabilities report');
+                this._reportCapabilitiesNow();
+            }
+        });
     }
 
     // ========================================================================
@@ -1428,13 +1447,31 @@ class AuthManager {
             api.setDevice(deviceId, info.modelName);
         }
 
-        // Re-report so the server and dashboard see the real device name and profile
+        // Re-report so the server and dashboard see the real device name and profile.
+        // Deferred until after the initial splash screen hides when boot is
+        // still in the cold-start window: on Chromium 38 (Tizen 3.0 / old
+        // webOS) the HTTP/1.1 pool has only 6 sockets and the entry page's
+        // data fetches (Views / Resume / NextUp) need every one of them.
         if (this.isAuthenticated()) {
-            api.reportCapabilities({
-                ...SUPPORTED_CAPABILITIES,
-                DeviceProfile: buildJellyfinProfile()
-            }).catch((e) => log.warn('Failed to report capabilities after webOS device info:', e));
+            if (this._splashHidden) {
+                this._reportCapabilitiesNow();
+            } else {
+                this._pendingCapsAfterSplash = true;
+            }
         }
+    }
+
+    /**
+     * Report session capabilities with the current device profile.
+     * ApiClient deduplicates bursts (4s guard), so this is safe to race
+     * with the establishSessionTelemetry() call in App's splash handler.
+     * @private
+     */
+    _reportCapabilitiesNow() {
+        api.reportCapabilities({
+            ...SUPPORTED_CAPABILITIES,
+            DeviceProfile: buildJellyfinProfile()
+        }).catch((e) => log.warn('Failed to report capabilities:', e));
     }
 
     // ========================================================================
