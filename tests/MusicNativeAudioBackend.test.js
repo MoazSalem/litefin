@@ -118,12 +118,44 @@ test('without element preload, the next track is not loaded while the current on
 });
 
 test('without element preload, ended releases the current element before loading the next', async () => {
-    const { backend, elements, events } = setup({ preloadNextElement: false });
+    const order = [];
+    const { backend, elements, events } = setup({
+        preloadNextElement: false,
+        createAudio: () => {
+            const el = makeAudio();
+            const id = `el${elements.length}`;
+            let src = '';
+            Object.defineProperty(el, 'src', {
+                get: () => src,
+                set: (value) => {
+                    src = value;
+                    if (value) order.push(`${id}:src`);
+                }
+            });
+            ['pause', 'load', 'removeAttribute'].forEach((name) => {
+                const original = el[name];
+                el[name] = (...args) => {
+                    order.push(name === 'removeAttribute' ? `${id}:remove:${args[0]}` : `${id}:${name}`);
+                    return original(...args);
+                };
+            });
+            elements.push(el);
+            order.push(`${id}:created`);
+            return el;
+        }
+    });
     const first = await loaded(backend, elements, track('a'));
     backend.play();
     await backend.preloadNext(track('b'));
+    order.length = 0;
     first.fire('ended');
     const second = elements[1];
+    const at = (entry) => order.indexOf(entry);
+    assert.ok(at('el0:pause') >= 0 && at('el0:remove:src') >= 0);
+    const released = Math.max(at('el0:pause'), at('el0:remove:src'));
+    assert.ok(released < at('el1:created'), `release must precede next creation: ${order}`);
+    assert.ok(released < at('el1:src'), `release must precede next src: ${order}`);
+    assert.ok(released < at('el1:load'), `release must precede next load: ${order}`);
     assert.equal(first.src, '');
     assert.equal(first.listenerCount(), 0);
     assert.equal(second.src, 'u/b');
