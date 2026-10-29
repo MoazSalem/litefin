@@ -144,6 +144,9 @@ The player includes 23 modular interactive overlays managed by `OSDController.js
     - Multi-source ratings badge rendering (IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, TMDB) across media cards and hero headers.
 - **Local Intros**:
     - Pre-roll cinema trailers and custom intro video sequences executed before main media playback.
+- **webOS Launch Deep Links (`LaunchTargetManager.js`)**:
+    - Other apps can open a title by launching Litefin through `luna://com.webos.applicationManager/launch` with `{ "id": "org.litefin.app", "params": { "tmdbId": 603, "mediaType": "movie" } }` (`mediaType` is `movie` or `tv`; an optional `title` helps find the item on servers that ignore the TMDB id filter).
+    - Opens the library item's details page when the library has that TMDB id, otherwise the Seerr details page to request it; works at launch and while Litefin runs, with Back leading to Home.
 - **Server Plugin Ecosystem ([Jellyfin](https://github.com/MoazSalem/litefin-plugin) / [Emby](https://github.com/MoazSalem/litefin-plugin-emby))**:
     - Server-side counterpart proxying Seerr requests, caching TMDB streaming provider catalogs, and serving the Litefin Client plugin (`Litefin.Client.Plugin`).
 
