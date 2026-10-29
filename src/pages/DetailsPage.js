@@ -1711,7 +1711,9 @@ class DetailsPage extends Page {
         }
 
         // Featured artists come from People, which is not requested for music items
-        const featured = (this._item.People || []).filter((p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist');
+        const featured = (this._item.People || []).filter(
+            (p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist'
+        );
         featured.forEach(addArtist);
 
         if (artists.length > 0) {
@@ -1873,9 +1875,11 @@ class DetailsPage extends Page {
         const nextSection = this._getNextVisibleSection('details-songs');
         const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
+        // The track list sits beside the actions (music-album grid), so it is entered sideways
         this.registerFocusSection('details-songs', container, {
             orientation: 'vertical',
-            leaveUp: upwardLink,
+            enterTo: 'first',
+            leaveUp: null,
             leaveDown: leaveDownTarget,
             leaveLeft: 'details-actions'
         });

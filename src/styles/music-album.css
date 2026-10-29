@@ -1,24 +1,28 @@
-/* Music album details page: cover + info on the left, numbered track list on the right */
+/* Music album details page: cover + info on the left, numbered track list on the right.
+   The scroll controller may wrap the content in .vertical-scroll-track, so the grid
+   applies to whichever element is the direct parent of the rows. */
 
-.details-page.music-album .details-content {
+.details-page.music-album .details-content,
+.details-page.music-album .details-content > .vertical-scroll-track {
     display: grid;
     grid-template-columns: minmax(0, 30%) minmax(0, 1fr);
     column-gap: 4vw;
     align-content: start;
 }
 
-.details-page.music-album .details-content > * {
+.details-page.music-album .details-content > *,
+.details-page.music-album .vertical-scroll-track > * {
     grid-column: 1 / -1;
 }
 
-.details-page.music-album .details-content > .details-main-split {
+.details-page.music-album .details-main-split {
     grid-column: 1;
     grid-row: 1;
     flex-direction: column;
     align-items: stretch;
 }
 
-.details-page.music-album .details-content > #songs-section {
+.details-page.music-album #songs-section {
     grid-column: 2;
     grid-row: 1;
     align-self: start;
@@ -93,12 +97,15 @@
     color: var(--jf-accent);
 }
 
+.album-track.focused,
 .album-track:focus {
     background: rgba(255, 255, 255, 0.12);
     box-shadow: inset 0 0 0 0.18vw rgba(255, 255, 255, 0.9);
     transition: background-color 150ms ease-out;
 }
 
+.album-track.focused .album-track-n,
+.album-track.focused .album-track-d,
 .album-track:focus .album-track-n,
 .album-track:focus .album-track-d {
     color: var(--jf-text-secondary, #ccc);
