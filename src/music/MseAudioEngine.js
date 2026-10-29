@@ -129,7 +129,8 @@ export default class MseAudioEngine {
             this._audio.currentTime = target;
             return;
         }
-        await this._reload(track, targetMs, this._nextTrack);
+        const { error } = await this._reload(track, targetMs, this._nextTrack);
+        if (error) this._reportError(track.id, error);
     }
 
     stop() {
@@ -295,7 +296,9 @@ export default class MseAudioEngine {
         } catch (err) {
             if (!this._isLive(gen, key)) return false;
             if (!isQuotaError(err)) {
-                this._failFeed(this._queued(key).track.id, err);
+                const { track } = this._queued(key);
+                if (key === this._nextKey) this._failNext(track, err);
+                else this._failFeed(track.id, err);
                 return false;
             }
             this._log.debug('SourceBuffer full, evicting and retrying on the next tick');
@@ -326,11 +329,24 @@ export default class MseAudioEngine {
         const { key } = this._enqueue(next, start.playlist, 0, last.end);
         this._nextKey = key;
         this._streamEnded = false;
-        await this._queue.run((sb) => {
-            if (!this._isLive(gen, key)) return;
-            this._pipe.switchType(sb, next.mime);
-            sb.appendBuffer(start.init);
-        });
+        try {
+            await this._queue.run((sb) => {
+                if (!this._isLive(gen, key)) return;
+                this._pipe.switchType(sb, next.mime);
+                sb.appendBuffer(start.init);
+            });
+        } catch (err) {
+            if (this._isLive(gen, key)) this._failNext(next, err);
+        }
+    }
+
+    /* the current track must still reach endOfStream, and the session may preload a replacement */
+    _failNext(track, err) {
+        this._log.warn(`Next track ${track.id} failed`, err);
+        this._dropNext();
+        this._nextTrack = null;
+        this._repump = true;
+        this._reportError(track.id, err);
     }
 
     _dropNext() {
@@ -417,26 +433,28 @@ export default class MseAudioEngine {
     }
 
     /* a next track the SourceBuffer could not take plays through a reload instead of a gapless append */
+    /* announced even when the reload fails, so the session reads the error as the current track's */
     async _continueWith(track) {
-        if (!(await this._reload(track, 0, null))) return;
-        if (this._playing) this.play();
+        const { superseded, error } = await this._reload(track, 0, null);
+        if (superseded) return;
+        if (!error && this._playing) this.play();
         this._callbacks.onTrackStart(track.id);
+        if (error) this._reportError(track.id, error);
     }
 
-    /* resolves true when this reload is still the current load once it finishes */
     async _reload(track, startMs, next) {
         const loading = this.load(track, startMs);
         const gen = this._generation;
         this._nextTrack = next;
+        let error = null;
         try {
             await loading;
         } catch (err) {
-            if (gen !== this._generation) return false;
-            this._playing = false;
-            this._reportError(track.id, err);
-            return false;
+            error = err;
         }
-        return gen === this._generation;
+        if (gen !== this._generation) return { superseded: true, error: null };
+        if (error) this._playing = false;
+        return { superseded: false, error };
     }
 
     _handleAudioError() {
