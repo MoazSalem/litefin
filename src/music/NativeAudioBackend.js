@@ -16,7 +16,8 @@ export default class NativeAudioBackend {
         createAudio = () => document.createElement('audio'),
         log = { warn: noop },
         setInterval: setIntervalFn = (fn, ms) => globalThis.setInterval(fn, ms),
-        clearInterval: clearIntervalFn = (handle) => globalThis.clearInterval(handle)
+        clearInterval: clearIntervalFn = (handle) => globalThis.clearInterval(handle),
+        preloadNextElement = true
     } = {}) {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
         this._createAudio = createAudio;
@@ -25,6 +26,8 @@ export default class NativeAudioBackend {
         this._clearInterval = clearIntervalFn;
         this._current = null;
         this._next = null;
+        this._preloadNextElement = preloadNextElement;
+        this._pendingNextTrack = null;
         this._playing = false;
         this._timer = null;
     }
@@ -76,7 +79,12 @@ export default class NativeAudioBackend {
     async preloadNext(track) {
         this._release(this._next);
         this._next = null;
+        this._pendingNextTrack = null;
         if (!track) return;
+        if (!this._preloadNextElement) {
+            this._pendingNextTrack = track;
+            return;
+        }
         const slot = this._createSlot(track);
         this._next = slot;
         slot.el.src = track.url;
@@ -105,6 +113,7 @@ export default class NativeAudioBackend {
         this._release(this._next);
         this._release(this._current);
         this._next = null;
+        this._pendingNextTrack = null;
         this._current = null;
     }
 
@@ -149,7 +158,7 @@ export default class NativeAudioBackend {
 
     _handleEnded(slot) {
         if (slot !== this._current) return;
-        const next = this._next;
+        const next = this._next || this._loadPendingNextAfter(slot);
         if (!next) {
             this._stopTimer();
             this._playing = false;
@@ -157,10 +166,24 @@ export default class NativeAudioBackend {
             return;
         }
         this._next = null;
-        this._release(slot);
+        if (this._current === slot) this._release(slot);
         this._current = next;
         this._listenOnce(next, 'playing', () => this._callbacks.onTrackStart(next.track.id));
         if (this._playing) this._startElement(next);
+    }
+
+    /* webOS pauses a playing <audio> as soon as a second one starts loading, so without
+       element preload the current element must be released before the next one loads */
+    _loadPendingNextAfter(slot) {
+        const track = this._pendingNextTrack;
+        if (!track) return null;
+        this._pendingNextTrack = null;
+        this._release(slot);
+        this._current = null;
+        const next = this._createSlot(track);
+        next.el.src = track.url;
+        next.el.load();
+        return next;
     }
 
     _listenOnce(slot, event, handler) {

@@ -36,7 +36,7 @@ function makeAudio() {
     return el;
 }
 
-function setup() {
+function setup(options = {}) {
     const elements = [];
     const events = [];
     const timers = [];
@@ -56,7 +56,8 @@ function setup() {
         },
         clearInterval: (handle) => {
             timers[handle - 1].cleared = true;
-        }
+        },
+        ...options
     });
     return { backend, elements, events, timers };
 }
@@ -106,6 +107,52 @@ test('ended swaps to the preloaded element and fires onTrackStart on playing', a
     second.fire('playing');
     assert.deepEqual(events, [['trackStart', 'b']]);
     assert.equal(backend.currentTrackId, 'b');
+});
+
+test('without element preload, the next track is not loaded while the current one plays', async () => {
+    const { backend, elements } = setup({ preloadNextElement: false });
+    await loaded(backend, elements, track('a'));
+    backend.play();
+    await backend.preloadNext(track('b'));
+    assert.equal(elements.length, 1);
+});
+
+test('without element preload, ended releases the current element before loading the next', async () => {
+    const { backend, elements, events } = setup({ preloadNextElement: false });
+    const first = await loaded(backend, elements, track('a'));
+    backend.play();
+    await backend.preloadNext(track('b'));
+    first.fire('ended');
+    const second = elements[1];
+    assert.equal(first.src, '');
+    assert.equal(first.listenerCount(), 0);
+    assert.equal(second.src, 'u/b');
+    assert.ok(second.calls.includes('play'));
+    second.fire('playing');
+    assert.deepEqual(events, [['trackStart', 'b']]);
+    assert.equal(backend.currentTrackId, 'b');
+});
+
+test('without element preload, a cleared next track ends playback', async () => {
+    const { backend, elements, events } = setup({ preloadNextElement: false });
+    const el = await loaded(backend, elements, track('a'));
+    backend.play();
+    await backend.preloadNext(track('b'));
+    await backend.preloadNext(null);
+    el.fire('ended');
+    assert.deepEqual(events, [['ended']]);
+});
+
+test('without element preload, an error on the next track reports it', async () => {
+    const { backend, elements, events } = setup({ preloadNextElement: false });
+    const first = await loaded(backend, elements, track('a'));
+    backend.play();
+    await backend.preloadNext(track('b'));
+    first.fire('ended');
+    const second = elements[1];
+    second.error = { code: 4 };
+    second.fire('error');
+    assert.deepEqual(events, [['error', 'b', 'Audio element error (code 4)']]);
 });
 
 test('ended with nothing preloaded fires onEnded', async () => {

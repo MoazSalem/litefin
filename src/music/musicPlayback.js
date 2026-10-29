@@ -63,7 +63,12 @@ function engineFactory(callbacks) {
     return new HybridAudioEngine({
         ...callbacks,
         createGapless: (routed) => new GaplessAudioEngine(routed),
-        createNative: (routed) => new NativeAudioBackend({ ...routed, log: logger.create('NativeAudioBackend') })
+        createNative: (routed) =>
+            new NativeAudioBackend({
+                ...routed,
+                preloadNextElement: !platformInfo.isWebOS,
+                log: logger.create('NativeAudioBackend')
+            })
     });
 }
 
