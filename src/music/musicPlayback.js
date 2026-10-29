@@ -26,20 +26,6 @@ const gaplessAvailable = supportsGaplessEngine(typeof window === 'undefined' ? u
 
 let soundOutput = null;
 
-if (platformInfo.isWebOS && typeof window !== 'undefined' && window.PalmServiceBridge) {
-    try {
-        watchSoundOutput(
-            () => new window.PalmServiceBridge(),
-            (value) => {
-                soundOutput = value;
-                log.info('Sound output:', value, value === 'tv_speaker' ? '(gapless engine)' : '(MSE)');
-            }
-        );
-    } catch (err) {
-        log.warn('Could not watch the sound output setting:', err);
-    }
-}
-
 let deviceProfile = null;
 
 function getDeviceProfile() {
@@ -88,3 +74,21 @@ export const musicSession = new MusicSession({
 });
 
 wireMusicSession({ session: musicSession, bus: eventBus, state, nowPlayingPath: NOW_PLAYING_PATH, log });
+
+if (platformInfo.isWebOS && typeof window !== 'undefined' && window.PalmServiceBridge) {
+    try {
+        watchSoundOutput(
+            () => new window.PalmServiceBridge(),
+            (value) => {
+                const changed = value !== soundOutput;
+                soundOutput = value;
+                log.info('Sound output:', value, value === 'tv_speaker' ? '(gapless engine)' : '(MSE)');
+                if (changed && musicSession.isActive) {
+                    musicSession.reroute().catch((err) => log.warn('Rerouting the playing track failed:', err));
+                }
+            }
+        );
+    } catch (err) {
+        log.warn('Could not watch the sound output setting:', err);
+    }
+}

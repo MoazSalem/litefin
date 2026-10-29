@@ -144,7 +144,13 @@ function makeEngine(callbacks) {
     return engine;
 }
 
-function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now } = {}) {
+const defaultDescribe = (item, mediaSource) => ({
+    url: `http://srv/audio/${item.Id}`,
+    kind: mediaSource.Container === 'flac' ? 'flac' : 'native',
+    ...(mediaSource.Mime ? { mime: mediaSource.Mime } : {})
+});
+
+function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now, describeTrack = defaultDescribe } = {}) {
     const queue = makeQueue();
     const api = makeApi({ failIds, flacIds });
     const events = [];
@@ -165,11 +171,7 @@ function setup({ ids = ['a', 'b', 'c', 'd'], failIds = [], flacIds = [], now } =
         api,
         queue,
         bus,
-        describeTrack: (item, mediaSource) => ({
-            url: `http://srv/audio/${item.Id}`,
-            kind: mediaSource.Container === 'flac' ? 'flac' : 'native',
-            ...(mediaSource.Mime ? { mime: mediaSource.Mime } : {})
-        }),
+        describeTrack,
         notify: (name) => notified.push(name),
         log,
         now: now || (() => 0),
@@ -499,4 +501,102 @@ test('unexpected track start is logged and ignored', async () => {
     getEngine().fireTrackStart('zzz');
     assert.equal(warnings.length, 1);
     assert.equal(queue.index, 0);
+});
+
+function routedSetup() {
+    const output = { value: 'tv_speaker' };
+    const described = [];
+    const h = setup({
+        flacIds: ['a', 'b', 'c', 'd'],
+        describeTrack: (item, mediaSource, playSessionId) => {
+            described.push({ id: item.Id, playSessionId });
+            const kind = output.value === 'tv_speaker' ? 'flac' : 'mse';
+            return { url: `http://srv/${kind}/${item.Id}`, kind };
+        }
+    });
+    return { ...h, output, described };
+}
+
+test('I3: an output change that reroutes the current track reloads it at its position and re-preloads the next', async () => {
+    const h = routedSetup();
+    await h.session.playItems(h.items, 0);
+    await flush();
+    const engine = h.getEngine();
+    engine.positionMs = 42000;
+    const infoCallsBefore = h.api.infoCalls.length;
+
+    h.output.value = 'external_arc';
+    await h.session.reroute();
+    await flush();
+
+    assert.equal(engine.loads.length, 2);
+    assert.deepEqual(engine.loads[1], {
+        track: { id: 'a', url: 'http://srv/mse/a', kind: 'mse', durationMs: 200000 },
+        startMs: 42000
+    });
+    assert.equal(engine.isPlaying, true);
+    assert.equal(engine.calls.filter((c) => c === 'play').length, 2);
+    assert.deepEqual(h.api.infoCalls.slice(infoCallsBefore), ['b']);
+    assert.equal(engine.preloads.at(-1).kind, 'mse');
+    assert.equal(engine.preloads.at(-1).id, 'b');
+    assert.equal(h.api.stopped.length, 0);
+    assert.equal(h.api.started.length, 1);
+
+    engine.fireTrackStart('b');
+    assert.equal(h.session.currentItem.Id, 'b');
+});
+
+test('I3: a paused track stays paused after the reroute', async () => {
+    const h = routedSetup();
+    await h.session.playItems(h.items, 0);
+    await flush();
+    h.session.pause();
+
+    h.output.value = 'external_arc';
+    await h.session.reroute();
+
+    const engine = h.getEngine();
+    assert.equal(engine.loads.length, 2);
+    assert.equal(engine.isPlaying, false);
+    assert.equal(engine.calls.filter((c) => c === 'play').length, 1);
+});
+
+test('I3: an output change that keeps the current route reloads nothing', async () => {
+    const h = routedSetup();
+    h.output.value = 'external_arc';
+    await h.session.playItems(h.items, 0);
+    await flush();
+    const engine = h.getEngine();
+    const preloads = engine.preloads.length;
+
+    h.output.value = 'bt_soundbar';
+    await h.session.reroute();
+    await flush();
+
+    assert.equal(engine.loads.length, 1);
+    assert.equal(engine.preloads.length, preloads);
+});
+
+test('I3: a reroute while idle does nothing', async () => {
+    const h = routedSetup();
+    await h.session.reroute();
+    assert.equal(h.getEngine(), null);
+});
+
+test('I3: a reroute whose reload fails skips the track like an engine error', async () => {
+    const h = routedSetup();
+    await h.session.playItems(h.items, 0);
+    await flush();
+    const engine = h.getEngine();
+    engine.load = async (track) => {
+        engine.loads.push({ track });
+        if (track.id === 'a') throw new Error('MSE unavailable');
+    };
+
+    h.output.value = 'external_arc';
+    await h.session.reroute();
+    await flush();
+
+    assert.deepEqual(h.notified, ['Song a']);
+    assert.equal(h.session.currentItem.Id, 'b');
 });

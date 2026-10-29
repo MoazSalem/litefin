@@ -130,6 +130,29 @@ export default class MusicSession {
         await this._engine.seek(ms);
     }
 
+    /* the sound output changed: a track whose route changes reloads at its position on the new route */
+    async reroute() {
+        const current = this._current;
+        if (!this._active || !current) return;
+        const descriptor = this._describeTrack(current.item, current.mediaSource);
+        if (descriptor.kind === current.track.kind) return;
+        const generation = this._beginTransition();
+        const wasPlaying = this._engine.isPlaying;
+        const rerouted = { ...current, track: { ...current.track, ...descriptor } };
+        try {
+            await this._engine.load(rerouted.track, this.positionMs);
+        } catch (err) {
+            if (generation === this._generation) this._handleError(current.item.Id, err);
+            return;
+        }
+        if (generation !== this._generation) return;
+        if (wasPlaying) this._engine.play();
+        this._current = rerouted;
+        this._bus.emit('music:state', { isPlaying: this._engine.isPlaying });
+        this._startProgressTimer();
+        this._fireAndForget(this._prefetch());
+    }
+
     async stop(reason) {
         if (!this._open) return;
         this._beginTransition();
