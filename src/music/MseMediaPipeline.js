@@ -3,7 +3,8 @@ import SourceBufferQueue from './sourceBufferQueue.js';
 const OPEN_TIMEOUT_MS = 10000;
 
 export default class MseMediaPipeline {
-    constructor({ media, timers, log, onEnded, onError }) {
+    constructor({ media, timers, log, onEnded, onError, allowChangeType = true }) {
+        this._allowChangeType = allowChangeType;
         this._media = media;
         this._timers = timers;
         this._log = log;
@@ -38,8 +39,10 @@ export default class MseMediaPipeline {
         return this._queue;
     }
 
+    /* webOS accepts changeType() but its audio pipeline stays locked to the first codec */
     canAppend(mime) {
-        return !this._sourceBuffer || mime === this._mime || typeof this._sourceBuffer.changeType === 'function';
+        if (!this._sourceBuffer || mime === this._mime) return true;
+        return this._allowChangeType && typeof this._sourceBuffer.changeType === 'function';
     }
 
     ensure(mime) {

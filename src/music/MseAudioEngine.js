@@ -32,6 +32,7 @@ export default class MseAudioEngine {
         setTimeout: setTimeoutFn = (fn, ms) => globalThis.setTimeout(fn, ms),
         clearTimeout: clearTimeoutFn = (handle) => globalThis.clearTimeout(handle),
         now = () => Date.now(),
+        allowChangeType = true,
         log = logger.create('MseAudioEngine')
     } = {}) {
         this._callbacks = { onTrackStart, onEnded, onError, onTime };
@@ -46,7 +47,8 @@ export default class MseAudioEngine {
             timers: { setTimeoutFn, clearTimeoutFn },
             log,
             onEnded: () => this._handleEnded(),
-            onError: () => this._handleAudioError()
+            onError: () => this._handleAudioError(),
+            allowChangeType
         });
         this._generation = 0;
         this._appendSeq = 0;

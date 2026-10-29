@@ -6,11 +6,12 @@ const MIME = 'audio/mp4; codecs="ec-3"';
 const FLAC = 'audio/mp4; codecs="flac"';
 const noop = () => {};
 
-function setup({ changeType = true } = {}) {
+function setup({ changeType = true, allowChangeType } = {}) {
     const audios = [];
     const mediaSources = [];
     const revoked = [];
     const pipeline = new MseMediaPipeline({
+        ...(allowChangeType === undefined ? {} : { allowChangeType }),
         media: {
             createAudio: () => {
                 const el = { error: null, src: '', addEventListener: noop, removeEventListener: noop };
@@ -93,4 +94,16 @@ test('switchType changes the SourceBuffer type only when the codec differs', () 
 
     assert.deepEqual(sb.calls, [FLAC]);
     assert.equal(h.pipeline.canAppend(MIME), true);
+});
+
+test('allowChangeType false treats another codec as unappendable even when changeType exists', () => {
+    const h = setup({ allowChangeType: false });
+    h.pipeline.ensure(MIME);
+    h.pipeline.ensureSourceBuffer(MIME);
+
+    assert.equal(h.pipeline.canAppend(FLAC), false);
+    assert.equal(h.pipeline.canAppend(MIME), true);
+    h.pipeline.ensure(FLAC);
+    assert.equal(h.mediaSources.length, 2);
+    assert.equal(h.audios.length, 1);
 });

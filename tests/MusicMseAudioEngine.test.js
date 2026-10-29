@@ -252,7 +252,7 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
-function setup({ autoOpen = true, changeType = true } = {}) {
+function setup({ autoOpen = true, changeType = true, allowChangeType } = {}) {
     const media = { autoOpen };
     const fetchCounts = new Map();
     const textFetchCounts = new Map();
@@ -306,6 +306,7 @@ function setup({ autoOpen = true, changeType = true } = {}) {
     };
 
     const engine = new MseAudioEngine({
+        ...(allowChangeType === undefined ? {} : { allowChangeType }),
         onTrackStart: (id) => {
             events.push(['trackStart', id]);
             if (hooks.onTrackStart) hooks.onTrackStart(id);
@@ -1428,4 +1429,73 @@ test('repeat-one: a failed repeated preload lets the current track end with onEn
     assert.equal(h.endedCount(), 1);
     assert.deepEqual(h.trackStarts(), []);
     assert.deepEqual(h.errors(), []);
+});
+
+test('allowChangeType false: load of another codec rebuilds the MediaSource on the same element instead of changeType', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [3], { mime: FLAC });
+    await h.engine.load(a);
+    await settle();
+    await h.engine.load(b);
+    await settle();
+
+    assert.equal(h.audios.length, 1);
+    assert.equal(h.mediaSources.length, 2);
+    assert.deepEqual(h.revoked, ['blob:ms1']);
+    assert.equal(h.audios[0].src, 'blob:ms2');
+    assert.deepEqual(h.mediaSources[1].mimes, [FLAC]);
+    assert.ok(!h.sbLog(0).some((x) => x.startsWith('changeType')));
+    assert.ok(!h.sbLog(1).some((x) => x.startsWith('changeType')));
+    assert.deepEqual(h.mediaSources[1].sourceBuffers[0].ranges, [[0, 3]]);
+    assert.equal(h.engine.currentTrackId, 'b');
+});
+
+test('allowChangeType false: a same-codec load keeps the MediaSource', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [5]);
+    await h.engine.load(a);
+    await settle();
+    await h.engine.load(b);
+    await settle();
+
+    assert.equal(h.mediaSources.length, 1);
+});
+
+test('allowChangeType false: a cross-codec next track is not appended; ended reloads it and starts it without onEnded', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [3], { mime: FLAC });
+    await h.engine.load(a);
+    await h.engine.preloadNext(b);
+    h.engine.play();
+    await settle();
+
+    assert.ok(!h.appendedUrls().some((url) => url.startsWith('b/')));
+    assert.ok(!h.sbLog().some((x) => x.startsWith('changeType')));
+    assert.equal(h.mediaSources[0].endOfStreamCalls, 1);
+
+    h.audios[0].fire('ended');
+    await settle();
+
+    assert.deepEqual(h.trackStarts(), ['b']);
+    assert.equal(h.endedCount(), 0);
+    assert.equal(h.engine.isPlaying, true);
+    assert.equal(h.audios.length, 1);
+    assert.equal(h.mediaSources.length, 2);
+    assert.deepEqual(h.mediaSources[1].mimes, [FLAC]);
+    assert.deepEqual(h.mediaSources[1].sourceBuffers[0].ranges, [[0, 3]]);
+});
+
+test('allowChangeType false: a same-codec next track is still appended gapless', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [3]);
+    await h.engine.load(a);
+    await h.engine.preloadNext(b);
+    await settle();
+
+    assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4', 'b/init.mp4', 'b/seg0.mp4']);
+    assert.equal(h.mediaSources.length, 1);
 });
