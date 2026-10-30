@@ -314,7 +314,8 @@ function getPlugins(tier, options = {}) {
         new CopyWebpackPlugin({ patterns }),
         new webpack.DefinePlugin({
             __APP_VERSION__: JSON.stringify(require('./package.json').version),
-            __I18N_KEYS__: JSON.stringify(getMasterEnUsKeys())
+            __I18N_KEYS__: JSON.stringify(getMasterEnUsKeys()),
+            __BUILD_TIER__: JSON.stringify(buildTier)
         })
     ];
 

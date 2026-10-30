@@ -1,0 +1,186 @@
+/* Music album details page: cover + info on the left, numbered track list on the right.
+   The scroll controller may wrap the content in .vertical-scroll-track, so the grid
+   applies to whichever element is the direct parent of the rows. */
+
+.details-page.music-album .details-content,
+.details-page.music-album .details-content > .vertical-scroll-track {
+    display: grid;
+    grid-template-columns: minmax(0, 30%) minmax(0, 1fr);
+    column-gap: 4vw;
+    align-content: start;
+}
+
+.details-page.music-album .details-content > *,
+.details-page.music-album .vertical-scroll-track > * {
+    grid-column: 1 / -1;
+}
+
+.details-page.music-album .details-main-split {
+    grid-column: 1;
+    grid-row: 1;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.details-page.music-album #songs-section {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    padding: 5% 60px 0 0;
+    box-sizing: border-box;
+}
+
+.details-page.music-album #songs-section .songs-title {
+    display: none;
+}
+
+.details-page.music-album .hero-poster {
+    width: 100%;
+}
+
+.details-page.music-album .details-info-col {
+    justify-content: flex-start;
+}
+
+/* The details logo floats beside the title for movies; in the narrow album column a long title runs under it */
+.details-page.music-album .hero-info .details-logo {
+    position: static;
+    justify-content: flex-start;
+    width: auto;
+    height: auto;
+    margin: 1.2vw 0 0.6vw;
+}
+
+.details-page.music-album .hero-info .details-logo img {
+    max-width: 60%;
+    max-height: 4.2vw;
+    width: auto;
+    height: auto;
+}
+
+.details-page.music-album .hero-info .details-title {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.album-tracks {
+    display: flex;
+    flex-direction: column;
+    padding: 0.4vw 0;
+}
+
+.album-disc {
+    font-size: 1vw;
+    font-weight: 700;
+    color: var(--jf-text-tertiary, #888);
+    padding: 1.2vw 1.2vw 0.5vw;
+}
+
+.album-track {
+    display: grid;
+    grid-template-columns: 3.4vw minmax(0, 1fr) 6vw;
+    align-items: center;
+    min-height: 4.1vw;
+    padding: 0 1.2vw;
+    border-radius: 0.5vw;
+    font-size: 1.3vw;
+    outline: none;
+}
+
+.album-track-n,
+.album-track-d {
+    color: var(--jf-text-tertiary, #888);
+    font-variant-numeric: tabular-nums;
+}
+
+.album-track-n {
+    font-size: 1.15vw;
+}
+
+.album-track-d {
+    text-align: right;
+    font-size: 1.1vw;
+}
+
+.album-track-t {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.album-track-t small {
+    display: block;
+    font-size: 0.95vw;
+    font-weight: 500;
+    color: var(--jf-text-tertiary, #888);
+    margin-top: 0.15vw;
+}
+
+.album-track.playing .album-track-t,
+.album-track.playing .album-track-n {
+    color: var(--jf-accent);
+}
+
+.album-track.focused,
+.album-track:focus {
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 0 0.18vw rgba(255, 255, 255, 0.9);
+    transition: background-color 150ms ease-out;
+}
+
+.album-track.focused .album-track-n,
+.album-track.focused .album-track-d,
+.album-track:focus .album-track-n,
+.album-track:focus .album-track-d {
+    color: var(--jf-text-secondary, #ccc);
+}
+
+.album-eq {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 0.2vw;
+    height: 1.2vw;
+}
+
+.album-eq i {
+    width: 0.25vw;
+    height: 100%;
+    background: var(--jf-accent);
+    border-radius: 0.1vw;
+    transform-origin: bottom;
+    animation: album-eq 900ms ease-in-out infinite alternate;
+}
+
+.album-eq i:nth-child(2) {
+    animation-delay: -300ms;
+    animation-duration: 700ms;
+}
+
+.album-eq i:nth-child(3) {
+    animation-delay: -600ms;
+    animation-duration: 1100ms;
+}
+
+@keyframes album-eq {
+    from {
+        transform: scaleY(0.25);
+    }
+    to {
+        transform: scaleY(1);
+    }
+}
+
+.details-page.music-album .album-artist-line {
+    font-size: 1.45vw;
+    font-weight: 600;
+    color: var(--jf-text-secondary, #ccc);
+    margin: 0.6vw 0 0;
+}
+
+.details-page.music-album .album-meta-line {
+    font-size: 1.1vw;
+    color: var(--jf-text-tertiary, #888);
+    font-variant-numeric: tabular-nums;
+    margin: 0.5vw 0 0;
+}

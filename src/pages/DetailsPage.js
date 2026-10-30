@@ -10,12 +10,14 @@
 // Page-scoped styles - loads with this module's chunk instead of the boot bundle
 import '../styles/details.css';
 import '../styles/season.css';
+import '../styles/music-album.css';
 
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { isMusicItem } from '../music/musicSection.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 
@@ -26,6 +28,8 @@ import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import { IdentifyModal } from '../components/IdentifyModal.js';
 import { ImageEditorModal } from '../components/ImageEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
+import AlbumTrackList from '../music/AlbumTrackList.js';
+import { albumMetaLine, fetchAllPages, isMusicDetailsType, mergeAlbumArtists } from '../music/albumPage.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 import { TrailerPlayer } from '../components/TrailerPlayer.js';
@@ -448,6 +452,7 @@ class DetailsPage extends Page {
 
     async onInit() {
         this._itemId = this.params.id;
+        const navigatedPath = router.getCurrentPath();
 
         try {
             // Setup focus
@@ -464,6 +469,9 @@ class DetailsPage extends Page {
 
             // Load item details
             await this._loadDetails();
+            if (this._item) {
+                eventBus.emit('music:context', { path: navigatedPath, isMusic: isMusicItem(this._item) });
+            }
 
             // Mark the page as rendered, fulfilling the Promise for NavigationState
             // to restore scroll/focus natively
@@ -833,15 +841,16 @@ class DetailsPage extends Page {
                     requestedFields.push('Tags');
                 }
                 if (
-                    richMetadataStyle === 'all' ||
-                    richMetadataStyle === 'genres-studios-writers' ||
-                    richMetadataStyle === 'genres-writers'
+                    !isMusicDetailsType(this._item?.Type) &&
+                    (richMetadataStyle === 'all' ||
+                        richMetadataStyle === 'genres-studios-writers' ||
+                        richMetadataStyle === 'genres-writers')
                 ) {
                     requestedFields.push('People');
                 }
             }
 
-            if (!hideCast && !requestedFields.includes('People')) {
+            if (!hideCast && !isMusicDetailsType(this._item?.Type) && !requestedFields.includes('People')) {
                 requestedFields.push('People');
             }
 
@@ -1613,6 +1622,8 @@ class DetailsPage extends Page {
     }
 
     async _loadSecondaryContent() {
+        this.el?.classList.toggle('music-album', this._item.Type === 'MusicAlbum');
+
         // Load additional data based on type
         if (this._item.Type === 'Series') {
             /*
@@ -1658,7 +1669,9 @@ class DetailsPage extends Page {
         // Render people if available
         this._people = this._item.People || [];
         const hideCast = storage.getItem('pref:hideCastSection') === 'true';
-        if (this._people.length > 0 && !hideCast) {
+        if (isMusicDetailsType(this._item.Type)) {
+            this.$('#people-section')?.classList.add('hidden');
+        } else if (this._people.length > 0 && !hideCast) {
             this._renderPeople();
         } else if (hideCast) {
             const peopleSection = this.$('#people-section');
@@ -1682,36 +1695,26 @@ class DetailsPage extends Page {
     async _loadArtists() {
         if (!['Audio', 'MusicAlbum', 'MusicArtist'].includes(this._item.Type)) return;
 
-        // Combine ArtistItems and Featured Artists from People
         const artists = [];
         const seenIds = new Set();
 
-        // 1. Add Main Artists from ArtistItems (these have IDs and Name)
-        if (this._item.ArtistItems) {
-            for (const artist of this._item.ArtistItems) {
-                if (artist.Id && !seenIds.has(artist.Id)) {
-                    artists.push({
-                        ...artist,
-                        Type: 'MusicArtist'
-                    });
-                    seenIds.add(artist.Id);
-                }
-            }
+        const addArtist = (artist) => {
+            if (!artist.Id || seenIds.has(artist.Id)) return;
+            artists.push({ ...artist, Type: 'MusicArtist' });
+            seenIds.add(artist.Id);
+        };
+
+        if (isMusicDetailsType(this._item.Type)) {
+            mergeAlbumArtists(this._item).forEach(addArtist);
+        } else {
+            (this._item.ArtistItems || []).forEach(addArtist);
         }
 
-        // 2. Add Featured Artists from People
-        if (this._item.People) {
-            const featured = this._item.People.filter((p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist');
-            for (const p of featured) {
-                if (p.Id && !seenIds.has(p.Id)) {
-                    artists.push({
-                        ...p,
-                        Type: 'MusicArtist'
-                    });
-                    seenIds.add(p.Id);
-                }
-            }
-        }
+        // Featured artists come from People, which is not requested for music items
+        const featured = (this._item.People || []).filter(
+            (p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist'
+        );
+        featured.forEach(addArtist);
 
         if (artists.length > 0) {
             this._renderArtists(artists);
@@ -1724,26 +1727,24 @@ class DetailsPage extends Page {
         try {
             // In Jellyfin, music album tracks are indexed by their AlbumId.
             // We first query via AlbumIds which succeeds regardless of folder layout.
-            let response = await api.getItems({
-                AlbumIds: this._itemId,
-                IncludeItemTypes: 'Audio',
-                Recursive: true,
-                Fields: 'UserData,RunTimeTicks',
-                SortBy: 'ParentIndexNumber,IndexNumber,SortName'
-            });
-
-            // If virtual album query yields no results, fallback to folder hierarchy (ParentId)
-            if (!response?.Items?.length) {
-                response = await api.getItems({
-                    ParentId: this._itemId,
+            const fetchTracks = (filter) => (startIndex, limit) =>
+                api.getItems({
+                    ...filter,
                     IncludeItemTypes: 'Audio',
                     Recursive: true,
                     Fields: 'UserData,RunTimeTicks',
-                    SortBy: 'ParentIndexNumber,IndexNumber,SortName'
+                    SortBy: 'ParentIndexNumber,IndexNumber,SortName',
+                    StartIndex: startIndex,
+                    Limit: limit
                 });
+
+            let songs = await fetchAllPages(fetchTracks({ AlbumIds: this._itemId }));
+
+            // If virtual album query yields no results, fallback to folder hierarchy (ParentId)
+            if (!songs.length) {
+                songs = await fetchAllPages(fetchTracks({ ParentId: this._itemId }));
             }
 
-            const songs = response?.Items || [];
             if (songs.length > 0) {
                 this._renderAlbumSongs(songs);
             }
@@ -1857,28 +1858,12 @@ class DetailsPage extends Page {
 
         section.classList.remove('hidden');
 
-        this._songsGrid = new MediaGrid({
-            id: 'album-songs-grid',
-            items: songs,
-            type: 'square', // Square posters as requested
-            contextType: 'library',
-            limit: 60,
-            moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Audio`,
-            isLandscape: false, // Not landscape
-            onClick: (card) => {
-                const stateKey = `details:lastFocusedItem:${this._itemId}`;
-                if (card.dataset.itemId) {
-                    if (storage.getItem('pref:disableFocusRestore') !== 'true') {
-                        state.set(stateKey, {
-                            itemId: card.dataset.itemId,
-                            sectionId: 'details-songs'
-                        });
-                    }
-                    // Start playback directly for songs?
-                    // Or navigate to song details?
-                    // Jellyfin usually plays. Litefin usually navigates.
-                    router.navigate(`/details/${card.dataset.itemId}`);
-                }
+        this._songsGrid = new AlbumTrackList({
+            container,
+            props: {
+                album: this._item,
+                tracks: songs,
+                onPlay: (index) => this._playAlbumFrom(songs[index])
             }
         });
 
@@ -1890,14 +1875,64 @@ class DetailsPage extends Page {
         const nextSection = this._getNextVisibleSection('details-songs');
         const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
+        // The track list sits beside the actions (music-album grid), so it is entered sideways
         this.registerFocusSection('details-songs', container, {
-            orientation: 'grid',
-            leaveUp: upwardLink,
+            orientation: 'vertical',
+            enterTo: 'first',
+            leaveUp: null,
             leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'details-actions'
         });
 
         this._updateLeaveDown(upwardLink, 'details-songs');
+        this._linkActionsToSongs();
+        this._albumTracks = songs;
+        this._renderAlbumMeta();
+    }
+
+    _linkActionsToSongs() {
+        const config = focusManager.getSectionConfig('details-actions');
+        if (!config) return;
+        focusManager.register('details-actions', config.container, { ...config, leaveRight: 'details-songs' });
+    }
+
+    _renderAlbumMeta() {
+        const heroInfo = this.$('#hero-info');
+        if (!heroInfo || this._item?.Type !== 'MusicAlbum' || !this._albumTracks) return;
+
+        heroInfo.querySelectorAll('.album-artist-line, .album-meta-line').forEach((el) => el.remove());
+
+        const artistNames = (this._item.AlbumArtists || []).map((a) => a.Name).filter(Boolean);
+        const artistText = artistNames.length ? artistNames.join(', ') : this._item.AlbumArtist || '';
+        const metaText = albumMetaLine(this._item, this._albumTracks, (key, args) => i18n.t(key, args));
+
+        const anchor = heroInfo.querySelector('.details-original-title') || heroInfo.querySelector('.details-title');
+        const html =
+            (artistText ? `<p class="album-artist-line">${escapeHtml(artistText)}</p>` : '') +
+            (metaText ? `<p class="album-meta-line">${escapeHtml(metaText)}</p>` : '');
+        if (anchor) anchor.insertAdjacentHTML('afterend', html);
+        else heroInfo.insertAdjacentHTML('afterbegin', html);
+    }
+
+    _playAlbumFrom(track) {
+        if (storage.getItem('pref:disableFocusRestore') !== 'true') {
+            state.set(`details:lastFocusedItem:${this._itemId}`, { itemId: track.Id, sectionId: 'details-songs' });
+        }
+        eventBus.emit('player:play', {
+            item: track,
+            contextType: 'music',
+            contextId: this._item.Id,
+            shuffle: false
+        });
+    }
+
+    _playAlbum({ shuffle }) {
+        eventBus.emit('player:play', {
+            item: this._item,
+            contextType: 'music',
+            contextId: this._item.Id,
+            shuffle
+        });
     }
 
     _renderArtists(artists) {
@@ -2317,7 +2352,7 @@ class DetailsPage extends Page {
             }
         }
 
-        if (genres && genres.length > 0) {
+        if (genres && genres.length > 0 && item.Type !== 'MusicAlbum') {
             htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
@@ -2967,7 +3002,8 @@ class DetailsPage extends Page {
         const item = this._item;
 
         // Build meta items (Year, Runtime, Ratings)
-        const year = item.ProductionYear || '';
+        const isAlbum = item.Type === 'MusicAlbum';
+        const year = isAlbum ? '' : item.ProductionYear || '';
 
         let runtimeText = '';
         let endsAtText = '';
@@ -2976,7 +3012,7 @@ class DetailsPage extends Page {
             if (item.Width && item.Height) {
                 runtimeText = `${item.Width} × ${item.Height}`;
             }
-        } else if (item.RunTimeTicks) {
+        } else if (item.RunTimeTicks && !isAlbum) {
             const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
@@ -3192,6 +3228,8 @@ class DetailsPage extends Page {
         if (heroInfoContainer) {
             heroInfoContainer.innerHTML = heroHtml;
         }
+
+        this._renderAlbumMeta();
 
         // Bind clickable subtitle if present
         const subtitleLink = this.$('#episode-subtitle-link');
@@ -3537,7 +3575,7 @@ class DetailsPage extends Page {
         if (shuffleBtn) {
             // Playlists get shuffle too — they are inherently sequential,
             // and shuffle is a natural interaction users expect.
-            const isShuffleable = ['Series', 'Season', 'BoxSet', 'Playlist'].includes(item.Type);
+            const isShuffleable = ['Series', 'Season', 'BoxSet', 'Playlist', 'MusicAlbum'].includes(item.Type);
             if (item.Type === 'Photo') {
                 shuffleBtn.classList.remove('hidden');
                 shuffleBtn.setAttribute('tabindex', '0');
@@ -5112,6 +5150,11 @@ class DetailsPage extends Page {
     }
 
     async _play({ resume = false, isShufflePlay = false, ghostMode = false, targetItem = null } = {}) {
+        if (this._item?.Type === 'MusicAlbum' && !targetItem) {
+            this._playAlbum({ shuffle: isShufflePlay });
+            return;
+        }
+
         /*
          * Allow initiating playback directly from a specific target item (e.g. Part 2 or Part 3
          * selected from the Additional Parts section on the details page).
@@ -5408,7 +5451,10 @@ class DetailsPage extends Page {
      * premature state leakage if resolution fails or exits early.
      */
     _shufflePlay() {
-        // Delegate directly to _play with the shuffle intent enabled
+        if (this._item?.Type === 'MusicAlbum') {
+            this._playAlbum({ shuffle: true });
+            return;
+        }
         this._play({ isShufflePlay: true });
     }
 
