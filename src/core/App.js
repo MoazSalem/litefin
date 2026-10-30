@@ -50,6 +50,7 @@ import Page from '../pages/Page.js';
 // chunk is fetched strictly on demand: the dominant launch path (resumed
 // session restore) never pays for the login page at all.
 import OfflinePage from '../pages/OfflinePage.js';
+import AchievementsPage from '../pages/AchievementsPage.js';
 
 // ============================================================================
 // DYNAMIC CHUNK SINGLETONS AND ASYNC MODULE LOADERS
@@ -2195,6 +2196,7 @@ class App {
         router.register('/search', SearchPage);
         router.register('/discover', DiscoverPage);
         router.register('/favorites', FavoritesPage);
+        router.register('/achievements', AchievementsPage);
         router.register('/settings', SettingsPage);
         router.register('/livetv', LiveTvPage);
         router.register('/offline', OfflinePage);

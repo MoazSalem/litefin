@@ -103,6 +103,13 @@ class Sidebar extends Component {
                         <span class="item-text" data-i18n="Favorites">Favorites</span>
                     </button>
 
+                    <button class="sidebar-item" id="sidebar-achievements" tabindex="0" data-path="/achievements">
+                        <div class="item-icon" aria-hidden="true">
+                            <span>🏆</span>
+                        </div>
+                        <span class="item-text" data-i18n="Achievements">Achievements</span>
+                    </button>
+
                     <button class="sidebar-item" id="sidebar-search" tabindex="0" data-path="/search">
                         <div class="item-icon">
                             ${sidebarIcons.search}

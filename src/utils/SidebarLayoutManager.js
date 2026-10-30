@@ -20,7 +20,7 @@ const log = logger.create('SidebarLayoutManager');
 
 /**
  * The canonical ordered list of static sidebar items for Classic layout.
- * Order: user, home, discover, favorites, search, random, syncplay, livetv, settings, librariesContainer
+ * Order: user, home, discover, favorites, achievements, search, random, syncplay, livetv, settings, librariesContainer
  */
 const CLASSIC_STATIC_ITEMS = [
     /* User Profile */
@@ -29,6 +29,7 @@ const CLASSIC_STATIC_ITEMS = [
     { id: 'home', label: 'Home' },
     { id: 'discover', label: 'SeerrDiscover' },
     { id: 'favorites', label: 'Favorites' },
+    { id: 'achievements', label: 'Achievements' },
     { id: 'search', label: 'Search' },
     { id: 'random', label: 'Random' },
     { id: 'syncplay', label: 'SyncPlay' },
@@ -39,13 +40,14 @@ const CLASSIC_STATIC_ITEMS = [
 
 /**
  * The canonical ordered list of static sidebar items for Modern layout.
- * Order: home, discover, favorites, search, random, syncplay, livetv, librariesContainer, settings
+ * Order: home, discover, favorites, achievements, search, random, syncplay, livetv, librariesContainer, settings
  * Note: 'user' is pinned in the bottom footer and excluded from the re-orderable list.
  */
 const MODERN_STATIC_ITEMS = [
     { id: 'home', label: 'Home' },
     { id: 'discover', label: 'SeerrDiscover' },
     { id: 'favorites', label: 'Favorites' },
+    { id: 'achievements', label: 'Achievements' },
     { id: 'search', label: 'Search' },
     { id: 'random', label: 'Random' },
     { id: 'syncplay', label: 'SyncPlay' },
