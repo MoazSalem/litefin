@@ -33,6 +33,11 @@ import { exitDialog } from '../ui/ExitDialog.js';
 import { pinDialog } from '../ui/PinDialog.js';
 import { pinManager } from '../utils/PinManager.js';
 import { customHeadersDialog } from '../ui/CustomHeadersDialog.js';
+import { musicSession, NOW_PLAYING_PATH } from '../music/musicPlayback.js';
+import { isMusicPlayRequest } from '../music/musicSection.js';
+import { resolveMusicQueue } from '../music/resolveMusicQueue.js';
+import { startMusicPlayback } from '../music/musicWiring.js';
+import { toast } from '../ui/Toast.js';
 
 // Base Page class for route proxies and page lifecycle coordination
 import Page from '../pages/Page.js';
@@ -659,6 +664,9 @@ const profilesChunk = createPageChunkLoader(
 const slideshowChunk = createPageChunkLoader(
     () => import(/* webpackChunkName: "slideshow" */ '../pages/SlideshowPage.js')
 );
+const nowPlayingChunk = createPageChunkLoader(
+    () => import(/* webpackChunkName: "now-playing" */ '../pages/NowPlayingPage.js')
+);
 const emulatorChunk = createPageChunkLoader(
     () => import(/* webpackChunkName: "emulator" */ '../pages/EmulatorPage.js')
 );
@@ -889,6 +897,15 @@ class ProfilesPage extends AsyncPageProxy {
 class SlideshowPage extends AsyncPageProxy {
     constructor(options) {
         super(options, slideshowChunk);
+    }
+}
+
+/**
+ * Route proxy for the music now-playing screen.
+ */
+class NowPlayingPage extends AsyncPageProxy {
+    constructor(options) {
+        super(options, nowPlayingChunk);
     }
 }
 
@@ -1446,7 +1463,7 @@ class App {
         // Routes that should NOT show the sidebar
         // ProfilesPage is intentionally fullscreen — it IS the user switcher, so
         // showing the sidebar (which contains the active user's name) would be inconsistent.
-        const fullScreenRoutes = ['/login', '/offline', '/profiles'];
+        const fullScreenRoutes = ['/login', '/offline', '/profiles', NOW_PLAYING_PATH];
         const isFullScreen =
             fullScreenRoutes.includes(path) ||
             path.startsWith('/player') ||
@@ -1790,9 +1807,18 @@ class App {
                 fromSlideshow,
                 fromBrowse,
                 ghostMode,
-                isShufflePlay
+                isShufflePlay,
+                contextType,
+                contextId,
+                shuffle
             }) => {
                 log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
+
+                if (item && isMusicPlayRequest(item)) {
+                    await this._playMusic({ item, contextType, contextId, shuffle: shuffle || isShufflePlay });
+                    return;
+                }
+                await musicSession.stop('video');
 
                 let itemToPlay = item;
 
@@ -2161,6 +2187,25 @@ class App {
     }
 
     /**
+     * Start a music queue on the long-lived music session and open the now-playing screen.
+     * @param {{item: Object, contextType?: string, contextId?: string, shuffle?: boolean}} request
+     * @private
+     */
+    async _playMusic(request) {
+        await startMusicPlayback(request, {
+            session: musicSession,
+            bus: eventBus,
+            queue: playQueue,
+            resolve: (req) => resolveMusicQueue(req, { getItems: (params) => api.getItems(params) }),
+            getCurrentPath: () => router.getCurrentPath(),
+            navigate: (path) => router.navigate(path),
+            notifyNothingPlayable: () => toast.show(i18n.t('music.nothingPlayable')),
+            log,
+            nowPlayingPath: NOW_PLAYING_PATH
+        });
+    }
+
+    /**
      * Obsolete: Do not call this method.
      * Ending the session via /Sessions/Logout permanently revokes the user's access token,
      * which causes a 401 Unauthorized error on the next launch.
@@ -2201,6 +2246,7 @@ class App {
         router.register('/slideshow/:photoId', SlideshowPage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page (async chunk)
         router.register('/emulator/:id', EmulatorPage); // JellyEmu game player page
+        router.register(NOW_PLAYING_PATH, NowPlayingPage);
 
         // Season redirect (for backward compatibility or deep links)
         router.register('/series/:id/season/:seasonId', {

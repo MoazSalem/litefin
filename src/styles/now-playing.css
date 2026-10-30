@@ -1,0 +1,133 @@
+/**
+ * ============================================================================
+ * Litefin - Now Playing Page Styles
+ * ============================================================================
+ */
+
+.now-playing-page {
+    background-color: var(--jf-background);
+    color: var(--jf-text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+.now-playing {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 1600px;
+    padding: 0 96px;
+    box-sizing: border-box;
+}
+
+.now-playing-cover {
+    flex: 0 0 auto;
+    width: 560px;
+    height: 560px;
+    margin-right: 80px;
+    border-radius: var(--jf-border-radius-lg);
+    overflow: hidden;
+    background-color: var(--jf-action-btn-bg);
+}
+
+.now-playing-cover-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.now-playing-cover-img.is-missing {
+    visibility: hidden;
+}
+
+.now-playing-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.now-playing-label {
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--jf-text-tertiary);
+    margin: 0 0 16px;
+}
+
+.now-playing-title {
+    font-size: 3.25rem;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0 0 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.now-playing-subtitle {
+    font-size: 1.75rem;
+    color: var(--jf-text-secondary);
+    margin: 0 0 48px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.now-playing-ended {
+    display: none;
+    font-size: 1.5rem;
+    color: var(--jf-text-secondary);
+    margin: 0 0 24px;
+}
+
+.now-playing-page.is-ended .now-playing-ended {
+    display: block;
+}
+
+.now-playing-progress {
+    display: flex;
+    align-items: center;
+    font-size: 1.25rem;
+    color: var(--jf-text-secondary);
+    margin-bottom: 40px;
+}
+
+.now-playing-elapsed,
+.now-playing-total {
+    flex: 0 0 auto;
+    min-width: 80px;
+}
+
+.now-playing-total {
+    text-align: right;
+}
+
+.now-playing-bar {
+    flex: 1 1 auto;
+    height: 6px;
+    margin: 0 20px;
+    border-radius: 3px;
+    overflow: hidden;
+    background-color: var(--jf-action-btn-bg);
+}
+
+.now-playing-bar-fill {
+    width: 100%;
+    height: 100%;
+    background-color: var(--jf-accent);
+    transform: scaleX(0);
+    transform-origin: left center;
+}
+
+.now-playing-controls {
+    display: flex;
+    align-items: center;
+}
+
+.now-playing-btn {
+    margin-right: 24px;
+}
