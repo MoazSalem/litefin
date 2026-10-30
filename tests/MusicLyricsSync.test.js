@@ -16,6 +16,26 @@ test('parseLyrics converts ticks to ms and detects synced', () => {
     ]);
 });
 
+test('parseLyrics restores spaces of word-synced lines from their cues', () => {
+    const cue = (Position, EndPosition) => ({ Position, EndPosition, Start: 0, End: 0 });
+    const { lines } = parseLyrics({
+        Lyrics: [
+            {
+                Text: "Pa'unaciudaddelnorte",
+                Start: 10_000,
+                Cues: [cue(0, 3), cue(3, 6), cue(6, 12), cue(12, 15), cue(15, 20)]
+            },
+            { Text: 'Already spaced line', Start: 20_000, Cues: [cue(0, 7), cue(8, 14)] },
+            { Text: 'NoCues', Start: 30_000 },
+            { Text: 'Single', Start: 40_000, Cues: [cue(0, 6)] }
+        ]
+    });
+    assert.deepEqual(
+        lines.map((l) => l.text),
+        ["Pa' una ciudad del norte", 'Already spaced line', 'NoCues', 'Single']
+    );
+});
+
 test('parseLyrics unsynced when Start missing', () => {
     assert.equal(parseLyrics({ Lyrics: [{ Text: 'a' }, { Text: 'b' }] }).synced, false);
 });

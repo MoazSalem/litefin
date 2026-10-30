@@ -1,10 +1,21 @@
 const TICKS_PER_MS = 10_000;
 
+/* Jellyfin strips the spaces of word-synced lines but keeps each word's position in Cues */
+function lineText(line) {
+    const text = line.Text || '';
+    const cues = Array.isArray(line.Cues) ? line.Cues : [];
+    if (cues.length < 2 || /\s/.test(text)) return text;
+    return cues
+        .map((cue) => text.slice(cue.Position, cue.EndPosition))
+        .filter(Boolean)
+        .join(' ');
+}
+
 export function parseLyrics(dto) {
     const raw = dto && Array.isArray(dto.Lyrics) ? dto.Lyrics : [];
     const lines = raw.map((l) => ({
         startMs: typeof l.Start === 'number' ? Math.round(l.Start / TICKS_PER_MS) : null,
-        text: l.Text || ''
+        text: lineText(l)
     }));
     const synced = lines.length > 0 && lines.every((l) => l.text === '' || l.startMs !== null);
     if (!synced) return { synced: false, lines };
