@@ -143,5 +143,21 @@ test('PlaybackSpeedMenu: the webOS fallback list matches JellyfinPlayer', async 
             { osd: { player: { getBackendType: () => 'webos' } } },
             speed
         );
-    assert.deepEqual([0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 4].filter(supported), [0.5, 0.75, 1, 1.5, 2]);
+    assert.deepEqual([0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 4].filter(supported), [0.25, 0.5, 0.75, 1, 1.5, 2]);
+});
+
+test('PlaybackSpeedMenu: webOS leaves out the speeds it cannot play, other backends keep them', async () => {
+    const { default: PlaybackSpeedMenu } = await import('../src/player/osd/PlaybackSpeedMenu.js');
+    const build = (backend) => {
+        const menu = {
+            availableSpeeds: [0.25, 1, 2, 2.5, 4, 8],
+            osd: { player: { getBackendType: () => backend, isPlaybackSpeedSupported: (speed) => speed <= 2 } },
+            _isSpeedSupportedFallback: () => false
+        };
+        PlaybackSpeedMenu.prototype._refreshOptions.call(menu);
+        return menu.options.map((opt) => opt.id);
+    };
+
+    assert.deepEqual(build('webos'), [0.25, 1, 2]);
+    assert.deepEqual(build('html5'), [0.25, 1, 2, 2.5, 4, 8]);
 });

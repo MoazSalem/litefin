@@ -49,6 +49,10 @@ export default class PlaybackSpeedMenu extends BaseMenu {
         // Retrieve player instance from OSDController
         const player = this.osd?.player;
 
+        // webOS speeds were tried on a TV: above 2x the picture skips frames and the sound is gone,
+        // so those are left out of the list instead of being offered with a warning
+        const hideUnsupported = player?.getBackendType?.() === 'webos';
+
         // Map every speed into an option object with localized label and support status
         this.options = this.availableSpeeds.map(speed => {
             // Check native hardware support via JellyfinPlayer or local fallback
@@ -61,7 +65,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
                 label: i18n.t('SpeedValue', [ speed.toString() ]),
                 isSupported
             };
-        });
+        }).filter(opt => opt.isSupported || !hideUnsupported);
     }
 
     /**
@@ -79,7 +83,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
 
         switch (backend) {
             case 'webos':
-                return speed >= 0.5 && speed <= 2;
+                return speed >= 0.25 && speed <= 2;
 
             case 'tizen':
                 // Samsung AVPlay trickplay engine expects integer multipliers [1, 2, 4, 8]

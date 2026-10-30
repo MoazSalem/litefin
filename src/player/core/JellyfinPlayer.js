@@ -3956,9 +3956,9 @@ export class JellyfinPlayer extends EventEmitter {
         switch (backend) {
             case 'webos':
                 // WebOSPlayer sends the rate to the TV's media service (sound stays on).
-                // 0.5x to 2x is confirmed on hardware; faster rates may be rejected and
-                // then fall back to the element playbackRate, which mutes the sound
-                return speed >= 0.5 && speed <= 2;
+                // Tested on an LG CX (webOS 5.5): up to 2x is smooth with sound, from 2.5x the
+                // picture jumps from frame to frame and the sound is gone
+                return speed >= 0.25 && speed <= 2;
 
             case 'tizen':
                 // Samsung AVPlay trickplay requires integer multipliers (1, 2, 4, 8);
