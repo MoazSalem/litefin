@@ -16,6 +16,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { isMusicItem } from '../music/musicSection.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 
@@ -448,6 +449,7 @@ class DetailsPage extends Page {
 
     async onInit() {
         this._itemId = this.params.id;
+        const navigatedPath = router.getCurrentPath();
 
         try {
             // Setup focus
@@ -464,6 +466,9 @@ class DetailsPage extends Page {
 
             // Load item details
             await this._loadDetails();
+            if (this._item) {
+                eventBus.emit('music:context', { path: navigatedPath, isMusic: isMusicItem(this._item) });
+            }
 
             // Mark the page as rendered, fulfilling the Promise for NavigationState
             // to restore scroll/focus natively
