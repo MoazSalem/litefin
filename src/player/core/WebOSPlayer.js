@@ -341,6 +341,7 @@ export class WebOSPlayer {
         /** The element's playbackRate was used instead of the media service (silent playback) */
         this._playRateOnElement = false;
         this._playRateFailures = 0;
+        this._playRatePending = 0;
         this._playRateTimer = null;
 
         // ---- Aspect ratio mode ('auto' | 'zoom' | 'stretch') ----
@@ -3285,6 +3286,7 @@ export class WebOSPlayer {
 
         this._playbackSpeed = speed;
         this._playRateFailures = 0;
+        this._playRatePending = 0;
         if (typeof window.PalmServiceBridge === 'undefined') {
             this._applyElementRate(speed);
             return;
@@ -3319,17 +3321,23 @@ export class WebOSPlayer {
             }
             this._playRateChanged = speed !== 1;
             this._playRateFailures = 0;
+            this._playRatePending = 0;
             return;
         }
 
-        this._playRateFailures++;
-        if (this._playRateFailures < (mediaId ? PLAY_RATE_FAILED_TRIES : PLAY_RATE_PENDING_TRIES)) {
+        if (mediaId) this._playRateFailures++;
+        else this._playRatePending++;
+        const retry = mediaId
+            ? this._playRateFailures < PLAY_RATE_FAILED_TRIES
+            : this._playRatePending < PLAY_RATE_PENDING_TRIES;
+        if (retry) {
             this._playRateTimer = setTimeout(() => this._applyPlayRate(), PLAY_RATE_RETRY_MS);
             return;
         }
 
         log.warn('WebOSPlayer: TV media service rejected the play rate, using the element playbackRate');
         this._applyElementRate(speed);
+        if (this._playRateOnElement) this.onEvent({ type: 'playratefallback', data: { speed } });
     }
 
     /**
@@ -3361,6 +3369,7 @@ export class WebOSPlayer {
         if (this._playbackSpeed === 1 && !this._playRateChanged) return;
         if (this._playRateOnElement || typeof window.PalmServiceBridge === 'undefined') return;
         this._playRateFailures = 0;
+        this._playRatePending = 0;
         this._applyPlayRate();
     }
 
@@ -3371,6 +3380,7 @@ export class WebOSPlayer {
         this._playbackSpeed = 1;
         this._playRateChanged = false;
         this._playRateFailures = 0;
+        this._playRatePending = 0;
         if (this._playRateOnElement && this._videoElement) {
             this._videoElement.playbackRate = 1;
         }
