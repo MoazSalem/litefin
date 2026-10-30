@@ -28,6 +28,8 @@ import { storage } from '../../utils/StorageService.js';
 import { prewarmManager } from './PrewarmManager.js';
 import { webCodecsProbe } from '../../utils/WebCodecsProbe.js';
 import { languageManager } from '../../utils/LanguageManager.js';
+import { toast } from '../../ui/Toast.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -820,6 +822,12 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+
+        if (event.type === 'playratefallback') {
+            log.warn('playratefallback: speed', event.data?.speed, 'plays without sound on this TV');
+            toast.show(i18n.t('SpeedNoSound') || 'This TV plays this speed without sound', 6000);
+            return;
+        }
 
         if (event.type === 'subtitlefallback') {
             log.warn('Backend requested subtitle fallback for index:', event.data.index);

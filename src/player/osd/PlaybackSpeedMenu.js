@@ -79,8 +79,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
 
         switch (backend) {
             case 'webos':
-                // LG webOS hardware decoders natively handle [0.5, 1, 2, 4]; others are snapped
-                return [0.5, 1, 2, 4].includes(speed);
+                return speed >= 0.5 && speed <= 2;
 
             case 'tizen':
                 // Samsung AVPlay trickplay engine expects integer multipliers [1, 2, 4, 8]
