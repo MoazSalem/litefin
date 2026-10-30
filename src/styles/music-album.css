@@ -38,6 +38,31 @@
     width: 100%;
 }
 
+.details-page.music-album .details-info-col {
+    justify-content: flex-start;
+}
+
+/* The details logo floats beside the title for movies; in the narrow album column a long title runs under it */
+.details-page.music-album .hero-info .details-logo {
+    position: static;
+    justify-content: flex-start;
+    width: auto;
+    height: auto;
+    margin: 1.2vw 0 0.6vw;
+}
+
+.details-page.music-album .hero-info .details-logo img {
+    max-width: 60%;
+    max-height: 4.2vw;
+    width: auto;
+    height: auto;
+}
+
+.details-page.music-album .hero-info .details-title {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
 .album-tracks {
     display: flex;
     flex-direction: column;
