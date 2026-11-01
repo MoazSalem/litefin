@@ -117,6 +117,19 @@ const TALL_ROW_MULTIPLIER = 2.0;
 // compositor layers), causing visible frame drops. Instant-snapping large deltas
 const LARGE_SCROLL_SNAP_FRACTION = 0.45;
 
+// Distance (px) above which a vertical hop is a genuine "long leap" (hero
+// carousel ↔ content rows, multi-row jumps, page-level transitions) whose
+// duration is stretched so the compositor gets fewer, cheaper pixels per frame.
+//
+// It must sit comfortably ABOVE ordinary row-to-row hops: poster rows are
+// ~574px tall (vs ~468px for landscape/square), so their hops travel up to
+// ~600px. The old 550px line caught every single poster hop and stretched it
+// by ×1.25 — poster rows then animated ~25% slower than landscape rows at the
+// same pref:scrollSmoothingDuration, which reads as "poster rows lag when
+// scrolled to". 700px keeps every row-type hop at the configured budget while
+// still slowing true hero/multi-row leaps.
+const LARGE_JUMP_THRESHOLD_PX = 700;
+
 // ============================================================================
 // ADAPTIVE PHYSICS SAMPLING (webOS 3 / low-tier hardware)
 // ============================================================================
@@ -652,21 +665,23 @@ class ScrollController {
         // ----------------------------------------------------------------
         // DYNAMIC VELOCITY ADAPTATION (Hero Carousel & Long Leaps)
         // ----------------------------------------------------------------
-        // Standard row-to-row navigation (~350-450px) uses the snappy base duration
-        // (130ms on desktop, 180ms on TV). Only massive transitions (e.g. hero carousel ↔
-        // first content row at >550px) scale smoothly to prevent compositor hitching.
+        // Standard row-to-row navigation (up to ~600px on tall poster rows) uses the
+        // snappy base duration (130ms on desktop, 180ms on TV) so every row type feels
+        // identical. Only massive transitions (hero carousel ↔ content rows, multi-row
+        // jumps beyond LARGE_JUMP_THRESHOLD_PX) scale smoothly to prevent compositor
+        // hitching.
         // ----------------------------------------------------------------
         if (isVertical && durationToUse > 0) {
             // Measure the absolute travel distance across the vertical axis
             const distance = Math.abs(targetScroll - currentScroll);
 
-            // True large vertical transitions (e.g. hero carousel ↔ content rows at >550px)
-            if (distance > 550) {
+            // True large vertical transitions (e.g. hero carousel ↔ content rows)
+            if (distance > LARGE_JUMP_THRESHOLD_PX) {
                 const minFloor = Math.round(durationToUse * 1.25);
                 const maxCap = Math.round(durationToUse * 1.75);
                 durationToUse = Math.min(
                     maxCap,
-                    Math.max(minFloor, Math.round(durationToUse * (1 + (distance - 550) / 400)))
+                    Math.max(minFloor, Math.round(durationToUse * (1 + (distance - LARGE_JUMP_THRESHOLD_PX) / 400)))
                 );
             }
         }
