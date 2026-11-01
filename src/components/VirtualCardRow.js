@@ -62,6 +62,16 @@ export class VirtualCardRow {
                   ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
                   : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
+        // ---------------------------------------------------------------------
+        // Persistent Scale Metrics
+        // ---------------------------------------------------------------------
+        // Persist resolved scale factor and multiplier directly on the instance.
+        // This ensures runtime window updates can calculate physical card pixel
+        // dimensions dynamically without repetitive storage or parsing overhead.
+        // ---------------------------------------------------------------------
+        this.scale = scale;
+        this.modernMultiplier = scale;
+
         // =====================================================================
         // Portrait Mobile & Scaled Viewport Track Padding
         // =====================================================================
@@ -707,8 +717,49 @@ export class VirtualCardRow {
                             cardNode.style.left = `${leftPos}px`;
                         }
                         cardNode.style.top = '0';
-                        if (!this.isModern && !this.isExpanded && !this.isModernPosters && !this.isExpanding) {
-                            cardNode.style.width = `${this.itemWidth}px`;
+                        // -----------------------------------------------------------------
+                        // Explicit Dimensional Calculation & Legacy Coordinate Synchronization
+                        // -----------------------------------------------------------------
+                        // On legacy and ultra-legacy engines (Chromium < 49 / Tizen 2-3 / webOS 1-3),
+                        // runtime CSS custom properties applied via track style.setProperty do not
+                        // resolve on element selectors. Setting explicit inline dimensions guarantees
+                        // that every card matches this.totalItemWidth mathematically, eliminating
+                        // empty spacing gaps between items across all layouts.
+                        // -----------------------------------------------------------------
+                        if (!this.isExpanding) {
+                            let cardWidth = this.itemWidth;
+                            if (cardNode.classList.contains('landscape') && !this.isLandscape) {
+                                const baseW = (this.isModern || this.isExpanded || this.isModernPosters) ? 396 : 400;
+                                cardWidth = Math.round(baseW * (this.modernMultiplier || this.scale || 1.0));
+                            } else if (cardNode.classList.contains('square') && this.cardType !== 'square' && this.cardType !== 'artist') {
+                                cardWidth = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                            }
+                            cardNode.style.width = `${cardWidth}px`;
+                            cardNode.style.marginLeft = '0px';
+                            cardNode.style.marginRight = `${this.itemMargin}px`;
+
+                            // -----------------------------------------------------------------
+                            // Card Image Surface Height Normalization
+                            // -----------------------------------------------------------------
+                            // Ensure the card image container's physical height matches the target
+                            // aspect ratio (16:9 for landscape, 2:3 for portrait, 1:1 for square)
+                            // scaled by user preferences, preventing stretched or squished posters.
+                            // -----------------------------------------------------------------
+                            const cardImage = cardNode.querySelector('.card-image');
+                            if (cardImage && (this.isModern || this.isExpanded || this.isModernPosters)) {
+                                let imageHeight;
+                                if (cardNode.classList.contains('landscape') || (this.isLandscape && !cardNode.classList.contains('square'))) {
+                                    imageHeight = Math.round(222.75 * (this.modernMultiplier || this.scale || 1.0));
+                                } else if (cardNode.classList.contains('square') || this.cardType === 'square' || this.cardType === 'artist') {
+                                    imageHeight = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                                } else {
+                                    imageHeight = Math.round(318 * (this.modernMultiplier || this.scale || 1.0));
+                                }
+                                cardImage.style.setProperty('height', `${imageHeight}px`, 'important');
+                            }
+                        } else {
+                            // In expanding poster mode, reset horizontal margin to align with coordinates
+                            cardNode.style.marginLeft = '0px';
                         }
                         cardNode.dataset.virtualIndex = i;
                         cardNode.setAttribute('data-virtual-index', i);
@@ -809,8 +860,49 @@ export class VirtualCardRow {
                     }
 
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
-                    if (!this.isModern && !this.isExpanded && !this.isModernPosters && !this.isExpanding) {
-                        cardNode.style.width = `${this.itemWidth}px`;
+                    // -----------------------------------------------------------------
+                    // Explicit Dimensional Calculation & Legacy Coordinate Synchronization
+                    // -----------------------------------------------------------------
+                    // On legacy and ultra-legacy engines (Chromium < 49 / Tizen 2-3 / webOS 1-3),
+                    // runtime CSS custom properties applied via track style.setProperty do not
+                    // resolve on element selectors. Setting explicit inline dimensions guarantees
+                    // that every card matches this.totalItemWidth mathematically, eliminating
+                    // empty spacing gaps between items across all layouts.
+                    // -----------------------------------------------------------------
+                    if (!this.isExpanding) {
+                        let cardWidth = this.itemWidth;
+                        if (cardNode.classList.contains('landscape') && !this.isLandscape) {
+                            const baseW = (this.isModern || this.isExpanded || this.isModernPosters) ? 396 : 400;
+                            cardWidth = Math.round(baseW * (this.modernMultiplier || this.scale || 1.0));
+                        } else if (cardNode.classList.contains('square') && this.cardType !== 'square' && this.cardType !== 'artist') {
+                            cardWidth = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                        }
+                        cardNode.style.width = `${cardWidth}px`;
+                        cardNode.style.marginLeft = '0px';
+                        cardNode.style.marginRight = `${this.itemMargin}px`;
+
+                        // -----------------------------------------------------------------
+                        // Card Image Surface Height Normalization
+                        // -----------------------------------------------------------------
+                        // Ensure the card image container's physical height matches the target
+                        // aspect ratio (16:9 for landscape, 2:3 for portrait, 1:1 for square)
+                        // scaled by user preferences, preventing stretched or squished posters.
+                        // -----------------------------------------------------------------
+                        const cardImage = cardNode.querySelector('.card-image');
+                        if (cardImage && (this.isModern || this.isExpanded || this.isModernPosters)) {
+                            let imageHeight;
+                            if (cardNode.classList.contains('landscape') || (this.isLandscape && !cardNode.classList.contains('square'))) {
+                                imageHeight = Math.round(222.75 * (this.modernMultiplier || this.scale || 1.0));
+                            } else if (cardNode.classList.contains('square') || this.cardType === 'square' || this.cardType === 'artist') {
+                                imageHeight = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                            } else {
+                                imageHeight = Math.round(318 * (this.modernMultiplier || this.scale || 1.0));
+                            }
+                            cardImage.style.setProperty('height', `${imageHeight}px`, 'important');
+                        }
+                    } else {
+                        // In expanding poster mode, reset horizontal margin to align with coordinates
+                        cardNode.style.marginLeft = '0px';
                     }
 
                     // Add index for identifying the card in focus handlers
