@@ -44,7 +44,7 @@ import {
     SPRING_SETTLE_VELOCITY_PX_MS,
     SPRING_MAX_DURATION_MS,
     NOMINAL_FRAME_MS,
-    stableFrameDelta,
+    CADENCE_DT_MAX_MS,
     CHASE_TAU_FACTOR,
     RAIL_DECEL_ZONE_FRACTION,
     FLING_VELOCITY_MULTIPLIER,
@@ -616,14 +616,14 @@ export class TouchHorizontalScroller {
             if (state.lastFrameTime === null) {
                 state.lastFrameTime = now;
             }
-            // FIXED CADENCE STEP (matches ScrollController): every paint
-            // advances the same simulated time, so deliveries with late
-            // frames do not dent or teleport mid-sweep.
+            // WALL-ACCURATE CADENCE (matches ScrollController): integrate the
+            // actual interval since the last paint (clamped). The configured
+            // settle duration is then honest at any frame rate — a 30fps panel
+            // paints bigger steps at half the rate instead of stretching the
+            // sweep to twice its configured length.
             const rawDelta = now - state.lastFrameTime;
             state.lastFrameTime = now;
-            state.samples.push(rawDelta);
-            if (state.samples.length > 16) state.samples.shift();
-            let dt = stableFrameDelta(state.samples, NOMINAL_FRAME_MS);
+            let dt = Math.min(Math.max(rawDelta, NOMINAL_FRAME_MS), CADENCE_DT_MAX_MS);
             state.elapsed += dt;
 
             while (dt > 0) {
