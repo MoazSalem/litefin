@@ -90,6 +90,14 @@ class CustomHeadersManager {
          * Sized to comfortably cache active library pages without TV heap pressure.
          */
         this._maxBlobCacheSize = 250;
+
+        /**
+         * Maximum number of concurrent in-flight HTTP fetches allowed on web runtimes.
+         * Prevents flooding the browser's 6-connection pool with simultaneous preflights.
+         */
+        this._maxConcurrentFetches = 6;
+        this._activeFetches = 0;
+        this._fetchQueue = [];
     }
 
     /**
@@ -182,6 +190,10 @@ class CustomHeadersManager {
         this._cache.delete(normalized);
         this.clearBlobCache();
         log.info(`Updated custom headers for ${normalized} (${sanitized.length} entries)`);
+
+        // Synchronize updated headers with native Android bridge if available
+        const headersMap = this.getNormalizedHeaders(normalized);
+        this._syncToNativeBridge(normalized, headersMap);
     }
 
     /**
@@ -329,6 +341,93 @@ class CustomHeadersManager {
      */
     setActiveServer(serverUrl) {
         this._activeServerUrl = this.normalizeServerUrl(serverUrl);
+        this.syncCurrentServer();
+    }
+
+    /**
+     * Synchronizes active server headers with the native Android bridge.
+     */
+    syncCurrentServer() {
+        if (!this._activeServerUrl) return;
+        const headers = this.getActiveHeaders();
+        this._syncToNativeBridge(this._activeServerUrl, headers);
+    }
+
+    /**
+     * Dispatches headers map to native platform bridge if available.
+     * @private
+     */
+    _syncToNativeBridge(serverUrl, headersMap) {
+        try {
+            if (typeof window !== 'undefined') {
+                if (window.androidAdapter?.syncCustomHeaders) {
+                    window.androidAdapter.syncCustomHeaders(serverUrl, headersMap);
+                } else if (typeof window.LitefinAndroid?.setCustomHeaders === 'function') {
+                    window.LitefinAndroid.setCustomHeaders(serverUrl, JSON.stringify(headersMap || {}));
+                }
+            }
+        } catch (e) {
+            log.warn('Failed syncing headers to native bridge:', e);
+        }
+    }
+
+    /**
+     * Checks if native platform request interception is active for the target URL.
+     * When active, standard <img> tags are intercepted at native OS network level,
+     * completely bypassing JavaScript fetch() and CORS OPTIONS preflights.
+     *
+     * @param {string} url - Target resource URL
+     * @param {string} [serverUrl] - Optional server URL override
+     * @returns {boolean}
+     */
+    hasNativeInterception(url, serverUrl) {
+        if (typeof window === 'undefined') return false;
+        try {
+            const hasBridge =
+                (typeof window.LitefinAndroid?.hasNativeHeaderInterception === 'function' &&
+                    Boolean(window.LitefinAndroid.hasNativeHeaderInterception())) ||
+                (typeof window.androidAdapter?.hasNativeHeaderInterception === 'function' &&
+                    Boolean(window.androidAdapter.hasNativeHeaderInterception()));
+
+            if (!hasBridge) return false;
+
+            const target = serverUrl || this._activeServerUrl;
+            return this.isUrlForServer(url, target);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
+     * Queues an asynchronous fetch operation to respect concurrency limits.
+     * @param {Function} fetchFn - Promise-returning fetch factory
+     * @returns {Promise<any>}
+     * @private
+     */
+    _enqueueFetch(fetchFn) {
+        return new Promise((resolve, reject) => {
+            this._fetchQueue.push({ fetchFn, resolve, reject });
+            this._dequeueFetch();
+        });
+    }
+
+    /**
+     * Drains the pending fetch queue while concurrency slots remain available.
+     * @private
+     */
+    _dequeueFetch() {
+        if (this._activeFetches >= this._maxConcurrentFetches || this._fetchQueue.length === 0) {
+            return;
+        }
+        this._activeFetches++;
+        const { fetchFn, resolve, reject } = this._fetchQueue.shift();
+        fetchFn()
+            .then(resolve)
+            .catch(reject)
+            .finally(() => {
+                this._activeFetches--;
+                this._dequeueFetch();
+            });
     }
 
     /**
@@ -406,6 +505,13 @@ class CustomHeadersManager {
         // Determine destination server address
         const targetServer = serverUrl || this._activeServerUrl;
 
+        // Fast-path for native Android request interception:
+        // When the native shell intercepts image requests via AuthenticatedWebViewClient,
+        // headers are attached at the OS HTTP level. Skip JS fetch and return original URL directly!
+        if (this.hasNativeInterception(url, targetServer)) {
+            return url;
+        }
+
         // Verify if destination belongs to the server and requires reverse proxy headers
         const headers = this.getHeadersForUrl(url, targetServer);
         if (!headers || Object.keys(headers).length === 0) {
@@ -423,8 +529,8 @@ class CustomHeadersManager {
             return await this._inFlightImages.get(url);
         }
 
-        // 3. Initiate authenticated fetch with custom headers
-        const fetchPromise = (async () => {
+        // 3. Initiate authenticated fetch through throttled queue to prevent connection starvation
+        const fetchPromise = this._enqueueFetch(async () => {
             try {
                 // Execute fetch with custom headers
                 const response = await fetch(url, {
@@ -469,7 +575,7 @@ class CustomHeadersManager {
                 // Clear active in-flight tracking once network promise settles
                 this._inFlightImages.delete(url);
             }
-        })();
+        });
 
         // Track in-flight operation and await result
         this._inFlightImages.set(url, fetchPromise);

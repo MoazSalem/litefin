@@ -385,6 +385,14 @@ class LazyLoader {
             return;
         }
 
+        // Fast path: if native platform request interception is active (Android TV AuthenticatedWebViewClient),
+        // headers are attached at OS level. Assign URL directly without JS fetch or blob allocation.
+        if (customHeaders?.hasNativeInterception?.(targetSrc)) {
+            img.crossOrigin = 'anonymous';
+            img.src = targetSrc;
+            return;
+        }
+
         // Check if Blob URL is already in cache for zero-latency synchronous hit
         const cached = customHeaders.getCachedBlobUrl(targetSrc);
         if (cached) {
