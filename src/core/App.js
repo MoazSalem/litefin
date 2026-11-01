@@ -88,6 +88,10 @@ function loadDetailsPageModule() {
         detailsPrewarmPromise = import(/* webpackChunkName: "details" */ '../pages/DetailsPage.js')
             .then((module) => {
                 CachedDetailsClass = module.default;
+                // Chunks carry their own <style> tags (style-loader tiers);
+                // on legacy engines the CSS-var polyfill must adopt any
+                // freshly injected stylesheet synchronously before the page renders.
+                cssVarsPolyfill.ensureStylesResolved(true);
                 return CachedDetailsClass;
             })
             .catch((err) => {
@@ -116,6 +120,10 @@ function loadLibraryPageModule() {
         libraryPrewarmPromise = import(/* webpackChunkName: "library" */ '../pages/LibraryPage.js')
             .then((module) => {
                 CachedLibraryClass = module.default;
+                // Chunks carry their own <style> tags (style-loader tiers);
+                // on legacy engines the CSS-var polyfill must adopt any
+                // freshly injected stylesheet synchronously before the page renders.
+                cssVarsPolyfill.ensureStylesResolved(true);
                 return CachedLibraryClass;
             })
             .catch((err) => {
@@ -144,6 +152,10 @@ function loadPlayerModule() {
         playerPrewarmPromise = import(/* webpackChunkName: "player" */ '../pages/PlayerPage.js')
             .then((module) => {
                 CachedPlayerClass = module.default;
+                // Chunks carry their own <style> tags (style-loader tiers);
+                // on legacy engines the CSS-var polyfill must adopt any
+                // freshly injected stylesheet synchronously before the player renders.
+                cssVarsPolyfill.ensureStylesResolved(true);
                 return CachedPlayerClass;
             })
             .catch((err) => {

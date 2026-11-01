@@ -61,6 +61,28 @@ const TerserPlugin = require('terser-webpack-plugin');
  *
  * @returns {Array} minimizer plugin list (fresh instances)
  */
+/**
+ * Safe cssnano preset configuration for extracted and inlined stylesheets.
+ * Discards comments and compresses whitespace while disabling destructive
+ * transforms that drop fallbacks or break parsing on legacy web runtimes.
+ */
+const safeCssnanoMinimizerPreset = [
+    'default',
+    {
+        discardComments: { removeAll: true },
+        normalizeWhitespace: true,
+        mergeRules: false,
+        discardOverridden: false,
+        discardDuplicates: false,
+        calc: false,
+        colormin: false,
+        minifySelectors: false,
+        mergeLonghand: false,
+        reduceInitial: false,
+        zindex: false
+    }
+];
+
 function getMinimizers() {
     return [
         new TerserPlugin({
@@ -74,7 +96,7 @@ function getMinimizers() {
         }),
         new CssMinimizerPlugin({
             minimizerOptions: {
-                preset: ['default', { discardComments: { removeAll: true } }]
+                preset: safeCssnanoMinimizerPreset
             }
         })
     ];

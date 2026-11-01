@@ -93,6 +93,10 @@ class CssVarsPolyfill {
         }
 
         this._active = true;
+        // Expose polyfill singleton on window for runtime diagnostics and inspectability
+        if (typeof window !== 'undefined') {
+            window.cssVarsPolyfill = this;
+        }
         log.info('CSS vars NOT natively supported — activating high-speed engine');
 
         const self = this;

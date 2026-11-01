@@ -4,10 +4,19 @@
  * ============================================================================
  */
 
+/*
+ * Details Page Main Viewport Container
+ * Incorporates 2009 webkit-box and 2012 webkit-flex fallbacks to prevent container
+ * collapse on legacy Tizen and older webOS platforms lacking modern flexbox.
+ */
 .details-page {
     overflow: hidden;
     /* Main container fixed */
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
     flex-direction: column;
     height: 100vh;
 }
@@ -18,12 +27,18 @@
     left: 0;
     width: 100%;
     height: 100%;
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.05);
     /* Subtle background */
-    color: var(--jf-text-secondary);
+    color: var(--jf-text-secondary, #aaaaaa);
 }
 
 .person-fallback svg {
@@ -39,6 +54,9 @@
      * active theme colors without hardcoding charcoal/black color channels.
      */
     --jf-background-rgb: 16, 16, 16;
+    --jf-card-bg: rgba(20, 20, 25, 0.75);
+    --jf-border-radius: 8px;
+    --jf-border-radius-lg: 12px;
 }
 
 .details-backdrop {
@@ -90,13 +108,22 @@
      * 2. 75% to 88%: Smooth ease transition into var(--jf-background) behind synopsis typography.
      * 3. 88% to 100%: 100% theme background eliminates dual-layer GPU fill-rate overdraw beneath cast rows.
      */
+    /* Vendor gradient fallback for legacy WebKit engines */
+    background: -webkit-linear-gradient(
+        top,
+        rgba(var(--jf-background-rgb, 16, 16, 16), 0.35) 0%,
+        rgba(var(--jf-background-rgb, 16, 16, 16), 0.60) 45%,
+        rgba(var(--jf-background-rgb, 16, 16, 16), 0.90) 75%,
+        var(--jf-background, #101010) 88%,
+        var(--jf-background, #101010) 100%
+    );
     background: linear-gradient(
         to bottom,
         rgba(var(--jf-background-rgb, 16, 16, 16), 0.35) 0%,
         rgba(var(--jf-background-rgb, 16, 16, 16), 0.60) 45%,
         rgba(var(--jf-background-rgb, 16, 16, 16), 0.90) 75%,
-        var(--jf-background) 88%,
-        var(--jf-background) 100%
+        var(--jf-background, #101010) 88%,
+        var(--jf-background, #101010) 100%
     );
     pointer-events: none;
 }
@@ -153,7 +180,12 @@
 
 /* Main Split Layout */
 .details-main-split {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: start;
+    -webkit-align-items: flex-start;
     align-items: flex-start;
     /* Prevent poster stretching */
     margin-bottom: 40px;
@@ -453,6 +485,8 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
 }
 
 .details-info-col {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
     flex: 1;
     /* --------------------------------------------------------------------- */
     /* Flexbox Width Containment                                             */
@@ -461,8 +495,14 @@ html[data-layout-media-rows="modern-posters"] .hero-poster .media-fallback {
     /* this container beyond the flexbox column limits. Ensures long titles  */
     /* and unwrapped button rows do not overflow the right margin.          */
     min-width: 0;
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
     justify-content: center;
     padding-bottom: 20px;
     opacity: 0;
