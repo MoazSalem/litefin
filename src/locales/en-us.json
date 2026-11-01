@@ -1477,6 +1477,7 @@
     "Source": "Source",
     "SpecialFeatures": "Special Features",
     "Specials": "Specials",
+    "SpeedNoSound": "This TV plays this speed without sound",
     "SpeedValue": "{0}x",
     "StartNextEpisode": "Start Next Episode",
     "StartTypingToSearch": "Start typing to search",
