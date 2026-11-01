@@ -5921,14 +5921,15 @@ class PlayerPage extends Page {
         }
 
         // Defensive safety net: if destroy is invoked directly without _stopAndExit having run
-        // (e.g. emergency external route discard), report stopped to server with synchronous XHR
+        // (e.g. emergency external route discard), report stopped to server. Asynchronously: the
+        // router only destroys pages on in-app navigation, and a synchronous XHR froze the UI
         if (!this._isExiting && this._hasReportedStart && this._item) {
             try {
                 const mediaSource = this._cachedMediaSource || this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
                 const durationTicks =
                     this._player?.getDurationTicks?.() || mediaSource?.RunTimeTicks || this._item?.RunTimeTicks || 0;
-                this._reportPlaybackStopped(mediaSource, positionTicks, true, durationTicks);
+                this._reportPlaybackStopped(mediaSource, positionTicks, false, durationTicks);
             } catch (err) {
                 log.warn('Defensive stop report on destroy failed:', err);
             }
