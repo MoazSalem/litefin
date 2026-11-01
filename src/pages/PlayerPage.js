@@ -5932,6 +5932,7 @@ class PlayerPage extends Page {
             } catch (err) {
                 log.warn('Defensive stop report on destroy failed:', err);
             }
+            eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'destroy' });
         }
 
         // Cancel any pending auto-recovery timers
