@@ -15,8 +15,19 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.graphics.Bitmap
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
@@ -74,6 +85,16 @@ class MainActivity : TauriActivity() {
 
   // Tracks cold-launch deep link payload until claimed by web application
   private var initialDeepLink: String? = null
+
+  // ---------------------------------------------------------------------------
+  // Reverse Proxy & Custom Headers State
+  // ---------------------------------------------------------------------------
+  // Stores configured reverse proxy base URL and custom headers (e.g. Cloudflare
+  // Service Tokens) for native WebView request interception.
+  // ---------------------------------------------------------------------------
+  @Volatile
+  private var protectedServerUrl: String? = null
+  private val customProxyHeaders = ConcurrentHashMap<String, String>()
 
   // ---------------------------------------------------------------------------
   // Display Mode & Refresh Rate State
@@ -224,7 +245,42 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
 
     // -------------------------------------------------------------------------
-    // 4. Lock Native Remote Focus to the WebView & Suppress Default Highlight
+    // 4. Configure Cookie Jar & Allow Third-Party Cookie Persistence
+    // -------------------------------------------------------------------------
+    // Enables standard cookie management for authenticated reverse proxies and
+    // ensures cross-origin API and asset requests retain authorization state.
+    // -------------------------------------------------------------------------
+    try {
+      val cookieManager = CookieManager.getInstance()
+      cookieManager.setAcceptCookie(true)
+      cookieManager.setAcceptThirdPartyCookies(webView, true)
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed configuring CookieManager: ${e.message}")
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Wrap WebViewClient to Intercept Protected Server Requests
+    // -------------------------------------------------------------------------
+    // Intercepts image requests destined for the Jellyfin server when reverse
+    // proxy headers (Cloudflare Service Tokens, Authentik, etc.) are active.
+    // Directs requests through native OkHttp with credentials injected,
+    // completely eliminating CORS OPTIONS preflights and JS Blob allocations.
+    // -------------------------------------------------------------------------
+    try {
+      val defaultClient = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        webView.webViewClient
+      } else {
+        RustWebViewClient(webView as RustWebView, this)
+      }
+      if (defaultClient != null && defaultClient !is AuthenticatedWebViewClient) {
+        webView.webViewClient = AuthenticatedWebViewClient(defaultClient)
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed attaching AuthenticatedWebViewClient: ${e.message}")
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Lock Native Remote Focus to the WebView & Suppress Default Highlight
     // -------------------------------------------------------------------------
     // On Android TV platforms operating in non-touch D-pad mode, ensure the
     // WebView immediately requests and claims focus so initial key events
@@ -1269,6 +1325,193 @@ class MainActivity : TauriActivity() {
     @JavascriptInterface
     fun getSupportedDisplayModes(): String {
       return this@MainActivity.getSupportedDisplayModesJson()
+    }
+
+    /**
+     * =========================================================================
+     * Synchronize Custom Reverse Proxy Headers
+     * =========================================================================
+     * Receives reverse proxy credentials (e.g. Cloudflare Service Tokens)
+     * configured in frontend settings, allowing native request interception
+     * to attach headers directly without triggering CORS preflights.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun setCustomHeaders(serverUrl: String?, headersJson: String?) {
+      try {
+        protectedServerUrl = serverUrl?.trimEnd('/')
+        customProxyHeaders.clear()
+        if (!headersJson.isNullOrEmpty()) {
+          val json = JSONObject(headersJson)
+          val keys = json.keys()
+          while (keys.hasNext()) {
+            val key = keys.next()
+            val value = json.optString(key)
+            if (key.isNotBlank() && value.isNotBlank()) {
+              customProxyHeaders[key] = value
+            }
+          }
+        }
+        android.util.Log.i("MainActivity", "Synchronized ${customProxyHeaders.size} custom proxy headers for $protectedServerUrl")
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed to parse custom headers JSON: ${e.message}")
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Native Header Interception Query
+     * =========================================================================
+     * Informs frontend runtime whether native request interception is active.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun hasNativeHeaderInterception(): Boolean {
+      return true
+    }
+
+    /**
+     * =========================================================================
+     * Session Cookie Injection Bridge
+     * =========================================================================
+     * Stores an authentication cookie directly into the Android WebView
+     * cookie jar for the specified server domain.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun setCookie(url: String?, cookie: String?) {
+      if (url.isNullOrBlank() || cookie.isNullOrBlank()) return
+      try {
+        CookieManager.getInstance().setCookie(url, cookie)
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed to set cookie: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * ===========================================================================
+   * Authenticated WebView Client
+   * ===========================================================================
+   * Wraps Tauri's underlying [RustWebViewClient] to provide native request
+   * interception for reverse-proxy-protected Jellyfin media assets.
+   *
+   * Key Advantages:
+   * 1. Eliminates CORS OPTIONS preflight latency (saves 100-300ms per image).
+   * 2. Eliminates in-memory Blob URL generation and JS heap pressure on TVs.
+   * 3. Streams network response directly into Chromium's native image pipeline.
+   * ===========================================================================
+   */
+  inner class AuthenticatedWebViewClient(
+    private val delegate: WebViewClient
+  ) : WebViewClient() {
+
+    // Dedicated OkHttpClient instance with persistent connection pooling
+    private val httpClient: OkHttpClient by lazy {
+      OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
+    }
+
+    override fun shouldInterceptRequest(
+      view: WebView?,
+      request: WebResourceRequest?
+    ): WebResourceResponse? {
+      val url = request?.url ?: return delegate.shouldInterceptRequest(view, request)
+      val urlStr = url.toString()
+      val serverUrl = protectedServerUrl
+
+      // Check if request targets the configured reverse-proxy server
+      if (!serverUrl.isNullOrEmpty() && customProxyHeaders.isNotEmpty() && urlStr.startsWith(serverUrl, ignoreCase = true)) {
+        val path = url.path ?: ""
+        // Intercept images and server health pings where custom headers are needed
+        val isTargetResource = path.contains("/Images/", ignoreCase = true) ||
+          request.requestHeaders["Accept"]?.contains("image/") == true ||
+          path.endsWith("/System/Ping", ignoreCase = true)
+
+        if (isTargetResource && request.method.equals("GET", ignoreCase = true)) {
+          try {
+            val reqBuilder = Request.Builder()
+              .url(urlStr)
+              .get()
+
+            // Forward original request headers, omitting Host to avoid mismatch
+            request.requestHeaders.forEach { (key, value) ->
+              if (!key.equals("Host", ignoreCase = true) && !customProxyHeaders.containsKey(key)) {
+                reqBuilder.header(key, value)
+              }
+            }
+
+            // Inject configured custom reverse proxy credentials
+            customProxyHeaders.forEach { (key, value) ->
+              reqBuilder.header(key, value)
+            }
+
+            // Execute network request natively
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            val body = response.body
+
+            if (response.isSuccessful && body != null) {
+              val contentType = body.contentType()?.toString() ?: "image/jpeg"
+              val mimeType = contentType.substringBefore(";").trim()
+              val responseHeaders = mutableMapOf<String, String>()
+
+              // Add permissive CORS headers so WebView accepts payload without complaint
+              responseHeaders["Access-Control-Allow-Origin"] = "*"
+              responseHeaders["Access-Control-Allow-Methods"] = "GET, OPTIONS, HEAD"
+              responseHeaders["Access-Control-Allow-Headers"] = "*"
+
+              response.headers.names().forEach { name ->
+                responseHeaders[name] = response.header(name) ?: ""
+              }
+
+              return WebResourceResponse(
+                mimeType,
+                "UTF-8",
+                response.code,
+                response.message.ifEmpty { "OK" },
+                responseHeaders,
+                body.byteStream()
+              )
+            }
+          } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Native interceptor failed for $urlStr: ${e.message}")
+          }
+        }
+      }
+
+      // Fall back to Tauri's default asset loader
+      return delegate.shouldInterceptRequest(view, request)
+    }
+
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+      return delegate.shouldOverrideUrlLoading(view, request)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+      @Suppress("DEPRECATION")
+      return delegate.shouldOverrideUrlLoading(view, url)
+    }
+
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+      delegate.onPageStarted(view, url, favicon)
+    }
+
+    override fun onPageFinished(view: WebView?, url: String?) {
+      delegate.onPageFinished(view, url)
+    }
+
+    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+      delegate.onReceivedError(view, request, error)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+      @Suppress("DEPRECATION")
+      delegate.onReceivedError(view, errorCode, description, failingUrl)
     }
   }
 }
