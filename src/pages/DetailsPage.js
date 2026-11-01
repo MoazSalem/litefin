@@ -2321,8 +2321,13 @@ class DetailsPage extends Page {
             htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
-        // Directors (only shown in 'all')
-        if (richMetadataStyle === 'all') {
+        // Directors (shown in 'all', 'genres-studios-writers', or 'genres-writers')
+        // Key creative leads; preserved when hiding tags/studios to maintain rich metadata hierarchy.
+        if (
+            richMetadataStyle === 'all' ||
+            richMetadataStyle === 'genres-studios-writers' ||
+            richMetadataStyle === 'genres-writers'
+        ) {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
                 htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));

@@ -1304,7 +1304,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .details-rich-meta:focus,
 .details-rich-meta.active-table,
 .details-rich-meta.focused {
-    border-color: var(--jf-btn-primary-bg) !important;
+    /* Border focus color with accent fallback */
+    border-color: var(--jf-btn-primary-bg, var(--jf-accent, #00a4dc)) !important;
     /* Focus highlight background tint applied cleanly without continuous transition */
     background-color: rgba(var(--jf-accent-dark-rgb,15,15,20),0.65);
     outline: none;
@@ -1326,7 +1327,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .meta-label {
     width: 120px;
     flex-shrink: 0;
-    color: var(--jf-text-secondary);
+    /* Metadata label text color with secondary text fallback */
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
     font-size: 1.2rem;
     font-weight: 500;
 }
@@ -1342,11 +1344,12 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     margin-top: 4px;
     margin-bottom: 4px;
     padding: 6px 10px;
-    border-radius: var(--jf-border-radius-lg);
-    -webkit-border-radius: var(--jf-border-radius-lg);
+    border-radius: var(--jf-border-radius-lg, 8px);
+    -webkit-border-radius: var(--jf-border-radius-lg, 8px);
     background: rgba(255, 255, 255, 0.05);
     border: 2px solid rgba(255, 255, 255, 0.1) !important;
-    color: var(--jf-text-primary);
+    /* Chip primary text color with clean white fallback */
+    color: var(--jf-text-primary, #ffffff);
     font-size: 1.1rem;
     font-weight: 500;
     cursor: pointer;
@@ -1364,9 +1367,10 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .meta-chip:hover,
 .meta-chip:focus,
 .meta-chip.focused {
-    background-color: var(--jf-btn-primary-focus-bg) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
-    border-color: var(--jf-btn-primary-focus-border) !important;
+    /* Focused chip background and contrast typography fallbacks */
+    background-color: var(--jf-btn-primary-focus-bg, var(--jf-accent, #00a4dc)) !important;
+    color: var(--jf-btn-primary-focus-color, #ffffff) !important;
+    border-color: var(--jf-btn-primary-focus-border, #ffffff) !important;
     transform: scale(1.1);
     opacity: 1;
     outline: none !important;

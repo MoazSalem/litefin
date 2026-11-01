@@ -615,8 +615,8 @@ function createPageChunkLoader(importer) {
                     chunk.cached = module.default;
                     // Chunks carry their own <style> tags (style-loader tiers);
                     // on legacy engines the CSS-var polyfill must adopt any
-                    // freshly injected stylesheet before the page renders.
-                    cssVarsPolyfill.ensureStylesResolved();
+                    // freshly injected stylesheet synchronously before the page renders.
+                    cssVarsPolyfill.ensureStylesResolved(true);
                     return chunk.cached;
                 })
                 .catch((err) => {

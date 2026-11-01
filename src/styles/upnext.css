@@ -8,9 +8,17 @@
    Card Container
    ============================================================================ */
 
-.upnext-dialog {
+/*
+ * Scale custom property declared on :root for legacy polyfill extraction.
+ * Unscoped var() lookups without a top-level fallback risk dropping the font-size
+ * rule entirely on Chromium < 49 runtimes.
+ */
+:root {
     --upnext-scale: 1.0;
-    font-size: calc(1.25rem * var(--upnext-scale));
+}
+
+.upnext-dialog {
+    font-size: calc(1.25rem * var(--upnext-scale, 1.0));
     
     /*
      * Position: absolute within .osd-overlays (which fills the full player).
@@ -335,22 +343,25 @@
 .upnext-btn.focused,
 .upnext-btn:focus {
     outline: none;
-    border: 0.125em solid var(--jf-action-btn-active-border) !important;
+    /* TV focus ring border with resilient fallback prevents missing focus indicator */
+    border: 0.125em solid var(--jf-action-btn-active-border, #ffffff) !important;
     transform: scale(1.05);
 }
 
 .upnext-btn-play.focused,
 .upnext-btn-play:focus {
-    background: var(--jf-btn-primary-focus-bg) !important;
-    border-color: var(--jf-btn-primary-focus-border) !important;
-    color: var(--jf-btn-primary-focus-color) !important;
+    /* High-contrast focus state fallbacks for legacy webOS engines */
+    background: var(--jf-btn-primary-focus-bg, #ffffff) !important;
+    border-color: var(--jf-btn-primary-focus-border, #ffffff) !important;
+    color: var(--jf-btn-primary-focus-color, #000000) !important;
 }
 
 .upnext-btn-hide.focused,
 .upnext-btn-hide:focus {
     background: rgba(255, 255, 255, 0.22) !important;
     color: #fff !important;
-    border: 0.125em solid var(--jf-action-btn-active-border) !important;
+    /* Border focus ring fallback for secondary actions */
+    border: 0.125em solid var(--jf-action-btn-active-border, #ffffff) !important;
 }
 
 /* ============================================================================
@@ -411,11 +422,12 @@
     height: auto !important;
     min-width: unset !important;
     padding: 0.7em 1.8em !important;
-    border-radius: var(--jf-border-radius-lg) !important;
-    -webkit-border-radius: var(--jf-border-radius-lg) !important;
+    border-radius: var(--jf-border-radius-lg, 8px) !important;
+    -webkit-border-radius: var(--jf-border-radius-lg, 8px) !important;
     background: rgba(0, 0, 0, 0.6) !important;
     color: var(--jf-text-primary, #fff) !important;
-    border: 2px solid var(--jf-osd-btn-border) !important;
+    /* Card button border fallback keeps bounding box visible */
+    border: 2px solid var(--jf-osd-btn-border, rgba(255, 255, 255, 0.2)) !important;
     font-size: 1.3em;
     font-weight: 600;
     line-height: 1;
@@ -432,10 +444,11 @@
 
 .upnext-dialog.upnext-style-button .upnext-btn-play.focused,
 .upnext-dialog.upnext-style-button .upnext-btn-play:focus {
-    background: var(--jf-osd-btn-focus-bg) !important;
-    border: 2px solid var(--jf-osd-btn-focus-border) !important;
+    /* Solid fallbacks ensure play button stays legible on TV */
+    background: var(--jf-osd-btn-focus-bg, var(--jf-btn-primary-bg, #ffffff)) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border, var(--jf-btn-primary-focus-border, #ffffff)) !important;
     outline: none !important;
-    color: var(--jf-osd-btn-focus-color) !important;
+    color: var(--jf-osd-btn-focus-color, #000000) !important;
     transform: scale(1.05);
 }
 

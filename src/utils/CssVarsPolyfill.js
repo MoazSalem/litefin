@@ -125,8 +125,16 @@ class CssVarsPolyfill {
      * AsyncPageProxy calls this after each chunk module resolves. No-op when
      * native CSS custom properties are supported.
      */
-    ensureStylesResolved() {
+    ensureStylesResolved(sync = false) {
         if (!this._active) return;
+
+        // When synchronous resolution is requested (e.g. immediately before page mount),
+        // run the style resolution pass right away so the page renders with computed styles.
+        if (sync) {
+            this._resolvePassScheduled = false;
+            this._runStyleResolutionPass();
+            return;
+        }
 
         // Coalesce concurrent triggers into a single resolution pass.
         // When several lazy chunks resolve in the same tick (e.g. the modern
