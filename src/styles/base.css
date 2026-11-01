@@ -1695,12 +1695,21 @@ html[data-low-vram="true"] .grid-card {
     will-change: auto !important;
 }
 
-/* Ensure card progress bar remains visible in Low VRAM mode without requiring CSS fade-in animations */
-html[data-low-vram="true"] .card-progress-container {
+/* Ensure card progress bar remains visible in Low VRAM mode and on Legacy/Ultra-Legacy hardware without animations */
+html[data-low-vram="true"] .card-progress-container,
+html[data-layout-tier="legacy"] .card-progress-container,
+html[data-layout-tier="ultra-legacy"] .card-progress-container {
     opacity: 1 !important;
     -webkit-animation: none !important;
     animation: none !important;
     will-change: auto !important;
+}
+
+/* Ensure progress value has a definitive fill on Legacy and Ultra-Legacy engines */
+html[data-layout-tier="legacy"] progress.card-progress::-webkit-progress-value,
+html[data-layout-tier="ultra-legacy"] progress.card-progress::-webkit-progress-value {
+    background-color: #00a4dc !important;
+    background-color: var(--jf-accent, #00a4dc) !important;
 }
 
 /* Maintain skeleton shimmer fallback (solid color instead of animation) */

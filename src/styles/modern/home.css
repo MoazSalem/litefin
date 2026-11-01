@@ -723,7 +723,8 @@ html[data-media-rows-family="modern"] progress.card-progress::-webkit-progress-b
 }
 
 html[data-media-rows-family="modern"] progress.card-progress::-webkit-progress-value {
-    background-color: var(--jf-accent);
+    background-color: #00a4dc;
+    background-color: var(--jf-accent, #00a4dc);
     border-radius: 10px;
     /* Spring-like transition for progress updates */
     -webkit-transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);

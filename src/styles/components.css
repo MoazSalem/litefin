@@ -252,8 +252,9 @@
        The parent (.card-image) already has overflow: hidden and the border-radius.
        Letting the parent handle the clipping ensures perfect pixel alignment. */
     overflow: hidden;
-    /* Clean entrance using global animation */
-    opacity: 0;
+    /* Default to visible: prevents permanent invisibility on Chrome < 43 lacking unprefixed animation */
+    opacity: 1;
+    -webkit-animation: fadeIn 0.4s ease-out forwards;
     animation: fadeIn 0.4s ease-out forwards;
     /* PERFORMANCE: no permanent will-change here. The container's only
      * animation is a one-shot 0.4s fade-in; a permanent promotion keeps
@@ -271,6 +272,8 @@ progress.card-progress {
     border: none;
     background: transparent;
     border-radius: 0; /* Reset internal radius to allow parent to clip naturally */
+    color: #00a4dc;
+    color: var(--jf-accent, #00a4dc);
 }
 
 progress.card-progress::-webkit-progress-bar {
@@ -279,10 +282,22 @@ progress.card-progress::-webkit-progress-bar {
 }
 
 progress.card-progress::-webkit-progress-value {
-    /* Premium gradient */
-    background: linear-gradient(90deg, var(--jf-accent) 0%, var(--jf-accent-hover) 100%);
+    /* Solid color fallback for Chromium 26-47 lacking CSS variable or gradient support */
+    background-color: #00a4dc;
+    background-color: var(--jf-accent, #00a4dc);
+    /* WebKit gradient fallback for Chromium 26-38 */
+    background: -webkit-linear-gradient(left, #00a4dc 0%, #0084b4 100%);
+    background: -webkit-linear-gradient(left, var(--jf-accent, #00a4dc) 0%, var(--jf-accent-hover, #0084b4) 100%);
+    /* Standard linear gradient */
+    background: linear-gradient(90deg, var(--jf-accent, #00a4dc) 0%, var(--jf-accent-hover, #0084b4) 100%);
     /* Ensure sharp edges for the value bar */
     border-radius: 0;
+}
+
+progress.card-progress::-moz-progress-bar {
+    background-color: #00a4dc;
+    background-color: var(--jf-accent, #00a4dc);
+    background: linear-gradient(90deg, var(--jf-accent, #00a4dc) 0%, var(--jf-accent-hover, #0084b4) 100%);
 }
 
 /* Skeleton Utility Classes (CSP-Safe) */

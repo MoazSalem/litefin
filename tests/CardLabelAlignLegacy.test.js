@@ -56,6 +56,7 @@ globalThis.__APP_VERSION__ = '1.0.0';
 const { storage } = await import('../src/utils/StorageService.js');
 const { layoutManager } = await import('../src/ui/LayoutManager.js');
 const { eventBus } = await import('../src/core/EventBus.js');
+const { default: CardRenderer } = await import('../src/utils/CardRenderer.js');
 
 test('Media Card Alignment: LayoutManager getter and setter lifecycle', () => {
     // Reset state
@@ -154,6 +155,100 @@ test('Media Card Alignment: CSS Selectors Level 3 backward compatibility in base
     assert.ok(
         section.includes('html[data-card-label-align] .view-list .media-card .card-title'),
         'base.css must define an explicit list view override to prevent cards in list mode from centering'
+    );
+});
+
+test('Media Card Progress Bar: Legacy & Ultra-Legacy CSS backward compatibility', () => {
+    // 1. Read components.css to verify progressive enhancements and fallbacks
+    const componentsCss = readFileSync(new URL('../src/styles/components.css', import.meta.url), 'utf8');
+
+    // Ensure .card-progress-container starts with opacity: 1 (not opacity: 0)
+    // to prevent invisibility on Chrome < 43 where unprefixed animation is unsupported
+    const containerMatch = componentsCss.match(/\.card-progress-container\s*\{([\s\S]*?)\}/);
+    assert.ok(containerMatch, '.card-progress-container rule must exist in components.css');
+    assert.ok(
+        containerMatch[1].includes('opacity: 1;'),
+        '.card-progress-container must default to opacity: 1 for older browser support'
+    );
+    assert.ok(
+        containerMatch[1].includes('-webkit-animation:'),
+        '.card-progress-container must provide -webkit-animation prefix for Chrome 26-42'
+    );
+
+    // Ensure ::-webkit-progress-value has solid background-color fallbacks
+    const valueMatch = componentsCss.match(/progress\.card-progress::-webkit-progress-value\s*\{([\s\S]*?)\}/);
+    assert.ok(valueMatch, 'progress.card-progress::-webkit-progress-value rule must exist');
+    assert.ok(
+        valueMatch[1].includes('background-color: #00a4dc;'),
+        '::-webkit-progress-value must include solid color fallback for browsers without CSS variable support'
+    );
+    assert.ok(
+        valueMatch[1].includes('-webkit-linear-gradient'),
+        '::-webkit-progress-value must include -webkit-linear-gradient for Chromium 26-38'
+    );
+
+    // 2. Read base.css to verify legacy & ultra-legacy tier overrides
+    const baseCss = readFileSync(new URL('../src/styles/base.css', import.meta.url), 'utf8');
+    assert.ok(
+        baseCss.includes('html[data-layout-tier="legacy"] .card-progress-container') &&
+        baseCss.includes('html[data-layout-tier="ultra-legacy"] .card-progress-container'),
+        'base.css must define tier-level overrides ensuring opacity: 1 on Legacy and Ultra-Legacy tiers'
+    );
+});
+
+test('Media Card Progress Bar: CardRenderer constructs progress bar for playback states', () => {
+    // 1. Item with PlaybackPositionTicks and RunTimeTicks
+    const itemWithTicks = {
+        Id: 'item-ticks-1',
+        Name: 'In Progress Movie',
+        Type: 'Movie',
+        RunTimeTicks: 72000000000, // 2 hours
+        UserData: {
+            PlaybackPositionTicks: 36000000000 // 50%
+        }
+    };
+
+    const html1 = CardRenderer.createCardHtml(itemWithTicks);
+    assert.ok(
+        html1.includes('class="card-progress" value="50" max="100"'),
+        'CardRenderer must render progress element with value="50"'
+    );
+    assert.ok(
+        html1.includes('has-progress'),
+        'CardRenderer must attach has-progress class to media card'
+    );
+
+    // 2. Item with PlayedPercentage
+    const itemWithPercentage = {
+        Id: 'item-pct-1',
+        Name: 'Partially Played Episode',
+        Type: 'Episode',
+        UserData: {
+            PlayedPercentage: 75.4
+        }
+    };
+
+    const html2 = CardRenderer.createCardHtml(itemWithPercentage);
+    assert.ok(
+        html2.includes('class="card-progress" value="75" max="100"'),
+        'CardRenderer must render progress element with integer value="75" from PlayedPercentage'
+    );
+
+    // 3. Game ROM should never render progress bar
+    const gameRom = {
+        Id: 'game-1',
+        Name: 'Super Mario',
+        Type: 'Game',
+        Tags: ['JellyEmu'],
+        RunTimeTicks: 1000,
+        UserData: { PlaybackPositionTicks: 500 }
+    };
+
+    const htmlGame = CardRenderer.createCardHtml(gameRom);
+    assert.strictEqual(
+        htmlGame.includes('card-progress'),
+        false,
+        'Games must never render a playback progress bar'
     );
 });
 
