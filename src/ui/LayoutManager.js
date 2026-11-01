@@ -177,6 +177,18 @@ class LayoutManager {
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
 
+        /*
+         * Card Label Typography Alignment State
+         * Tracks text alignment for titles and subtitles beneath media cards ('start', 'center', 'end').
+         */
+        this._cardLabelAlign = 'start';
+
+        /*
+         * Card Label Display Presentation Style
+         * Controls label visibility and clamp limits ('default', 'titleOnly', 'titleOnly2Lines', 'hidden').
+         */
+        this._cardLabelStyle = 'default';
+
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
 
@@ -444,12 +456,12 @@ class LayoutManager {
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        document.documentElement.setAttribute('data-card-label-style', savedCardLabelStyle);
+        this.setCardLabelStyle(savedCardLabelStyle, false);
 
         // Load saved card label alignment and stamp it on the root HTML element
         // Alignment defaults to 'start' now for cleaner card typography alignment.
         const savedCardLabelAlign = storage.getItem('pref:cardLabelAlign') || 'start';
-        document.documentElement.setAttribute('data-card-label-align', savedCardLabelAlign);
+        this.setCardLabelAlign(savedCardLabelAlign, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -1725,6 +1737,81 @@ class LayoutManager {
 
     getCardLabelScale() {
         return this._cardLabelScale;
+    }
+
+    /**
+     * ========================================================================
+     * Card Typography Alignment Engine
+     * ========================================================================
+     * Updates card label alignment on document root and persists preference.
+     * Stamps 'data-card-label-align' onto the document root element, enabling
+     * CSS-based alignment for titles and subtitles across all media card layouts.
+     *
+     * @param {string} align - Alignment value ('start', 'center', or 'end')
+     * @param {boolean} [save=true] - Whether to persist to persistent storage
+     */
+    setCardLabelAlign(align, save = true) {
+        // Fall back to clean 'start' alignment when no valid string is supplied
+        const normalized = align || 'start';
+        this._cardLabelAlign = normalized;
+
+        // Apply attribute to document root for immediate CSS rule matching
+        document.documentElement.setAttribute('data-card-label-align', normalized);
+
+        // Persist setting to local preferences if requested
+        if (save) {
+            storage.setItem('pref:cardLabelAlign', normalized);
+        }
+
+        // Notify active grid views and observers of alignment adjustment
+        eventBus.emit('cardLabelAlign:changed', { align: normalized });
+    }
+
+    /**
+     * Retrieves currently configured card label alignment mode.
+     * @returns {string} 'start', 'center', or 'end'
+     */
+    getCardLabelAlign() {
+        return this._cardLabelAlign;
+    }
+
+    /**
+     * ========================================================================
+     * Card Label Display Style Controller
+     * ========================================================================
+     * Controls whether titles and subtitles are rendered, hidden, or clamped.
+     * Stamps 'data-card-label-style' onto the root element and purges the
+     * synchronous HTML markup cache to force fresh card generation.
+     *
+     * @param {string} style - Display mode ('default', 'titleOnly', 'titleOnly2Lines', 'hidden')
+     * @param {boolean} [save=true] - Whether to persist to persistent storage
+     */
+    setCardLabelStyle(style, save = true) {
+        // Default to standard dual-line metadata view
+        const normalized = style || 'default';
+        this._cardLabelStyle = normalized;
+
+        // Apply attribute to document root for structural stylesheet overrides
+        document.documentElement.setAttribute('data-card-label-style', normalized);
+
+        // Persist mode to local storage
+        if (save) {
+            storage.setItem('pref:cardLabelStyle', normalized);
+        }
+
+        // Clear card template cache so new card renders adapt immediately
+        CardRenderer.clearCache();
+
+        // Broadcast change event across application message bus
+        eventBus.emit('cardLabelStyle:changed', { style: normalized });
+    }
+
+    /**
+     * Retrieves currently configured card label display style.
+     * @returns {string}
+     */
+    getCardLabelStyle() {
+        return this._cardLabelStyle;
     }
 
     /**

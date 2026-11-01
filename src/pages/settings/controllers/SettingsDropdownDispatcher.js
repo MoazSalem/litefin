@@ -157,6 +157,8 @@ export class SettingsDropdownDispatcher {
             'display-scale-select': () => layoutManager.setDisplayScale(newValue),
             'text-scale-select': () => layoutManager.setTextScale(newValue),
             'card-label-scale-select': () => layoutManager.setCardLabelScale(newValue),
+            'card-label-style-select': () => layoutManager.setCardLabelStyle(newValue),
+            'card-label-align-select': () => layoutManager.setCardLabelAlign(newValue),
             'hero-carousel-vignette-select': () => layoutManager.setHeroVignette(newValue),
             'theme-mode-select': () => {
                 layoutManager.setThemeMode(newValue);

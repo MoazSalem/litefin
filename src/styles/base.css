@@ -2659,17 +2659,42 @@ html[data-card-label-style="hidden"] .genre-grid-items {
    Card Labels Alignment Adjustments
    ============================================================================ */
 
-/* Card Labels Alignment Adjustments (excluding list-views) */
-html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+/*
+ * Align card titles and subtitles based on data-card-label-align.
+ * NOTE: CSS Selectors Level 3 (used by legacy and ultra-legacy engines like
+ * Chromium 26 - 47 on Tizen 2.x/3.x and webOS 1.x-3.x) does NOT support complex
+ * selectors inside :not() (such as :not(.view-list .media-card)).
+ * A complex selector in :not() causes older CSS parsers to discard the entire rule!
+ * Therefore, list-view exclusions are handled via an explicit overriding rule below.
+ */
+
+/* Start Alignment (Left in LTR, Right in RTL) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: left !important;
     text-align: start !important;
 }
-html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .card-title,
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: right !important;
+    text-align: start !important;
+}
+
+/* End Alignment (Right in LTR, Left in RTL) */
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: right !important;
     text-align: end !important;
 }
-html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .card-title,
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: left !important;
+    text-align: end !important;
+}
+
+/* Center Alignment */
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .card-subtitle {
     text-align: center !important;
 }
 
@@ -2698,8 +2723,20 @@ html[data-card-label-align="center"] .media-card:not(.list-skeleton) .skeleton-l
     margin-right: auto !important;
 }
 
-/* Title Only 2 Lines Wrapping Override (excluding list-views) */
-html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title {
+/* List view cards always retain start alignment (left in LTR, right in RTL) */
+html[data-card-label-align] .view-list .media-card .card-title,
+html[data-card-label-align] .view-list .media-card .card-subtitle {
+    text-align: left !important;
+    text-align: start !important;
+}
+html[dir="rtl"][data-card-label-align] .view-list .media-card .card-title,
+html[dir="rtl"][data-card-label-align] .view-list .media-card .card-subtitle {
+    text-align: right !important;
+    text-align: start !important;
+}
+
+/* Title Only 2 Lines Wrapping Override */
+html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton) .card-title {
     white-space: normal !important;
     display: -webkit-box !important;
     -webkit-line-clamp: 2 !important;
@@ -2709,6 +2746,13 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
     text-overflow: ellipsis !important;
     line-height: 1.25 !important;
     max-height: 2.5em !important;
+}
+html[data-card-label-style="titleOnly2Lines"] .view-list .media-card .card-title {
+    white-space: nowrap !important;
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    max-height: none !important;
 }
 
 /* ============================================================================
