@@ -8,6 +8,9 @@
  * ============================================================================
  */
 
+// Dedicated stylesheet for administrator dialogs (Image Editor & Metadata Identify)
+import '../styles/admin-modals.css';
+
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';

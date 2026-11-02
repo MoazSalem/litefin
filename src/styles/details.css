@@ -1165,7 +1165,9 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
  * ============================================================================
  */
 .details-actions .btn .icon-filled,
-.details-actions .btn-icon .icon-filled {
+.details-actions .btn-icon .icon-filled,
+.person-actions-row .btn-icon .icon-filled,
+.more-btn .icon-filled {
     display: none;
 }
 
@@ -1175,7 +1177,15 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .details-actions .btn-icon:focus .icon-filled,
 .details-actions .btn-icon.focused .icon-filled,
 .details-actions .btn-icon:hover .icon-filled,
-.details-actions .btn-icon.active .icon-filled {
+.details-actions .btn-icon.active .icon-filled,
+.person-actions-row .btn-icon:focus .icon-filled,
+.person-actions-row .btn-icon.focused .icon-filled,
+.person-actions-row .btn-icon:hover .icon-filled,
+.person-actions-row .btn-icon.active .icon-filled,
+.more-btn:focus .icon-filled,
+.more-btn.focused .icon-filled,
+.more-btn:hover .icon-filled,
+.more-btn.active .icon-filled {
     display: inline-block;
 }
 
@@ -1185,7 +1195,15 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .details-actions .btn-icon:focus .icon-outline,
 .details-actions .btn-icon.focused .icon-outline,
 .details-actions .btn-icon:hover .icon-outline,
-.details-actions .btn-icon.active .icon-outline {
+.details-actions .btn-icon.active .icon-outline,
+.person-actions-row .btn-icon:focus .icon-outline,
+.person-actions-row .btn-icon.focused .icon-outline,
+.person-actions-row .btn-icon:hover .icon-outline,
+.person-actions-row .btn-icon.active .icon-outline,
+.more-btn:focus .icon-outline,
+.more-btn.focused .icon-outline,
+.more-btn:hover .icon-outline,
+.more-btn.active .icon-outline {
     display: none;
 }
 
@@ -1661,7 +1679,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
  */
 
 /* By default, hide the filled SVG to allow the outlined structure to show */
-.favorite-btn .icon-filled {
+.favorite-btn .icon-filled,
+.more-btn .icon-filled {
     display: none;
 }
 
@@ -1672,7 +1691,11 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .favorite-btn.active .icon-filled,
 .favorite-btn:focus .icon-filled,
 .favorite-btn.focused .icon-filled,
-.favorite-btn:hover .icon-filled {
+.favorite-btn:hover .icon-filled,
+.more-btn.active .icon-filled,
+.more-btn:focus .icon-filled,
+.more-btn.focused .icon-filled,
+.more-btn:hover .icon-filled {
     display: inline-block;
 }
 
@@ -1683,7 +1706,11 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .favorite-btn.active .icon-outline,
 .favorite-btn:focus .icon-outline,
 .favorite-btn.focused .icon-outline,
-.favorite-btn:hover .icon-outline {
+.favorite-btn:hover .icon-outline,
+.more-btn.active .icon-outline,
+.more-btn:focus .icon-outline,
+.more-btn.focused .icon-outline,
+.more-btn:hover .icon-outline {
     display: none;
 }
 
@@ -1990,7 +2017,13 @@ html[data-layout-quirks="c26"] .details-actions .btn-icon .icon-outline,
 html[data-layout-quirks="c26"] .details-actions .btn:focus .icon-outline,
 html[data-layout-quirks="c26"] .details-actions .btn.focused .icon-outline,
 html[data-layout-quirks="c26"] .details-actions .btn-icon:focus .icon-outline,
-html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-outline {
+html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-outline,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon .icon-outline,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon:focus .icon-outline,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon.focused .icon-outline,
+html[data-layout-quirks="c26"] .more-btn .icon-outline,
+html[data-layout-quirks="c26"] .more-btn:focus .icon-outline,
+html[data-layout-quirks="c26"] .more-btn.focused .icon-outline {
     display: inline-block !important;
 }
 
@@ -1999,7 +2032,13 @@ html[data-layout-quirks="c26"] .details-actions .btn-icon .icon-filled,
 html[data-layout-quirks="c26"] .details-actions .btn:focus .icon-filled,
 html[data-layout-quirks="c26"] .details-actions .btn.focused .icon-filled,
 html[data-layout-quirks="c26"] .details-actions .btn-icon:focus .icon-filled,
-html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-filled {
+html[data-layout-quirks="c26"] .details-actions .btn-icon.focused .icon-filled,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon .icon-filled,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon:focus .icon-filled,
+html[data-layout-quirks="c26"] .person-actions-row .btn-icon.focused .icon-filled,
+html[data-layout-quirks="c26"] .more-btn .icon-filled,
+html[data-layout-quirks="c26"] .more-btn:focus .icon-filled,
+html[data-layout-quirks="c26"] .more-btn.focused .icon-filled {
     display: none !important;
 }
 

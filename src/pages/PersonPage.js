@@ -20,10 +20,13 @@ import { eventBus } from '../core/EventBus.js';
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
+import { ImageEditorModal } from '../components/ImageEditorModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
 import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
+import { detailsIcons } from '../utils/Icons.js';
+import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PersonPage');
@@ -37,6 +40,32 @@ class PersonPage extends Page {
         this._grids = {}; // Store component instances
         // Active filter state: 'all' | 'movie' | 'tv' (matching Seerr person details)
         this._selectedFilter = 'all';
+        // Cached user session information for privilege and policy verification
+        this._currentUser = null;
+        // Tracking state for modal transitions and focus restoration
+        this._prevFocus = null;
+        this._prevSection = null;
+        this._isMoreMenuOpen = false;
+        this._hasModifiedArtwork = false;
+    }
+
+    /**
+     * Compatibility getter exposing the underlying person entity as standard item.
+     * Allows shared modals (such as ImageEditorModal) to read item name and properties.
+     *
+     * @returns {Object|null} Person metadata object
+     */
+    get _item() {
+        return this._person;
+    }
+
+    /**
+     * Compatibility getter exposing person ID as itemId for shared modal workflows.
+     *
+     * @returns {string|null} Person identifier
+     */
+    get _itemId() {
+        return this._personId;
     }
 
     onInit() {
@@ -411,6 +440,53 @@ class PersonPage extends Page {
                     favContainer.insertBefore(seerrBtn, tooltipBar);
                 } else {
                     favContainer.appendChild(seerrBtn);
+                }
+            }
+
+            // ────────────────────────────────────────────────────────────
+            // 3. Mount 3-dots More Options button for administrators
+            // ────────────────────────────────────────────────────────────
+            // Ensure user policy & session information is loaded to verify administrative rights
+            if (!this._currentUser) {
+                this._currentUser = state.get('user:data');
+            }
+
+            // Only administrators have permissions to refresh metadata or edit/replace artwork
+            const isAdmin = !!this._currentUser?.Policy?.IsAdministrator;
+            if (isAdmin) {
+                // Instantiate the circular more-options icon action button
+                const moreBtn = document.createElement('button');
+                moreBtn.className = 'btn btn-icon more-btn focusable';
+                moreBtn.id = 'btn-person-more';
+                moreBtn.setAttribute('title', i18n.t('MoreOptions') || 'More Options');
+                moreBtn.setAttribute('aria-label', i18n.t('MoreOptions') || 'More Options');
+                moreBtn.setAttribute('data-tooltip', i18n.t('MoreOptions') || 'More Options');
+                moreBtn.setAttribute('tabindex', '0');
+                moreBtn.innerHTML = detailsIcons.more;
+
+                // Handle activation events with debounce protection to prevent double-modal triggers
+                let lastActivateTime = 0;
+                const handleMoreActivate = (e) => {
+                    const now = Date.now();
+                    if (now - lastActivateTime < 400) return;
+                    lastActivateTime = now;
+
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    this._showMoreOptionsModal(this._personId);
+                };
+
+                // Support both mouse/touch and keyboard/remote focus click triggers
+                moreBtn.addEventListener('mousedown', handleMoreActivate);
+                moreBtn.addEventListener('click', handleMoreActivate);
+
+                // Insert moreBtn before tooltipBar so tooltip positioning logic remains consistent
+                if (tooltipBar && tooltipBar.parentNode === favContainer) {
+                    favContainer.insertBefore(moreBtn, tooltipBar);
+                } else {
+                    favContainer.appendChild(moreBtn);
                 }
             }
 
@@ -1358,6 +1434,401 @@ class PersonPage extends Page {
         this._tooltipTimers.push(setTimeout(updateInitial, 400));
     }
 
+    /**
+     * Display the contextual More Options modal for administrators.
+     * Surfaces options to Refresh Metadata and Replace/Edit Images.
+     *
+     * @param {string} itemId - Person ID
+     * @param {Object} [transitionContext=null] - Navigation / state context passed when returning from child modals
+     */
+    _showMoreOptionsModal(itemId, transitionContext = null) {
+        const oldOnBack = transitionContext?.oldOnBack || this.onBack;
+
+        // Ensure user session & policy data is accessible
+        if (!this._currentUser) {
+            this._currentUser = state.get('user:data');
+        }
+
+        // Snapshot current focus position to restore after modal dismissal
+        if (transitionContext?.prevFocus && document.contains(transitionContext.prevFocus)) {
+            this._prevFocus = transitionContext.prevFocus;
+            this._prevSection = transitionContext.prevSection || 'person-fav-actions';
+        } else if (!this._prevFocus || !document.contains(this._prevFocus)) {
+            const currentFocused = focusManager.getFocused();
+            if (currentFocused && document.contains(currentFocused)) {
+                this._prevFocus = currentFocused;
+                this._prevSection = focusManager.getActiveSection() || 'person-fav-actions';
+            } else {
+                this._prevFocus = this.$('.more-btn') || this.$('#person-fav-actions button');
+                this._prevSection = 'person-fav-actions';
+            }
+        }
+
+        // Track whether artwork modifications occurred in sub-dialogs
+        if (transitionContext?.hasModified) {
+            this._hasModifiedArtwork = true;
+        }
+
+        // Remove any stale overlay element from the DOM
+        let overlay = document.getElementById('details-more-menu');
+        if (overlay) {
+            overlay.remove();
+        }
+
+        // Construct modal background overlay
+        overlay = document.createElement('div');
+        overlay.id = 'details-more-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        // Core admin action options for person entities
+        const options = [
+            { id: 'refresh', label: i18n.t('RefreshMetadata') || 'Refresh metadata' },
+            { id: 'edit-images', label: i18n.t('EditImages') || 'Edit Images' }
+        ];
+
+        // Format options list HTML
+        const optionsHtml = options
+            .map(
+                (opt) => `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `
+            )
+            .join('');
+
+        // Inject modal structure into DOM
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${i18n.t('MoreOptions') || 'More Options'}</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">${i18n.t('ButtonCancel') || 'Cancel'}</button>
+                </div>
+            </div>
+        `;
+
+        // Register focus sections with FocusManager
+        const optionsContainer = overlay.querySelector('.modal-options');
+        const actionsContainer = overlay.querySelector('.modal-actions');
+        const optionsSection = 'person-more-menu';
+        const actionsSection = 'person-more-menu-actions';
+
+        this._isMoreMenuOpen = true;
+
+        // Mark the action button active while the modal is open
+        const moreBtn = this.$('.more-btn') || this.$('#btn-person-more');
+        if (moreBtn) {
+            moreBtn.classList.add('active');
+        }
+
+        // Vertical navigation between option items
+        focusManager.register(optionsSection, optionsContainer, {
+            orientation: 'vertical',
+            leaveDown: actionsSection,
+            leaveUp: actionsSection,
+            enterTo: 'last'
+        });
+
+        // Horizontal navigation in footer actions
+        focusManager.register(actionsSection, actionsContainer, {
+            orientation: 'horizontal',
+            leaveUp: optionsSection,
+            onMove: (direction) => {
+                if (direction === 'down') {
+                    focusManager.setActiveSection(optionsSection, true, null, { enterTo: 'first' });
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        // Direct focus immediately to first menu option
+        focusManager.setActiveSection(optionsSection);
+
+        // Helper to cleanly dismiss menu and restore focus
+        this._closeMoreMenu = () => {
+            if (!this._isMoreMenuOpen) return;
+
+            // Remove active visual state from more options button
+            const moreBtn = this.$('.more-btn') || this.$('#btn-person-more');
+            if (moreBtn) {
+                moreBtn.classList.remove('active');
+            }
+
+            this._isMoreMenuOpen = false;
+            overlay.classList.remove('visible');
+
+            // Unregister temporary modal focus sections
+            focusManager.unregister(optionsSection);
+            focusManager.unregister(actionsSection);
+
+            // Remove overlay from DOM once fade transition completes
+            setTimeout(() => {
+                if (!this._isMoreMenuOpen) overlay.remove();
+            }, 300);
+
+            // Restore focus back to previous active section and button
+            const targetSection = this._prevSection || 'person-fav-actions';
+            focusManager.setActiveSection(targetSection, false);
+
+            if (this._prevFocus && document.contains(this._prevFocus)) {
+                focusManager.focusElement(this._prevFocus);
+            } else {
+                const fallbackEl = this.$('.more-btn') || this.$('#person-fav-actions button');
+                if (fallbackEl) {
+                    focusManager.focusElement(fallbackEl);
+                } else {
+                    focusManager.setActiveSection(targetSection, true);
+                }
+            }
+
+            // Reset focus tracking
+            this._prevFocus = null;
+            this._prevSection = null;
+            this.onBack = oldOnBack;
+
+            // Trigger refresh if artwork or metadata was modified in sub-modals
+            if (this._hasModifiedArtwork) {
+                this._hasModifiedArtwork = false;
+                this._refreshItem();
+            }
+        };
+
+        // Handle hardware back or escape key
+        this.onBack = () => {
+            this._closeMoreMenu();
+            return true;
+        };
+
+        // Dismiss when tapping or clicking on backdrop overlay
+        overlay.onclick = (e) => {
+            if (e.target === overlay) this._closeMoreMenu();
+        };
+
+        // Wire selection triggers for menu options
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const id = btn.dataset.id;
+                log.debug(`Selected more-option: ${id}`);
+
+                if (id === 'refresh') {
+                    // Close more menu without restoring focus yet, forwarding context to refresh dialog
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+
+                    this._showRefreshMetadataModal(itemId, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'edit-images') {
+                    // Close more menu and route directly to the visual image editor modal
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+
+                    ImageEditorModal.show(itemId, this, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                }
+            };
+        });
+
+        // Wire cancel button
+        overlay.querySelector('#btn-modal-cancel').onclick = (e) => {
+            e.stopPropagation();
+            this._closeMoreMenu();
+        };
+    }
+
+    /**
+     * Show Refresh Metadata confirmation dialog for person entity.
+     *
+     * @param {string} itemId - Person ID to refresh
+     * @param {Object} [transitionContext=null] - Navigation context from caller modal
+     */
+    _showRefreshMetadataModal(itemId, transitionContext = null) {
+        const oldOnBack = transitionContext?.oldOnBack || this.onBack;
+        const prevFocus = transitionContext?.prevFocus || focusManager.getFocused();
+        const prevSection = transitionContext?.prevSection || focusManager.getActiveSection();
+
+        // Clear existing refresh menu if present
+        let overlay = document.getElementById('details-refresh-menu');
+        if (overlay) overlay.remove();
+
+        // Create overlay container
+        overlay = document.createElement('div');
+        overlay.id = 'details-refresh-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        // Standard Jellyfin refresh modes
+        const options = [
+            { id: 'scan', label: i18n.t('ScanForNewAndUpdatedFiles') || 'Scan for new and updated files', mode: 'Default', replace: false },
+            { id: 'missing', label: i18n.t('SearchForMissingMetadata') || 'Search for missing metadata', mode: 'FullRefresh', replace: false },
+            { id: 'all', label: i18n.t('ReplaceAllMetadata') || 'Replace all metadata', mode: 'FullRefresh', replace: true }
+        ];
+
+        // Build option buttons
+        const optionsHtml = options
+            .map(
+                (opt) => `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `
+            )
+            .join('');
+
+        // Mount refresh modal structure
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${i18n.t('RefreshMetadata') || 'Refresh metadata'}</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-refresh-cancel" tabindex="0">${i18n.t('ButtonCancel') || 'Cancel'}</button>
+                </div>
+            </div>
+        `;
+
+        // Helper to close refresh modal and conditionally restore focus
+        const _close = (restoreFocus = true) => {
+            this.onBack = oldOnBack;
+            overlay.classList.remove('visible');
+            focusManager.unregister('person-refresh-menu');
+            focusManager.unregister('person-refresh-actions');
+            setTimeout(() => overlay.remove(), 300);
+
+            if (restoreFocus) {
+                if (prevFocus) focusManager.focusElement(prevFocus);
+                if (prevSection) focusManager.setActiveSection(prevSection, false);
+            }
+        };
+
+        // Handle refresh selection dispatch to server API
+        const onSelect = async (optId) => {
+            const opt = options.find((o) => o.id === optId);
+            if (!opt) return;
+
+            try {
+                // Dispatch refresh task to Jellyfin server
+                await api.refreshItem(itemId, {
+                    MetadataRefreshMode: opt.mode,
+                    ImageRefreshMode: opt.mode,
+                    ReplaceAllMetadata: opt.replace,
+                    ReplaceAllImages: opt.replace
+                });
+
+                // Clear HTTP ETag response cache and in-memory state entries
+                api.clearEtagCache();
+                state.clearByPrefix('home:');
+                state.clearByPrefix('details:');
+                state.clearByPrefix('person:');
+
+                // Notify user that server background task has been scheduled
+                toast.show(i18n.t('MessageRefreshQueued') || 'Refresh queued');
+
+                // Re-fetch person data after a brief delay to reflect server updates
+                setTimeout(() => {
+                    this._refreshItem().catch(() => {});
+                }, 500);
+            } catch (e) {
+                log.error('Failed to queue metadata refresh for person', e);
+                toast.show(i18n.t('MessageRefreshFailed') || 'Refresh failed');
+            }
+        };
+
+        const section = 'person-refresh-menu';
+        const actionsSection = 'person-refresh-actions';
+
+        // Register focus sections
+        focusManager.register(section, overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            circular: false,
+            leaveDown: actionsSection
+        });
+
+        focusManager.register(actionsSection, overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: section
+        });
+
+        focusManager.setActiveSection(section);
+
+        // Bind clicks on refresh option buttons
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                onSelect(btn.dataset.id);
+                _close();
+            };
+        });
+
+        // Bind cancel button
+        overlay.querySelector('#btn-refresh-cancel').onclick = (e) => {
+            e.stopPropagation();
+            _close();
+        };
+
+        // Handle back button: return to more options menu if opened from it
+        this.onBack = () => {
+            if (transitionContext?.fromMoreOptions) {
+                _close(false);
+                this._showMoreOptionsModal(itemId);
+            } else {
+                _close();
+            }
+            return true;
+        };
+    }
+
+    /**
+     * Re-fetch person metadata and visual assets from the server.
+     * Clears cached responses and re-renders the header information and poster.
+     */
+    async _refreshItem() {
+        if (!this._personId) return;
+
+        try {
+            log.info(`Re-fetching person metadata and assets for ${this._personId}`);
+
+            // Clear cache entries to guarantee fresh data
+            api.clearEtagCache();
+            state.clearByPrefix(`details:${this._personId}`);
+            state.clearByPrefix(`person:${this._personId}`);
+
+            // Re-fetch person data
+            this._person = await api.getPerson(this._personId);
+            this.title = this._person.Name;
+
+            // Re-render visual information and re-evaluate smart backdrop
+            await this._renderPersonInfo();
+            this._setSmartBackdrop();
+        } catch (err) {
+            log.error('Failed to refresh person details', err);
+        }
+    }
+
     destroy() {
         if (this._tooltipTimers) {
             this._tooltipTimers.forEach((t) => clearTimeout(t));
@@ -1372,6 +1843,22 @@ class PersonPage extends Page {
         if (this._favBtn) {
             this._favBtn.destroy();
             this._favBtn = null;
+        }
+
+        // Clean up any open more-menu or refresh overlays
+        if (this._isMoreMenuOpen) {
+            const moreMenuOverlay = document.getElementById('details-more-menu');
+            if (moreMenuOverlay) moreMenuOverlay.remove();
+            focusManager.unregister('person-more-menu');
+            focusManager.unregister('person-more-menu-actions');
+            this._isMoreMenuOpen = false;
+        }
+
+        const refreshOverlay = document.getElementById('details-refresh-menu');
+        if (refreshOverlay) {
+            refreshOverlay.remove();
+            focusManager.unregister('person-refresh-menu');
+            focusManager.unregister('person-refresh-actions');
         }
 
         // Destroy sub-components
