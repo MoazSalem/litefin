@@ -12,6 +12,9 @@
  * ============================================================================
  */
 
+// Dedicated stylesheet for administrator dialogs (Image Editor & Metadata Identify)
+import '../styles/admin-modals.css';
+
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
@@ -55,7 +58,9 @@ export class ImageEditorModal {
         overlay.className = 'modal-overlay visible';
         document.body.appendChild(overlay);
 
-        const item = detailsPage._item || {};
+        // Resolve the underlying media or person item from caller page
+        // Supports standard media details pages as well as person details views
+        const item = detailsPage._item || detailsPage._person || {};
         let activeType = 'Primary';
         let currentItemImages = [];
         let remoteImages = [];
@@ -109,7 +114,8 @@ export class ImageEditorModal {
                         detailsPage.$('.more-btn') ||
                         detailsPage.$('.resume-btn') ||
                         detailsPage.$('.play-btn') ||
-                        detailsPage.$('#actions button');
+                        detailsPage.$('#actions button') ||
+                        detailsPage.$('#person-fav-actions button');
                     if (fallbackEl) {
                         focusManager.focusElement(fallbackEl);
                     } else {

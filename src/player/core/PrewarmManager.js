@@ -104,16 +104,17 @@ export class PrewarmManager {
         const activeForceDirectPlay = PlayerSettings.get('forceDirectPlay') || 'off';
         const activeForceTranscode = Boolean(PlayerSettings.get('forceTranscode'));
 
-        // Check if item is already prewarmed with identical track, media source, and policy options
+        // Check if item is already prewarmed with identical resume position, track, media source, and policy options
         const isSameItem = this._cachedItemId === item.Id;
         const isFresh = Date.now() - this._timestamp < 60000;
+        const isSamePosition = this._cachedItem?.UserData?.PlaybackPositionTicks === item.UserData?.PlaybackPositionTicks;
         const isSameSource = this._prewarmParams?.mediaSourceId === targetMediaSourceId;
         const isSameAudio = this._prewarmParams?.audioStreamIndex === targetAudioIndex;
         const isSameSubtitle = this._prewarmParams?.subtitleStreamIndex === targetSubtitleIndex;
         const isSameForceDirectPlay = this._prewarmParams?.forceDirectPlay === activeForceDirectPlay;
         const isSameForceTranscode = this._prewarmParams?.forceTranscode === activeForceTranscode;
 
-        if (isSameItem && isFresh && isSameSource && isSameAudio && isSameSubtitle && isSameForceDirectPlay && isSameForceTranscode) {
+        if (isSameItem && isFresh && isSamePosition && isSameSource && isSameAudio && isSameSubtitle && isSameForceDirectPlay && isSameForceTranscode) {
             log.debug(`Item "${item.Name}" already pre-warmed with matching parameters, skipping duplicate.`);
             return;
         }

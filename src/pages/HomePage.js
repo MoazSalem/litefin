@@ -1546,6 +1546,16 @@ class HomePage extends Page {
             const isModern = mediaLayout === 'modern';
             const isExpanded = mediaLayout === 'expanded';
             const isModernPosters = mediaLayout === 'modern-posters';
+            const isExpanding = mediaLayout === 'expanding';
+
+            // -----------------------------------------------------------------
+            // Skeleton Layout Variable Normalization
+            // -----------------------------------------------------------------
+            // Align skeleton placeholder metrics with active media row layout.
+            // Modern & Modern Posters rows share identical poster/landscape card
+            // footprints (212px poster / 396px landscape / 223px square with 26px margin).
+            // Expanding layout uses distinct expansion boundaries (175.5px poster).
+            // -----------------------------------------------------------------
             if (isExpanded) {
                 const scale = parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2;
                 const itemMargin = Math.round(26 * scale);
@@ -1555,8 +1565,10 @@ class HomePage extends Page {
                 sectionEl.style.setProperty('--card-expanded-width', `${Math.round(396 * scale)}px`);
                 sectionEl.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
                 sectionEl.style.setProperty('--card-expansion', '0px');
-            } else if (isModernPosters) {
-                const scale = parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2;
+            } else if (isModern || isModernPosters) {
+                const scale = isModernPosters
+                    ? (parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2)
+                    : (parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2);
                 const itemMargin = Math.round(26 * scale);
                 sectionEl.style.setProperty('--card-width', `${Math.round(212 * scale)}px`);
                 sectionEl.style.setProperty('--card-height', `${Math.round(318 * scale)}px`);
@@ -1567,8 +1579,8 @@ class HomePage extends Page {
                 sectionEl.style.setProperty('--card-square-width', `${Math.round(223 * scale)}px`);
                 sectionEl.style.setProperty('--card-square-height', `${Math.round(223 * scale)}px`);
                 sectionEl.style.setProperty('--card-expansion', '0px');
-            } else if (isModern) {
-                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.0;
+            } else if (isExpanding) {
+                const scale = parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0;
                 const itemMargin = Math.round(31 * scale);
                 sectionEl.style.setProperty('--card-width', `${Math.round(175.5 * scale)}px`);
                 sectionEl.style.setProperty('--card-height', `${Math.round(263.25 * scale)}px`);

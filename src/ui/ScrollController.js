@@ -42,12 +42,10 @@ import {
     PHYSICS_SETTLE_DISTANCE_PX,
     GLIDE_ZONE_FRACTION,
     GLIDE_ZONE_MAX_PX,
-    GLIDE_FALLBACK_SPEED_PX_MS,
-    GLIDE_ENTRY_SPEED_CAP_PX_MS,
     GLIDE_MIN_DURATION_MS,
     getHorizontalDurationMs,
     NOMINAL_FRAME_MS,
-    stableFrameDelta
+    CADENCE_DT_MAX_MS
 } from './SpringPhysics.js';
 
 // ============================================================================
@@ -118,6 +116,19 @@ const TALL_ROW_MULTIPLIER = 2.0;
 // gradient overlays, backdrop layer) AND the content rows (per-row translateZ(0)
 // compositor layers), causing visible frame drops. Instant-snapping large deltas
 const LARGE_SCROLL_SNAP_FRACTION = 0.45;
+
+// Distance (px) above which a vertical hop is a genuine "long leap" (hero
+// carousel ↔ content rows, multi-row jumps, page-level transitions) whose
+// duration is stretched so the compositor gets fewer, cheaper pixels per frame.
+//
+// It must sit comfortably ABOVE ordinary row-to-row hops: poster rows are
+// ~574px tall (vs ~468px for landscape/square), so their hops travel up to
+// ~600px. The old 550px line caught every single poster hop and stretched it
+// by ×1.25 — poster rows then animated ~25% slower than landscape rows at the
+// same pref:scrollSmoothingDuration, which reads as "poster rows lag when
+// scrolled to". 700px keeps every row-type hop at the configured budget while
+// still slowing true hero/multi-row leaps.
+const LARGE_JUMP_THRESHOLD_PX = 700;
 
 // ============================================================================
 // ADAPTIVE PHYSICS SAMPLING (webOS 3 / low-tier hardware)
@@ -654,21 +665,23 @@ class ScrollController {
         // ----------------------------------------------------------------
         // DYNAMIC VELOCITY ADAPTATION (Hero Carousel & Long Leaps)
         // ----------------------------------------------------------------
-        // Standard row-to-row navigation (~350-450px) uses the snappy base duration
-        // (130ms on desktop, 180ms on TV). Only massive transitions (e.g. hero carousel ↔
-        // first content row at >550px) scale smoothly to prevent compositor hitching.
+        // Standard row-to-row navigation (up to ~600px on tall poster rows) uses the
+        // snappy base duration (130ms on desktop, 180ms on TV) so every row type feels
+        // identical. Only massive transitions (hero carousel ↔ content rows, multi-row
+        // jumps beyond LARGE_JUMP_THRESHOLD_PX) scale smoothly to prevent compositor
+        // hitching.
         // ----------------------------------------------------------------
         if (isVertical && durationToUse > 0) {
             // Measure the absolute travel distance across the vertical axis
             const distance = Math.abs(targetScroll - currentScroll);
 
-            // True large vertical transitions (e.g. hero carousel ↔ content rows at >550px)
-            if (distance > 550) {
+            // True large vertical transitions (e.g. hero carousel ↔ content rows)
+            if (distance > LARGE_JUMP_THRESHOLD_PX) {
                 const minFloor = Math.round(durationToUse * 1.25);
                 const maxCap = Math.round(durationToUse * 1.75);
                 durationToUse = Math.min(
                     maxCap,
-                    Math.max(minFloor, Math.round(durationToUse * (1 + (distance - 550) / 400)))
+                    Math.max(minFloor, Math.round(durationToUse * (1 + (distance - LARGE_JUMP_THRESHOLD_PX) / 400)))
                 );
             }
         }
@@ -997,6 +1010,7 @@ class ScrollController {
             existing.target = targetScroll;
             existing.startTime = null;
             existing.elapsed = 0;
+            existing.budget = Math.max(duration || 0, SPRING_MIN_DURATION_MS);
             existing.glide = null;
             existing.glideZone = Math.min(
                 GLIDE_ZONE_MAX_PX,
@@ -1119,6 +1133,7 @@ class ScrollController {
             existing.target = targetX;
             existing.startTime = null;
             existing.elapsed = 0;
+            existing.budget = Math.max(this.getHorizontalScrollDuration(), SPRING_MIN_DURATION_MS);
             existing.glide = null;
             existing.glideZone = Math.min(
                 GLIDE_ZONE_MAX_PX,
@@ -1203,6 +1218,11 @@ class ScrollController {
             startTime: null,
             lastFrameTime: null,
             elapsed: 0,
+            // The settle budget the glide must respect. Total animation time
+            // (spring + glide) is then exactly the configured duration at any
+            // frame rate, instead of the spring's free-running exponential
+            // tail (~500ms for a 340ms setting on long hops).
+            budget: durationFloor,
             glide: null,
             glideZone,
             _write,
@@ -1297,15 +1317,19 @@ class ScrollController {
                 this._recordFrameDelta(rawDelta);
             }
 
-            // FIXED CADENCE STEP: integrate the same dt every frame — the
-            // clamped median of recent measured intervals. Consuming each
-            // frame's actual interval produced wild per-paint steps on janky
-            // delivery (fast frames = small steps, late frames = teleports),
-            // the source of the "scroll splits into two uneven parts" hitch,
-            // worst at long duration settings where late frames are frequent.
-            // Constant dt paints equal steps; late frames only paint earlier
-            // state, and slow panels stretch the animation proportionally.
-            let dt = stableFrameDelta(this._frameSamples, NOMINAL_FRAME_MS);
+            // WALL-ACCURATE CADENCE: integrate the ACTUAL interval since the
+            // last paint (clamped). Deriving dt from a sliding median made the
+            // animation take MORE wall time than the configured duration
+            // whenever the panel got slower than the median had converged to
+            // (poster rows composite at ~30fps vs ~60fps on landscape rows →
+            // the same setting ran ~2.2x longer, the "posters feel laggy"
+            // slowdown between rows). Clamping the raw interval keeps the
+            // configured duration honest at every frame rate: 16.7ms panels
+            // paint small steps, 33ms panels paint double-sized steps at half
+            // the rate — same perceived speed — while a single late frame can
+            // never teleport (64ms tap) or stall the clock.
+            const dt = Math.min(Math.max(rawDelta, NOMINAL_FRAME_MS), CADENCE_DT_MAX_MS);
+            let remainingDt = dt;
 
             // Settle budget accumulates INTEGRATED simulation time, not wall
             // clock (identical accounting to TouchHorizontalScroller). Timing
@@ -1317,19 +1341,26 @@ class ScrollController {
             s.elapsed += dt;
 
             if (s.glide) {
-                // TERMINAL GLIDE: constant-deceleration ease-out quadratic to
-                // the target. Exponential tails fall below ~1px/frame for the
-                // last third of a hop — motion appears to stop, then creeps
-                // the remainder (perceived 2-part hitch on slow panels). The
-                // glide keeps visible speed from vEntry down to 0 exactly at
-                // the target within 2·rem/v of sim time.
-                const f = Math.min((s.elapsed - s.glide.start) / s.glide.dur, 1);
-                const eased = 1 - (1 - f) * (1 - f);
-                s.x = s.glide.x0 + (s.target - s.glide.x0) * eased;
+                // BUDGET-EXACT TERMINAL GLIDE: monotone cubic Hermite from the
+                // handover position to the target, starting at the TRUE entry
+                // velocity and landing exactly when the configured settle
+                // budget expires.
+                //
+                //   shape(u) = a·u + (3−2a)·u² + (a−2)·u³,  a = vEntry·T / R
+                //
+                // a is clamped to [0, 3] (the cubic's monotonicity limit), so
+                // the departure speed equals the spring's true velocity (C1:
+                // no mid-flight speed step — the old floor-clamped entry
+                // accelerated the paint by 30-100% at the seam) unless the
+                // spring arrived implausibly fast.
+                const u = Math.min((s.elapsed - s.glide.start) / s.glide.dur, 1);
+                const a = s.glide.alpha;
+                const shape = a * u + (3 - 2 * a) * u * u + (a - 2) * u * u * u;
+                s.x = s.glide.x0 + s.glide.span * shape;
                 // Snap bittersweet settle criterion while gliding is disabled —
-                // only the landing (f=1) or the timeout may end the state.
+                // only the landing (u=1) or the timeout may end the state.
                 s._write(s.x);
-                if (f >= 1 || s.elapsed >= SPRING_MAX_DURATION_MS) {
+                if (u >= 1 || s.elapsed >= SPRING_MAX_DURATION_MS) {
                     s._finalize(s.target);
                     this[animIdKey] = null;
                     this[stateKey] = null;
@@ -1340,28 +1371,28 @@ class ScrollController {
                 return;
             }
 
-            while (dt > 0) {
-                const h = Math.min(dt, s.engine === 'spring' ? SPRING_SUBSTEP_MS : 16);
+            while (remainingDt > 0) {
+                const h = Math.min(remainingDt, s.engine === 'spring' ? SPRING_SUBSTEP_MS : 16);
                 const [nx, nv] = this._advancePhysics(s, h);
                 s.x = nx;
                 s.v = nv;
-                dt -= h;
+                remainingDt -= h;
             }
             s._write(s.x);
 
             // Glide handover: distance remaining inside the glide band and
-            // still moving toward the target → replace the exponential tail.
+            // still moving toward the target → replace the exponential tail
+            // with a glide that consumes the REMAINING settle budget, so the
+            // total animation time equals the configured duration on every row
+            // type and frame rate.
             const remaining = Math.abs(s.target - s.x);
             if (remaining > 0 && remaining <= s.glideZone && !s.glide) {
                 const vEntry = Math.abs(s.v);
-                // Soft entry: clamp the starting speed into [2·floor, cap] so
-                // the handover never reads as a jerk, then bound the glide
-                // duration between a multi-frame minimum and the longest that
-                // still keeps the average closing speed perceptible.
-                const vStart = Math.min(Math.max(vEntry, 2 * GLIDE_FALLBACK_SPEED_PX_MS), GLIDE_ENTRY_SPEED_CAP_PX_MS);
-                const durRaw = (2 * remaining) / vStart;
-                const dur = Math.min(Math.max(durRaw, GLIDE_MIN_DURATION_MS), remaining / GLIDE_FALLBACK_SPEED_PX_MS);
-                s.glide = { x0: s.x, dur, start: s.elapsed };
+                const dur = Math.max(s.budget - s.elapsed, GLIDE_MIN_DURATION_MS);
+                // a·R/T must equal the entry velocity; clamped to the cubic's
+                // monotone range.
+                const alpha = Math.min(Math.max((vEntry * dur) / remaining, 0), 3);
+                s.glide = { x0: s.x, dur, start: s.elapsed, alpha, span: s.target - s.x };
             }
 
             const settled = this._isPhysicsSettled(s);

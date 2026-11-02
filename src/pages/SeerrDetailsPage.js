@@ -525,15 +525,41 @@ class SeerrDetailsPage extends Page {
 
     async _checkJellyfinMediaAvailability(mediaType, tmdbId) {
         let jfId = this._item ? this._item._jellyfinMediaId : null;
+
+        // Seerr's serviceId/externalServiceId is NOT guaranteed to be a valid
+        // Jellyfin item id. When it is stale (or a Seerr-internal media id), the
+        // player navigates to /player/<badId> and Jellyfin answers
+        // "GET /Items/<badId> -> 400 The value '<badId>' is not valid", which the
+        // UI shows as "Playback Error / HTTP 400". Validate before trusting it.
+        if (jfId) {
+            try {
+                const probe = await api.getItem(jfId);
+                if (!probe || !probe.Id) jfId = null;
+            } catch (e) {
+                log.warn('Seerr media id is not a valid Jellyfin item, resolving by TMDB id instead:', jfId, e);
+                jfId = null;
+            }
+        }
+
         if (!jfId) {
             try {
-                const jfItems = await api.getItems({
+                const jfRes = await api.getItems({
                     Recursive: true,
                     IncludeItemTypes: mediaType === 'tv' ? 'Series' : 'Movie',
-                    AnyProviderIdEquals: `tmdb.${tmdbId}`
+                    AnyProviderIdEquals: `tmdb.${tmdbId}`,
+                    Fields: 'ProviderIds,ProductionYear'
                 });
-                if (jfItems && jfItems.length > 0) {
-                    jfId = jfItems[0].Id;
+                // api.getItems() resolves to {Items, TotalRecordCount}, not an array.
+                const jfItems = jfRes?.Items || (Array.isArray(jfRes) ? jfRes : []);
+                if (jfItems.length > 0) {
+                    // Never take "the first result": this query is not a strict
+                    // filter on every server version. Only an exact TMDB match
+                    // may be used, otherwise we would start a different movie.
+                    const exact = jfItems.find((item) => {
+                        const tmdbVal = item.ProviderIds?.Tmdb || item.ProviderIds?.tmdb;
+                        return tmdbVal && String(tmdbVal) === String(tmdbId);
+                    });
+                    jfId = exact ? exact.Id : null;
                 }
             } catch (e) {
                 log.debug('Jellyfin media lookup failed for tmdb ID', tmdbId, e);
@@ -542,14 +568,15 @@ class SeerrDetailsPage extends Page {
 
         if (!jfId && this._item && this._item.Name) {
             try {
-                const searchRes = await api.getItems({
+                const searchRaw = await api.getItems({
                     Recursive: true,
                     IncludeItemTypes: mediaType === 'tv' ? 'Series' : 'Movie',
                     SearchTerm: this._item.Name,
                     Fields: 'ProviderIds,ProductionYear',
                     Limit: 10
                 });
-                if (searchRes && searchRes.length > 0) {
+                const searchRes = searchRaw?.Items || (Array.isArray(searchRaw) ? searchRaw : []);
+                if (searchRes.length > 0) {
                     const match = searchRes.find((item) => {
                         const tmdbVal = item.ProviderIds?.Tmdb || item.ProviderIds?.tmdb;
                         const tmdbMatch = tmdbVal && String(tmdbVal) === String(tmdbId);

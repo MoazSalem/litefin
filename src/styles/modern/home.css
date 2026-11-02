@@ -82,6 +82,23 @@ html[data-layout-media-rows="modern-posters"] .media-card.square:not(.grid-card)
 
 /*
  * -----------------------------------------------------------------------------
+ * Legacy & Ultra-Legacy Media Card Spacing Resets
+ * -----------------------------------------------------------------------------
+ * Legacy runtimes (webOS 1-3, Tizen 2-3, Chromium < 49) do not resolve CSS variables
+ * dynamically from parent inline styles. Enforcing zero left margin ensures
+ * absolutely positioned cards in virtualized tracks maintain exact mathematical
+ * spacing without coordinate drift caused by inherited margin rules.
+ * -----------------------------------------------------------------------------
+ */
+html[data-layout-tier="legacy"][data-media-rows-cards="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-tier="ultra-legacy"][data-media-rows-cards="modern"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-tier="legacy"][data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card),
+html[data-layout-tier="ultra-legacy"][data-layout-media-rows="expanded"] .media-card:not(.grid-card):not(.episode-row-card):not(.episode-card) {
+    margin-left: 0 !important;
+}
+
+/*
+ * -----------------------------------------------------------------------------
  * Dynamic Card Scale on Remote D-Pad / Keyboard Focus
  * -----------------------------------------------------------------------------
  * Applies subtle, premium elevation strictly to the actively focused media card.
@@ -723,7 +740,8 @@ html[data-media-rows-family="modern"] progress.card-progress::-webkit-progress-b
 }
 
 html[data-media-rows-family="modern"] progress.card-progress::-webkit-progress-value {
-    background-color: var(--jf-accent);
+    background-color: #00a4dc;
+    background-color: var(--jf-accent, #00a4dc);
     border-radius: 10px;
     /* Spring-like transition for progress updates */
     -webkit-transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);

@@ -28,6 +28,7 @@ import { i18n } from '../../utils/i18n.js';
 import { shouldShowScore } from '../../utils/visibility.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { detailsIcons } from '../../utils/Icons.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
 
 /**
  * UpNextDialog
@@ -562,8 +563,42 @@ export default class UpNextDialog extends BaseMenu {
         if (imgEl) {
             const url = this._buildThumbnailUrl(item);
             if (url) {
-                imgEl.src = url;
-                imgEl.style.display = 'block';
+                // Sets final image source onto DOM element
+                const setImgSrc = (finalSrc) => {
+                    imgEl.src = finalSrc;
+                    imgEl.style.display = 'block';
+                };
+
+                // Fallback to JS fetch & Blob URL if native request fails
+                imgEl.onerror = () => {
+                    if (customHeaders?.hasCustomHeaders?.() && !imgEl.dataset.nativeFallbackTried) {
+                        imgEl.dataset.nativeFallbackTried = 'true';
+                        customHeaders
+                            .resolveImageUrl(url, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== url) {
+                                    imgEl.removeAttribute('crossorigin');
+                                    imgEl.src = blobUrl;
+                                }
+                            })
+                            .catch(() => {});
+                    }
+                };
+
+                // Resolve thumbnail URL with reverse proxy authentication headers
+                if (customHeaders?.hasCustomHeaders?.()) {
+                    const cached = customHeaders.getCachedBlobUrl(url);
+                    if (cached) {
+                        setImgSrc(cached);
+                    } else {
+                        customHeaders
+                            .resolveImageUrl(url)
+                            .then(setImgSrc)
+                            .catch(() => setImgSrc(url));
+                    }
+                } else {
+                    setImgSrc(url);
+                }
             } else {
                 // No image available — hide the thumbnail slot
                 imgEl.style.display = 'none';

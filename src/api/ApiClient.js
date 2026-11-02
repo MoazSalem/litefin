@@ -35,6 +35,9 @@ export class ServerUnreachableError extends Error {
 // API request timeout (ms)
 const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware (Tizen/WebOS)
 
+// Plugin Id of the Litefin server companion plugin (fixed in its Plugin.cs, without dashes)
+const LITEFIN_COMPANION_PLUGIN_ID = 'f5c68360ca474648b47c3da5f112aa8f';
+
 /**
  * Determine whether the host JavaScript environment provides native fetch cancellation.
  * Modern Chromium engines (66+) support AbortSignal directly on window.fetch.
@@ -1486,9 +1489,9 @@ export class ApiClient {
                         const adminList = await serverPluginClient.getInstalledPlugins();
                         if (Array.isArray(adminList)) {
                             const match = adminList.some((p) => {
-                                const name = (p.Name || p.name || '').toLowerCase();
-                                const id = (p.Id || p.id || '').toLowerCase();
-                                const matchesName = name.includes('litefin') || id.includes('litefin');
+                                // Match by GUID: the "Litefin Client" web plugin also has "litefin" in its name
+                                const id = (p.Id || p.id || '').replace(/-/g, '').toLowerCase();
+                                const matchesId = id === LITEFIN_COMPANION_PLUGIN_ID;
                                 const status = (p.Status || p.status || '').toString().toLowerCase();
                                 const isExplicitlyDisabled =
                                     status === 'disabled' ||
@@ -1498,7 +1501,7 @@ export class ApiClient {
                                     status === 'superseded';
                                 const isActive =
                                     !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
-                                return matchesName && isActive;
+                                return matchesId && isActive;
                             });
                             this._hasLitefinServerPlugin = match;
                             log.info(
@@ -1514,9 +1517,13 @@ export class ApiClient {
                 // Strategy B: Lightweight silent probe to /Litefin/Hero
                 log.debug('Probing Litefin server companion plugin presence...');
                 const probeResult = await this.get('/Litefin/Hero', { limit: 1 }, { silent: true, warnOnError: true });
-                this._hasLitefinServerPlugin = !!probeResult;
-                log.info('Litefin server companion plugin is installed and accessible');
-                return true;
+                // The Litefin Client web plugin answers unknown /Litefin/* paths with index.html
+                const isAvailable = Array.isArray(probeResult?.Items);
+                this._hasLitefinServerPlugin = isAvailable;
+                log.info(
+                    `Litefin server companion plugin ${isAvailable ? 'is installed and accessible' : 'not found'}`
+                );
+                return isAvailable;
             } catch (err) {
                 // 404 indicates the plugin is not installed or disabled on this server
                 if (err.status === 404 || err.message?.includes('Not found') || err.message?.includes('404')) {

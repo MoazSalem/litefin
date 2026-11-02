@@ -114,10 +114,9 @@ class DetailsPage extends Page {
      * related content rows (Similar, Next Up, Cast).
      */
     _renderMediaCard(item, isLandscape, type, options = {}) {
-        // Default to 'details-row' which maps to the 'home' preset (228px posters, 388px thumbs)
-        // rather than the massive 'details' primary image presets.
-        options.contextType = options.contextType || 'details-row';
-        return super._renderMediaCard(item, isLandscape, type, options);
+        // Resolve contextType string cleanly so Page.js receives a valid string rather than an options Object
+        const contextType = typeof options === 'string' ? options : (options?.contextType || 'details-row');
+        return super._renderMediaCard(item, isLandscape, type, contextType);
     }
 
     /**
@@ -1548,6 +1547,15 @@ class DetailsPage extends Page {
              * to fetch the authenticated blob URL so native WebViews display it.
              * ================================================================
              */
+            const showFallback = () => {
+                // Ensure BlurHash placeholder canvas is removed when falling back
+                if (posterCanvas && posterCanvas.parentNode) {
+                    posterCanvas.parentNode.removeChild(posterCanvas);
+                }
+                const isLandscape = posterType === 'landscape';
+                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
+            };
+
             const applyPoster = (effectivePosterUrl) => {
                 const img = new Image();
                 img.onload = () => {
@@ -1561,6 +1569,24 @@ class DetailsPage extends Page {
                             }
                         }, 250);
                     }
+                };
+                img.onerror = () => {
+                    log.warn(`Failed to load details poster from ${effectivePosterUrl}`);
+                    // If native interception was used and the direct request failed, fallback to JS fetch & blob
+                    if (customHeaders?.hasCustomHeaders?.() && effectivePosterUrl === posterUrl) {
+                        customHeaders
+                            .resolveImageUrl(posterUrl, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== posterUrl) {
+                                    img.src = blobUrl;
+                                    return;
+                                }
+                                showFallback();
+                            })
+                            .catch(() => showFallback());
+                        return;
+                    }
+                    showFallback();
                 };
                 img.src = effectivePosterUrl;
                 img.alt = item.Name;
@@ -2326,8 +2352,13 @@ class DetailsPage extends Page {
             htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
-        // Directors (only shown in 'all')
-        if (richMetadataStyle === 'all') {
+        // Directors (shown in 'all', 'genres-studios-writers', or 'genres-writers')
+        // Key creative leads; preserved when hiding tags/studios to maintain rich metadata hierarchy.
+        if (
+            richMetadataStyle === 'all' ||
+            richMetadataStyle === 'genres-studios-writers' ||
+            richMetadataStyle === 'genres-writers'
+        ) {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
                 htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
@@ -2600,6 +2631,7 @@ class DetailsPage extends Page {
         }
 
         return new Promise((resolve) => {
+            // When logo image finishes loading, calculate aspect ratio and display container
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
@@ -2615,16 +2647,55 @@ class DetailsPage extends Page {
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
 
+                    // Update container dimensions to prevent layout shifts
                     logoContainer.style.height = `${containerHeight}px`;
 
+                    // Mount logo image element into DOM
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
                 }
                 resolve();
             };
-            img.onerror = () => resolve();
-            img.src = logoUrl;
+
+            // Error recovery: fall back to JS fetch and Blob URL when native network request fails
+            img.onerror = () => {
+                if (customHeaders?.hasCustomHeaders?.() && !img.dataset.nativeFallbackTried) {
+                    img.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(logoUrl, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== logoUrl) {
+                                img.removeAttribute('crossorigin');
+                                img.src = blobUrl;
+                                return;
+                            }
+                            resolve();
+                        })
+                        .catch(() => resolve());
+                } else {
+                    resolve();
+                }
+            };
+
+            // Resolve logo URL via CustomHeadersManager if reverse proxy authentication is required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(logoUrl);
+                if (cached) {
+                    img.src = cached;
+                } else {
+                    customHeaders
+                        .resolveImageUrl(logoUrl)
+                        .then((resolvedUrl) => {
+                            img.src = resolvedUrl;
+                        })
+                        .catch(() => {
+                            img.src = logoUrl;
+                        });
+                }
+            } else {
+                img.src = logoUrl;
+            }
         });
     }
 
@@ -4210,7 +4281,7 @@ class DetailsPage extends Page {
                     return `
                         <button class="episode-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                             <div class="episode-thumb">
-                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : ''}
                             </div>
                             <div class="episode-info">

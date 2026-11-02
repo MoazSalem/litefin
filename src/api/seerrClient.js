@@ -49,6 +49,14 @@ export class SeerrClient {
 
         // Invalidate DiscoverPage rendered rows cache so navigating back displays fresh data
         state.delete('discover:pageCache');
+
+        // Reset in-memory and session status cache
+        this._status = null;
+        if (typeof sessionStorage !== 'undefined') {
+            try {
+                sessionStorage.removeItem('seerr:session_status');
+            } catch (_) {}
+        }
     }
 
     /** Last known server-side configuration state. */
@@ -67,6 +75,16 @@ export class SeerrClient {
             this._clearedLegacyCredentials = true;
         }
 
+        // When forcing a refresh, bust memory and session storage caches
+        if (force) {
+            this._status = null;
+            if (typeof sessionStorage !== 'undefined') {
+                try {
+                    sessionStorage.removeItem('seerr:session_status');
+                } catch (_) {}
+            }
+        }
+
         if (this._status && !force) return this._status;
 
         // In-flight deduplication: return active shared probe promise
@@ -79,8 +97,12 @@ export class SeerrClient {
             try {
                 const sessionCached = sessionStorage.getItem('seerr:session_status');
                 if (sessionCached) {
-                    this._status = JSON.parse(sessionCached);
-                    return this._status;
+                    const parsed = JSON.parse(sessionCached);
+                    // Only honor cached status if Seerr was previously verified as available
+                    if (parsed && parsed.available) {
+                        this._status = parsed;
+                        return this._status;
+                    }
                 }
             } catch (_) {}
         }
@@ -90,30 +112,38 @@ export class SeerrClient {
          * (e.g. Sidebar, Search, Discover) from dispatching duplicate concurrent network probes.
          */
         this._statusPromise = (async () => {
-            // Verify Litefin companion server plugin is present before attempting endpoint request
-            const isLitefinAvailable = await api.isLitefinPluginAvailable();
+            // First check if companion plugin is already known to be available
+            let isLitefinAvailable = this._status?.available || false;
             if (!isLitefinAvailable) {
-                this._status = { configured: false, available: false };
-                return this._status;
+                isLitefinAvailable = await api.isLitefinPluginAvailable();
             }
 
             try {
-                // Bound the Seerr status probe to 5 seconds so an unresponsive or sleeping
-                // upstream Seerr instance fails fast instead of blocking navigation for 30s
+                // Bound the Seerr status probe to 8 seconds so an unresponsive or sleeping
+                // upstream Seerr instance fails fast while allowing reverse-proxy handshake latency
                 const payload = await api.get(
                     `${API_ROOT}/Status`,
                     {},
-                    { silent: true, warnOnError: true, timeout: 5000 }
+                    { silent: true, warnOnError: true, timeout: 8000 }
                 );
+
                 this._status = {
                     configured: !!payload?.configured,
                     available: !!payload?.available
                 };
-                if (typeof sessionStorage !== 'undefined') {
+
+                // When payload is received successfully, mark companion plugin as active
+                if (payload) {
+                    api._hasLitefinServerPlugin = true;
+                }
+
+                // Only cache successful status in sessionStorage to allow retries on transient boot failures
+                if (this._status.available && typeof sessionStorage !== 'undefined') {
                     try {
                         sessionStorage.setItem('seerr:session_status', JSON.stringify(this._status));
                     } catch (_) {}
                 }
+
                 // Notify all components that seerr availability is now resolved so they
                 // can update their UI without an additional probe round-trip
                 eventBus.emit('seerr:statusResolved', this._status);
