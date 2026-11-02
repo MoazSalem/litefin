@@ -1429,38 +1429,59 @@ class MainActivity : TauriActivity() {
         val path = url.path ?: ""
         val method = request.method ?: "GET"
 
+        // ---------------------------------------------------------------------
+        // 1. Short-Circuit ALL CORS Preflight OPTIONS Requests for Protected Server
+        // ---------------------------------------------------------------------
+        // When JavaScript fetch() attaches custom reverse-proxy authentication headers
+        // (such as Cloudflare Service Tokens or Authelia keys), Chromium in WebView
+        // automatically dispatches an unauthenticated OPTIONS preflight request.
+        // Upstream reverse proxies (Cloudflare Access) reject unauthenticated preflights
+        // with 403 Forbidden, and server-side plugin endpoints (e.g. /Litefin/Seerr)
+        // lack dedicated OPTIONS handlers.
+        // Short-circuiting all OPTIONS requests for the configured server with 204 No Content
+        // and permissive CORS headers guarantees immediate, zero-latency CORS compliance.
+        // ---------------------------------------------------------------------
+        if (method.equals("OPTIONS", ignoreCase = true)) {
+          val origin = request.requestHeaders["Origin"] ?: "*"
+          val preflightHeaders = mutableMapOf(
+            "Access-Control-Allow-Origin" to origin,
+            "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "Access-Control-Allow-Headers" to "*",
+            "Access-Control-Allow-Credentials" to "true",
+            "Access-Control-Max-Age" to "86400"
+          )
+          return WebResourceResponse(
+            "text/plain",
+            "UTF-8",
+            204,
+            "No Content",
+            preflightHeaders,
+            java.io.ByteArrayInputStream(ByteArray(0))
+          )
+        }
+
         // Case-insensitive check for image accept headers across browser variants
         val hasImageAccept = request.requestHeaders.entries.any {
           it.key.equals("Accept", ignoreCase = true) && it.value.contains("image/")
         }
 
-        // Intercept image assets, artwork endpoints, and server health pings
+        // ---------------------------------------------------------------------
+        // 2. Identify Native Read Interception Targets
+        // ---------------------------------------------------------------------
+        // Intercept image assets, artwork endpoints, server health pings,
+        // and companion plugin endpoints (/Litefin/... and /Moonfin/...) natively via OkHttp.
+        // This delivers raw byte streams directly to Chromium with zero CORS friction
+        // and automatically attaches required reverse-proxy authentication headers.
+        // ---------------------------------------------------------------------
         val isTargetResource = path.contains("/Images/", ignoreCase = true) ||
           hasImageAccept ||
-          path.endsWith("/System/Ping", ignoreCase = true)
+          path.endsWith("/System/Ping", ignoreCase = true) ||
+          path.contains("/Litefin/", ignoreCase = true) ||
+          path.contains("/Moonfin/", ignoreCase = true)
 
-        // Only handle standard read operations and CORS preflights natively
+        // Only handle standard read operations natively
         if (isTargetResource && (method.equals("GET", ignoreCase = true) ||
-            method.equals("OPTIONS", ignoreCase = true) ||
             method.equals("HEAD", ignoreCase = true))) {
-
-          // Short-circuit CORS preflight requests with permissive headers
-          if (method.equals("OPTIONS", ignoreCase = true)) {
-            val preflightHeaders = mutableMapOf(
-              "Access-Control-Allow-Origin" to "*",
-              "Access-Control-Allow-Methods" to "GET, OPTIONS, HEAD",
-              "Access-Control-Allow-Headers" to "*",
-              "Access-Control-Max-Age" to "86400"
-            )
-            return WebResourceResponse(
-              "text/plain",
-              "UTF-8",
-              204,
-              "No Content",
-              preflightHeaders,
-              java.io.ByteArrayInputStream(ByteArray(0))
-            )
-          }
 
           try {
             // Instantiate native request builder for the intercepted destination
@@ -1529,7 +1550,7 @@ class MainActivity : TauriActivity() {
 
               // Guarantee single canonical permissive CORS response headers
               responseHeaders["Access-Control-Allow-Origin"] = "*"
-              responseHeaders["Access-Control-Allow-Methods"] = "GET, OPTIONS, HEAD"
+              responseHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
               responseHeaders["Access-Control-Allow-Headers"] = "*"
               responseHeaders["Access-Control-Max-Age"] = "86400"
 
@@ -1549,19 +1570,24 @@ class MainActivity : TauriActivity() {
                 responseHeaders,
                 body.byteStream()
               )
-            } else if (code == 404) {
-              // Return clean 404 response so image element onError fires immediately
+            } else {
+              // Return upstream error response with permissive CORS so JS fetch error handlers can read status
+              val contentType = body?.contentType()?.toString() ?: "application/json"
+              val mimeType = contentType.substringBefore(";").trim()
               val errorHeaders = mutableMapOf(
                 "Access-Control-Allow-Origin" to "*",
-                "Access-Control-Allow-Methods" to "GET, OPTIONS, HEAD"
+                "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+                "Access-Control-Allow-Headers" to "*"
               )
+              val encoding = body?.contentType()?.charset()?.name() ?: "UTF-8"
+              val stream = body?.byteStream() ?: java.io.ByteArrayInputStream(ByteArray(0))
               return WebResourceResponse(
-                "text/plain",
-                "UTF-8",
-                404,
-                "Not Found",
+                mimeType,
+                encoding,
+                code,
+                response.message.ifEmpty { if (code == 404) "Not Found" else "Error $code" },
                 errorHeaders,
-                java.io.ByteArrayInputStream(ByteArray(0))
+                stream
               )
             }
           } catch (e: Exception) {

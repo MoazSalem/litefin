@@ -189,6 +189,14 @@ class CustomHeadersManager {
         // Invalidate in-memory cache for this server address
         this._cache.delete(normalized);
         this.clearBlobCache();
+
+        // Clear transient Seerr status session cache so fresh headers can immediately probe
+        if (typeof sessionStorage !== 'undefined') {
+            try {
+                sessionStorage.removeItem('seerr:session_status');
+            } catch (_) {}
+        }
+
         log.info(`Updated custom headers for ${normalized} (${sanitized.length} entries)`);
 
         // Synchronize updated headers with native Android bridge if available
