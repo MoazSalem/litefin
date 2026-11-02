@@ -1546,3 +1546,27 @@ test('a next track with another FLAC bit depth stays gapless where a new init se
     assert.ok(!h.sbLog().some((x) => x.startsWith('changeType')));
     assert.equal(h.mediaSources.length, 1);
 });
+
+/* play() runs during a load, so seeking after the first segment arrives would rewind audio that already played */
+test('load positions the element before the first media segment is appended', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4]);
+    const b = h.addTrack('b', [4, 4, 4]);
+    await h.engine.load(a);
+    await settle();
+    const audio = h.audios[0];
+    const seeks = [];
+    let time = audio.currentTime;
+    Object.defineProperty(audio, 'currentTime', {
+        get: () => time,
+        set: (value) => {
+            time = value;
+            seeks.push([value, h.appendedUrls().filter((url) => url.startsWith('b/seg')).length]);
+        }
+    });
+
+    await h.engine.load(b, 5000);
+    await settle();
+
+    assert.deepEqual(seeks, [[5, 0]]);
+});
