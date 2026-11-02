@@ -17,6 +17,7 @@ export default class MseMediaPipeline {
         this._sourceBuffer = null;
         this._queue = null;
         this._mime = null;
+        this._format = null;
         this._objectUrl = null;
         this._opened = false;
         this._broken = false;
@@ -39,18 +40,18 @@ export default class MseMediaPipeline {
         return this._queue;
     }
 
-    /* webOS accepts changeType() but its audio pipeline stays locked to the first codec */
-    canAppend(mime) {
-        if (!this._sourceBuffer || mime === this._mime) return true;
+    /* webOS accepts changeType() but its audio pipeline stays locked to the first codec and stream format */
+    canAppend(mime, format = mime) {
+        if (!this._sourceBuffer || format === this._format) return true;
         return this._allowChangeType && typeof this._sourceBuffer.changeType === 'function';
     }
 
-    ensure(mime) {
+    ensure(mime, format = mime) {
         if (!this._audio) {
             this._audio = this._media.createAudio();
             this._listeners.forEach(([event, handler]) => this._audio.addEventListener(event, handler));
         }
-        if (!this._needsRebuild(mime)) return;
+        if (!this._needsRebuild(mime, format)) return;
         this._detach();
         this._broken = false;
         this._mediaSource = this._media.createMediaSource();
@@ -88,19 +89,20 @@ export default class MseMediaPipeline {
         if (this._cancelOpenWait) this._cancelOpenWait();
     }
 
-    ensureSourceBuffer(mime) {
+    ensureSourceBuffer(mime, format = mime) {
         if (this._sourceBuffer) return;
         this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
         this._sourceBuffer.mode = 'sequence';
         this._mime = mime;
+        this._format = format;
         this._queue = new SourceBufferQueue(this._sourceBuffer);
     }
 
     /* only inside a queued operation, before the init segment of `mime` */
-    switchType(sourceBuffer, mime) {
-        if (mime === this._mime) return;
-        sourceBuffer.changeType(mime);
+    switchType(sourceBuffer, mime, format = mime) {
+        if (mime !== this._mime) sourceBuffer.changeType(mime);
         this._mime = mime;
+        this._format = format;
     }
 
     markBroken() {
@@ -168,10 +170,10 @@ export default class MseMediaPipeline {
     }
 
     /* an element error survives stop(), and a MediaSource closed after opening never reopens */
-    _needsRebuild(mime) {
+    _needsRebuild(mime, format) {
         if (!this._mediaSource || this._broken || this._audio.error) return true;
         if (this._opened && this._mediaSource.readyState === 'closed') return true;
-        return !this.canAppend(mime);
+        return !this.canAppend(mime, format);
     }
 
     _detach() {
@@ -186,6 +188,7 @@ export default class MseMediaPipeline {
         this._queue = null;
         this._sourceBuffer = null;
         this._mime = null;
+        this._format = null;
         this._mediaSource = null;
         this._objectUrl = null;
         this._opened = false;
