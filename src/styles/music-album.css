@@ -63,6 +63,19 @@
     overflow-wrap: anywhere;
 }
 
+/* All album actions fit one row in the narrow column, so the floating focus label never covers a second row.
+   Upstream sizes .btn-icon and .play-btn with !important. */
+.details-page.music-album .details-actions .btn {
+    width: 60px !important;
+    height: 60px !important;
+    min-width: 60px !important;
+    margin: 0 8px 0 0;
+}
+
+.details-page.music-album .details-actions .mobile-action-break {
+    display: none;
+}
+
 .album-tracks {
     display: flex;
     flex-direction: column;
