@@ -107,3 +107,27 @@ test('allowChangeType false treats another codec as unappendable even when chang
     assert.equal(h.mediaSources.length, 2);
     assert.equal(h.audios.length, 1);
 });
+
+test('allowChangeType false: another stream format of the same codec needs a rebuilt MediaSource', () => {
+    const h = setup({ allowChangeType: false });
+    h.pipeline.ensure(FLAC, 'flac/24');
+    h.pipeline.ensureSourceBuffer(FLAC, 'flac/24');
+
+    assert.equal(h.pipeline.canAppend(FLAC, 'flac/16'), false);
+    assert.equal(h.pipeline.canAppend(FLAC, 'flac/24'), true);
+    h.pipeline.ensure(FLAC, 'flac/16');
+    assert.equal(h.mediaSources.length, 2);
+});
+
+test('switchType records a new stream format without changeType when the codec is unchanged', () => {
+    const h = setup();
+    h.pipeline.ensure(FLAC, 'flac/24');
+    h.pipeline.ensureSourceBuffer(FLAC, 'flac/24');
+    const sb = h.pipeline.sourceBuffer;
+
+    assert.equal(h.pipeline.canAppend(FLAC, 'flac/16'), true);
+    h.pipeline.switchType(sb, FLAC, 'flac/16');
+
+    assert.deepEqual(sb.calls, []);
+    assert.equal(h.mediaSources.length, 1);
+});

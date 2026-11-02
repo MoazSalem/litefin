@@ -155,10 +155,10 @@ export default class MseAudioEngine {
 
     async _loadInto(gen, track, startMs) {
         const fresh = () => gen === this._generation;
-        this._pipe.ensure(track.mime);
+        this._pipe.ensure(track.mime, track.format);
         await this._pipe.whenOpen();
         if (!fresh()) return;
-        this._pipe.ensureSourceBuffer(track.mime);
+        this._pipe.ensureSourceBuffer(track.mime, track.format);
         await this._pipe.clear();
         if (!fresh()) return;
         const { playlist, init } = await this._fetchStart(track);
@@ -166,7 +166,7 @@ export default class MseAudioEngine {
         const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
         this._currentKey = item.key;
         await this._queue.run((sb) => {
-            this._pipe.switchType(sb, track.mime);
+            this._pipe.switchType(sb, track.mime, track.format);
             sb.appendBuffer(init);
         });
         if (!fresh()) return;
@@ -256,7 +256,7 @@ export default class MseAudioEngine {
         const { init, bytes } = item;
         await this._queue.run((sb) => {
             if (!this._isLive(gen, key)) return;
-            if (init) this._pipe.switchType(sb, item.track.mime);
+            if (init) this._pipe.switchType(sb, item.track.mime, item.track.format);
             sb.appendBuffer(init || bytes);
         });
         if (!this._isLive(gen, key)) return false;
@@ -324,7 +324,7 @@ export default class MseAudioEngine {
     async _startNext(gen) {
         const next = this._nextTrack;
         const wanted = () => gen === this._generation && this._nextTrack === next;
-        if (!this._pipe.canAppend(next.mime)) {
+        if (!this._pipe.canAppend(next.mime, next.format)) {
             this._nextBlocked = true;
             return;
         }
