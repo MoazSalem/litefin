@@ -22,6 +22,7 @@ import { seerr } from '../api/seerrClient.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
 import { logger } from '../utils/Logger.js';
 
@@ -443,15 +444,19 @@ class PersonPage extends Page {
         const fallbackHtml = CardRenderer.getFallbackHtml(p, false);
 
         if (posterContainer) {
-            if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
+            // Check both ImageTags.Primary and PrimaryImageTag on the person payload
+            const primaryTag = p.ImageTags?.Primary || p.PrimaryImageTag;
+
+            if (primaryTag || isArtist) {
+                // Compute resolution parameters using the details poster profile
                 const params = imageService.getParams('details-poster');
                 const posterUrl = api.getImageUrl(p.Id, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    ...(p.ImageTags?.Primary ? { tag: p.ImageTags.Primary } : {})
+                    ...(primaryTag ? { tag: primaryTag } : {})
                 });
 
-                // Poster BlurHash
+                // Resolve person poster blurhash if enabled in preferences
                 const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
                 let posterBlurHash = '';
                 if (!isBlurHashDisabled && p.ImageBlurHashes?.Primary) {
@@ -463,8 +468,10 @@ class PersonPage extends Page {
 
                 posterContainer.innerHTML = '';
 
+                // Render dynamic BlurHash canvas placeholder while image loads
+                let posterCanvas = null;
                 if (posterBlurHash) {
-                    const posterCanvas = document.createElement('canvas');
+                    posterCanvas = document.createElement('canvas');
                     posterCanvas.className = 'blurhash-canvas poster-blurhash';
                     posterCanvas.style.position = 'absolute';
                     posterCanvas.style.top = '0';
@@ -472,6 +479,7 @@ class PersonPage extends Page {
                     posterCanvas.style.width = '100%';
                     posterContainer.appendChild(posterCanvas);
 
+                    // Decode blurhash at a lightweight resolution asynchronously
                     import('../utils/BlurHashDecoder.js')
                         .then(({ default: BlurHashDecoder }) => {
                             const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
@@ -484,29 +492,69 @@ class PersonPage extends Page {
                                 ctx.putImageData(imageData, 0, 0);
                             }
                         })
-                        .catch((err) => log.error('Failed to decode poster blurhash', err));
+                        .catch((err) => log.error('Failed to decode person poster blurhash', err));
                 }
 
-                const img = new Image();
-                img.onload = () => {
-                    img.classList.add('loaded');
-                    if (posterBlurHash) {
-                        const canvas = posterContainer.querySelector('.poster-blurhash');
-                        if (canvas) {
-                            canvas.style.opacity = '0';
+                // Helper to display initials gradient fallback on permanent failure
+                const showFallback = () => {
+                    if (posterCanvas && posterCanvas.parentNode) {
+                        posterCanvas.parentNode.removeChild(posterCanvas);
+                    }
+                    posterContainer.innerHTML = fallbackHtml;
+                };
+
+                // Instantiates and renders the person portrait image element
+                const applyPoster = (effectivePosterUrl) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        img.classList.add('loaded');
+                        // Fade out and remove canvas when image completes loading
+                        if (posterCanvas) {
+                            posterCanvas.style.opacity = '0';
                             setTimeout(() => {
-                                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                                if (posterCanvas && posterCanvas.parentNode) {
+                                    posterCanvas.parentNode.removeChild(posterCanvas);
+                                }
                             }, 250);
                         }
+                    };
+                    img.onerror = () => {
+                        log.warn(`Failed to load person poster from ${effectivePosterUrl}`);
+                        // If native direct request failed, fallback to authenticated JS fetch & blob
+                        if (customHeaders?.hasCustomHeaders?.() && effectivePosterUrl === posterUrl) {
+                            customHeaders
+                                .resolveImageUrl(posterUrl, null, { bypassNative: true })
+                                .then((blobUrl) => {
+                                    if (blobUrl && blobUrl !== posterUrl) {
+                                        img.src = blobUrl;
+                                        return;
+                                    }
+                                    showFallback();
+                                })
+                                .catch(() => showFallback());
+                            return;
+                        }
+                        showFallback();
+                    };
+                    img.src = effectivePosterUrl;
+                    img.alt = p.Name;
+                    posterContainer.appendChild(img);
+                };
+
+                // Check if reverse proxy headers are active for the Jellyfin server
+                if (customHeaders?.hasCustomHeaders?.()) {
+                    const cached = customHeaders.getCachedBlobUrl(posterUrl);
+                    if (cached) {
+                        applyPoster(cached);
+                    } else {
+                        customHeaders
+                            .resolveImageUrl(posterUrl)
+                            .then((resolvedUrl) => applyPoster(resolvedUrl))
+                            .catch(() => applyPoster(posterUrl));
                     }
-                };
-                img.onerror = () => {
-                    img.style.display = 'none';
-                    posterContainer.insertAdjacentHTML('afterbegin', fallbackHtml);
-                };
-                img.src = posterUrl;
-                img.alt = p.Name;
-                posterContainer.appendChild(img);
+                } else {
+                    applyPoster(posterUrl);
+                }
             } else {
                 posterContainer.innerHTML = fallbackHtml;
             }
