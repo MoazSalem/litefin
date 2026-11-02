@@ -28,10 +28,44 @@ const path = require('path');
 const postcss = require('postcss');
 const cssnano = require('cssnano');
 
+/**
+ * Safe cssnano preset configuration for legacy Smart TV rendering engines.
+ * Discards all comments and collapses extraneous whitespace while explicitly
+ * disabling destructive transformations that corrupt backward compatibility
+ * on Chromium 26-38, legacy WebKit, and TV WebViews (Tizen 2.3-3.0, webOS 1.0-3.5).
+ */
+const safeCssnanoPreset = [
+    'default',
+    {
+        // Strip comments completely to optimize bundle weight
+        discardComments: { removeAll: true },
+        // Normalize whitespace for high-density delivery
+        normalizeWhitespace: true,
+        // Disable selector merging: if any selector fails parsing, older engines drop the entire block
+        mergeRules: false,
+        // Preserve duplicate property declarations used as progressive enhancements or vendor fallbacks
+        discardOverridden: false,
+        // Preserve intentional fallback duplicate declarations
+        discardDuplicates: false,
+        // Disable calc optimization: prevents operator whitespace stripping that breaks older WebKit layout
+        calc: false,
+        // Prevent color rewriting: preserves rgba channels in gradients and regex compatibility
+        colormin: false,
+        // Keep quotes intact on attribute selectors for older CSS parsers
+        minifySelectors: false,
+        // Do not combine individual directional properties into shorthands
+        mergeLonghand: false,
+        // Do not replace initial keyword with default browser values
+        reduceInitial: false,
+        // Preserve explicit z-index values to avoid layering collisions in modals and overlays
+        zindex: false
+    }
+];
+
 /** @type {import('postcss').Plugin} */
 function cssnanoPlugin() {
     const cssnanoFactory = cssnano.default || cssnano;
-    return cssnanoFactory({ preset: ['default', { discardComments: { removeAll: true } }] });
+    return cssnanoFactory({ preset: safeCssnanoPreset });
 }
 
 const IMPORT_RE = /@import\s+(?:url\(\s*)?['"]([^'"]+)['"]\s*(?:\)\s*)?[^;]*;/g;

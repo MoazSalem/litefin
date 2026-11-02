@@ -28,6 +28,8 @@ import { storage } from '../../utils/StorageService.js';
 import { prewarmManager } from './PrewarmManager.js';
 import { webCodecsProbe } from '../../utils/WebCodecsProbe.js';
 import { languageManager } from '../../utils/LanguageManager.js';
+import { toast } from '../../ui/Toast.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -820,6 +822,12 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+
+        if (event.type === 'playratefallback') {
+            log.warn('playratefallback: speed', event.data?.speed, 'plays without sound on this TV');
+            toast.show(i18n.t('SpeedNoSound') || 'This TV plays this speed without sound', 6000);
+            return;
+        }
 
         if (event.type === 'subtitlefallback') {
             log.warn('Backend requested subtitle fallback for index:', event.data.index);
@@ -3947,9 +3955,10 @@ export class JellyfinPlayer extends EventEmitter {
         // Evaluate backend-specific hardware constraints
         switch (backend) {
             case 'webos':
-                // LG webOS hardware decoders reliably support [0.5, 1, 2, 4];
-                // all other rates trigger silent snap-down in WebOSPlayer.js
-                return [0.5, 1, 2, 4].includes(speed);
+                // WebOSPlayer sends the rate to the TV's media service (sound stays on).
+                // Tested on an LG CX (webOS 5.5): up to 2x is smooth with sound, from 2.5x the
+                // picture jumps from frame to frame and the sound is gone
+                return speed >= 0.25 && speed <= 2;
 
             case 'tizen':
                 // Samsung AVPlay trickplay requires integer multipliers (1, 2, 4, 8);

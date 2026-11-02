@@ -2,8 +2,29 @@
    Litefin Tizen - Library Page Styles
    ========================================================================== */
 
+/*
+ * Baseline Custom Properties for Grid Dimensions:
+ * Declared on :root so that CssVarsPolyfill captures them during baseline
+ * variable scanning on legacy WebKit and early Chromium (Chrome < 49) engines.
+ */
+:root {
+    /* Default spacing between library grid cards */
+    --grid-card-margin: 20px;
+    /* Default number of columns for dynamic grid mode */
+    --grid-columns: 5;
+    /* Text color aliases */
+    --text-primary: var(--jf-text-primary, #ffffff);
+    --text-muted: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
 .library-page {
+    /* Full viewport height layout container */
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    /* Vertical layout orientation */
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
     flex-direction: column;
     height: 100vh;
     box-sizing: border-box;
@@ -13,6 +34,9 @@
 
 /* --- Scroll Container --- */
 .library-scroll-container {
+    /* Flex-grow fill for vertical viewport */
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -1072,9 +1096,10 @@ html[data-layout-media-rows="modern-posters"] .library-grid.view-list .media-car
      * Pull the container right to offset the margin-right on the last child card.
      * This ensures the grid bounds align perfectly with the parent container boundaries
      * and prevents off-screen overhangs that trigger scroll layout bugs on Tizen 4.
+     * Robust fallbacks ensure calculation does not collapse if custom property is unresolved.
      */
-    margin-right: calc(-1 * var(--grid-card-margin)) !important;
-    width: calc(100% + var(--grid-card-margin)) !important;
+    margin-right: calc(-1 * var(--grid-card-margin, 20px)) !important;
+    width: calc(100% + var(--grid-card-margin, 20px)) !important;
     max-width: none !important;
     min-width: 0 !important;
 }
@@ -1084,17 +1109,20 @@ html[data-layout-media-rows="modern-posters"] .library-grid.view-list .media-car
      * Force layout containment to isolate paint operations and optimize 
      * scrolling performance during focus transitions on low-spec TV hardware.
      */
+    -webkit-box-flex: 0 !important;
+    -webkit-flex: 0 0 auto !important;
     flex: 0 0 auto !important;
     
     /* 
      * Divide 100% by the number of columns, then subtract the card margin.
      * Card + margin-right will sum exactly to 100% / columns.
+     * Fully qualified fallback parameters keep layout intact on legacy WebKit.
      */
-    width: calc((100% / var(--grid-columns)) - var(--grid-card-margin)) !important;
+    width: calc((100% / var(--grid-columns, 5)) - var(--grid-card-margin, 20px)) !important;
     min-width: 0 !important; /* Overrides static banner min-width */
-    margin-right: var(--grid-card-margin) !important;
+    margin-right: var(--grid-card-margin, 20px) !important;
     margin-left: 0 !important;
-    margin-bottom: var(--grid-card-margin) !important;
+    margin-bottom: var(--grid-card-margin, 20px) !important;
     
     contain: layout style paint !important;
 }
@@ -1168,7 +1196,7 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 .alpha-btn {
     font-size: 18px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--text-muted, var(--jf-text-secondary, rgba(255, 255, 255, 0.7)));
     background: transparent;
     border: none;
     cursor: pointer;
@@ -1417,7 +1445,7 @@ html[data-layout-tier="ultra-legacy"][data-alpha-picker-position="right"] .alpha
 .pagination-info {
     font-size: 20px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-primary, var(--jf-text-primary, #ffffff));
     margin: 0 30px;
 }
 
@@ -1457,7 +1485,7 @@ html[data-layout-tier="ultra-legacy"][data-alpha-picker-position="right"] .alpha
     margin: 0;
     font-size: 24px;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-primary, var(--jf-text-primary, #ffffff));
 }
 
 .modal-options {
@@ -1478,7 +1506,7 @@ html[data-layout-tier="ultra-legacy"][data-alpha-picker-position="right"] .alpha
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--jf-border-radius-lg);
-    color: var(--text-primary);
+    color: var(--text-primary, var(--jf-text-primary, #ffffff));
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
@@ -2003,7 +2031,7 @@ html[data-layout-tier="ultra-legacy"] .library-row {
     border-radius: var(--jf-border-radius-lg);
     border: 2px solid transparent;
     background: rgba(255, 255, 255, 0.04);
-    color: var(--text-muted);
+    color: var(--text-muted, var(--jf-text-secondary, rgba(255, 255, 255, 0.7)));
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
                 background-color 0.18s ease,

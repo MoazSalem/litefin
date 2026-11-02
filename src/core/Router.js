@@ -481,6 +481,8 @@ class Router {
         this._isBackNavigation = true;
         this._pendingRestoreState = capturedState;
 
+        // Mark the reload as expected so the redundant-hashchange filter lets it through
+        this._lastNavigatePath = this.getCurrentPath();
         this._onHashChange();
     }
 }

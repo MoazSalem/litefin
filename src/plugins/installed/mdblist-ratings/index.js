@@ -10,7 +10,13 @@
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
 import { storage } from '../../../utils/StorageService.js';
-import { getMdbProviderInfo, normalizeWebClientSettings, filterAndOrderRatings } from './ratingsFormatter.js';
+import { openExternalUrl } from '../../../pages/settings/modals/AboutDeviceSpecs.js';
+import {
+    getMdbProviderInfo,
+    normalizeWebClientSettings,
+    filterAndOrderRatings,
+    buildProviderHref
+} from './ratingsFormatter.js';
 
 export default {
     id: 'mdblist-ratings',
@@ -52,7 +58,7 @@ export default {
                 this._settings = normalizeWebClientSettings(cfg);
                 this._awardsEnabledOnServer = this._settings.awards.enabled;
                 this.log.info(
-                    `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}`
+                    `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}, clickable=${this._settings.clickable}`
                 );
             } catch (err) {
                 // Fallback for legacy 10.xx plugins where WebClientSettings endpoint does not exist
@@ -106,7 +112,7 @@ export default {
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
-     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string }>}
+     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string, context: Object }>}
      */
     async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
         try {
@@ -120,18 +126,26 @@ export default {
             const rawRatings = data && data.hasCache ? data.ratings || [] : [];
             const filteredRatings = filterAndOrderRatings(rawRatings, settings);
 
-            // 3. Resolve IMDb ID only if awards are requested and enabled
-            let finalImdbId = null;
+            // 3. Resolve IMDb and TMDb identifiers for awards and deep-link navigation
+            let finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb || null;
+            let finalTmdbId = data?.ids?.tmdb || data?.ids?.Tmdb || null;
+            let itemInfo = null;
+
+            // Determine if full item info from Jellyfin is required
             const awardsAllowed = includeAwards && settings.awards.enabled && this._awardsEnabledOnServer !== false;
-            if (awardsAllowed) {
-                finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
-                if (!finalImdbId) {
-                    try {
-                        const itemInfo = await this.api.getItem(itemId);
-                        finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
-                    } catch (e) {
-                        this.log.warn('Could not fetch IMDb ID from Jellyfin for metadata request:', e);
+            const needsItemInfo = (!finalImdbId && awardsAllowed) || ((!finalImdbId || !finalTmdbId) && settings.clickable);
+
+            if (needsItemInfo) {
+                try {
+                    itemInfo = await this.api.getItem(itemId);
+                    if (!finalImdbId) {
+                        finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb || null;
                     }
+                    if (!finalTmdbId) {
+                        finalTmdbId = itemInfo?.ProviderIds?.Tmdb || itemInfo?.ProviderIds?.tmdb || null;
+                    }
+                } catch (e) {
+                    this.log.warn('Could not fetch item info from Jellyfin for metadata request:', e);
                 }
             }
 
@@ -159,16 +173,32 @@ export default {
                 }
             }
 
+            // Assemble structured metadata context for external provider page resolution
+            const context = {
+                ids: {
+                    imdb: finalImdbId,
+                    tmdb: finalTmdbId
+                },
+                contentType: itemInfo?.Type
+                    ? (itemInfo.Type === 'Series' ? 'show' : itemInfo.Type.toLowerCase())
+                    : 'movie',
+                seasonNumber: itemInfo?.Type === 'Episode'
+                    ? itemInfo?.ParentIndexNumber
+                    : (itemInfo?.Type === 'Season' ? itemInfo?.IndexNumber : null),
+                episodeNumber: itemInfo?.Type === 'Episode' ? itemInfo?.IndexNumber : null
+            };
+
             return {
                 ratings: filteredRatings,
                 badges: awards || [],
                 features: data?.whatsonFeatures || data?.whatson_features || null,
                 settings,
-                imdbId: finalImdbId
+                imdbId: finalImdbId,
+                context
             };
         } catch (err) {
             this.log.warn(`MDBList Plugin metadata fetch failed for ${itemId}:`, err);
-            return { ratings: [], badges: [], features: null, settings: this._settings, imdbId };
+            return { ratings: [], badges: [], features: null, settings: this._settings, imdbId, context: null };
         }
     },
 
@@ -192,7 +222,13 @@ export default {
                     // Render Ratings Row (Respect Score Visibility / Mystery Mode)
                     const item = api.getCurrentItem();
                     if (metadata.ratings.length > 0 && shouldShowScore(item)) {
-                        this._renderRatingsRow(pageEl, metadata.ratings, metadata.features, metadata.settings);
+                        this._renderRatingsRow(
+                            pageEl,
+                            metadata.ratings,
+                            metadata.features,
+                            metadata.settings,
+                            metadata.context
+                        );
                     }
 
                     // Render Awards Row
@@ -261,8 +297,9 @@ export default {
      * @param {Array} ratings - Array of rating objects
      * @param {Object} [features] - Extra metadata features (e.g. IMDb Top 250)
      * @param {Object} [settings] - Server WebClientSettings configuration
+     * @param {Object} [context] - Media context for deep link resolution
      */
-    _renderRatingsRow(pageEl, ratings, features = null, settings = null) {
+    _renderRatingsRow(pageEl, ratings, features = null, settings = null, context = null) {
         const metaRow = pageEl.querySelector('.details-meta-row');
         if (!metaRow) return;
 
@@ -278,6 +315,7 @@ export default {
         // Base URL for plugin assets
         const assetBase = `${this.api.serverUrl}/Plugins/MdbListRatings/Assets/`;
         const activeSettings = settings || this._settings;
+        const isClickable = Boolean(activeSettings && activeSettings.clickable === true);
 
         // Build items
         let html = '<div class="mdblist-ratings-row" tabindex="-1">';
@@ -305,14 +343,33 @@ export default {
                 iconHtml = `<span class="mdblist-rating-icon star-emoji">⭐</span>`;
             }
 
-            html += `
-                <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
-                    <span class="provider-icon ${provider.className}">
-                        ${iconHtml}
-                    </span>
-                    <span class="mdblist-value">${provider.formattedText}</span>
-                </div>
+            // Construct visual presentation elements (provider badge icon and tabular score value)
+            const itemInnerHtml = `
+                <span class="provider-icon ${provider.className}">
+                    ${iconHtml}
+                </span>
+                <span class="mdblist-value">${provider.formattedText}</span>
             `;
+
+            // If server clickable option is active, resolve destination hyperlink
+            // Both icon and score value are unified into 1 clickable entry for mouse users
+            const href = isClickable ? buildProviderHref(rating.source || rating.Source, rating, context) : null;
+
+            if (href) {
+                html += `
+                    <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
+                        <a href="${href}" class="mdblist-rating-link" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-label="${provider.displayName}: ${provider.formattedText}">
+                            ${itemInnerHtml}
+                        </a>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
+                        ${itemInnerHtml}
+                    </div>
+                `;
+            }
         }
 
         html += '</div>';
@@ -322,13 +379,30 @@ export default {
         const targetRow = techRow || metaRow;
         targetRow.insertAdjacentHTML('afterend', html);
 
-        // Add subtle entrance animation with spring curve
-        requestAnimationFrame(() => {
-            const row = pageEl.querySelector('.mdblist-ratings-row');
-            if (row) {
-                row.classList.add('visible');
+        const row = pageEl.querySelector('.mdblist-ratings-row');
+        if (row) {
+            // Wire mouse-click event delegation for external rating provider links
+            if (isClickable) {
+                row.addEventListener('click', (e) => {
+                    const link = e.target.closest('.mdblist-rating-link');
+                    if (!link) return;
+
+                    // Strictly intercept mouse click to prevent D-pad remote focus or card bubble
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const targetUrl = link.getAttribute('href');
+                    if (targetUrl) {
+                        openExternalUrl(targetUrl);
+                    }
+                });
             }
-        });
+
+            // Add subtle entrance animation with spring curve
+            requestAnimationFrame(() => {
+                row.classList.add('visible');
+            });
+        }
     },
 
     /**

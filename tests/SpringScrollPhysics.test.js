@@ -765,3 +765,84 @@ test('ScrollController: late/uneven rAF frames paint equal steps with no mid-fli
         scrollController._verticalScrollAnimationId = null;
     }
 });
+
+/**
+ * ============================================================================
+ * Row-type duration parity — every row hop must use the configured budget
+ * ============================================================================
+ * The "long leap" duration stretch exists for hero carousel <-> content row
+ * transitions only. Poster rows are taller than landscape/square rows, so their
+ * hops travel up to ~600px; while the threshold sat at 550px every poster hop
+ * was silently stretched by x1.25 and poster rows animated noticeably slower
+ * than landscape rows at the same pref:scrollSmoothingDuration ("poster rows
+ * lag when scrolled to"). Row hops must stay on the base budget; only true
+ * leaps (hero <-> rows, multi-row jumps) may scale.
+ */
+test('ScrollController: row-to-row hops keep the base duration on every row type', () => {
+    const controller = new ScrollController();
+    const realRaf = globalThis.requestAnimationFrame;
+    try {
+        // Isolate from the scheduler: we only inspect the settle budget.
+        globalThis.requestAnimationFrame = () => 1;
+
+        const container = {
+            style: {},
+            scrollTop: 0,
+            scrollLeft: 0,
+            clientHeight: 1080,
+            querySelector: () => null
+        };
+
+        storage.setItem('pref:scrollSmoothingDuration', 'slower');
+        const base = controller.getVerticalScrollDuration();
+        assert.ok(base > 0, 'slower preference must resolve to a positive duration');
+
+        // Tallest real row hop measured on the home screen: a 574px poster row
+        // plus its gap (602px), and the shorter landscape/square hops (448px).
+        for (const distance of [356, 448, 475, 504, 602, 699]) {
+            controller.cancelAnimation('vertical');
+            container.scrollTop = 0;
+            controller.smoothScrollTo(container, distance, null, 'vertical');
+            assert.strictEqual(
+                controller._verticalScrollState.budget,
+                base,
+                `a ${distance}px row hop must animate for the configured ${base}ms, not a stretched budget`
+            );
+        }
+
+        // Genuine leaps still stretch (hero <-> rows, multi-row jumps).
+        controller.cancelAnimation('vertical');
+        container.scrollTop = 0;
+        controller.smoothScrollTo(container, 1000, null, 'vertical');
+        const leap = controller._verticalScrollState.budget;
+        assert.ok(
+            leap >= Math.round(base * 1.25) && leap <= Math.round(base * 1.75),
+            `a 1000px leap must still stretch within the x1.25-x1.75 band (saw ${leap}ms for base ${base}ms)`
+        );
+
+        // Horizontal row scrolling is untouched by the vertical leap rule.
+        controller.cancelAnimation('horizontal');
+        const horizontalBase = controller.getHorizontalScrollDuration();
+        controller.smoothScrollTo(container, 900, null, 'horizontal');
+        assert.strictEqual(
+            controller._horizontalScrollState.budget,
+            horizontalBase,
+            'horizontal row scrolling must keep its own duration mapping'
+        );
+
+        // Sanity: base duration ordering matches the 4-value preference mapping.
+        storage.setItem('pref:scrollSmoothingDuration', 'smooth');
+        const smooth = controller.getVerticalScrollDuration();
+        storage.setItem('pref:scrollSmoothingDuration', 'instant');
+        assert.strictEqual(controller.getVerticalScrollDuration(), 0, 'instant preference must stay instant');
+        assert.ok(base > smooth, 'slower must be longer than smooth');
+    } finally {
+        storage.removeItem('pref:scrollSmoothingDuration');
+        storage.removeItem('pref:scrollPhysics');
+        globalThis.requestAnimationFrame = realRaf;
+        scrollController._verticalScrollState = null;
+        scrollController._verticalScrollAnimationId = null;
+        scrollController._horizontalScrollState = null;
+        scrollController._horizontalScrollAnimationId = null;
+    }
+});

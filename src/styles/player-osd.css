@@ -8,24 +8,35 @@
    CSS Variables
    ============================================================================ */
 
-.player-osd {
-    /* OSD specific button variables with fallback inheritance to global button variables */
-    --jf-osd-btn-bg: var(--jf-btn-primary-bg);
-    --jf-osd-btn-color: var(--jf-btn-primary-color);
-    --jf-osd-btn-border: var(--jf-btn-primary-border);
-    --jf-osd-btn-focus-bg: var(--jf-btn-primary-bg); /* Align focused button color with primary accent background */
-    --jf-osd-btn-focus-color: var(--jf-btn-primary-color);
-    --jf-osd-btn-focus-border: var(--jf-btn-primary-focus-border);
-    --jf-osd-btn-hover-border: var(--jf-btn-primary-hover-border);
+/*
+ * OSD button variables with fallback inheritance to global button variables.
+ * Declared on :root, NOT .player-osd: the CssVarsPolyfill (Chromium 38-47)
+ * only knows :root custom-property declarations, and usages like
+ * var(--jf-osd-btn-focus-bg) have no fallback - declared on a class selector
+ * they stayed unresolved and the OSD controls rendered with initial (black)
+ * colors on legacy webOS/Tizen engines. The values only reference global
+ * --jf-btn-primary-* statics, so :root placement loses no scoping semantics
+ * (no other selector redefines these names).
+ */
+:root {
+    /* OSD button variables with robust fallback inheritance to global theme variables */
+    --jf-osd-btn-bg: var(--jf-btn-primary-bg, rgba(255, 255, 255, 0.15));
+    --jf-osd-btn-color: var(--jf-btn-primary-color, #ffffff);
+    --jf-osd-btn-border: var(--jf-btn-primary-border, rgba(255, 255, 255, 0.2));
+    --jf-osd-btn-focus-bg: var(--jf-btn-primary-bg, #00a4dc); /* Align focused button color with primary accent background */
+    --jf-osd-btn-focus-color: var(--jf-btn-primary-color, #ffffff);
+    --jf-osd-btn-focus-border: var(--jf-btn-primary-focus-border, #ffffff);
+    --jf-osd-btn-hover-border: var(--jf-btn-primary-hover-border, rgba(255, 255, 255, 0.4));
 }
 
 :root {
-    --osd-text-color: var(--jf-text-primary, #fff);
-    --osd-accent-color: var(--jf-accent);
+    /* High-contrast defaults ensure overlay buttons and progress bar are never invisible on legacy engines */
+    --osd-text-color: var(--jf-text-primary, #ffffff);
+    --osd-accent-color: var(--jf-accent, #00a4dc);
     --osd-gradient-opacity: 0.75;
     --osd-gradient-dark: rgba(0, 0, 0, 1);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
-    --osd-slider-progress: var(--jf-btn-primary-bg);
+    --osd-slider-progress: var(--jf-btn-primary-bg, #00a4dc);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
     /* Fallback value for customized seek bar thumb background */
     --osd-thumb-bg: #ffffff;
@@ -176,7 +187,7 @@ html[data-osd-progress-color="theme-inverted"] {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    background: linear-gradient(180deg, var(--osd-gradient-dark, rgba(0, 0, 0, 0.9)) 0%, rgba(0, 0, 0, 0) 100%);
     opacity: var(--osd-gradient-opacity, 0.75);
     z-index: -1;
     pointer-events: none;
@@ -367,7 +378,7 @@ html[data-osd-progress-color="theme-inverted"] {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
+    background: linear-gradient(0deg, var(--osd-gradient-dark, rgba(0, 0, 0, 0.9)) 0%, rgba(0, 0, 0, 0) 100%);
     opacity: var(--osd-gradient-opacity, 0.75);
     z-index: -1;
     pointer-events: none;
@@ -555,7 +566,8 @@ html[data-osd-progress-color="theme-inverted"] {
     height: 58px;
     border: none; /* Base reset */
     background: transparent;
-    color: var(--osd-text-color);
+    /* Provide resilient white text fallback for legacy engines lacking CSS custom property evaluation */
+    color: var(--osd-text-color, #ffffff);
     cursor: pointer;
     border-radius: 50%;
     transition: 
@@ -588,8 +600,9 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .osd-btn.focused,
 .osd-btn.magic-hover {
     /* Focus styles use high contrast solid accent colors */
-    background: var(--jf-osd-btn-focus-bg) !important;
-    color: var(--jf-osd-btn-focus-color) !important;
+    /* Theme accent and contrast text fallbacks prevent unstyled black-on-transparent rendering */
+    background: var(--jf-osd-btn-focus-bg, var(--jf-btn-primary-bg, #00a4dc)) !important;
+    color: var(--jf-osd-btn-focus-color, var(--jf-btn-primary-color, #ffffff)) !important;
     outline: none !important;
 }
 
@@ -604,7 +617,8 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .osd-btn.focused,
 .osd-btn.magic-hover,
 .osd-btn:hover {
-    border: 2px solid var(--jf-osd-btn-focus-border) !important;
+    /* Robust border color fallback */
+    border: 2px solid var(--jf-osd-btn-focus-border, var(--jf-btn-primary-focus-border, #ffffff)) !important;
 }
 
 /*
@@ -657,22 +671,25 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 
 /* Accent color for active toggle buttons when not focused */
 .osd-btn.active:not(#osdFavoriteBtn) {
-    color: var(--jf-osd-btn-bg) !important;
+    /* Primary accent color fallback */
+    color: var(--jf-osd-btn-bg, var(--jf-btn-primary-bg, #00a4dc)) !important;
 }
 
 /* Active buttons when hovered get standard soft hover treatment */
 .osd-btn.active:not(#osdFavoriteBtn):hover {
-    background: var(--osd-btn-hover) !important;
-    color: var(--osd-text-color) !important;
+    /* High-contrast hover background and text fallbacks */
+    background: var(--osd-btn-hover, rgba(255, 255, 255, 0.1)) !important;
+    color: var(--osd-text-color, #ffffff) !important;
 }
 
 /* Active buttons when focused receive complete focus ring styling */
 .osd-btn.active:not(#osdFavoriteBtn):focus,
 .osd-btn.active:not(#osdFavoriteBtn).focused,
 .osd-btn.active:not(#osdFavoriteBtn).magic-hover {
-    background: var(--jf-osd-btn-focus-bg) !important;
-    color: var(--jf-osd-btn-focus-color) !important;
-    border-color: var(--jf-osd-btn-focus-border) !important;
+    /* Complete tactile focus state fallbacks matching active theme */
+    background: var(--jf-osd-btn-focus-bg, var(--jf-btn-primary-bg, #00a4dc)) !important;
+    color: var(--jf-osd-btn-focus-color, var(--jf-btn-primary-color, #ffffff)) !important;
+    border-color: var(--jf-osd-btn-focus-border, var(--jf-btn-primary-focus-border, #ffffff)) !important;
 }
 
 /* Pulse Animation Trigger */
@@ -785,9 +802,10 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 
 .osd-back-btn:focus,
 .osd-back-btn.focused {
-    border: 2px solid var(--jf-osd-btn-focus-border) !important;
-    background: var(--jf-osd-btn-focus-bg) !important;
-    color: var(--jf-osd-btn-focus-color) !important;
+    /* Back button focus styling with theme fallback values */
+    border: 2px solid var(--jf-osd-btn-focus-border, var(--jf-btn-primary-focus-border, #ffffff)) !important;
+    background: var(--jf-osd-btn-focus-bg, var(--jf-btn-primary-bg, #00a4dc)) !important;
+    color: var(--jf-osd-btn-focus-color, var(--jf-btn-primary-color, #ffffff)) !important;
     outline: none !important;
 }
 
@@ -813,9 +831,10 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 
 .osd-btn-play:focus,
 .osd-btn-play.focused {
-    background: var(--jf-osd-btn-focus-bg) !important;
-    color: var(--jf-osd-btn-focus-color) !important;
-    border: 2px solid var(--jf-osd-btn-focus-border) !important;
+    /* Play/Pause main button focus highlight fallbacks */
+    background: var(--jf-osd-btn-focus-bg, var(--jf-btn-primary-bg, #00a4dc)) !important;
+    color: var(--jf-osd-btn-focus-color, var(--jf-btn-primary-color, #ffffff)) !important;
+    border: 2px solid var(--jf-osd-btn-focus-border, var(--jf-btn-primary-focus-border, #ffffff)) !important;
 }
 
 .osd-btn-play .osd-icon {
@@ -1020,10 +1039,11 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
     left: 0;
     top: 0;
     height: 100%;
-    background: var(--osd-slider-progress);
+    /* Seek bar fill progress with solid accent fallbacks prevents invisible scrubber on legacy webOS */
+    background: var(--osd-slider-progress, var(--jf-btn-primary-bg, #00a4dc));
     width: 0%;
     /* border-radius removed to ensure it touches the thumb seamlessly */
-    box-shadow: 2px 0 0 var(--osd-slider-progress); /* Bridge gap to thumb center */
+    box-shadow: 2px 0 0 var(--osd-slider-progress, var(--jf-btn-primary-bg, #00a4dc)); /* Bridge gap to thumb center */
     pointer-events: none;
     transition: width 0.1s ease-out;
 }
@@ -1301,7 +1321,8 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
     text-align: center;
     margin-bottom: 1.2em;
     /* 1em * 1.2 */
-    color: var(--osd-text-color);
+    /* Track menu title header color with high-contrast text fallback */
+    color: var(--osd-text-color, #ffffff);
 }
 
 .track-menu-options {
@@ -1323,7 +1344,8 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
     /* Standardized dynamic radius */
     background: transparent;
     border: none;
-    color: var(--osd-text-color);
+    /* Track option item label color with resilient white fallback */
+    color: var(--osd-text-color, #ffffff);
     font-size: 1.2em;
     /* 1em * 1.2 */
     font-weight: bold;
@@ -1588,7 +1610,8 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 }
 
 .osd-slider-container.menu-slider .osd-slider-fill {
-    background: var(--osd-accent-color);
+    /* Menu slider fill bar with theme accent color fallback */
+    background: var(--osd-accent-color, var(--jf-accent, #00a4dc));
     /* border-radius removed */
 }
 
@@ -1680,7 +1703,8 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 
 .playback-info-close:focus,
 .playback-info-close.focused {
-    background: var(--osd-accent-color);
+    /* Playback info close button focus background fallback */
+    background: var(--osd-accent-color, var(--jf-accent, #00a4dc));
     color: var(--jf-primary-btn-color) !important;
     outline: none;
     border: 2px solid var(--jf-action-btn-active-border)!important;
@@ -1842,7 +1866,8 @@ body.webos-cursor-active .osd-btn.focused .osd-icon {
 .osd-offset-close:hover,
 .osd-offset-close:focus,
 .osd-offset-close.focused {
-    background: var(--osd-accent-color);
+    /* Offset modal close button focus background fallback */
+    background: var(--osd-accent-color, var(--jf-accent, #00a4dc));
     color: var(--jf-primary-btn-color) !important;
     transform: scale(1.1);
     outline: none !important;

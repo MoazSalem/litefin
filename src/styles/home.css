@@ -123,25 +123,36 @@ html[dir="rtl"][data-layout-media-rows="modern-posters"] .media-row--skeleton .r
  * --card-expanded-width, --card-margin) that scale with user settings.
  * We override classic skeletons with high-specificity modern selectors.
  */
+/*
+ * High-specificity modern skeleton overrides with resilient fallback metrics.
+ * On legacy runtimes (Chromium < 49), bare variable lookups without defaults
+ * will cause older CSS parsers to invalidate and drop the entire rule declaration,
+ * causing loading placeholders to collapse horizontally or vertically before JS sets them.
+ */
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card {
-    width: var(--card-width) !important;
-    height: var(--card-height) !important;
-    margin-right: var(--card-margin) !important;
+    /* Fallback width matches classic poster card default */
+    width: var(--card-width, 240px) !important;
+    /* Fallback height provides consistent vertical baseline */
+    height: var(--card-height, 360px) !important;
+    /* Margin spacing fallback maintains horizontal grid separation */
+    margin-right: var(--card-margin, 24px) !important;
     margin-left: 0 !important;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.landscape {
+    /* Resilient landscape aspect ratio width preserves 16:9 banner dimensions */
     width: var(--card-expanded-width, var(--card-landscape-width, 400px)) !important;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.square {
-    width: var(--card-square-width) !important;
+    /* Square skeleton fallback maintains 1:1 ratio width */
+    width: var(--card-square-width, 240px) !important;
 }
 
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
@@ -357,8 +368,15 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
     padding: 12px 4px 0 4px;
 }
 
+/*
+ * Media Card Title & Subtitle Styling
+ * Text colors and scaled font calculations include robust static fallbacks
+ * to maintain typography hierarchy even if CSS variables are uninitialized.
+ */
 .card-title {
-    color: var(--jf-text-primary);
+    /* Primary text color with high-contrast white fallback */
+    color: var(--jf-text-primary, #ffffff);
+    /* Scaled title font size computation */
     font-size: calc(1.2rem * var(--card-title-font-scale, 1));
     font-weight: 600;
     margin: 0;
@@ -369,7 +387,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
 }
 
 .card-subtitle {
-    color: var(--jf-text-secondary);
+    /* Secondary text color with subdued gray fallback */
+    color: var(--jf-text-secondary, #aaaaaa);
+    /* Scaled subtitle font size computation */
     font-size: calc(1rem * var(--card-title-font-scale, 1));
     margin: 6px 0 0;
     text-align: center;

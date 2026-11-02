@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { touchHorizontalScroller } from './TouchHorizontalScroller.js';
 import { layoutManager } from '../ui/LayoutManager.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 
 const log = logger.create('AndroidAdapter');
 
@@ -146,6 +147,15 @@ class AndroidAdapter {
         document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
+
+        // Synchronize active reverse proxy custom headers to native Android bridge
+        try {
+            if (typeof customHeaders !== 'undefined' && typeof customHeaders?.syncCurrentServer === 'function') {
+                customHeaders.syncCurrentServer();
+            }
+        } catch (e) {
+            log.warn('Failed synchronizing custom headers on AndroidAdapter init:', e);
+        }
 
         // Synchronize display wake lock and standard Media Session playback state
         // Prevents the Android system screensaver (Ambient Mode, Daydream) from activating
@@ -1295,6 +1305,67 @@ class AndroidAdapter {
             log.warn('Failed retrieving manufacturer:', err);
         }
         return 'Android';
+    }
+
+    /**
+     * ========================================================================
+     * Reverse Proxy Custom Headers Synchronization
+     * ========================================================================
+     * Dispatches reverse proxy headers (e.g. Cloudflare Service Tokens) to the
+     * native Android WebView bridge, allowing AuthenticatedWebViewClient to
+     * intercept media asset requests and attach headers without CORS preflights.
+     *
+     * @param {string} serverUrl - Jellyfin server root URL
+     * @param {Object} headersMap - Key-value map of header names to values
+     * @returns {boolean} True if successfully dispatched to native bridge
+     */
+    syncCustomHeaders(serverUrl, headersMap) {
+        if (typeof window === 'undefined') return false;
+
+        try {
+            if (typeof window.LitefinAndroid?.setCustomHeaders === 'function') {
+                const serialized = JSON.stringify(headersMap || {});
+                window.LitefinAndroid.setCustomHeaders(serverUrl, serialized);
+                log.info(`Synchronized custom reverse proxy headers to native Android bridge for ${serverUrl}`);
+                return true;
+            }
+        } catch (e) {
+            log.warn('Failed synchronizing custom headers with native bridge:', e);
+        }
+        return false;
+    }
+
+    /**
+     * Checks if native shell supports transparent request interception for custom headers.
+     * @returns {boolean}
+     */
+    hasNativeHeaderInterception() {
+        if (typeof window === 'undefined') return false;
+        try {
+            return typeof window.LitefinAndroid?.hasNativeHeaderInterception === 'function' &&
+                Boolean(window.LitefinAndroid.hasNativeHeaderInterception());
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
+     * Injects an authentication cookie directly into the native WebView cookie jar.
+     * @param {string} url - Target URL domain
+     * @param {string} cookie - Full cookie specification string
+     * @returns {boolean}
+     */
+    setCookie(url, cookie) {
+        if (typeof window === 'undefined') return false;
+        try {
+            if (typeof window.LitefinAndroid?.setCookie === 'function') {
+                window.LitefinAndroid.setCookie(url, cookie);
+                return true;
+            }
+        } catch (e) {
+            log.warn('Failed injecting cookie to native bridge:', e);
+        }
+        return false;
     }
 
     /**
