@@ -174,8 +174,10 @@ export default class MseAudioEngine {
         await this._queue.run((sb) => {
             sb.timestampOffset = offset;
         });
-        if (!fresh() || !(await this._appendSegment(gen, item.key))) return;
+        if (!fresh()) return;
+        /* play() may already be running, so seeking after the first append would rewind audio that already played */
         this._audio.currentTime = startMs / 1000;
+        if (!(await this._appendSegment(gen, item.key))) return;
         this._ready = true;
         this._startTimer();
         this._pump(gen);
