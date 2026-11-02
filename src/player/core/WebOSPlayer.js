@@ -104,6 +104,17 @@ const SEEK_THRESHOLD_MS = 1000;
 const WEBOS_SAFE_RATES = [0.5, 1, 2, 4];
 
 /**
+ * Speed goes through the TV's media service: WebAppMgr mutes the sound at any
+ * playbackRate other than 1, while the media service speeds up picture and
+ * sound together. A fresh pipeline registers with the service a few seconds
+ * after load, so a missing mediaId is retried for longer than a rejected call.
+ */
+const PLAY_RATE_URI = 'luna://com.webos.media/setPlayRate';
+const PLAY_RATE_RETRY_MS = 500;
+const PLAY_RATE_PENDING_TRIES = 20;
+const PLAY_RATE_FAILED_TRIES = 4;
+
+/**
  * Load watchdogs: longest wait from load() to 'canplay' while the media
  * pipeline reports no progress at all. 'loadedmetadata' and 'progress' re-arm
  * the timer, so slow but working servers are not cut off.
@@ -322,6 +333,15 @@ export class WebOSPlayer {
 
         // ---- Bound event handlers (stored so we can removeEventListener cleanly) ----
         this._boundHandlers = {};
+
+        // ---- Playback speed (see setSpeed) ----
+        this._playbackSpeed = 1;
+        /** The media service holds a non-1 rate for the current pipeline, so 1 must be sent back */
+        this._playRateChanged = false;
+        /** The element's playbackRate was used instead of the media service (silent playback) */
+        this._playRateOnElement = false;
+        this._playRateFailures = 0;
+        this._playRateTimer = null;
 
         // ---- Aspect ratio mode ('auto' | 'zoom' | 'stretch') ----
         this._aspectMode = 'auto';
@@ -2540,6 +2560,7 @@ export class WebOSPlayer {
         this._clearStallCheck();
         this._destroyHlsPlayer();
         this._stopOutputWindowTimers();
+        this._resetPlayRate();
         this._outputWindowActive = false;
         this._outputWindowFailures = 0;
         this._outputWindowRerun = false;
@@ -3251,25 +3272,109 @@ export class WebOSPlayer {
     /**
      * Set the playback rate.
      *
-     * WebOS hardware only reliably supports a subset of speeds. We snap to the
-     * nearest safe value in WEBOS_SAFE_RATES to prevent silent no-ops or
-     * decoder stalls on obscure speeds like 1.5 or 3.
+     * Setting video.playbackRate makes WebAppMgr mute the sound, so the rate is sent to the TV's
+     * media service (picture and sound speed up together). That needs the pipeline's mediaId, which
+     * appears a few seconds after load, so the call is retried and repeated on loadedmetadata/playing.
+     * Without the media service (no PalmServiceBridge, or the TV rejects the call) it falls back to
+     * the element's playbackRate, snapped to the nearest value in WEBOS_SAFE_RATES.
      *
      * @param {number} speed
      */
     setSpeed(speed) {
         if (!this._videoElement) return;
 
-        // Find the closest supported rate to the requested value
+        this._playbackSpeed = speed;
+        this._playRateFailures = 0;
+        if (typeof window.PalmServiceBridge === 'undefined') {
+            this._applyElementRate(speed);
+            return;
+        }
+        this._applyPlayRate();
+    }
+
+    /** @private */
+    async _applyPlayRate() {
+        clearTimeout(this._playRateTimer);
+        this._playRateTimer = null;
+
+        const video = this._videoElement;
+        const speed = this._playbackSpeed;
+        if (!video) return;
+        // Nothing to undo
+        if (speed === 1 && !this._playRateChanged && !this._playRateOnElement) return;
+
+        const mediaId = video.mediaId;
+        let ok = false;
+        if (mediaId) {
+            const reply = await this._callLuna(PLAY_RATE_URI, { mediaId, playRate: speed, audioOutput: true });
+            // The speed or the element changed while the call was in flight
+            if (video !== this._videoElement || speed !== this._playbackSpeed) return;
+            ok = Boolean(reply && reply.returnValue);
+        }
+
+        if (ok) {
+            if (this._playRateOnElement) {
+                this._playRateOnElement = false;
+                video.playbackRate = 1;
+            }
+            this._playRateChanged = speed !== 1;
+            this._playRateFailures = 0;
+            return;
+        }
+
+        this._playRateFailures++;
+        if (this._playRateFailures < (mediaId ? PLAY_RATE_FAILED_TRIES : PLAY_RATE_PENDING_TRIES)) {
+            this._playRateTimer = setTimeout(() => this._applyPlayRate(), PLAY_RATE_RETRY_MS);
+            return;
+        }
+
+        log.warn('WebOSPlayer: TV media service rejected the play rate, using the element playbackRate');
+        this._applyElementRate(speed);
+    }
+
+    /**
+     * Fallback: the element's playbackRate. Works, but the TV mutes the sound at any rate other than 1.
+     * @private
+     */
+    _applyElementRate(speed) {
+        const video = this._videoElement;
+        if (!video) return;
+
         const safeRate = WEBOS_SAFE_RATES.reduce((prev, curr) => {
             return Math.abs(curr - speed) < Math.abs(prev - speed) ? curr : prev;
         });
-
         if (safeRate !== speed) {
             log.info('WebOSPlayer: Speed', speed, '→ snapped to safe rate', safeRate);
         }
 
-        this._videoElement.playbackRate = safeRate;
+        video.playbackRate = safeRate;
+        this._playRateOnElement = safeRate !== 1;
+        this._playRateChanged = false;
+    }
+
+    /**
+     * Re-send a non-default rate when the pipeline (re)starts or resumes. A rate the
+     * pipeline dropped, or one still pending on a new mediaId, is applied again here.
+     * @private
+     */
+    _reapplyPlayRate() {
+        if (this._playbackSpeed === 1 && !this._playRateChanged) return;
+        if (this._playRateOnElement || typeof window.PalmServiceBridge === 'undefined') return;
+        this._playRateFailures = 0;
+        this._applyPlayRate();
+    }
+
+    /** A new pipeline starts at 1x, whatever the last item used. @private */
+    _resetPlayRate() {
+        clearTimeout(this._playRateTimer);
+        this._playRateTimer = null;
+        this._playbackSpeed = 1;
+        this._playRateChanged = false;
+        this._playRateFailures = 0;
+        if (this._playRateOnElement && this._videoElement) {
+            this._videoElement.playbackRate = 1;
+        }
+        this._playRateOnElement = false;
     }
 
     // ========================================================================
@@ -3975,6 +4080,7 @@ export class WebOSPlayer {
 
     /** @private */
     _onPlaying() {
+        this._reapplyPlayRate();
         if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
             const target = this._robustSeekTarget;
             const current = this.getCurrentTime();
@@ -4207,6 +4313,7 @@ export class WebOSPlayer {
     _onLoadedMetadata() {
         log.debug('WebOSPlayer: Metadata loaded, duration:', this.getDuration());
         this._fitVideoBox();
+        this._reapplyPlayRate();
         this.onEvent({ type: 'loadedmetadata', data: { duration: this.getDuration() } });
     }
 

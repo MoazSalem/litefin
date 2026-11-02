@@ -3947,9 +3947,10 @@ export class JellyfinPlayer extends EventEmitter {
         // Evaluate backend-specific hardware constraints
         switch (backend) {
             case 'webos':
-                // LG webOS hardware decoders reliably support [0.5, 1, 2, 4];
-                // all other rates trigger silent snap-down in WebOSPlayer.js
-                return [0.5, 1, 2, 4].includes(speed);
+                // WebOSPlayer sends the rate to the TV's media service (sound stays on).
+                // 0.5x to 2x is confirmed on hardware; faster rates may be rejected and
+                // then fall back to the element playbackRate, which mutes the sound
+                return speed >= 0.5 && speed <= 2;
 
             case 'tizen':
                 // Samsung AVPlay trickplay requires integer multipliers (1, 2, 4, 8);
