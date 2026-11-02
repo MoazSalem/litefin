@@ -9,7 +9,9 @@ export function mseSourceFor(mediaSource) {
     const stream = mediaSource?.MediaStreams?.find((s) => s.Type === 'Audio');
     const codec = String(stream?.Codec ?? '').toLowerCase();
     const mime = COPY_MIMES[codec];
-    return mime ? { audioCodec: 'copy', sampleRate: null, mime } : { ...FLAC_SOURCE };
+    if (mime) return { audioCodec: 'copy', sampleRate: null, mime, format: mime };
+    /* the server keeps the source bit depth in the flac it transcodes to, and that changes the init segment */
+    return { ...FLAC_SOURCE, format: stream?.BitDepth ? `flac/${stream.BitDepth}` : 'flac' };
 }
 
 export function supportsMse(win, mime) {

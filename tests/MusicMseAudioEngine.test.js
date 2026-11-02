@@ -287,7 +287,7 @@ function setup({ autoOpen = true, changeType = true, allowChangeType } = {}) {
         return lines.join('\n');
     };
 
-    const addTrack = (id, durations, { mime = MIME } = {}) => {
+    const addTrack = (id, durations, { mime = MIME, format } = {}) => {
         const base = `http://srv/${id}/`;
         playlists.set(`${base}main.m3u8`, [playlistText(base, durations, '')]);
         return {
@@ -295,6 +295,7 @@ function setup({ autoOpen = true, changeType = true, allowChangeType } = {}) {
             url: `${base}main.m3u8`,
             kind: 'mse',
             mime,
+            ...(format ? { format } : {}),
             durations,
             durationMs: 1000 * durations.reduce((a, b) => a + b, 0)
         };
@@ -1497,5 +1498,51 @@ test('allowChangeType false: a same-codec next track is still appended gapless',
     await settle();
 
     assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4', 'b/init.mp4', 'b/seg0.mp4']);
+    assert.equal(h.mediaSources.length, 1);
+});
+
+test('allowChangeType false: a next track with another FLAC bit depth is not appended; ended starts it in a rebuilt MediaSource', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
+    const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
+    await h.engine.load(a);
+    await h.engine.preloadNext(b);
+    h.engine.play();
+    await settle();
+
+    assert.ok(!h.appendedUrls().some((url) => url.startsWith('b/')));
+
+    h.audios[0].fire('ended');
+    await settle();
+
+    assert.deepEqual(h.trackStarts(), ['b']);
+    assert.equal(h.engine.isPlaying, true);
+    assert.equal(h.mediaSources.length, 2);
+    assert.deepEqual(h.mediaSources[1].sourceBuffers[0].ranges, [[0, 3]]);
+});
+
+test('allowChangeType false: load of another FLAC bit depth rebuilds the MediaSource', async () => {
+    const h = setup({ allowChangeType: false });
+    const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
+    const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
+    await h.engine.load(a);
+    await settle();
+    await h.engine.load(b);
+    await settle();
+
+    assert.equal(h.mediaSources.length, 2);
+    assert.equal(h.engine.currentTrackId, 'b');
+});
+
+test('a next track with another FLAC bit depth stays gapless where a new init segment is supported', async () => {
+    const h = setup();
+    const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
+    const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
+    await h.engine.load(a);
+    await h.engine.preloadNext(b);
+    await settle();
+
+    assert.deepEqual(h.appendedUrls(), ['a/init.mp4', 'a/seg0.mp4', 'b/init.mp4', 'b/seg0.mp4']);
+    assert.ok(!h.sbLog().some((x) => x.startsWith('changeType')));
     assert.equal(h.mediaSources.length, 1);
 });
