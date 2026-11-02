@@ -329,6 +329,16 @@ test('CustomHeaders: native Android request interception fast-path', async () =>
         const resolved = await customHeaders.resolveImageUrl(imageUrl, serverUrl);
         assert.strictEqual(resolved, imageUrl);
 
+        // Verify bypassNative: true bypasses native interception for fallback handling
+        global.fetch = async () => ({
+            ok: true,
+            status: 200,
+            blob: async () => ({ size: 1024, type: 'image/jpeg' })
+        });
+        global.URL.createObjectURL = () => 'blob:http://localhost/test-blob-uuid';
+        const bypassed = await customHeaders.resolveImageUrl(imageUrl, serverUrl, { bypassNative: true });
+        assert.strictEqual(bypassed, 'blob:http://localhost/test-blob-uuid');
+
         // Verify header synchronization
         customHeaders.syncCurrentServer();
         assert.strictEqual(syncedHeaders?.['CF-Access-Client-Id'], 'client-id-test');

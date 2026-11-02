@@ -273,6 +273,17 @@ class BackdropManager {
             };
             img.onerror = () => {
                 log.warn(`Failed to load backdrop from ${effectiveUrl}`);
+                // If native direct request failed, fallback to JS fetch & blob
+                if (customHeaders?.hasCustomHeaders?.() && effectiveUrl === url) {
+                    customHeaders
+                        .resolveImageUrl(url, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== url) {
+                                img.src = blobUrl;
+                            }
+                        })
+                        .catch(() => {});
+                }
             };
             img.src = effectiveUrl;
         };

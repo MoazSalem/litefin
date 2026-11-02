@@ -113,10 +113,9 @@ class DetailsPage extends Page {
      * related content rows (Similar, Next Up, Cast).
      */
     _renderMediaCard(item, isLandscape, type, options = {}) {
-        // Default to 'details-row' which maps to the 'home' preset (228px posters, 388px thumbs)
-        // rather than the massive 'details' primary image presets.
-        options.contextType = options.contextType || 'details-row';
-        return super._renderMediaCard(item, isLandscape, type, options);
+        // Resolve contextType string cleanly so Page.js receives a valid string rather than an options Object
+        const contextType = typeof options === 'string' ? options : (options?.contextType || 'details-row');
+        return super._renderMediaCard(item, isLandscape, type, contextType);
     }
 
     /**
@@ -1543,6 +1542,15 @@ class DetailsPage extends Page {
              * to fetch the authenticated blob URL so native WebViews display it.
              * ================================================================
              */
+            const showFallback = () => {
+                // Ensure BlurHash placeholder canvas is removed when falling back
+                if (posterCanvas && posterCanvas.parentNode) {
+                    posterCanvas.parentNode.removeChild(posterCanvas);
+                }
+                const isLandscape = posterType === 'landscape';
+                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
+            };
+
             const applyPoster = (effectivePosterUrl) => {
                 const img = new Image();
                 img.onload = () => {
@@ -1556,6 +1564,24 @@ class DetailsPage extends Page {
                             }
                         }, 250);
                     }
+                };
+                img.onerror = () => {
+                    log.warn(`Failed to load details poster from ${effectivePosterUrl}`);
+                    // If native interception was used and the direct request failed, fallback to JS fetch & blob
+                    if (customHeaders?.hasCustomHeaders?.() && effectivePosterUrl === posterUrl) {
+                        customHeaders
+                            .resolveImageUrl(posterUrl, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== posterUrl) {
+                                    img.src = blobUrl;
+                                    return;
+                                }
+                                showFallback();
+                            })
+                            .catch(() => showFallback());
+                        return;
+                    }
+                    showFallback();
                 };
                 img.src = effectivePosterUrl;
                 img.alt = item.Name;

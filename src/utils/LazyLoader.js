@@ -354,6 +354,29 @@ class LazyLoader {
                 // Ignore error events fired while transitioning from placeholder
                 if (img.src && img.src.startsWith('data:image/gif')) return;
 
+                // When native request interception is active but encounters a network glitch,
+                // seamlessly fallback to the authenticated JavaScript fetch and Blob URL pipeline.
+                const targetSrc = img.dataset.src;
+                if (!img.dataset.nativeFallbackTried && customHeaders?.hasCustomHeaders?.() && targetSrc) {
+                    img.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(targetSrc, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== targetSrc && img.isConnected) {
+                                img.removeAttribute('crossorigin');
+                                img.src = blobUrl;
+                                return;
+                            }
+                            img.removeAttribute('data-lazy-loading');
+                            this._handleImageError(img);
+                        })
+                        .catch(() => {
+                            img.removeAttribute('data-lazy-loading');
+                            this._handleImageError(img);
+                        });
+                    return;
+                }
+
                 img.removeAttribute('data-lazy-loading');
                 this._handleImageError(img);
             };
@@ -467,6 +490,29 @@ class LazyLoader {
         img.onerror = () => {
             // Ignore error events fired while transitioning from placeholder
             if (img.src && img.src.startsWith('data:image/gif')) return;
+
+            // When native request interception is active but encounters a network glitch,
+            // seamlessly fallback to the authenticated JavaScript fetch and Blob URL pipeline.
+            const targetSrc = img.dataset.src;
+            if (!img.dataset.nativeFallbackTried && customHeaders?.hasCustomHeaders?.() && targetSrc) {
+                img.dataset.nativeFallbackTried = 'true';
+                customHeaders
+                    .resolveImageUrl(targetSrc, null, { bypassNative: true })
+                    .then((blobUrl) => {
+                        if (blobUrl && blobUrl !== targetSrc && img.isConnected) {
+                            img.removeAttribute('crossorigin');
+                            img.src = blobUrl;
+                            return;
+                        }
+                        img.removeAttribute('data-lazy-loading');
+                        this._handleImageError(img);
+                    })
+                    .catch(() => {
+                        img.removeAttribute('data-lazy-loading');
+                        this._handleImageError(img);
+                    });
+                return;
+            }
 
             img.removeAttribute('data-lazy-loading');
             this._handleImageError(img);

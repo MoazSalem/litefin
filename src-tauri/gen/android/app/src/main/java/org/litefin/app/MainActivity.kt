@@ -1419,6 +1419,7 @@ class MainActivity : TauriActivity() {
       view: WebView?,
       request: WebResourceRequest?
     ): WebResourceResponse? {
+      // Safely extract request URI and fallback to default delegate when absent
       val url = request?.url ?: return delegate.shouldInterceptRequest(view, request)
       val urlStr = url.toString()
       val serverUrl = protectedServerUrl
@@ -1426,54 +1427,127 @@ class MainActivity : TauriActivity() {
       // Check if request targets the configured reverse-proxy server
       if (!serverUrl.isNullOrEmpty() && customProxyHeaders.isNotEmpty() && urlStr.startsWith(serverUrl, ignoreCase = true)) {
         val path = url.path ?: ""
-        // Intercept images and server health pings where custom headers are needed
+        val method = request.method ?: "GET"
+
+        // Case-insensitive check for image accept headers across browser variants
+        val hasImageAccept = request.requestHeaders.entries.any {
+          it.key.equals("Accept", ignoreCase = true) && it.value.contains("image/")
+        }
+
+        // Intercept image assets, artwork endpoints, and server health pings
         val isTargetResource = path.contains("/Images/", ignoreCase = true) ||
-          request.requestHeaders["Accept"]?.contains("image/") == true ||
+          hasImageAccept ||
           path.endsWith("/System/Ping", ignoreCase = true)
 
-        if (isTargetResource && request.method.equals("GET", ignoreCase = true)) {
-          try {
-            val reqBuilder = Request.Builder()
-              .url(urlStr)
-              .get()
+        // Only handle standard read operations and CORS preflights natively
+        if (isTargetResource && (method.equals("GET", ignoreCase = true) ||
+            method.equals("OPTIONS", ignoreCase = true) ||
+            method.equals("HEAD", ignoreCase = true))) {
 
-            // Forward original request headers, omitting Host to avoid mismatch
+          // Short-circuit CORS preflight requests with permissive headers
+          if (method.equals("OPTIONS", ignoreCase = true)) {
+            val preflightHeaders = mutableMapOf(
+              "Access-Control-Allow-Origin" to "*",
+              "Access-Control-Allow-Methods" to "GET, OPTIONS, HEAD",
+              "Access-Control-Allow-Headers" to "*",
+              "Access-Control-Max-Age" to "86400"
+            )
+            return WebResourceResponse(
+              "text/plain",
+              "UTF-8",
+              204,
+              "No Content",
+              preflightHeaders,
+              java.io.ByteArrayInputStream(ByteArray(0))
+            )
+          }
+
+          try {
+            // Instantiate native request builder for the intercepted destination
+            val reqBuilder = Request.Builder().url(urlStr)
+            if (method.equals("HEAD", ignoreCase = true)) {
+              reqBuilder.head()
+            } else {
+              reqBuilder.get()
+            }
+
+            // Forward original request headers while omitting Host and Accept-Encoding.
+            // Stripping Accept-Encoding lets OkHttp transparently decompress Gzip internally,
+            // delivering uncompressed raw byte streams directly to the WebView decoder.
             request.requestHeaders.forEach { (key, value) ->
-              if (!key.equals("Host", ignoreCase = true) && !customProxyHeaders.containsKey(key)) {
+              val lower = key.lowercase()
+              if (lower != "host" && lower != "accept-encoding" && !customProxyHeaders.containsKey(key)) {
                 reqBuilder.header(key, value)
               }
             }
 
-            // Inject configured custom reverse proxy credentials
+            // Inject configured reverse-proxy authentication headers (e.g. Cloudflare Service Tokens)
             customProxyHeaders.forEach { (key, value) ->
               reqBuilder.header(key, value)
             }
 
-            // Execute network request natively
+            // Execute network request natively via connection-pooled HTTP client
             val response = httpClient.newCall(reqBuilder.build()).execute()
+            val code = response.code
             val body = response.body
 
-            if (response.isSuccessful && body != null) {
-              val contentType = body.contentType()?.toString() ?: "image/jpeg"
+            // Handle successful resource payloads (2xx) or conditional cache validations (304)
+            if (response.isSuccessful || code == 304) {
+              val contentType = body?.contentType()?.toString() ?: "image/jpeg"
               val mimeType = contentType.substringBefore(";").trim()
               val responseHeaders = mutableMapOf<String, String>()
 
-              // Add permissive CORS headers so WebView accepts payload without complaint
+              // Filter out upstream CORS and compression headers to avoid duplicate collisions
+              response.headers.names().forEach { name ->
+                val lowerName = name.lowercase()
+                if (lowerName != "content-encoding" &&
+                    lowerName != "content-length" &&
+                    !lowerName.startsWith("access-control-")) {
+                  responseHeaders[name] = response.header(name) ?: ""
+                }
+              }
+
+              // Guarantee single canonical permissive CORS response headers
               responseHeaders["Access-Control-Allow-Origin"] = "*"
               responseHeaders["Access-Control-Allow-Methods"] = "GET, OPTIONS, HEAD"
               responseHeaders["Access-Control-Allow-Headers"] = "*"
+              responseHeaders["Access-Control-Max-Age"] = "86400"
 
-              response.headers.names().forEach { name ->
-                responseHeaders[name] = response.header(name) ?: ""
+              // Binary media must pass null for encoding; text payloads use charset
+              val encoding = if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
+                null
+              } else {
+                body?.contentType()?.charset()?.name() ?: "UTF-8"
+              }
+
+              // Return empty stream for 304 Not Modified or decompressed byte stream for 200 OK
+              val stream = if (code == 304 || body == null) {
+                java.io.ByteArrayInputStream(ByteArray(0))
+              } else {
+                body.byteStream()
               }
 
               return WebResourceResponse(
                 mimeType,
-                "UTF-8",
-                response.code,
-                response.message.ifEmpty { "OK" },
+                encoding,
+                code,
+                response.message.ifEmpty { if (code == 304) "Not Modified" else "OK" },
                 responseHeaders,
-                body.byteStream()
+                stream
+              )
+            } else if (code == 404) {
+              // Return clean 404 response so image element onError fires immediately
+              val errorHeaders = mutableMapOf(
+                "Access-Control-Allow-Origin" to "*",
+                "Access-Control-Allow-Methods" to "GET, OPTIONS, HEAD"
+              )
+              return WebResourceResponse(
+                "text/plain",
+                "UTF-8",
+                404,
+                "Not Found",
+                errorHeaders,
+                java.io.ByteArrayInputStream(ByteArray(0))
               )
             }
           } catch (e: Exception) {

@@ -491,9 +491,11 @@ class CustomHeadersManager {
      *
      * @param {string} url - Target artwork or backdrop image URL
      * @param {string} [serverUrl] - Optional server URL override
+     * @param {Object} [options] - Resolution options
+     * @param {boolean} [options.bypassNative=false] - Force JS fetch and blob URL generation
      * @returns {Promise<string>} Blob URL or original image URL
      */
-    async resolveImageUrl(url, serverUrl) {
+    async resolveImageUrl(url, serverUrl, { bypassNative = false } = {}) {
         // Fast-path exit for invalid or empty image paths
         if (!url || typeof url !== 'string') return url;
 
@@ -508,7 +510,7 @@ class CustomHeadersManager {
         // Fast-path for native Android request interception:
         // When the native shell intercepts image requests via AuthenticatedWebViewClient,
         // headers are attached at the OS HTTP level. Skip JS fetch and return original URL directly!
-        if (this.hasNativeInterception(url, targetServer)) {
+        if (!bypassNative && this.hasNativeInterception(url, targetServer)) {
             return url;
         }
 
