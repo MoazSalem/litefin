@@ -428,6 +428,7 @@ export function normalizeWebClientSettings(cfg = {}) {
         enabled: cfg?.enableWebAllRatingsFromCache !== false,
         mode,
         order,
+        clickable: Boolean(cfg?.enableWebClickableRatingIcons ?? cfg?.EnableWebClickableRatingIcons ?? false),
         top250: Boolean(cfg?.enableImdbTop250Icon ?? cfg?.EnableImdbTop250Icon ?? false),
         extras: {
             tc: Boolean(cfg?.enableWebExtraTomatoesCertified ?? cfg?.EnableWebExtraTomatoesCertified ?? false),
@@ -535,4 +536,294 @@ export function filterAndOrderRatings(ratings, settings = null) {
     }
 
     return ordered;
+}
+
+
+/**
+ * ============================================================================
+ * Provider Link Resolution & Deep-Linking Helpers
+ * ============================================================================
+ * Matches Jellyfin Web WebUiInjector external URL creation for rating icons.
+ * Resolves destination URLs across IMDb, TMDb, Trakt, Rotten Tomatoes,
+ * Metacritic, Letterboxd, Simkl, MyAnimeList, AniList, Kinopoisk, and WhatsOn.
+ * ============================================================================
+ */
+
+/**
+ * Safely tests whether a given string is comprised entirely of numeric digits.
+ *
+ * @param {*} s - Value to test
+ * @returns {boolean} True if string contains only numeric digits
+ */
+export function isDigitsOnly(s) {
+    // Return false for null, undefined, or empty values
+    if (s === null || s === undefined) return false;
+
+    // Test for continuous numeric digits
+    return /^[0-9]+$/.test(String(s).trim());
+}
+
+/**
+ * Normalizes leading slashes on URL path segments.
+ *
+ * @param {*} p - Raw path or full URL
+ * @returns {string|null} Normalized path with single leading slash or full URL
+ */
+export function normalizeLeadingSlash(p) {
+    // Guard against blank or invalid parameters
+    if (p === undefined || p === null) return null;
+
+    let s = String(p).trim();
+    if (!s) return null;
+
+    // Retain absolute protocol links untouched
+    if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+
+    // Ensure leading single slash exists
+    if (s[0] !== '/') s = '/' + s;
+    return s;
+}
+
+/**
+ * Resolves an external provider page URL for a given rating item and metadata context.
+ * Faithfully mirrors the URL resolver implementation in Jellyfin Web Client WebUiInjector.
+ *
+ * @param {string} source - Raw or canonical provider source name
+ * @param {Object} rating - Rating item containing provider metadata and optional direct URL
+ * @param {Object} [context] - Context containing IDs (imdb, tmdb), content type, and season/episode info
+ * @returns {string|null} Destination URL or null if unavailable
+ */
+export function buildProviderHref(source, rating, context = {}) {
+    try {
+        // Resolve canonical source key using centralized alias directory
+        const canonical = normalizeSourceKey(source);
+
+        // Extract identifier mappings from context
+        const ids = context?.ids || {};
+        const imdbId = ids.imdb || ids.Imdb || context?.imdbId || null;
+        const tmdbId = ids.tmdb || ids.Tmdb || context?.tmdbId || null;
+
+        // Extract raw URL string from rating item
+        const rawUrl = rating ? (rating.url || rating.Url) : null;
+        const normalizedUrl = normalizeLeadingSlash(rawUrl);
+
+        // Content type formatting helpers
+        const contentType = String(context?.contentType || '').toLowerCase();
+        const seasonNumber = context?.seasonNumber;
+        const episodeNumber = context?.episodeNumber;
+
+        // --------------------------------------------------------------------
+        // 1. IMDb URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'imdb') {
+            // Prioritize raw direct provider URL if available
+            if (rawUrl) {
+                const s = String(rawUrl).trim();
+                if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) {
+                    return s;
+                }
+            }
+            // Construct canonical IMDb title link using resolved IMDb ID
+            if (imdbId) {
+                return `https://www.imdb.com/title/${String(imdbId).trim()}/`;
+            }
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 2. TVmaze URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'tvmaze') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (!s) return null;
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            if (s.indexOf('/') === 0) return `https://www.tvmaze.com${s}`;
+            return `https://www.tvmaze.com/${s}`;
+        }
+
+        // --------------------------------------------------------------------
+        // 3. The Movie Database (TMDb) URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'tmdb') {
+            // Direct URL path fallback
+            if (rawUrl) {
+                const s = String(rawUrl).trim();
+                if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+                if (s.indexOf('/') === 0) return `https://www.themoviedb.org${s}`;
+            }
+
+            // Structured fallback using TMDb numeric ID and media hierarchy
+            if (tmdbId) {
+                // Episode-level deep link
+                if (contentType === 'episode' && seasonNumber != null && episodeNumber != null) {
+                    return `https://www.themoviedb.org/tv/${String(tmdbId).trim()}/season/${String(seasonNumber).trim()}/episode/${String(episodeNumber).trim()}`;
+                }
+                // Season-level deep link
+                if (contentType === 'season' && seasonNumber != null) {
+                    return `https://www.themoviedb.org/tv/${String(tmdbId).trim()}/season/${String(seasonNumber).trim()}`;
+                }
+                // Series vs Movie link resolution
+                const kind = (contentType === 'show' || contentType === 'series') ? 'tv' : 'movie';
+                return `https://www.themoviedb.org/${kind}/${String(tmdbId).trim()}`;
+            }
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Trakt URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'trakt') {
+            // Direct URL path check
+            if (rawUrl) {
+                const s = String(rawUrl).trim();
+                if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+                if (s.indexOf('/') === 0) return `https://trakt.tv${s}`;
+            }
+
+            // Trakt accepts IMDb IDs for title and episode lookups
+            if (imdbId) {
+                const cleanImdb = String(imdbId).trim();
+                if (contentType === 'episode' && seasonNumber != null && episodeNumber != null) {
+                    return `https://trakt.tv/shows/${cleanImdb}/seasons/${String(seasonNumber).trim()}/episodes/${String(episodeNumber).trim()}`;
+                }
+                if (contentType === 'season' && seasonNumber != null) {
+                    return `https://trakt.tv/shows/${cleanImdb}/seasons/${String(seasonNumber).trim()}`;
+                }
+                const kind = (contentType === 'show' || contentType === 'series') ? 'shows' : 'movies';
+                return `https://trakt.tv/${kind}/${cleanImdb}`;
+            }
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 5. Rotten Tomatoes (Critics & Audience Popcorn)
+        // --------------------------------------------------------------------
+        if (canonical === 'tomatoes' || canonical === 'popcorn') {
+            if (!normalizedUrl || isDigitsOnly(rawUrl) || isDigitsOnly(normalizedUrl.replace(/^\/+/, ''))) return null;
+            if (normalizedUrl.indexOf('http://') === 0 || normalizedUrl.indexOf('https://') === 0) {
+                return normalizedUrl;
+            }
+            return `https://www.rottentomatoes.com${normalizedUrl}`;
+        }
+
+        // --------------------------------------------------------------------
+        // 6. Metacritic (Critics, Users, Must-See)
+        // --------------------------------------------------------------------
+        if (canonical === 'metacritic' || canonical === 'metacriticuser' || canonical === 'metacriticms') {
+            if (!normalizedUrl || isDigitsOnly(rawUrl) || isDigitsOnly(normalizedUrl.replace(/^\/+/, ''))) return null;
+            if (normalizedUrl.indexOf('http://') === 0 || normalizedUrl.indexOf('https://') === 0) {
+                return normalizedUrl;
+            }
+            // Preserve explicit movie or tv paths
+            if (normalizedUrl.indexOf('/movie/') === 0 || normalizedUrl.indexOf('/tv/') === 0) {
+                return `https://www.metacritic.com${normalizedUrl}`;
+            }
+            // Infer route prefix from media content type
+            const prefix = (contentType === 'show' || contentType === 'series') ? '/tv' : '/movie';
+            return `https://www.metacritic.com${prefix}${normalizedUrl}`;
+        }
+
+        // --------------------------------------------------------------------
+        // 7. Letterboxd URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'letterboxd') {
+            if (!normalizedUrl || isDigitsOnly(rawUrl) || isDigitsOnly(normalizedUrl.replace(/^\/+/, ''))) return null;
+            if (normalizedUrl.indexOf('http://') === 0 || normalizedUrl.indexOf('https://') === 0) {
+                return normalizedUrl;
+            }
+            return `https://letterboxd.com${normalizedUrl}`;
+        }
+
+        // --------------------------------------------------------------------
+        // 8. Simkl URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'simkl') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 9. MyAnimeList (MAL) URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'myanimelist') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            if (isDigitsOnly(s)) return `https://myanimelist.net/anime/${s}`;
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 10. AniList URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'anilist') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            if (isDigitsOnly(s)) return `https://anilist.co/anime/${s}`;
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 11. Kinopoisk URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'kinopoisk') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            if (isDigitsOnly(s)) return `https://www.kinopoisk.ru/film/${s}/`;
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 12. WhatsOn French Providers (SensCritique, AlloCine, BetaSeries)
+        // --------------------------------------------------------------------
+        if (canonical === 'senscritique' || canonical === 'allocine_critics' || canonical === 'allocine_users' || canonical === 'betaseries') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (!s) return null;
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            const cleanPath = s.replace(/^\/+/, '');
+            if (canonical === 'senscritique') return `https://www.senscritique.com/${cleanPath}`;
+            if (canonical === 'allocine_critics' || canonical === 'allocine_users') return `https://www.allocine.fr/${cleanPath}`;
+            if (canonical === 'betaseries') return `https://www.betaseries.com/${cleanPath}`;
+            return null;
+        }
+
+        // --------------------------------------------------------------------
+        // 13. Roger Ebert Reviews URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'rogerebert') {
+            if (!rawUrl) return null;
+            const s = String(rawUrl).trim();
+            if (!s) return null;
+            if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+            const cleanPath = s.replace(/^\/+/, '');
+            if (!cleanPath) return null;
+            return `https://www.rogerebert.com/reviews/${cleanPath}`;
+        }
+
+        // --------------------------------------------------------------------
+        // 14. MDBList Aggregator URL Builder
+        // --------------------------------------------------------------------
+        if (canonical === 'mdblist') {
+            if (rawUrl) {
+                const s = String(rawUrl).trim();
+                if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) return s;
+                if (s.indexOf('/') === 0) return `https://mdblist.com${s}`;
+            }
+            if (imdbId) {
+                return `https://mdblist.com/item/${String(imdbId).trim()}`;
+            }
+            return null;
+        }
+
+        return null;
+    } catch (e) {
+        // Fallback gracefully on parsing errors
+        return null;
+    }
 }
