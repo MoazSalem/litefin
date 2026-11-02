@@ -230,10 +230,10 @@ class HeroCarousel {
         // 1820px backdrop at once, starving the main thread during page load.
         // We set background-image exclusively for the active slide (index 0).
         // Inactive slides store the URL in data-backdrop and load just-in-time.
-        // When reverse proxy headers are active, check the cached Blob URL first.
+        // When reverse proxy headers are active, check native interception or cached Blob URL.
         // ---------------------------------------------------------------------
         const initialBackdrop = customHeaders?.hasCustomHeaders?.()
-            ? customHeaders.getCachedBlobUrl(backdropUrl) || null
+            ? (customHeaders.hasNativeInterception?.(backdropUrl) ? backdropUrl : customHeaders.getCachedBlobUrl(backdropUrl) || null)
             : backdropUrl;
         const backdropStyle = isActive && initialBackdrop ? ` style="background-image: url('${initialBackdrop}')"` : '';
 
@@ -927,13 +927,19 @@ class HeroCarousel {
             /*
              * Applies the loaded backdrop image to the hero element.
              * Fades out and discards the BlurHash canvas once the graphic settles.
+             * Uses img.src or effectiveUrl so that fallback Blob URLs are correctly applied.
              */
             const applyBackdrop = (effectiveUrl) => {
                 const img = new Image();
+
+                // When image finishes downloading and decoding, attach to background-image
                 img.onload = () => {
                     if (backdrop.dataset.backdrop === url) {
-                        backdrop.style.backgroundImage = `url('${effectiveUrl}')`;
-                        // Fade out blurhash canvas if present
+                        // Prefer resolved img.src to ensure fallback Blob URLs are utilized
+                        const finalUrl = img.src || effectiveUrl;
+                        backdrop.style.backgroundImage = `url('${finalUrl}')`;
+
+                        // Fade out blurhash canvas once the high-res graphic settles
                         const canvas = item.querySelector('.hero-blurhash-canvas');
                         if (canvas) {
                             canvas.style.opacity = '0';
@@ -943,6 +949,22 @@ class HeroCarousel {
                         }
                     }
                 };
+
+                // Handle backdrop loading failure with authenticated JS fetch fallback
+                img.onerror = () => {
+                    if (customHeaders?.hasCustomHeaders?.() && (effectiveUrl === url || !img.src.startsWith('blob:'))) {
+                        customHeaders
+                            .resolveImageUrl(url, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== url) {
+                                    img.src = blobUrl;
+                                }
+                            })
+                            .catch(() => {});
+                    }
+                };
+
+                // Trigger network load
                 img.src = effectiveUrl;
             };
 
@@ -991,6 +1013,22 @@ class HeroCarousel {
                     adjustLogoHeight();
                 } else {
                     logo.onload = adjustLogoHeight;
+                }
+            };
+
+            // Fallback for logo images if native network request fails
+            logo.onerror = () => {
+                if (customHeaders?.hasCustomHeaders?.() && !logo.dataset.nativeFallbackTried) {
+                    logo.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(logo.dataset.src, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== logo.dataset.src) {
+                                logo.removeAttribute('crossorigin');
+                                logo.src = blobUrl;
+                            }
+                        })
+                        .catch(() => {});
                 }
             };
 

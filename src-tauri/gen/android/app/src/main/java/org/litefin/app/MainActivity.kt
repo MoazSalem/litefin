@@ -1474,9 +1474,19 @@ class MainActivity : TauriActivity() {
             // Forward original request headers while omitting Host and Accept-Encoding.
             // Stripping Accept-Encoding lets OkHttp transparently decompress Gzip internally,
             // delivering uncompressed raw byte streams directly to the WebView decoder.
+            // Crucial: We must also strip conditional validation headers (If-None-Match, If-Modified-Since, If-Range).
+            // Android WebView's shouldInterceptRequest handler replaces the internal cache layer.
+            // If the upstream reverse proxy or Jellyfin responds with HTTP 304, WebView's Chromium network
+            // pipeline does NOT pull from disk cache and instead fails decoding on a 0-byte stream.
+            // Stripping validation headers forces an unconditional 200 OK stream with full body bytes.
             request.requestHeaders.forEach { (key, value) ->
               val lower = key.lowercase()
-              if (lower != "host" && lower != "accept-encoding" && !customProxyHeaders.containsKey(key)) {
+              if (lower != "host" &&
+                  lower != "accept-encoding" &&
+                  lower != "if-none-match" &&
+                  lower != "if-modified-since" &&
+                  lower != "if-range" &&
+                  !customProxyHeaders.containsKey(key)) {
                 reqBuilder.header(key, value)
               }
             }
@@ -1491,17 +1501,27 @@ class MainActivity : TauriActivity() {
             val code = response.code
             val body = response.body
 
-            // Handle successful resource payloads (2xx) or conditional cache validations (304)
-            if (response.isSuccessful || code == 304) {
-              val contentType = body?.contentType()?.toString() ?: "image/jpeg"
+            // Handle successful resource payloads (2xx) with non-null response streams
+            if (response.isSuccessful && body != null) {
+              val contentType = body.contentType()?.toString() ?: "image/jpeg"
               val mimeType = contentType.substringBefore(";").trim()
               val responseHeaders = mutableMapOf<String, String>()
 
-              // Filter out upstream CORS and compression headers to avoid duplicate collisions
+              // Filter out upstream CORS, hop-by-hop transport, and compression headers.
+              // Crucial Root Cause: OkHttp automatically decompresses and de-chunks response streams.
+              // If the upstream server returned 'Transfer-Encoding: chunked' (standard for large 1080p/4K backdrops),
+              // OkHttp yields an already de-chunked raw binary byte stream.
+              // Leaking 'transfer-encoding: chunked' into WebResourceResponse instructs Chromium's
+              // network loader to expect chunk boundaries on raw bytes, failing immediately with
+              // ERR_INVALID_CHUNKED_ENCODING and breaking high-resolution backdrop rendering.
               response.headers.names().forEach { name ->
                 val lowerName = name.lowercase()
                 if (lowerName != "content-encoding" &&
                     lowerName != "content-length" &&
+                    lowerName != "transfer-encoding" &&
+                    lowerName != "connection" &&
+                    lowerName != "keep-alive" &&
+                    lowerName != "trailer" &&
                     !lowerName.startsWith("access-control-")) {
                   responseHeaders[name] = response.header(name) ?: ""
                 }
@@ -1517,23 +1537,17 @@ class MainActivity : TauriActivity() {
               val encoding = if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
                 null
               } else {
-                body?.contentType()?.charset()?.name() ?: "UTF-8"
+                body.contentType()?.charset()?.name() ?: "UTF-8"
               }
 
-              // Return empty stream for 304 Not Modified or decompressed byte stream for 200 OK
-              val stream = if (code == 304 || body == null) {
-                java.io.ByteArrayInputStream(ByteArray(0))
-              } else {
-                body.byteStream()
-              }
-
+              // Return fully resolved binary stream directly into WebView decoder
               return WebResourceResponse(
                 mimeType,
                 encoding,
                 code,
-                response.message.ifEmpty { if (code == 304) "Not Modified" else "OK" },
+                response.message.ifEmpty { "OK" },
                 responseHeaders,
-                stream
+                body.byteStream()
               )
             } else if (code == 404) {
               // Return clean 404 response so image element onError fires immediately

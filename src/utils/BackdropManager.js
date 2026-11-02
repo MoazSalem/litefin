@@ -251,12 +251,18 @@ class BackdropManager {
          * Sets the backdrop on the element and cleanly transitions from any
          * active BlurHash canvas. When reverse proxy custom headers are active,
          * resolves the image via CustomHeadersManager to acquire a local Blob URL.
+         * Ensures that any fallback Blob URL loaded via img.src is accurately
+         * assigned to element.style.backgroundImage rather than the failing URL.
          * ====================================================================
          */
         const loadBackdropImage = (effectiveUrl) => {
             const img = new Image();
+
+            // When the backdrop image completes decoding, assign it to the DOM
             img.onload = () => {
-                element.style.backgroundImage = `url('${effectiveUrl}')`;
+                // Ensure we use the resolved image source (captures fallback Blob URLs)
+                const finalUrl = img.src || effectiveUrl;
+                element.style.backgroundImage = `url('${finalUrl}')`;
 
                 requestAnimationFrame(() => {
                     // Ensure backdrop container is fully visible
@@ -271,10 +277,13 @@ class BackdropManager {
                     }
                 });
             };
+
+            // Graceful error recovery: fallback to authenticated JS fetch if native fails
             img.onerror = () => {
                 log.warn(`Failed to load backdrop from ${effectiveUrl}`);
-                // If native direct request failed, fallback to JS fetch & blob
-                if (customHeaders?.hasCustomHeaders?.() && effectiveUrl === url) {
+
+                // If native direct request failed, fallback to authenticated JS fetch & blob
+                if (customHeaders?.hasCustomHeaders?.() && (effectiveUrl === url || !img.src.startsWith('blob:'))) {
                     customHeaders
                         .resolveImageUrl(url, null, { bypassNative: true })
                         .then((blobUrl) => {
@@ -285,6 +294,8 @@ class BackdropManager {
                         .catch(() => {});
                 }
             };
+
+            // Initiate image loading pipeline
             img.src = effectiveUrl;
         };
 

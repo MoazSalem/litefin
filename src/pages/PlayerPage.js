@@ -2139,8 +2139,26 @@ class PlayerPage extends Page {
 
         if (artEl) {
             if (artUrl) {
-                artEl.style.backgroundImage = `url('${artUrl}')`;
-                artEl.style.display = 'block';
+                // Method to update art element background cleanly
+                const applyArt = (resolvedArt) => {
+                    artEl.style.backgroundImage = `url('${resolvedArt}')`;
+                    artEl.style.display = 'block';
+                };
+
+                // Authenticate art request via CustomHeadersManager if proxy headers active
+                if (typeof customHeaders !== 'undefined' && customHeaders?.hasCustomHeaders?.()) {
+                    const cached = customHeaders.getCachedBlobUrl(artUrl);
+                    if (cached) {
+                        applyArt(cached);
+                    } else {
+                        customHeaders
+                            .resolveImageUrl(artUrl)
+                            .then(applyArt)
+                            .catch(() => applyArt(artUrl));
+                    }
+                } else {
+                    applyArt(artUrl);
+                }
             } else {
                 artEl.style.display = 'none'; // Hide if no art
             }
@@ -2239,8 +2257,26 @@ class PlayerPage extends Page {
 
         if (backdropEl) {
             if (backdropUrl) {
-                backdropEl.style.backgroundImage = `url('${backdropUrl}')`;
-                backdropEl.style.display = 'block';
+                // Method to update audio player ambient backdrop
+                const applyPlayerBackdrop = (resolvedBackdrop) => {
+                    backdropEl.style.backgroundImage = `url('${resolvedBackdrop}')`;
+                    backdropEl.style.display = 'block';
+                };
+
+                // Authenticate backdrop request via CustomHeadersManager if proxy headers active
+                if (typeof customHeaders !== 'undefined' && customHeaders?.hasCustomHeaders?.()) {
+                    const cached = customHeaders.getCachedBlobUrl(backdropUrl);
+                    if (cached) {
+                        applyPlayerBackdrop(cached);
+                    } else {
+                        customHeaders
+                            .resolveImageUrl(backdropUrl)
+                            .then(applyPlayerBackdrop)
+                            .catch(() => applyPlayerBackdrop(backdropUrl));
+                    }
+                } else {
+                    applyPlayerBackdrop(backdropUrl);
+                }
             } else {
                 backdropEl.style.display = 'none';
                 backdropEl.style.backgroundImage = '';
@@ -4421,8 +4457,19 @@ class PlayerPage extends Page {
         };
 
         img.onerror = () => {
-            // Keep solid black on error without exposing transparency
             log.warn('Backdrop image failed to load, maintaining solid black loading background');
+
+            // Fallback: If native interception failed, attempt JS fetch & Blob URL conversion
+            if (typeof customHeaders !== 'undefined' && customHeaders?.hasCustomHeaders?.() && (img.src === backdropUrl || !img.src.startsWith('blob:'))) {
+                customHeaders
+                    .resolveImageUrl(backdropUrl, null, { bypassNative: true })
+                    .then((blobUrl) => {
+                        if (blobUrl && blobUrl !== backdropUrl) {
+                            img.src = blobUrl;
+                        }
+                    })
+                    .catch(() => {});
+            }
         };
 
         // When custom reverse proxy headers are active, resolve through CustomHeadersManager

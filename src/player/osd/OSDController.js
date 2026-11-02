@@ -33,6 +33,7 @@ import ConfirmExitModal from './ConfirmExitModal.js';
 import ResumeProfilesMenu from './ResumeProfilesMenu.js';
 import PlayerMediaInfoModal from './PlayerMediaInfoModal.js';
 import SubtitleDownloadModal from './SubtitleDownloadModal.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
 
 import '../../styles/description-modal.css';
 
@@ -5799,7 +5800,31 @@ export default class OSDController extends Component {
                     }
                 };
 
+                // Fallback to JS fetch & Blob URL if native request encounters network or auth error
                 logoEl.onerror = () => {
+                    if (customHeaders?.hasCustomHeaders?.() && !logoEl.dataset.nativeFallbackTried) {
+                        logoEl.dataset.nativeFallbackTried = 'true';
+                        customHeaders
+                            .resolveImageUrl(logoUrl, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== logoUrl) {
+                                    logoEl.removeAttribute('crossorigin');
+                                    logoEl.src = blobUrl;
+                                    return;
+                                }
+                                if (titleEl) titleEl.classList.remove('hidden');
+                                logoEl.classList.add('hidden');
+                                logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
+                                if (wrapEl) {
+                                    wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+                                }
+                            })
+                            .catch(() => {
+                                if (titleEl) titleEl.classList.remove('hidden');
+                                logoEl.classList.add('hidden');
+                            });
+                        return;
+                    }
                     if (titleEl) titleEl.classList.remove('hidden');
                     logoEl.classList.add('hidden');
                     logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
@@ -5808,7 +5833,24 @@ export default class OSDController extends Component {
                     }
                 };
 
-                logoEl.src = logoUrl;
+                // Attach custom headers via CustomHeadersManager if configured
+                if (customHeaders?.hasCustomHeaders?.()) {
+                    const cached = customHeaders.getCachedBlobUrl(logoUrl);
+                    if (cached) {
+                        logoEl.src = cached;
+                    } else {
+                        customHeaders
+                            .resolveImageUrl(logoUrl)
+                            .then((resolvedUrl) => {
+                                logoEl.src = resolvedUrl;
+                            })
+                            .catch(() => {
+                                logoEl.src = logoUrl;
+                            });
+                    }
+                } else {
+                    logoEl.src = logoUrl;
+                }
             }
         }
 

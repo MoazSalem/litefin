@@ -2626,6 +2626,7 @@ class DetailsPage extends Page {
         }
 
         return new Promise((resolve) => {
+            // When logo image finishes loading, calculate aspect ratio and display container
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
@@ -2641,16 +2642,55 @@ class DetailsPage extends Page {
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
 
+                    // Update container dimensions to prevent layout shifts
                     logoContainer.style.height = `${containerHeight}px`;
 
+                    // Mount logo image element into DOM
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
                 }
                 resolve();
             };
-            img.onerror = () => resolve();
-            img.src = logoUrl;
+
+            // Error recovery: fall back to JS fetch and Blob URL when native network request fails
+            img.onerror = () => {
+                if (customHeaders?.hasCustomHeaders?.() && !img.dataset.nativeFallbackTried) {
+                    img.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(logoUrl, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== logoUrl) {
+                                img.removeAttribute('crossorigin');
+                                img.src = blobUrl;
+                                return;
+                            }
+                            resolve();
+                        })
+                        .catch(() => resolve());
+                } else {
+                    resolve();
+                }
+            };
+
+            // Resolve logo URL via CustomHeadersManager if reverse proxy authentication is required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(logoUrl);
+                if (cached) {
+                    img.src = cached;
+                } else {
+                    customHeaders
+                        .resolveImageUrl(logoUrl)
+                        .then((resolvedUrl) => {
+                            img.src = resolvedUrl;
+                        })
+                        .catch(() => {
+                            img.src = logoUrl;
+                        });
+                }
+            } else {
+                img.src = logoUrl;
+            }
         });
     }
 
@@ -4236,7 +4276,7 @@ class DetailsPage extends Page {
                     return `
                         <button class="episode-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                             <div class="episode-thumb">
-                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : ''}
                             </div>
                             <div class="episode-info">
