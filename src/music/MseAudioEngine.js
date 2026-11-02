@@ -5,6 +5,7 @@ import MseMediaPipeline from './MseMediaPipeline.js';
 import { FEED_STEP, nextFeedStep, nextState } from './mseFeedPlan.js';
 import { defaultFetchBytes, defaultFetchText, fetchSegment, fetchTrackStart } from './mseSegmentSource.js';
 import { retryDue } from './mseRetry.js';
+import { initFormat } from './mseInitFormat.js';
 
 export const AHEAD_SECONDS = 20;
 export const BEHIND_SECONDS = 4;
@@ -155,18 +156,21 @@ export default class MseAudioEngine {
 
     async _loadInto(gen, track, startMs) {
         const fresh = () => gen === this._generation;
-        this._pipe.ensure(track.mime, track.format);
-        await this._pipe.whenOpen();
-        if (!fresh()) return;
-        this._pipe.ensureSourceBuffer(track.mime, track.format);
-        await this._pipe.clear();
-        if (!fresh()) return;
+        /* the init segment decides whether the current MediaSource can take this track */
         const { playlist, init } = await this._fetchStart(track);
         if (!fresh()) return;
-        const item = this._enqueue(track, playlist, segmentIndexAt(playlist.segments, startMs / 1000), 0);
+        const format = initFormat(init) ?? track.mime;
+        this._pipe.ensure(track.mime, format);
+        await this._pipe.whenOpen();
+        if (!fresh()) return;
+        this._pipe.ensureSourceBuffer(track.mime, format);
+        await this._pipe.clear();
+        if (!fresh()) return;
+        const index = segmentIndexAt(playlist.segments, startMs / 1000);
+        const item = this._enqueue({ track, playlist, index, origin: 0, format });
         this._currentKey = item.key;
         await this._queue.run((sb) => {
-            this._pipe.switchType(sb, track.mime, track.format);
+            this._pipe.switchType(sb, track.mime, format);
             sb.appendBuffer(init);
         });
         if (!fresh()) return;
@@ -222,9 +226,9 @@ export default class MseAudioEngine {
         this._feedHalted = false;
     }
 
-    _enqueue(track, playlist, index, origin, init = null) {
+    _enqueue({ track, playlist, index, origin, format, init = null }) {
         const key = `${track.id}#${++this._appendSeq}`;
-        const item = { key, track, playlist, index, init, bytes: null, retry: null };
+        const item = { key, track, playlist, index, format, init, bytes: null, retry: null };
         this._tracksByKey.set(key, track);
         this._timeline = addTrack(this._timeline, key, origin);
         this._feedQueue = [...this._feedQueue, item];
@@ -258,7 +262,7 @@ export default class MseAudioEngine {
         const { init, bytes } = item;
         await this._queue.run((sb) => {
             if (!this._isLive(gen, key)) return;
-            if (init) this._pipe.switchType(sb, item.track.mime, item.track.format);
+            if (init) this._pipe.switchType(sb, item.track.mime, item.format);
             sb.appendBuffer(init || bytes);
         });
         if (!this._isLive(gen, key)) return false;
@@ -326,10 +330,6 @@ export default class MseAudioEngine {
     async _startNext(gen) {
         const next = this._nextTrack;
         const wanted = () => gen === this._generation && this._nextTrack === next;
-        if (!this._pipe.canAppend(next.mime, next.format)) {
-            this._nextBlocked = true;
-            return;
-        }
         let start;
         try {
             start = await this._fetchStart(next);
@@ -340,8 +340,14 @@ export default class MseAudioEngine {
             return;
         }
         if (!wanted()) return;
+        const format = initFormat(start.init) ?? next.mime;
+        if (!this._pipe.canAppend(next.mime, format)) {
+            this._nextBlocked = true;
+            return;
+        }
         const last = this._timeline.entries[this._timeline.entries.length - 1];
-        this._nextKey = this._enqueue(next, start.playlist, 0, last.end, start.init).key;
+        const { playlist, init } = start;
+        this._nextKey = this._enqueue({ track: next, playlist, index: 0, origin: last.end, format, init }).key;
         this._streamEnded = false;
     }
 

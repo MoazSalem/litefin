@@ -24,7 +24,7 @@ export function describeMusicTrack({ item, mediaSource, playSessionId, soundOutp
             sampleRate: mseSource.sampleRate
         });
         const playMethod = mseSource.audioCodec === 'copy' ? 'DirectStream' : 'Transcode';
-        return { url, kind, mime: mseSource.mime, format: mseSource.format, playMethod };
+        return { url, kind, mime: mseSource.mime, playMethod };
     }
     const url = buildStaticAudioUrl({
         serverUrl: api.serverUrl,

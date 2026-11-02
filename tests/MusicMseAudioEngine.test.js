@@ -208,6 +208,22 @@ class FakeMediaSource {
     }
 }
 
+function initWithSampleDescription(tag) {
+    const body = [...tag].map((c) => c.charCodeAt(0));
+    const box = (type, payload) => {
+        const size = 8 + payload.length;
+        return [
+            size >>> 24,
+            (size >>> 16) & 255,
+            (size >>> 8) & 255,
+            size & 255,
+            ...[...type].map((c) => c.charCodeAt(0)),
+            ...payload
+        ];
+    };
+    return new Uint8Array(box('moov', box('stsd', body)));
+}
+
 function makeAudio() {
     let src = '';
     const el = {
@@ -272,14 +288,14 @@ function setup({ autoOpen = true, changeType = true, allowChangeType } = {}) {
     const events = [];
     const revoked = [];
 
-    const register = (url, duration) => {
-        const bytes = new Uint8Array(1);
+    const register = (url, duration, bytes = new Uint8Array(1)) => {
         registry.set(bytes, { url, duration });
         bytesByUrl.set(url, bytes);
     };
+    const inits = new Map();
     const playlistText = (base, durations, suffix) => {
         const lines = ['#EXTM3U', '#EXT-X-MAP:URI="init.mp4"'];
-        register(`${base}init.mp4`, 0);
+        register(`${base}init.mp4`, 0, inits.get(base));
         durations.forEach((d, i) => {
             lines.push(`#EXTINF:${d},`, `seg${i}.mp4${suffix}`);
             register(`${base}seg${i}.mp4${suffix}`, d);
@@ -287,15 +303,16 @@ function setup({ autoOpen = true, changeType = true, allowChangeType } = {}) {
         return lines.join('\n');
     };
 
+    /* format names the sample description the track's init segment carries */
     const addTrack = (id, durations, { mime = MIME, format } = {}) => {
         const base = `http://srv/${id}/`;
+        if (format) inits.set(base, initWithSampleDescription(format));
         playlists.set(`${base}main.m3u8`, [playlistText(base, durations, '')]);
         return {
             id,
             url: `${base}main.m3u8`,
             kind: 'mse',
             mime,
-            ...(format ? { format } : {}),
             durations,
             durationMs: 1000 * durations.reduce((a, b) => a + b, 0)
         };
@@ -1501,7 +1518,7 @@ test('allowChangeType false: a same-codec next track is still appended gapless',
     assert.equal(h.mediaSources.length, 1);
 });
 
-test('allowChangeType false: a next track with another FLAC bit depth is not appended; ended starts it in a rebuilt MediaSource', async () => {
+test('allowChangeType false: a next track whose init has another sample description is not appended; ended starts it in a rebuilt MediaSource', async () => {
     const h = setup({ allowChangeType: false });
     const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
     const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
@@ -1521,7 +1538,7 @@ test('allowChangeType false: a next track with another FLAC bit depth is not app
     assert.deepEqual(h.mediaSources[1].sourceBuffers[0].ranges, [[0, 3]]);
 });
 
-test('allowChangeType false: load of another FLAC bit depth rebuilds the MediaSource', async () => {
+test('allowChangeType false: load of a track whose init has another sample description rebuilds the MediaSource', async () => {
     const h = setup({ allowChangeType: false });
     const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
     const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
@@ -1534,7 +1551,7 @@ test('allowChangeType false: load of another FLAC bit depth rebuilds the MediaSo
     assert.equal(h.engine.currentTrackId, 'b');
 });
 
-test('a next track with another FLAC bit depth stays gapless where a new init segment is supported', async () => {
+test('a next track with another sample description stays gapless where a new init segment is supported', async () => {
     const h = setup();
     const a = h.addTrack('a', [4], { mime: FLAC, format: 'flac/24' });
     const b = h.addTrack('b', [3], { mime: FLAC, format: 'flac/16' });
