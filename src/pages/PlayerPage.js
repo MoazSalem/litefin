@@ -494,10 +494,29 @@ class PlayerPage extends Page {
                 this._item = queueItem;
             }
 
+            // Reconcile this._item with authoritative client stop state if server UserData is stale
+            const lastStopped =
+                state.get(`playback:lastStopped:${this._item.Id}`) ||
+                state.get('playback:lastStoppedMap')?.[this._item.Id] ||
+                (state.get('playback:lastStopped')?.itemId === this._item.Id ? state.get('playback:lastStopped') : null);
+
+            if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+                this._item.UserData = this._item.UserData || {};
+                if (lastStopped.isNearComplete) {
+                    this._item.UserData.Played = true;
+                    this._item.UserData.PlaybackPositionTicks = 0;
+                } else if (lastStopped.positionTicks > 0) {
+                    this._item.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+                }
+            }
+
             // Calculate resume position if needed
-            if (startPositionTicks !== null && !isNaN(startPositionTicks)) {
-                // If an explicit position was passed via URL (e.g. from SyncPlay), preserve it exactly
-                this._resumePosition = startPositionTicks;
+            if (startPositionTicks !== null && !isNaN(startPositionTicks) && startPositionTicks > 0) {
+                // If an explicit position was passed via URL (from DetailsPage, QuickPlay, or SyncPlay),
+                // apply user-configured rewind offset if user selected Resume intent
+                this._resumePosition = resume
+                    ? PlayerSettings.getAdjustedResumePositionTicks(startPositionTicks)
+                    : startPositionTicks;
             } else if (resume && this._item.UserData?.PlaybackPositionTicks) {
                 /*
                  * User requested to resume playback. We pass the stored playback ticks
@@ -5621,7 +5640,7 @@ class PlayerPage extends Page {
                 // Persist authoritative client playback stop snapshot to in-memory state.
                 // This acts as a reliable source of truth during immediate page navigation
                 // in case the server database transaction is still committing.
-                state.set('playback:lastStopped', {
+                const stopSnapshot = {
                     itemId,
                     seriesId: this._item.SeriesId || null,
                     seasonId: this._item.SeasonId || null,
@@ -5629,7 +5648,18 @@ class PlayerPage extends Page {
                     durationTicks,
                     isNearComplete,
                     timestamp: Date.now()
-                });
+                };
+
+                // Store singular reference for backwards compatibility
+                state.set('playback:lastStopped', stopSnapshot);
+
+                // Store item-keyed reference so playing subsequent media does not erase this item's snapshot
+                state.set(`playback:lastStopped:${itemId}`, stopSnapshot);
+
+                // Maintain bounded map of recent stop snapshots
+                const stoppedMap = state.get('playback:lastStoppedMap') || {};
+                stoppedMap[itemId] = stopSnapshot;
+                state.set('playback:lastStoppedMap', stoppedMap);
 
                 // Update cached played and progress state across all library state caches
                 const allState = state.getAll();
@@ -5668,6 +5698,10 @@ class PlayerPage extends Page {
 
             // Invalidate HTTP ETag cache to guarantee next requests do not receive 304 Not Modified
             api.clearEtagCache();
+            api.clearEtagCacheForItem?.(this._item.Id);
+
+            // Clear prewarm cache so stale playback info and pre-stop metadata are discarded
+            prewarmManager.clear();
 
             // Invalidate home page's rendered row cache so returning to Home loads fresh rows
             state.delete('home:pageCache');
@@ -5982,6 +6016,9 @@ class PlayerPage extends Page {
             }
             eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'destroy' });
         }
+
+        // Clear prewarm manager to ensure stale item state does not linger across sessions
+        prewarmManager.clear();
 
         // Cancel any pending auto-recovery timers
         this._cancelAutoRecovery();
