@@ -41,14 +41,22 @@ export class SeerrClient {
     }
 
     /**
-     * Clears all cached network responses and invalidates Discover page state.
+     * Clears cached API responses without resetting companion service status.
      */
-    clearCache() {
+    clearResponseCache() {
         // Clear in-memory HTTP response cache for Seerr requests
         this._cache.clear();
 
         // Invalidate DiscoverPage rendered rows cache so navigating back displays fresh data
         state.delete('discover:pageCache');
+    }
+
+    /**
+     * Clears all cached network responses and resets companion service status.
+     */
+    clearCache() {
+        // Clear cached request responses and Discover page row states
+        this.clearResponseCache();
 
         // Reset in-memory and session status cache
         this._status = null;
@@ -113,9 +121,15 @@ export class SeerrClient {
          */
         this._statusPromise = (async () => {
             // First check if companion plugin is already known to be available
-            let isLitefinAvailable = this._status?.available || false;
-            if (!isLitefinAvailable) {
+            let isLitefinAvailable = api._hasLitefinServerPlugin;
+            if (isLitefinAvailable === null || isLitefinAvailable === undefined) {
                 isLitefinAvailable = await api.isLitefinPluginAvailable();
+            }
+
+            // If companion server plugin is confirmed not present, return early
+            if (!isLitefinAvailable) {
+                this._status = { configured: false, available: false };
+                return this._status;
             }
 
             try {
@@ -186,11 +200,11 @@ export class SeerrClient {
 
         try {
             if (method === 'POST') {
-                this.clearCache();
+                this.clearResponseCache();
                 return await api.post(`${API_ROOT}${path}`, options.body);
             }
             if (method === 'DELETE') {
-                this.clearCache();
+                this.clearResponseCache();
                 return await api.delete(`${API_ROOT}${path}`);
             }
 

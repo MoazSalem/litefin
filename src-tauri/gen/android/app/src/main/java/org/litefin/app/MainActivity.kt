@@ -1436,20 +1436,37 @@ class MainActivity : TauriActivity() {
         // (such as Cloudflare Service Tokens or Authelia keys), Chromium in WebView
         // automatically dispatches an unauthenticated OPTIONS preflight request.
         // Upstream reverse proxies (Cloudflare Access) reject unauthenticated preflights
-        // with 403 Forbidden, and server-side plugin endpoints (e.g. /Litefin/Seerr)
-        // lack dedicated OPTIONS handlers.
+        // with 403 Forbidden, and server-side plugin endpoints lack dedicated OPTIONS handlers.
         // Short-circuiting all OPTIONS requests for the configured server with 204 No Content
-        // and permissive CORS headers guarantees immediate, zero-latency CORS compliance.
+        // and RFC-compliant CORS headers guarantees immediate, zero-latency CORS compliance.
         // ---------------------------------------------------------------------
         if (method.equals("OPTIONS", ignoreCase = true)) {
-          val origin = request.requestHeaders["Origin"] ?: "*"
+          // Resolve request origin case-insensitively from incoming headers
+          val origin = request.requestHeaders.entries.firstOrNull {
+            it.key.equals("Origin", ignoreCase = true)
+          }?.value?.trim()?.ifEmpty { null } ?: "*"
+
+          // Resolve requested headers case-insensitively from preflight request
+          val reqHeaders = request.requestHeaders.entries.firstOrNull {
+            it.key.equals("Access-Control-Request-Headers", ignoreCase = true)
+          }?.value?.trim()?.ifEmpty { null } ?: "*"
+
+          // Build preflight response headers dictionary
           val preflightHeaders = mutableMapOf(
             "Access-Control-Allow-Origin" to origin,
             "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-            "Access-Control-Allow-Headers" to "*",
-            "Access-Control-Allow-Credentials" to "true",
+            "Access-Control-Allow-Headers" to reqHeaders,
             "Access-Control-Max-Age" to "86400"
           )
+
+          // W3C CORS Specification: Access-Control-Allow-Credentials MUST NOT be 'true'
+          // when Access-Control-Allow-Origin is wildcard '*', otherwise Chromium aborts with CORS error.
+          if (origin != "*") {
+            preflightHeaders["Access-Control-Allow-Credentials"] = "true"
+            preflightHeaders["Vary"] = "Origin"
+          }
+
+          // Return empty 204 No Content preflight response directly into Chromium network stack
           return WebResourceResponse(
             "text/plain",
             "UTF-8",
@@ -1468,16 +1485,18 @@ class MainActivity : TauriActivity() {
         // ---------------------------------------------------------------------
         // 2. Identify Native Read Interception Targets
         // ---------------------------------------------------------------------
-        // Intercept image assets, artwork endpoints, server health pings,
-        // and companion plugin endpoints (/Litefin/... and /Moonfin/...) natively via OkHttp.
-        // This delivers raw byte streams directly to Chromium with zero CORS friction
-        // and automatically attaches required reverse-proxy authentication headers.
+        // Intercept ONLY image assets, artwork endpoints, and server health pings
+        // natively via OkHttp.
+        // Critical: DO NOT intercept API or JSON plugin routes (/Litefin/..., /Items/..., etc.)
+        // because Android WebView's WebResourceRequest intentionally filters out the
+        // Jellyfin 'Authorization' header for cross-origin security isolation.
+        // API requests are handled directly by JavaScript fetch() which already
+        // attaches both reverse-proxy headers and Jellyfin session tokens, while
+        // benefiting from the local OPTIONS preflight short-circuit above.
         // ---------------------------------------------------------------------
         val isTargetResource = path.contains("/Images/", ignoreCase = true) ||
           hasImageAccept ||
-          path.endsWith("/System/Ping", ignoreCase = true) ||
-          path.contains("/Litefin/", ignoreCase = true) ||
-          path.contains("/Moonfin/", ignoreCase = true)
+          path.endsWith("/System/Ping", ignoreCase = true)
 
         // Only handle standard read operations natively
         if (isTargetResource && (method.equals("GET", ignoreCase = true) ||
