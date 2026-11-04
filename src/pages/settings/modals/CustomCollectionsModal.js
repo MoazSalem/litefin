@@ -18,6 +18,9 @@ import { logger } from '../../../utils/Logger.js';
 
 const log = logger.create('CustomCollectionsModal');
 
+// Delay before filtering the list after the last keystroke
+const SEARCH_DEBOUNCE_MS = 250;
+
 /**
  * Computes a human-readable summary badge indicating how many custom
  * collection and playlist rows are currently selected for the home view.
@@ -132,8 +135,9 @@ export class CustomCollectionsModal {
      * @private
      * @param {HTMLElement} overlay Dialog backdrop container
      * @param {Function} [onUpdate] Layout refresh callback
+     * @param {boolean} [keepSearchFocus=false] Keep focus in the search box (re-render triggered by typing)
      */
-    _renderModal(overlay, onUpdate) {
+    _renderModal(overlay, onUpdate, keepSearchFocus = false) {
         // Filter collections by case-insensitive name match
         const filteredCols = this._searchQuery
             ? this._collections.filter((c) => (c.Name || '').toLowerCase().includes(this._searchQuery.toLowerCase()))
@@ -201,12 +205,15 @@ export class CustomCollectionsModal {
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this._searchQuery = e.target.value;
-                this._renderModal(overlay, onUpdate);
-                const updatedInput = overlay.querySelector('#custom-col-search-input');
-                if (updatedInput) {
-                    updatedInput.focus();
-                    updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
-                }
+                clearTimeout(this._searchTimer);
+                this._searchTimer = setTimeout(() => {
+                    this._renderModal(overlay, onUpdate, true);
+                    const updatedInput = overlay.querySelector('#custom-col-search-input');
+                    if (updatedInput) {
+                        updatedInput.focus();
+                        updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
+                    }
+                }, SEARCH_DEBOUNCE_MS);
             });
         }
 
@@ -241,7 +248,7 @@ export class CustomCollectionsModal {
         };
 
         // Wire spatial navigation focus sections
-        this._setupFocusSections(overlay);
+        this._setupFocusSections(overlay, keepSearchFocus);
     }
 
     /**
@@ -270,8 +277,9 @@ export class CustomCollectionsModal {
      *
      * @private
      * @param {HTMLElement} overlay Dialog backdrop container
+     * @param {boolean} [keepSearchFocus=false] Skip initial focus so typing in the search box is not interrupted
      */
-    _setupFocusSections(overlay) {
+    _setupFocusSections(overlay, keepSearchFocus = false) {
         this.page.registerFocusSection('custom-col-search', overlay.querySelector('.fav-lang-search-box'), {
             orientation: 'horizontal',
             leaveDown: 'custom-col-list'
@@ -287,6 +295,12 @@ export class CustomCollectionsModal {
             orientation: 'horizontal',
             leaveUp: 'custom-col-list'
         });
+
+        // Re-render while typing: the caller restores focus to the search input itself
+        if (keepSearchFocus) {
+            focusManager.setActiveSection('custom-col-search');
+            return;
+        }
 
         // Establish initial focus on first list option or search box
         const firstOption = overlay.querySelector('#custom-col-list .check-btn');
@@ -312,6 +326,8 @@ export class CustomCollectionsModal {
     close(onUpdate) {
         const overlay = this.page.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
+
+        clearTimeout(this._searchTimer);
 
         // Detach click listener and hide dialog shell
         overlay.onclick = null;
