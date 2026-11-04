@@ -11,6 +11,16 @@
 
 export const BYW_ROW_ID_PREFIX = 'because-watched-';
 export const BYW_MAX_ROWS = 3;
+
+/**
+ * Parses the "rows per recommendation type" setting into 1..BYW_MAX_ROWS (default 1).
+ * @param {string|number|null} value
+ * @returns {number}
+ */
+export function clampRowCount(value) {
+    const n = parseInt(value, 10);
+    return Math.min(Math.max(Number.isNaN(n) ? 1 : n, 1), BYW_MAX_ROWS);
+}
 export const RECO_ROW_ID_PREFIX = 'reco-';
 
 /**
@@ -24,17 +34,18 @@ export function isRecommendationRowId(id) {
 }
 
 /**
- * Default position of a recommendation row relative to its anchor row (Next Up / Continue Watching).
- * Because-you-watched rows come first, then actor, director, studio and genre rows.
+ * Default position of a recommendation row relative to its anchor row (Next Up / Continue Watching),
+ * always below 1 so it stays ahead of the next saved row. Because-you-watched rows come first, then
+ * actor, director, studio and genre rows; row ids end in the row number (`reco-actor-2`).
  * @param {string} id
  * @returns {number}
  */
 export function recommendationRowOffset(id) {
-    if (id.startsWith(BYW_ROW_ID_PREFIX)) {
-        return 0.8 + (parseInt(id.slice(BYW_ROW_ID_PREFIX.length), 10) || 1) * 0.01;
-    }
-    const order = ['actor', 'director', 'studio', 'genre'].indexOf(id.slice(RECO_ROW_ID_PREFIX.length));
-    return 0.9 + (order < 0 ? 5 : order) * 0.01;
+    const n = (parseInt(id.slice(id.lastIndexOf('-') + 1), 10) || 1) * 0.01;
+    if (id.startsWith(BYW_ROW_ID_PREFIX)) return 0.5 + n;
+    const kind = id.slice(RECO_ROW_ID_PREFIX.length).split('-')[0];
+    const order = ['actor', 'director', 'studio', 'genre'].indexOf(kind);
+    return 0.6 + (order < 0 ? 3 : order) * 0.1 + n;
 }
 
 /**

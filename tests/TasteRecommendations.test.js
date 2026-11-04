@@ -10,7 +10,8 @@ import {
     createSerialQueue,
     createBecauseWatchedLoader,
     isRecommendationRowId,
-    recommendationRowOffset
+    recommendationRowOffset,
+    clampRowCount
 } from '../src/utils/BecauseYouWatched.js';
 
 const title = (id, extra = {}) => ({ Id: id, Type: 'Movie', Name: id, People: [], Studios: [], Genres: [], ...extra });
@@ -188,10 +189,10 @@ test('serial queue - runs jobs in order and survives a failing job', async () =>
 
 test('row id helpers - recognise recommendation rows and order them', () => {
     assert.equal(isRecommendationRowId('because-watched-2'), true);
-    assert.equal(isRecommendationRowId('reco-actor'), true);
+    assert.equal(isRecommendationRowId('reco-actor-1'), true);
     assert.equal(isRecommendationRowId('latest-abc'), false);
-    assert.ok(recommendationRowOffset('because-watched-1') < recommendationRowOffset('reco-actor'));
-    assert.ok(recommendationRowOffset('reco-actor') < recommendationRowOffset('reco-genre'));
+    assert.ok(recommendationRowOffset('because-watched-1') < recommendationRowOffset('reco-actor-1'));
+    assert.ok(recommendationRowOffset('reco-actor') < recommendationRowOffset('reco-genre-1'));
 });
 
 test('row loader - claims only the titles it shows so later rows are not starved', async () => {
@@ -238,4 +239,37 @@ test('profile provider - a failed build is retried by the next call', async () =
     });
     assert.deepEqual((await getProfile()).actor, []);
     assert.equal((await getProfile()).actor[0].name, 'Ann');
+});
+
+test('row count - clamps to 1..3 and defaults to 1', () => {
+    assert.equal(clampRowCount(undefined), 1);
+    assert.equal(clampRowCount('2'), 2);
+    assert.equal(clampRowCount('9'), 3);
+    assert.equal(clampRowCount('0'), 1);
+    assert.equal(clampRowCount('abc'), 1);
+});
+
+test('row ids - every offset stays below the next saved row', () => {
+    for (const id of ['because-watched-3', 'reco-actor-3', 'reco-director-3', 'reco-studio-3', 'reco-genre-3']) {
+        assert.ok(recommendationRowOffset(id) < 1, id);
+    }
+    assert.ok(recommendationRowOffset('reco-actor-1') < recommendationRowOffset('reco-actor-2'));
+    assert.ok(recommendationRowOffset('because-watched-3') < recommendationRowOffset('reco-actor-1'));
+});
+
+test('row loader - rows of one kind use different sources and share no titles, even unclaimed', async () => {
+    const load = createTasteRowLoader({
+        getProfile: async () => richProfile(),
+        fetchByKind: async (kind, source) =>
+            source.id === 'a1'
+                ? [{ Id: '1' }, { Id: '2' }, { Id: '3' }]
+                : [{ Id: '2' }, { Id: '3' }, { Id: '4' }, { Id: '5' }, { Id: '6' }],
+        exclude: new Set(),
+        claimTitles: false
+    });
+    const first = await load('actor', 0);
+    const second = await load('actor', 1);
+    assert.notEqual(first.sourceName, second.sourceName);
+    const all = [...first.items, ...second.items].map((i) => i.Id);
+    assert.equal(new Set(all).size, all.length);
 });

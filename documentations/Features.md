@@ -98,7 +98,7 @@ The player includes 23 modular interactive overlays managed by `OSDController.js
 - **Home Screen (`HomePage.js`)**:
     - Highly configurable section ordering: Continue Watching, Next Up, My Media, Trending Movies, Trending Shows, Suggestions, Live TV Channels.
     - Interactive Hero Carousel with customizable transition styles and simplified indicator dots for enhanced performance.
-    - Optional recommendation rows (off by default, configured in Settings → Home): "Because you watched" rows (1-3) based on recently finished titles, plus actor, director, studio and genre rows ranked from a taste profile of recent viewing and favorites. Rows can be reordered or hidden in the Home layout editor.
+    - Optional recommendation rows (off by default, configured in Settings → Home): "Because you watched" rows based on recently finished titles, plus actor, director, studio and genre rows ranked from a taste profile of recent viewing and favorites. One setting picks how many rows (1-3) each enabled type shows. Rows can be reordered or hidden in the Home layout editor.
     - Configurable collection-based trending rows and merged Next Up / Continue Watching rows.
 - **Library Hub (`LibraryPage.js`)**:
     - High-performance grid views with toggleable infinite scrolling or page-based navigation.

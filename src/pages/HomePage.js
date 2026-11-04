@@ -59,7 +59,7 @@ import {
     createSerialQueue,
     isRecommendationRowId,
     BYW_ROW_ID_PREFIX,
-    BYW_MAX_ROWS,
+    clampRowCount,
     RECO_ROW_ID_PREFIX
 } from '../utils/BecauseYouWatched.js';
 import {
@@ -1218,6 +1218,7 @@ class HomePage extends Page {
      */
     _getRecommendationDescriptors(homeRowLimit) {
         const bywEnabled = storage.getItem('pref:becauseYouWatched') === 'true';
+        const rowCount = clampRowCount(storage.getItem('pref:recommendationRowCount'));
         const tasteKinds = TASTE_KINDS.filter((kind) => storage.getItem(TASTE_PREF_KEYS[kind]) === 'true');
         if (!bywEnabled && tasteKinds.length === 0) return [];
 
@@ -1245,10 +1246,7 @@ class HomePage extends Page {
         const descriptors = [];
 
         if (bywEnabled) {
-            const bywCount = Math.min(
-                Math.max(parseInt(storage.getItem('pref:becauseYouWatchedCount') || 2, 10) || 2, 1),
-                BYW_MAX_ROWS
-            );
+            const bywCount = rowCount;
             const loadBywRow = createBecauseWatchedLoader({
                 getPlayed,
                 getSimilar: async (id) => {
@@ -1346,20 +1344,22 @@ class HomePage extends Page {
             });
 
             for (const kind of tasteKinds) {
-                descriptors.push({
-                    id: `${RECO_ROW_ID_PREFIX}${kind}`,
-                    title: i18n.t(TASTE_HEADER_KEYS[kind]),
-                    priority: 2,
-                    layout: 'portrait',
-                    cardType: 'poster',
-                    contextType: 'suggestion',
-                    fetchFn: async function () {
-                        const row = await loadTasteRow(kind, 0);
-                        if (!row) return null;
-                        this.title = i18n.t(TASTE_TITLE_KEYS[kind], [row.sourceName]);
-                        return row.items.slice(0, homeRowLimit);
-                    }
-                });
+                for (let i = 0; i < rowCount; i++) {
+                    descriptors.push({
+                        id: `${RECO_ROW_ID_PREFIX}${kind}-${i + 1}`,
+                        title: i18n.t(TASTE_HEADER_KEYS[kind]),
+                        priority: 2,
+                        layout: 'portrait',
+                        cardType: 'poster',
+                        contextType: 'suggestion',
+                        fetchFn: async function () {
+                            const row = await loadTasteRow(kind, i);
+                            if (!row) return null;
+                            this.title = i18n.t(TASTE_TITLE_KEYS[kind], [row.sourceName]);
+                            return row.items.slice(0, homeRowLimit);
+                        }
+                    });
+                }
             }
         }
 

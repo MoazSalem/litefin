@@ -181,8 +181,8 @@ export class SettingsDropdownDispatcher {
             storage.setItem(settingConfig.key, newValue);
         }
 
-        // The number of "Because you watched" rows changes the Home row structure
-        if (settingConfig.key === 'pref:becauseYouWatchedCount') {
+        // The number of recommendation rows changes the Home row structure
+        if (settingConfig.key === 'pref:recommendationRowCount') {
             state.delete('home:pageCache');
         }
 
