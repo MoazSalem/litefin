@@ -190,8 +190,8 @@ export function createTasteProfileProvider({ getPlayed, getDetails, getFavorites
  * @param {Set<string>} deps.exclude - Shared with the other recommendation rows.
  * @param {{run: Function}} [deps.queue]
  * @param {(msg: string, err: any) => void} [deps.onError]
- * @param {boolean} [deps.claimTitles=true] - Add shown titles to `exclude`. Turn off so a row's result
- *   never depends on which other rows loaded first.
+ * @param {boolean} [deps.claimTitles=true] - Add shown titles to the shared `exclude`. Turn off so a row's
+ *   result never depends on which other kinds loaded first. Rows of the same kind always avoid each other.
  * @param {number} [deps.rowLimit] - Titles a row shows. Only these are claimed, so a row never starves later ones.
  * @param {(msg: string) => void} [deps.onTrace] - Reports why a candidate was kept or skipped.
  * @returns {(kind: string, index: number) => Promise<{kind: string, sourceName: string, items: Array<Object>}|null>}
@@ -199,12 +199,14 @@ export function createTasteProfileProvider({ getPlayed, getDetails, getFavorites
 export function createTasteRowLoader({ getProfile, fetchByKind, exclude, queue, onError, onTrace, rowLimit, claimTitles = true }) {
     const trace = onTrace || (() => {});
     const used = {};
+    const claimed = {};
     const slots = {};
     const run = queue ? (fn) => queue.run(fn) : (fn) => fn();
 
     const resolveNext = async (kind) => {
         const profile = await getProfile();
         const usedForKind = used[kind] || (used[kind] = new Set());
+        const claimedForKind = claimed[kind] || (claimed[kind] = new Set());
         const all = profile[kind] || [];
         const candidates = all.filter((c) => c.support >= MIN_SUPPORT && !usedForKind.has(c.id)).slice(0, MAX_TRIES);
         trace(`${kind}: ${all.length} sources in profile, ${candidates.length} with at least ${MIN_SUPPORT} titles`);
@@ -218,10 +220,11 @@ export function createTasteRowLoader({ getProfile, fetchByKind, exclude, queue, 
                 if (onError) onError(`Failed to load ${kind} recommendations for ${candidate.name}`, err);
                 continue;
             }
-            const usable = filterSimilar(found, exclude);
+            const usable = filterSimilar(filterSimilar(found, exclude), claimedForKind);
             const items = rowLimit ? usable.slice(0, rowLimit) : usable;
             trace(`${kind}: ${candidate.name} returned ${(found || []).length} items, ${usable.length} usable`);
             if (items.length < MIN_ROW_ITEMS) continue;
+            items.forEach((item) => claimedForKind.add(item.Id));
             if (claimTitles) items.forEach((item) => exclude.add(item.Id));
             return { kind, sourceName: candidate.name, items };
         }
