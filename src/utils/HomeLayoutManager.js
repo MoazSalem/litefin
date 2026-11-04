@@ -1,5 +1,6 @@
 import { storage } from './StorageService.js';
 import { logger } from './Logger.js';
+import { isRecommendationRowId, recommendationRowOffset } from './BecauseYouWatched.js';
 
 const log = logger.create('HomeLayoutManager');
 
@@ -108,6 +109,15 @@ class HomeLayoutManager {
                     ...desc,
                     _userOrder: defaultOrder
                 });
+            } else if (isRecommendationRowId(desc.id)) {
+                // Not yet in saved preferences: sit right after Next Up / Continue Watching
+                // instead of being pushed behind every library.
+                const anchor = layoutMap.get('next-up') || layoutMap.get('resume');
+                const offset = recommendationRowOffset(desc.id);
+                processedDescriptors.push({
+                    ...desc,
+                    _userOrder: anchor ? anchor.order + offset : 1 + offset
+                });
             } else {
                 // New library or section not in preferences yet!
                 // We'll append it to the end.
@@ -204,6 +214,16 @@ class HomeLayoutManager {
                 });
             }
         });
+
+        // Recommendation rows that are not saved yet belong right after Next Up / Continue Watching,
+        // matching where applyLayout() renders them, not at the end of the list.
+        const bywNew = settingsList.filter((i) => isRecommendationRowId(i.id) && !savedMap.has(i.id));
+        if (bywNew.length > 0) {
+            bywNew.forEach((item) => settingsList.splice(settingsList.indexOf(item), 1));
+            let anchorIdx = settingsList.findIndex((i) => i.id === 'next-up');
+            if (anchorIdx < 0) anchorIdx = settingsList.findIndex((i) => i.id === 'resume');
+            settingsList.splice(anchorIdx + 1, 0, ...bywNew);
+        }
 
         // Ensure order values are sequential and correct after any manipulation
         // Sequence layout items sequentially according to their final array positions.

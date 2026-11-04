@@ -13,6 +13,8 @@ import { i18n } from '../../../utils/i18n.js';
 import { api } from '../../../api/index.js';
 import { focusManager } from '../../../ui/FocusManager.js';
 import { homeLayoutManager } from '../../../utils/HomeLayoutManager.js';
+import { BYW_ROW_ID_PREFIX, BYW_MAX_ROWS, RECO_ROW_ID_PREFIX } from '../../../utils/BecauseYouWatched.js';
+import { TASTE_KINDS, TASTE_PREF_KEYS, TASTE_HEADER_KEYS, TASTE_LABEL_KEYS } from '../../../utils/TasteRecommendations.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { pluginManager } from '../../../plugins/PluginManager.js';
 import { router } from '../../../core/Router.js';
@@ -80,6 +82,12 @@ export class HomeTab {
             label: (i18n.t('ItemCountValue', [v]) || `${v} items`) + (v === 12 ? ` (${i18n.t('Default') || 'Default'})` : '')
         }));
 
+        const bywEnabled = storage.getItem('pref:becauseYouWatched') === 'true';
+        const bywCountOpts = [1, 2, 3].map((v) => ({
+            value: v,
+            label: String(v) + (v === 2 ? ` (${i18n.t('Default') || 'Default'})` : '')
+        }));
+
         const buildTrending = (colKey, nameKey) => {
             const val = storage.getItem(colKey) || 'none';
             const name = storage.getItem(nameKey);
@@ -128,6 +136,9 @@ export class HomeTab {
                 ${this._item(i18n.t('HomeInitialFocus') || 'Initial Focus', i18n.t('HomeInitialFocusDescription') || 'Choose whether the home page initially focuses the hero carousel or the first content row.', this._drop('home-initial-focus-select', initialFocusOpts, initialFocus), 'home-initial-focus-item', heroEnabled)}
                 ${this._item(i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit', i18n.t('HomeRowsLimitDescription') || 'Maximum items per row.', this._drop('home-rows-limit-select', rowsOpts, parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)))}
                 ${this._item(i18n.t('LabelMergeResumeNextUp'), i18n.t('LabelMergeResumeNextUpDescription'), this._toggle('toggle-merge-resume-nextup', storage.getItem('pref:mergeResumeNextUp') === 'true'))}
+                ${this._item(i18n.t('LabelBecauseYouWatched'), i18n.t('LabelBecauseYouWatchedDescription'), this._toggle('toggle-because-you-watched', bywEnabled))}
+                ${this._item(i18n.t('LabelBecauseYouWatchedCount'), i18n.t('LabelBecauseYouWatchedCountDescription'), this._drop('because-you-watched-count-select', bywCountOpts, parseInt(storage.getItem('pref:becauseYouWatchedCount') || 2, 10)), 'because-you-watched-count-item', bywEnabled)}
+                ${TASTE_KINDS.map((kind) => this._item(i18n.t(TASTE_LABEL_KEYS[kind]), i18n.t(TASTE_LABEL_KEYS[kind] + 'Description'), this._toggle(`toggle-reco-${kind}`, storage.getItem(TASTE_PREF_KEYS[kind]) === 'true'))).join('')}
                 ${this._item(i18n.t('EnableCollectionRows') || 'Enable Collection Rows in Home Screen', i18n.t('EnableCollectionRowsDescription') || 'Display custom collection and trending rows.', this._toggle('toggle-enable-collection-rows', enableRows))}
                 ${this._item(i18n.t('LabelTrendingMoviesCollection'), i18n.t('LabelTrendingMoviesCollectionDescription'), this._drop('trending-movies-collection-select', mTrend.opts, mTrend.val), 'trending-movies-collection-item', enableRows)}
                 ${this._item(i18n.t('LabelTrendingSeriesCollection'), i18n.t('LabelTrendingSeriesCollectionDescription'), this._drop('trending-series-collection-select', sTrend.opts, sTrend.val), 'trending-series-collection-item', enableRows)}
@@ -187,6 +198,13 @@ export class HomeTab {
             addTrending('pref:trendingMoviesCollection', 'pref:trendingMoviesCollectionName', 'HeaderTrendingMovies', 'trending');
             addTrending('pref:trendingSeriesCollection', 'pref:trendingSeriesCollectionName', 'HeaderTrendingSeries', 'trending-series');
             if (!mergeResumeNextUp) descriptors.push({ id: 'next-up', title: i18n.t('NextUp') });
+            if (storage.getItem('pref:becauseYouWatched') === 'true') {
+                const bywCount = Math.min(Math.max(parseInt(storage.getItem('pref:becauseYouWatchedCount') || 2, 10) || 2, 1), BYW_MAX_ROWS);
+                for (let n = 1; n <= bywCount; n++) descriptors.push({ id: `${BYW_ROW_ID_PREFIX}${n}`, title: `${i18n.t('HeaderBecauseYouWatched')} (${n})` });
+            }
+            TASTE_KINDS.forEach((kind) => {
+                if (storage.getItem(TASTE_PREF_KEYS[kind]) === 'true') descriptors.push({ id: `${RECO_ROW_ID_PREFIX}${kind}`, title: i18n.t(TASTE_HEADER_KEYS[kind]) });
+            });
             views.forEach((lib) => descriptors.push({ id: `latest-${lib.Id}`, title: i18n.t('LatestFromLibrary', [lib.Name]) }));
 
             try {
@@ -307,6 +325,18 @@ export class HomeTab {
         bindToggle('#toggle-hero-carousel-blurhash-fill', 'pref:heroCarouselBlurhashFill');
         bindToggle('#toggle-indicator-animation', 'pref:heroCarouselIndicatorAnimation', true);
         bindToggle('#toggle-hero-carousel-mdb', 'pref:heroCarouselMdbList', true);
+        TASTE_KINDS.forEach((kind) => {
+            bindToggle(`#toggle-reco-${kind}`, TASTE_PREF_KEYS[kind], false, () => {
+                this.setupHomeLayoutUI();
+                state.delete('home:pageCache');
+            });
+        });
+        bindToggle('#toggle-because-you-watched', 'pref:becauseYouWatched', false, (next) => {
+            const countItem = rootEl.querySelector('#because-you-watched-count-item');
+            if (countItem) countItem.style.display = next ? '' : 'none';
+            this.setupHomeLayoutUI();
+            state.delete('home:pageCache');
+        });
         bindToggle('#toggle-hero-carousel-ignore-watched', 'pref:heroCarouselIgnoreWatched');
 
         const mergeBtn = rootEl.querySelector('#toggle-merge-resume-nextup');
