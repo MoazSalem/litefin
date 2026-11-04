@@ -181,6 +181,11 @@ export class SettingsDropdownDispatcher {
             storage.setItem(settingConfig.key, newValue);
         }
 
+        // The number of "Because you watched" rows changes the Home row structure
+        if (settingConfig.key === 'pref:becauseYouWatchedCount') {
+            state.delete('home:pageCache');
+        }
+
         // Library paging and layout cache invalidations
         if (settingConfig.key === 'pref:libraryPageSize') {
             state.clearByPrefix('library:state');

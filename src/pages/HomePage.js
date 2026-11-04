@@ -54,6 +54,22 @@ import HeroCarousel from '../ui/HeroCarousel.js';
 import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
 import { fireHomeRowPrefetch, consumeHomeRowPrefetch } from '../utils/HomeRowPrefetch.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import {
+    createBecauseWatchedLoader,
+    createSerialQueue,
+    isRecommendationRowId,
+    BYW_ROW_ID_PREFIX,
+    BYW_MAX_ROWS,
+    RECO_ROW_ID_PREFIX
+} from '../utils/BecauseYouWatched.js';
+import {
+    createTasteProfileProvider,
+    createTasteRowLoader,
+    TASTE_KINDS,
+    TASTE_PREF_KEYS,
+    TASTE_HEADER_KEYS,
+    TASTE_TITLE_KEYS
+} from '../utils/TasteRecommendations.js';
 
 const log = logger.create('HomePage');
 
@@ -1149,6 +1165,14 @@ class HomePage extends Page {
             });
         }
 
+        // ── Priority 2: Recommendation rows ──────────────────────────────────
+        // Placed ahead of the per-library Latest rows so the default order puts them first.
+        const recommendationDescriptors = this._getRecommendationDescriptors(homeRowLimit);
+        if (recommendationDescriptors.length > 0) {
+            const firstLatest = descriptors.findIndex((d) => d.priority >= 2);
+            descriptors.splice(firstLatest < 0 ? descriptors.length : firstLatest, 0, ...recommendationDescriptors);
+        }
+
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
 
@@ -1179,6 +1203,167 @@ class HomePage extends Page {
 
         // Apply dynamic user layout sorting and visibility filtering
         return homeLayoutManager.applyLayout(descriptors);
+    }
+
+    /**
+     * Builds the recommendation rows: "Because you watched" plus the optional
+     * actor / director / studio / genre rows. They share one set of excluded ids
+     * and one serial queue, so no title appears in two rows, and one request
+     * for recent plays. Row titles name the chosen source, so they are filled
+     * in when the fetch resolves.
+     *
+     * @param {number} homeRowLimit
+     * @returns {RowDescriptor[]}
+     * @private
+     */
+    _getRecommendationDescriptors(homeRowLimit) {
+        const bywEnabled = storage.getItem('pref:becauseYouWatched') === 'true';
+        const tasteKinds = TASTE_KINDS.filter((kind) => storage.getItem(TASTE_PREF_KEYS[kind]) === 'true');
+        if (!bywEnabled && tasteKinds.length === 0) return [];
+
+        const exclude = new Set();
+        const queue = createSerialQueue();
+        const onError = (msg, err) => log.warn(msg, err);
+
+        let playedPromise = null;
+        const getPlayed = () => {
+            if (!playedPromise) {
+                playedPromise = api
+                    .getItems({
+                        Filters: 'IsPlayed',
+                        SortBy: 'DatePlayed',
+                        SortOrder: 'Descending',
+                        IncludeItemTypes: 'Movie,Episode',
+                        Fields: 'SeriesId,SeriesName',
+                        Limit: 60
+                    })
+                    .then((res) => res?.Items || []);
+            }
+            return playedPromise;
+        };
+
+        const descriptors = [];
+
+        if (bywEnabled) {
+            const bywCount = Math.min(
+                Math.max(parseInt(storage.getItem('pref:becauseYouWatchedCount') || 2, 10) || 2, 1),
+                BYW_MAX_ROWS
+            );
+            const loadBywRow = createBecauseWatchedLoader({
+                getPlayed,
+                getSimilar: async (id) => {
+                    const res = await api.getSimilar(id, {
+                        Limit: homeRowLimit + 6,
+                        IncludeItemTypes: 'Movie,Series',
+                        Fields: 'PrimaryImageAspectRatio,UserData'
+                    });
+                    return res?.Items || [];
+                },
+                onError,
+                exclude,
+                queue
+            });
+
+            for (let i = 0; i < bywCount; i++) {
+                descriptors.push({
+                    id: `${BYW_ROW_ID_PREFIX}${i + 1}`,
+                    title: i18n.t('HeaderBecauseYouWatched'),
+                    priority: 2,
+                    layout: 'portrait',
+                    cardType: 'poster',
+                    contextType: 'suggestion',
+                    fetchFn: async function () {
+                        const row = await loadBywRow(i);
+                        if (!row) return null;
+                        this.title = i18n.t('SimilarTo', [row.sourceName]);
+                        return row.items.slice(0, homeRowLimit);
+                    }
+                });
+            }
+        }
+
+        if (tasteKinds.length > 0) {
+            const detailFields = 'People,Studios,Genres,GenreItems,PrimaryImageAspectRatio';
+            const tasteExclude = new Set();
+            const getProfile = createTasteProfileProvider({
+                getPlayed,
+                getDetails: async (ids) => {
+                    const res = await api.getItems({
+                        Ids: ids.join(','),
+                        Limit: ids.length,
+                        SortBy: 'SortName',
+                        Fields: detailFields
+                    });
+                    return res?.Items || [];
+                },
+                getFavorites: async () => {
+                    const res = await api.getItems({
+                        Filters: 'IsFavorite',
+                        IncludeItemTypes: 'Movie,Series',
+                        Limit: 20,
+                        Fields: detailFields
+                    });
+                    return res?.Items || [];
+                },
+                exclude: tasteExclude,
+                onError
+            });
+
+            const fetchByKind = async (kind, source) => {
+                const params = {
+                    IncludeItemTypes: 'Movie,Series',
+                    Filters: 'IsUnplayed',
+                    SortBy: 'Random',
+                    // A wide pool: earlier rows claim titles, and a narrow pool (one director or studio)
+                    // would otherwise drop below the minimum depending on which random titles they took.
+                    Limit: homeRowLimit * 2 + 10,
+                    Fields: 'PrimaryImageAspectRatio,UserData'
+                };
+                if (kind === 'actor' || kind === 'director') {
+                    params.PersonIds = source.id;
+                    params.PersonTypes = kind === 'actor' ? 'Actor' : 'Director';
+                } else if (kind === 'studio') {
+                    params.StudioIds = source.id;
+                } else {
+                    params.Genres = source.name;
+                }
+                const res = await api.getItems(params);
+                return res?.Items || [];
+            };
+
+            // Taste rows only skip titles you already watched. They deliberately do not claim titles from
+            // each other or from Because You Watched: rows load lazily in scroll order, and claiming made
+            // a small pool (one director or studio) appear or vanish depending on what loaded first.
+            const loadTasteRow = createTasteRowLoader({
+                getProfile,
+                fetchByKind,
+                exclude: tasteExclude,
+                claimTitles: false,
+                queue,
+                onError,
+                rowLimit: homeRowLimit,
+                onTrace: (msg) => log.info(`Recommendations ${msg}`)
+            });
+
+            for (const kind of tasteKinds) {
+                descriptors.push({
+                    id: `${RECO_ROW_ID_PREFIX}${kind}`,
+                    title: i18n.t(TASTE_HEADER_KEYS[kind]),
+                    priority: 2,
+                    layout: 'portrait',
+                    cardType: 'poster',
+                    contextType: 'suggestion',
+                    fetchFn: async function () {
+                        const row = await loadTasteRow(kind, 0);
+                        if (!row) return null;
+                        this.title = i18n.t(TASTE_TITLE_KEYS[kind], [row.sourceName]);
+                        return row.items.slice(0, homeRowLimit);
+                    }
+                });
+            }
+        }
+
+        return descriptors;
     }
 
     // =========================================================================
@@ -1332,7 +1517,7 @@ class HomePage extends Page {
 
             // If restored from cache, replace fetchFns with cached item arrays
             if (cache) {
-                this._applyCachedRowData(descriptors, cache.rows);
+                this._applyCachedRowData(descriptors, cache.rows, cache.rowTitles);
             }
 
             // Validate focus target exists in the generated descriptors
@@ -3693,12 +3878,14 @@ class HomePage extends Page {
      * Replaces each descriptor's fetchFn to return cached items instantly.
      * @param {RowDescriptor[]} descriptors
      * @param {Object<string, Array>} rowCache - Row ID -> items map
+     * @param {Object<string, string>} [rowTitles] - Row ID -> title for rows whose title is resolved while fetching
      */
-    _applyCachedRowData(descriptors, rowCache) {
+    _applyCachedRowData(descriptors, rowCache, rowTitles) {
         for (const desc of descriptors) {
             const cachedItems = rowCache[desc.id];
             if (cachedItems) {
                 desc.fetchFn = () => Promise.resolve(cachedItems);
+                if (rowTitles && rowTitles[desc.id]) desc.title = rowTitles[desc.id];
             }
         }
     }
@@ -3750,9 +3937,12 @@ class HomePage extends Page {
         }
 
         const rows = {};
+        const rowTitles = {};
         for (const [id, entry] of this._rowRegistry) {
             if (entry.virtualRow && entry.virtualRow.items && entry.virtualRow.items.length > 0) {
                 rows[id] = entry.virtualRow.items;
+                // Recommendation titles name the chosen source, which is only known after the fetch.
+                if (isRecommendationRowId(id)) rowTitles[id] = entry.descriptor.title;
             }
         }
 
@@ -3774,6 +3964,7 @@ class HomePage extends Page {
             libraries: this._libraries,
             thumbUrls,
             rows,
+            rowTitles,
             heroItems,
             homeRowLimit,
             serverUrl: api._serverUrl,

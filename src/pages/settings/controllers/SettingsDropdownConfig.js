@@ -53,6 +53,7 @@ export function getSettingsDropdownMap() {
         'text-scale-select': { key: 'litefin:textScale', type: 'local' },
         'home-rows-limit-select': { key: 'pref:homeRowsLimit', type: 'local', triggerEvent: true },
         'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
+        'because-you-watched-count-select': { key: 'pref:becauseYouWatchedCount', type: 'local' },
         'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
         'button-style-select': { key: 'litefin:buttonStyle', type: 'local' },
         'focus-border-style-select': { key: 'litefin:focusBorderStyle', type: 'local' },
