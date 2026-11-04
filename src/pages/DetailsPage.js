@@ -458,6 +458,62 @@ class DetailsPage extends Page {
             // Setup action button tooltip listener
             this._setupTooltipListener();
 
+            // Listen for server-side user data updates (e.g. playback progress or watched commits)
+            this._onRemoteUserDataChanged = (userDataList) => {
+                if (!this._item || !Array.isArray(userDataList)) return;
+                const match = userDataList.find((u) => u.ItemId === this._itemId || u.ItemId === this._item.Id);
+                if (!match) return;
+
+                // Update active item UserData in place
+                this._item.UserData = this._item.UserData || {};
+                if (match.PlaybackPositionTicks !== undefined) {
+                    this._item.UserData.PlaybackPositionTicks = match.PlaybackPositionTicks;
+                }
+                if (match.Played !== undefined) {
+                    this._item.UserData.Played = match.Played;
+                }
+                if (match.PlayCount !== undefined) {
+                    this._item.UserData.PlayCount = match.PlayCount;
+                }
+                if (match.IsFavorite !== undefined) {
+                    this._item.UserData.IsFavorite = match.IsFavorite;
+                }
+                if (match.LastPlayedDate) {
+                    this._item.UserData.LastPlayedDate = match.LastPlayedDate;
+                }
+
+                // Update stop snapshot so local memory aligns with committed server state
+                const stopSnapshot = {
+                    itemId: this._item.Id,
+                    seriesId: this._item.SeriesId || null,
+                    seasonId: this._item.SeasonId || null,
+                    positionTicks: match.PlaybackPositionTicks || 0,
+                    durationTicks: this._item.RunTimeTicks || 0,
+                    isNearComplete: Boolean(match.Played),
+                    timestamp: Date.now()
+                };
+                state.set(`playback:lastStopped:${this._item.Id}`, stopSnapshot);
+                state.set('playback:lastStopped', stopSnapshot);
+
+                // Update UI action buttons (Play vs Resume, resume timestamp label)
+                this._updateButtons();
+
+                // Re-trigger prewarm with the updated authoritative resume position
+                if (
+                    this._item.Type === 'Movie' ||
+                    this._item.Type === 'Episode' ||
+                    this._item.Type === 'Video' ||
+                    this._item.Type === 'Trailer'
+                ) {
+                    prewarmManager.prewarm(this._item, {
+                        mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                        audioStreamIndex: this._selectedAudioIndex,
+                        subtitleStreamIndex: this._selectedSubtitleIndex
+                    });
+                }
+            };
+            eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
+
             // Translate static UI labels
             i18n.translateDOM(this.el);
 
@@ -927,14 +983,24 @@ class DetailsPage extends Page {
      * @private
      */
     _reconcileItemWithLastStopped(item) {
-        if (!item) return;
+        if (!item || !item.Id) return;
 
-        // Retrieve last stopped snapshot from in-memory state
-        const lastStopped = state.get('playback:lastStopped');
-        if (!lastStopped || lastStopped.itemId !== item.Id) return;
+        // Retrieve last stopped snapshot from item-scoped key, bounded map, or singular fallback
+        const lastStopped =
+            state.get(`playback:lastStopped:${item.Id}`) ||
+            state.get('playback:lastStoppedMap')?.[item.Id] ||
+            (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
 
-        // Only reconcile if stop was recent (within 30 seconds)
-        if (Date.now() - lastStopped.timestamp > 30000) return;
+        if (!lastStopped) return;
+
+        // Determine if local snapshot is still authoritative
+        // 1. Time-based validity: within 15 minutes of stopping
+        // 2. Or if server LastPlayedDate is older than our local stop snapshot timestamp
+        const lastPlayedMs = item.UserData?.LastPlayedDate ? new Date(item.UserData.LastPlayedDate).getTime() : 0;
+        const isNewerThanServer = lastPlayedMs > 0 && lastStopped.timestamp > lastPlayedMs;
+        const isRecent = Date.now() - lastStopped.timestamp < 900000; // 15 minutes
+
+        if (!isRecent && !isNewerThanServer) return;
 
         item.UserData = item.UserData || {};
         if (lastStopped.isNearComplete) {
@@ -3845,14 +3911,18 @@ class DetailsPage extends Page {
 
             // If the episode returned by the server as Next Up was just marked complete,
             // suppress it from the Next Up display so the finished item does not linger.
-            const lastStopped = state.get('playback:lastStopped');
+            const nextUpTargetId = this._nextUp[0]?.Id;
+            const lastStopped =
+                (nextUpTargetId && state.get(`playback:lastStopped:${nextUpTargetId}`)) ||
+                (nextUpTargetId && state.get('playback:lastStoppedMap')?.[nextUpTargetId]) ||
+                state.get('playback:lastStopped');
             if (
                 this._nextUp &&
                 this._nextUp.length > 0 &&
                 lastStopped &&
                 lastStopped.isNearComplete &&
                 this._nextUp[0].Id === lastStopped.itemId &&
-                Date.now() - lastStopped.timestamp < 30000
+                Date.now() - lastStopped.timestamp < 900000
             ) {
                 log.info('Server NextUp returned recently completed episode — suppressing stale item');
                 this._nextUp = [];
@@ -5456,9 +5526,16 @@ class DetailsPage extends Page {
                 quality: backdropParams.quality
             });
 
+        // Extract exact resume ticks when resuming playback
+        let startPositionTicks = null;
+        if (resume && !ghostMode) {
+            startPositionTicks = itemToPlay.UserData?.PlaybackPositionTicks || 0;
+        }
+
         eventBus.emit('player:play', {
             item: itemToPlay,
             resume: ghostMode ? false : resume,
+            startPositionTicks,
             mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
@@ -7369,6 +7446,11 @@ class DetailsPage extends Page {
         if (this._episodeGrid) {
             this._episodeGrid.destroy();
             this._episodeGrid = null;
+        }
+
+        if (this._onRemoteUserDataChanged) {
+            eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
+            this._onRemoteUserDataChanged = null;
         }
 
         const currentPath = router.getCurrentPath?.() || '';

@@ -419,6 +419,26 @@ export class ApiClient {
         log.debug('ETag cache cleared');
     }
 
+    /**
+     * Clear cached ETag entries for a specific media item.
+     * Prevents stale 304 Not Modified responses when item state (such as playback progress) changes.
+     *
+     * @param {string} itemId - The Jellyfin/Emby item identifier to purge
+     */
+    clearEtagCacheForItem(itemId) {
+        if (!itemId || typeof itemId !== 'string') return;
+        // Iterate through cached URLs and remove any entries matching the target item
+        for (const url of this._etagCache.keys()) {
+            if (
+                url.includes(`/Items/${itemId}`) ||
+                url.includes(`/Videos/${itemId}`) ||
+                url.includes(`/UserItems/${itemId}`)
+            ) {
+                this._etagCache.delete(url);
+            }
+        }
+    }
+
     // ========================================================================
     // Header Management
     // ========================================================================
@@ -608,11 +628,6 @@ export class ApiClient {
             headers['Accept-Language'] = `${activeLang},en;q=0.8`;
         }
 
-        // Add If-None-Match header if we have a cached ETag for this URL
-        if (etagEntry && etagEntry.etag) {
-            headers['If-None-Match'] = etagEntry.etag;
-        }
-
         if (!options.skipAuth) {
             /*
              * Fetch the formatted authorization header.
@@ -638,9 +653,19 @@ export class ApiClient {
             keepalive: options.keepalive
         };
 
-        // Forward cache mode if explicitly requested (e.g. 'no-cache')
+        // Forward cache mode if explicitly requested (e.g. 'no-cache', 'no-store')
         if (options.cache) {
             fetchOptions.cache = options.cache;
+        }
+
+        // Add If-None-Match header if we have a cached ETag for this URL.
+        // Guard: NEVER send If-None-Match when cache is set to 'no-store' or 'no-cache'.
+        // Sending If-None-Match on endpoints returning user data (like /Items/{id}) causes
+        // servers (such as Jellyfin) to respond with 304 Not Modified because Jellyfin calculates
+        // item ETags from DateLastSaved.Ticks, which does not change when UserData.PlaybackPositionTicks updates.
+        const isNoCache = fetchOptions.cache === 'no-store' || fetchOptions.cache === 'no-cache';
+        if (etagEntry && etagEntry.etag && !isNoCache) {
+            headers['If-None-Match'] = etagEntry.etag;
         }
 
         // Add body for POST/PUT requests
@@ -786,7 +811,8 @@ export class ApiClient {
 
             // Cache ETag for GET requests so subsequent calls can use
             // If-None-Match / 304 short-circuit when data hasn't changed.
-            if (method === 'GET') {
+            // Guard: Do not cache ETag entries if request explicitly requested fresh data.
+            if (method === 'GET' && !isNoCache) {
                 const etag = response.headers.get('ETag');
                 if (etag && body !== undefined && body !== null) {
                     if (this._etagCache.size >= this._etagCacheMaxSize) {
@@ -1694,12 +1720,29 @@ export class ApiClient {
      * @param {Object} [options] - Network request options
      */
     async getItem(itemId, params = {}, options = {}) {
+        /*
+         * Fetch item metadata with strict fresh cache policy.
+         * Jellyfin computes item ETags solely from DateLastSaved.Ticks, which does
+         * not update when user playback state changes (UserData.PlaybackPositionTicks).
+         * Suppressing cache-revalidation via 'no-store' prevents stale 304 responses
+         * and ensures the latest resume position and played flags are retrieved.
+         */
+        const itemOptions = {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                ...(options.headers || {})
+            },
+            ...options
+        };
+
         if (this.isJF12Plus()) {
             // New JF12 form — userId is a query param on the non-user route
-            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params }, options);
+            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params }, itemOptions);
         }
         // Legacy path for JF 10.10 / 10.11
-        return this.get(`/Users/${this._userId}/Items/${itemId}`, params, options);
+        return this.get(`/Users/${this._userId}/Items/${itemId}`, params, itemOptions);
     }
 
     /**

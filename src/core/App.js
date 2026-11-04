@@ -1795,6 +1795,7 @@ class App {
             async ({
                 item,
                 resume,
+                startPositionTicks,
                 mediaSourceId,
                 audioStreamIndex,
                 subtitleStreamIndex,
@@ -2020,6 +2021,9 @@ class App {
                 // to the originating page (see replace flag below).
                 const resumeParam = resume ? 'true' : 'false';
                 const queryParts = [];
+                if (startPositionTicks !== undefined && startPositionTicks !== null && startPositionTicks > 0) {
+                    queryParts.push(`startPositionTicks=${startPositionTicks}`);
+                }
                 if (fromSlideshow) queryParts.push('fromSlideshow=true');
                 if (fromBrowse) queryParts.push('fromBrowse=true');
                 if (ghostMode) queryParts.push('ghostMode=true');

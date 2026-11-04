@@ -3030,7 +3030,10 @@ export default class OSDController extends Component {
                         this._currentFocusRow = 0;
                     }
                 } else if (this._currentFocusRow === -1) {
-                    if (this._cachedHeaderRow.length > 0) {
+                    if (this._cachedOverlayRow.length > 1 && this._currentFocusIndex > 0) {
+                        // Move up within vertically stacked overlay buttons
+                        this._currentFocusIndex--;
+                    } else if (this._cachedHeaderRow.length > 0) {
                         this._currentFocusRow = 0;
                     }
                 } else if (this._currentFocusRow === 0) {
@@ -3068,7 +3071,8 @@ export default class OSDController extends Component {
                             );
                             this._currentFocusIndex = sliderIdx !== -1 ? sliderIdx : 0;
                         } else {
-                            this._currentFocusIndex = 0;
+                            // Land on the bottom-most overlay button closest to controls
+                            this._currentFocusIndex = this._cachedOverlayRow.length - 1;
                         }
                     } else if (this._cachedHeaderRow.length > 0) {
                         this._currentFocusRow = 0;
@@ -3077,7 +3081,10 @@ export default class OSDController extends Component {
                     // Overlay → Header (back button). Completes the chain:
                     // Seekbar ↑ Controls ↑ Overlay ↑ Header
                     // From Header the user can then right/left into subtitle offset / playback info.
-                    if (this._cachedHeaderRow.length > 0) {
+                    if (this._cachedOverlayRow.length > 1 && this._currentFocusIndex > 0) {
+                        // Move up within vertically stacked overlay buttons
+                        this._currentFocusIndex--;
+                    } else if (this._cachedHeaderRow.length > 0) {
                         this._currentFocusRow = 0;
                     }
                 } else if (this._currentFocusRow === 0) {
@@ -3100,7 +3107,12 @@ export default class OSDController extends Component {
                         this._currentFocusRow = 2; // Header -> Seekbar
                     }
                 } else if (this._currentFocusRow === -1) {
-                    this._currentFocusRow = 2; // Overlay -> Seekbar
+                    if (this._cachedOverlayRow.length > 1 && this._currentFocusIndex < this._cachedOverlayRow.length - 1) {
+                        // Move down within vertically stacked overlay buttons
+                        this._currentFocusIndex++;
+                    } else {
+                        this._currentFocusRow = 2; // Overlay -> Seekbar
+                    }
                 } else if (this._currentFocusRow === 2) {
                     this._currentFocusRow = 1; // Seekbar -> Controls
                     const playIdx = this._findActionIndex('togglePlay');
@@ -3110,10 +3122,15 @@ export default class OSDController extends Component {
                 }
             } else {
                 if (this._currentFocusRow === -1) {
-                    // Return from overlay row straight to Controls, landing on Play/Pause
-                    this._currentFocusRow = 1;
-                    const playIdx = this._findActionIndex('togglePlay');
-                    if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                    if (this._cachedOverlayRow.length > 1 && this._currentFocusIndex < this._cachedOverlayRow.length - 1) {
+                        // Move down within vertically stacked overlay buttons
+                        this._currentFocusIndex++;
+                    } else {
+                        // Return from overlay row straight to Controls, landing on Play/Pause
+                        this._currentFocusRow = 1;
+                        const playIdx = this._findActionIndex('togglePlay');
+                        if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                    }
                 } else if (this._currentFocusRow === 0) {
                     // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
                     // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
@@ -3302,12 +3319,28 @@ export default class OSDController extends Component {
      * @returns {HTMLElement|null}
      */
     _getHighlightedSkipPrompt() {
-        const widget = this._osdEl.querySelector('.osd-overlays .plugin-widget.visible');
-        const cta = widget && widget.querySelector('.skip-intro-btn.focused');
-        if (!cta) return null;
+        // Query all visible plugin widgets in the overlay layer
+        const widgets = this._osdEl.querySelectorAll
+            ? Array.from(this._osdEl.querySelectorAll('.osd-overlays .plugin-widget.visible'))
+            : [];
 
-        const widgetStyle = getComputedStyle(widget);
-        return widgetStyle.opacity !== '0' && widgetStyle.pointerEvents !== 'none' ? cta : null;
+        // Fallback for isolated test environments where querySelectorAll might not be mocked
+        if (widgets.length === 0) {
+            const single = this._osdEl.querySelector?.('.osd-overlays .plugin-widget.visible');
+            if (single) widgets.push(single);
+        }
+
+        // Locate any active CTA button with remote focus within visible widgets
+        for (const widget of widgets) {
+            const cta = widget && widget.querySelector?.('.skip-intro-btn.focused');
+            if (cta) {
+                const widgetStyle = getComputedStyle(widget);
+                if (widgetStyle.opacity !== '0' && widgetStyle.pointerEvents !== 'none') {
+                    return cta;
+                }
+            }
+        }
+        return null;
     }
 
     /**

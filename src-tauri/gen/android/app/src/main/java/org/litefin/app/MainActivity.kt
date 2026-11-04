@@ -1451,11 +1451,19 @@ class MainActivity : TauriActivity() {
             it.key.equals("Access-Control-Request-Headers", ignoreCase = true)
           }?.value?.trim()?.ifEmpty { null } ?: "*"
 
+          // W3C CORS Specification: Access-Control-Allow-Headers MUST NOT be wildcard '*'
+          // when Access-Control-Allow-Credentials is true; provide explicit header list when absent.
+          val allowedHeaders = if (reqHeaders == "*") {
+            "Authorization, X-Emby-Authorization, X-MediaBrowser-Token, Content-Type, Accept, Origin, User-Agent, X-Requested-With, Cache-Control, Pragma, If-None-Match, " + customProxyHeaders.keys.joinToString(", ")
+          } else {
+            reqHeaders
+          }
+
           // Build preflight response headers dictionary
           val preflightHeaders = mutableMapOf(
             "Access-Control-Allow-Origin" to origin,
             "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-            "Access-Control-Allow-Headers" to reqHeaders,
+            "Access-Control-Allow-Headers" to allowedHeaders,
             "Access-Control-Max-Age" to "86400"
           )
 
@@ -1527,19 +1535,45 @@ class MainActivity : TauriActivity() {
                   lower != "if-modified-since" &&
                   lower != "if-range" &&
                   !customProxyHeaders.containsKey(key)) {
-                reqBuilder.header(key, value)
+                try {
+                  // Sanitize value to strip CR/LF preventing OkHttp header argument exceptions
+                  val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                  reqBuilder.header(key.trim(), sanitizedVal)
+                } catch (_: Exception) {}
               }
             }
 
             // Inject configured reverse-proxy authentication headers (e.g. Cloudflare Service Tokens)
             customProxyHeaders.forEach { (key, value) ->
-              reqBuilder.header(key, value)
+              try {
+                val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                reqBuilder.header(key.trim(), sanitizedVal)
+              } catch (_: Exception) {}
             }
 
             // Execute network request natively via connection-pooled HTTP client
             val response = httpClient.newCall(reqBuilder.build()).execute()
             val code = response.code
             val body = response.body
+
+            // Android WebResourceResponse reasonPhrase specification strictly requires
+            // ASCII letters and spaces only: regex ^[a-zA-Z ]+$. Numbers or symbols trigger
+            // an immediate IllegalArgumentException, crashing native interception into fallback.
+            val safeReasonPhrase = when (code) {
+              200 -> "OK"
+              201 -> "Created"
+              204 -> "No Content"
+              304 -> "Not Modified"
+              400 -> "Bad Request"
+              401 -> "Unauthorized"
+              403 -> "Forbidden"
+              404 -> "Not Found"
+              500 -> "Internal Server Error"
+              502 -> "Bad Gateway"
+              503 -> "Service Unavailable"
+              504 -> "Gateway Timeout"
+              else -> if (code in 200..299) "OK" else "Error"
+            }
 
             // Handle successful resource payloads (2xx) with non-null response streams
             if (response.isSuccessful && body != null) {
@@ -1585,7 +1619,7 @@ class MainActivity : TauriActivity() {
                 mimeType,
                 encoding,
                 code,
-                response.message.ifEmpty { "OK" },
+                safeReasonPhrase,
                 responseHeaders,
                 body.byteStream()
               )
@@ -1604,7 +1638,7 @@ class MainActivity : TauriActivity() {
                 mimeType,
                 encoding,
                 code,
-                response.message.ifEmpty { if (code == 404) "Not Found" else "Error $code" },
+                safeReasonPhrase,
                 errorHeaders,
                 stream
               )
