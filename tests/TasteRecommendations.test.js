@@ -303,5 +303,38 @@ test('row loader - downstream slots load even if an earlier slot rejects', async
         exclude: new Set()
     });
     const row0 = await load('actor', 0);
+    assert.ok(calls > 0);
     assert.equal(row0.sourceName, 'Bob');
+});
+
+test('profile provider - retries with fresh getPlayed when network recovers', async () => {
+    let attempts = 0;
+    let playedPromise = null;
+    const getPlayed = () => {
+        if (!playedPromise) {
+            playedPromise = Promise.resolve()
+                .then(() => {
+                    attempts++;
+                    if (attempts === 1) throw new Error('connection lost');
+                    return [{ Id: 'm1', Type: 'Movie', Name: 'Movie 1' }];
+                })
+                .catch((err) => {
+                    playedPromise = null;
+                    throw err;
+                });
+        }
+        return playedPromise;
+    };
+
+    const getProfile = createTasteProfileProvider({
+        getPlayed,
+        getDetails: async () => [title('m1', { People: [actor('a1', 'Ann')] })]
+    });
+
+    const first = await getProfile();
+    assert.deepEqual(first.actor, []);
+
+    const second = await getProfile();
+    assert.equal(second.actor.length, 1);
+    assert.equal(second.actor[0].name, 'Ann');
 });

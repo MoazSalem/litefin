@@ -108,6 +108,7 @@ test('loader - skips sources with fewer suggestions than BYW_MIN_ITEMS', async (
                 ? [{ Id: 's1' }, { Id: 's2' }] // Only 2 items < 3
                 : [{ Id: 'f1' }, { Id: 'f2' }, { Id: 'f3' }]
     });
+    assert.equal(BYW_MIN_ITEMS, 3);
     const row = await load(0);
     assert.equal(row.sourceName, 'Full');
     assert.equal(row.items.length, 3);
@@ -124,5 +125,21 @@ test('loader - survives unexpected rejection in an earlier slot without cascadin
         }
     });
     const row0 = await load(0);
+    assert.ok(callCount > 0);
     assert.equal(row0.sourceName, 'Second');
+});
+
+test('loader - retries recently played fetch on downstream slot after initial failure', async () => {
+    let playedCalls = 0;
+    const load = createBecauseWatchedLoader({
+        getPlayed: async () => {
+            playedCalls++;
+            if (playedCalls === 1) throw new Error('network down');
+            return [movie('m1', 'Recovered')];
+        },
+        getSimilar: async () => [{ Id: 'r1' }, { Id: 'r2' }, { Id: 'r3' }]
+    });
+    assert.equal(await load(0), null);
+    const row1 = await load(1);
+    assert.equal(row1.sourceName, 'Recovered');
 });

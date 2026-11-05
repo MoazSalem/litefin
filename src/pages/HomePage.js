@@ -1229,6 +1229,8 @@ class HomePage extends Page {
         let playedPromise = null;
         const getPlayed = () => {
             if (!playedPromise) {
+                // Query recently played history to feed recommendation algorithms.
+                // Clear cached promise on failure so subsequent row retries can re-fetch.
                 playedPromise = api
                     .getItems({
                         Filters: 'IsPlayed',
@@ -1238,7 +1240,11 @@ class HomePage extends Page {
                         Fields: 'SeriesId,SeriesName',
                         Limit: 60
                     })
-                    .then((res) => res?.Items || []);
+                    .then((res) => res?.Items || [])
+                    .catch((err) => {
+                        playedPromise = null;
+                        throw err;
+                    });
             }
             return playedPromise;
         };
