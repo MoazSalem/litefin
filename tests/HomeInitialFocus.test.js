@@ -48,11 +48,17 @@ test('HomePage: default and fallback focus respect pref:homeInitialFocus', () =>
         'Hero must remain the default focus target unless firstRow is selected'
     );
 
-    const occurrences = source.match(/!this\._shouldFocusHeroByDefault\(\) && this\._focusFirstRowCard\(\)/g) || [];
+    assert.match(
+        source,
+        /return this\._shouldFocusHeroByDefault\(\) \? hero \|\| firstRow : firstRow \|\| hero;/,
+        'Default focus target must prefer the configured target and fall back to the other'
+    );
+
+    const occurrences = source.match(/this\._focusHomeTarget\(this\._resolveDefaultFocusTarget\(\)\)/g) || [];
     assert.equal(
         occurrences.length,
         2,
-        'Both the initial focus and the modal-close fallback must try the first row before the hero'
+        'Both the initial focus and the modal-close fallback must use the resolved default focus target'
     );
 });
 
