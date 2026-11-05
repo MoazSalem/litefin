@@ -1259,6 +1259,10 @@ class HomePage extends Page {
                 const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
                 if (enableHero && cache.heroItems && cache.heroItems.length > 0) {
                     this._initHeroCarouselFromItems(cache.heroItems);
+                    // Items cached before the plugin system was ready have no ratings yet
+                    if (cache.heroItems.some((item) => !item._mdbMetadata)) {
+                        this._scheduleHeroMdbEnrichment(cache.heroItems);
+                    }
                 }
             } else {
                 // ─── Step 0.5: Fire resume/next-up prefetch in parallel ──────
@@ -2932,25 +2936,14 @@ class HomePage extends Page {
                 return;
             }
 
-            // 1. Enrich with MDBList Metadata if enabled
-            if (storage.getItem('pref:heroCarouselMdbList') !== 'false' && pluginManager.isEnabled('mdblist-ratings')) {
-                const mdblist = pluginManager.getPlugin('mdblist-ratings');
-                if (mdblist && mdblist.plugin) {
-                    log.info('Enriching hero items with MDBList data...');
-                    try {
-                        await Promise.all(
-                            items.map(async (item) => {
-                                // Fetch and attach to the item object
-                                // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
-                                // We pass false for includeAwards to optimize for carousel performance.
-                                const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                                item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
-                            })
-                        );
-                    } catch (err) {
-                        log.warn('Enriching hero items failed, continuing with partial data', err);
-                    }
-                }
+            // 1. Enrich with MDBList Metadata. If plugins are already loaded, wait for the
+            //    ratings so the first paint is complete; on cold boot the plugin system
+            //    initializes after the splash, so enrich in the background instead.
+            if (pluginManager.isReady) {
+                await this._enrichHeroItemsWithMdbList(items);
+                if (!this._isMounted) return;
+            } else {
+                this._scheduleHeroMdbEnrichment(items);
             }
 
             // 2. Initialize the carousel component
@@ -3648,6 +3641,55 @@ class HomePage extends Page {
                 if (url) lib._dynamicThumbUrl = url;
             }
         }
+    }
+
+    /**
+     * Attaches MDBList ratings to hero items (mutates items in place).
+     * No-op when the MDBList plugin or the hero ratings preference is disabled.
+     *
+     * @param {Array} items - Hero carousel items
+     * @returns {Promise<boolean>} True if enrichment ran
+     * @private
+     */
+    async _enrichHeroItemsWithMdbList(items) {
+        if (storage.getItem('pref:heroCarouselMdbList') === 'false') return false;
+        if (!pluginManager.isEnabled('mdblist-ratings')) return false;
+        const mdblist = pluginManager.getPlugin('mdblist-ratings');
+        if (!mdblist || !mdblist.plugin) return false;
+
+        log.info('Enriching hero items with MDBList data...');
+        try {
+            await Promise.all(
+                items.map(async (item) => {
+                    if (item._mdbMetadata) return;
+                    // Prefer ProviderIds.Imdb to avoid extra API calls; skip awards for carousel performance
+                    const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                    item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                })
+            );
+        } catch (err) {
+            log.warn('Enriching hero items failed, continuing with partial data', err);
+        }
+        return true;
+    }
+
+    /**
+     * Waits for the plugin system, enriches hero items with MDBList ratings and
+     * refreshes the rendered carousel's meta rows in place.
+     *
+     * @param {Array} items - Items backing the current hero carousel
+     * @private
+     */
+    _scheduleHeroMdbEnrichment(items) {
+        pluginManager
+            .whenReady()
+            .then(() => this._enrichHeroItemsWithMdbList(items))
+            .then((enriched) => {
+                if (!enriched || !this._isMounted || !this._hero) return;
+                if (!items.includes(this._hero._items[0])) return; // Hero was rebuilt with other items
+                this._hero.refreshMeta();
+            })
+            .catch((err) => log.warn('Deferred hero MDBList enrichment failed', err));
     }
 
     /**
