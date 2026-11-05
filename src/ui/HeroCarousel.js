@@ -187,34 +187,7 @@ class HeroCarousel {
         }
 
         // Meta Info Row
-        const year = item.ProductionYear || '';
-        let runtimeText = '';
-        if (item.RunTimeTicks) {
-            const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-        }
-
-        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating)
-        const hasMdbRatings = item._mdbMetadata && item._mdbMetadata.ratings && item._mdbMetadata.ratings.length > 0;
-        const rating = item.OfficialRating;
-        const starRating =
-            !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
-                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
-                : '';
-
-        let metaHtml = '';
-        if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
-        if (runtimeText) metaHtml += `<span class="hero-meta-item">${runtimeText}</span>`;
-        if (rating) metaHtml += `<span class="hero-meta-item hero-meta-badge">${rating}</span>`;
-        if (starRating)
-            metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
-
-        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
-        if (item._mdbMetadata && shouldShowScore(item)) {
-            metaHtml += this._renderMdbMetadata(item._mdbMetadata);
-        }
+        const metaHtml = this._renderMetaHtml(item);
 
         // Resolve BlurHash for the hero backdrop and ambient fill background
         const blurHash = this._resolveBlurHash(item);
@@ -261,6 +234,57 @@ class HeroCarousel {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Builds the meta row (year, runtime, parental rating, scores) for a slide.
+     * @param {Object} item - Hero item
+     * @returns {string} HTML string
+     * @private
+     */
+    _renderMetaHtml(item) {
+        const year = item.ProductionYear || '';
+        let runtimeText = '';
+        if (item.RunTimeTicks) {
+            const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        }
+
+        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating)
+        const hasMdbRatings = item._mdbMetadata && item._mdbMetadata.ratings && item._mdbMetadata.ratings.length > 0;
+        const rating = item.OfficialRating;
+        const starRating =
+            !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
+                : '';
+
+        let metaHtml = '';
+        if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
+        if (runtimeText) metaHtml += `<span class="hero-meta-item">${runtimeText}</span>`;
+        if (rating) metaHtml += `<span class="hero-meta-item hero-meta-badge">${rating}</span>`;
+        if (starRating)
+            metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
+
+        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
+        if (item._mdbMetadata && shouldShowScore(item)) {
+            metaHtml += this._renderMdbMetadata(item._mdbMetadata);
+        }
+
+        return metaHtml;
+    }
+
+    /**
+     * Re-renders the meta rows in place, e.g. after MDBList ratings arrive
+     * asynchronously once the plugin system finishes initializing.
+     */
+    refreshMeta() {
+        if (!this._container) return;
+        this._items.forEach((item, index) => {
+            const row = this._container.querySelector(`.hero-item[data-index="${index}"] .hero-meta-row`);
+            if (row) row.innerHTML = this._renderMetaHtml(item);
+        });
     }
 
     /**
