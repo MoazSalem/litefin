@@ -1217,6 +1217,11 @@ class HomePage extends Page {
      * @private
      */
     _getRecommendationDescriptors(homeRowLimit) {
+        // --------------------------------------------------------------------
+        // Master recommendation switch: if disabled, skip all recommendation rows completely
+        // --------------------------------------------------------------------
+        if (storage.getItem('pref:enableRecommendationRows') !== 'true') return [];
+
         const bywEnabled = storage.getItem('pref:becauseYouWatched') === 'true';
         const rowCount = clampRowCount(storage.getItem('pref:recommendationRowCount'));
         const tasteKinds = TASTE_KINDS.filter((kind) => storage.getItem(TASTE_PREF_KEYS[kind]) === 'true');
