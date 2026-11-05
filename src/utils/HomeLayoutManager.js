@@ -110,10 +110,31 @@ class HomeLayoutManager {
                     _userOrder: defaultOrder
                 });
             } else if (isRecommendationRowId(desc.id)) {
-                // Not yet in saved preferences: sit right after Next Up / Continue Watching
-                // instead of being pushed behind every library.
-                const anchor = layoutMap.get('next-up') || layoutMap.get('resume');
-                const offset = recommendationRowOffset(desc.id);
+                // ------------------------------------------------------------
+                // Sibling-aware placement for newly incremented recommendation rows:
+                // When a user expands row count (e.g. from 1 to 2), the new row is not
+                // yet in saved preferences. If row 1 of the same kind was already repositioned
+                // by the user, anchor row 2 immediately after row 1 instead of pushing
+                // it back up next to Next Up / Continue Watching.
+                // ------------------------------------------------------------
+                const lastDash = desc.id.lastIndexOf('-');
+                const rowNum = parseInt(desc.id.slice(lastDash + 1), 10);
+                const prefix = desc.id.slice(0, lastDash + 1);
+
+                // Search for any preceding sibling already registered in layout map
+                let siblingAnchor = null;
+                if (rowNum > 1) {
+                    for (let prev = rowNum - 1; prev >= 1; prev--) {
+                        siblingAnchor = layoutMap.get(`${prefix}${prev}`);
+                        if (siblingAnchor) break;
+                    }
+                }
+
+                // Fall back to Next Up or Continue Watching when no preceding sibling is saved
+                const anchor = siblingAnchor || layoutMap.get('next-up') || layoutMap.get('resume');
+                const offset = siblingAnchor ? 0.01 * rowNum : recommendationRowOffset(desc.id);
+
+                // Attach synthetic user order maintaining natural clustering
                 processedDescriptors.push({
                     ...desc,
                     _userOrder: anchor ? anchor.order + offset : 1 + offset
@@ -215,14 +236,37 @@ class HomeLayoutManager {
             }
         });
 
-        // Recommendation rows that are not saved yet belong right after Next Up / Continue Watching,
-        // matching where applyLayout() renders them, not at the end of the list.
+        // --------------------------------------------------------------------
+        // Layout editor sequence synchronization for unsaved recommendation rows:
+        // Group newly activated rows with preceding siblings if already in the list,
+        // or anchor them immediately after Next Up / Continue Watching.
+        // --------------------------------------------------------------------
         const bywNew = settingsList.filter((i) => isRecommendationRowId(i.id) && !savedMap.has(i.id));
         if (bywNew.length > 0) {
             bywNew.forEach((item) => settingsList.splice(settingsList.indexOf(item), 1));
-            let anchorIdx = settingsList.findIndex((i) => i.id === 'next-up');
-            if (anchorIdx < 0) anchorIdx = settingsList.findIndex((i) => i.id === 'resume');
-            settingsList.splice(anchorIdx + 1, 0, ...bywNew);
+            for (const item of bywNew) {
+                const lastDash = item.id.lastIndexOf('-');
+                const rowNum = parseInt(item.id.slice(lastDash + 1), 10);
+                const prefix = item.id.slice(0, lastDash + 1);
+
+                // Check if a preceding row sibling exists in settings list
+                let siblingIdx = -1;
+                if (rowNum > 1) {
+                    for (let prev = rowNum - 1; prev >= 1; prev--) {
+                        siblingIdx = settingsList.findIndex((i) => i.id === `${prefix}${prev}`);
+                        if (siblingIdx >= 0) break;
+                    }
+                }
+
+                // Insert adjacent to sibling, or fallback to Next Up / Continue Watching anchor
+                if (siblingIdx >= 0) {
+                    settingsList.splice(siblingIdx + 1, 0, item);
+                } else {
+                    let anchorIdx = settingsList.findIndex((i) => i.id === 'next-up');
+                    if (anchorIdx < 0) anchorIdx = settingsList.findIndex((i) => i.id === 'resume');
+                    settingsList.splice(anchorIdx + 1, 0, item);
+                }
+            }
         }
 
         // Ensure order values are sequential and correct after any manipulation
