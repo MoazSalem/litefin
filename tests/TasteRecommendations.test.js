@@ -157,7 +157,7 @@ test('row loader - rows across kinds and Because You Watched never repeat a titl
     const queue = createSerialQueue();
     const byw = createBecauseWatchedLoader({
         getPlayed: async () => [title('m1')],
-        getSimilar: async () => [{ Id: 'x' }, { Id: 'y' }, { Id: 'z' }],
+        getSimilar: async () => [{ Id: 'x' }, { Id: 'x2' }, { Id: 'x3' }, { Id: 'y' }, { Id: 'z' }],
         exclude,
         queue
     });
