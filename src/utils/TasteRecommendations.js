@@ -250,7 +250,9 @@ export function createTasteRowLoader({ getProfile, fetchByKind, exclude, queue, 
         const list = slots[kind] || (slots[kind] = []);
         const load = (i) => {
             if (!list[i]) {
-                const previous = i > 0 ? load(i - 1) : Promise.resolve();
+                // Prevent cascade rejection: an unexpected failure in an earlier row slot
+                // must not prevent subsequent rows of this kind from attempting to load.
+                const previous = i > 0 ? load(i - 1).catch(() => null) : Promise.resolve();
                 list[i] = previous.then(() => run(() => resolveNext(kind)));
             }
             return list[i];

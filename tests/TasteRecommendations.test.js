@@ -288,3 +288,20 @@ test('row loader - rows of one kind use different sources and share no titles, e
     const all = [...first.items, ...second.items].map((i) => i.Id);
     assert.equal(new Set(all).size, all.length);
 });
+
+test('row loader - downstream slots load even if an earlier slot rejects', async () => {
+    let calls = 0;
+    const load = createTasteRowLoader({
+        getProfile: async () => richProfile(),
+        fetchByKind: async (kind, candidate) => {
+            calls++;
+            if (candidate.id === 'a1') {
+                throw new TypeError('unexpected failure');
+            }
+            return [{ Id: 's1' }, { Id: 's2' }, { Id: 's3' }];
+        },
+        exclude: new Set()
+    });
+    const row0 = await load('actor', 0);
+    assert.equal(row0.sourceName, 'Bob');
+});
