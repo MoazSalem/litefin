@@ -133,6 +133,8 @@ export function createBecauseWatchedLoader({ getPlayed, getSimilar, onError, exc
                 })
                 .catch((err) => {
                     if (onError) onError('Failed to load recently played items', err);
+                    // Reset cached promise so subsequent attempts can retry the fetch
+                    sourcesPromise = null;
                     return [];
                 });
         }
