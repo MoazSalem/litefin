@@ -20,6 +20,7 @@ import { detailsIcons } from '../utils/Icons.js';
 import { escapeHtml } from '../utils/Utils.js';
 import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratingsFormatter.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -252,8 +253,11 @@ class HeroCarousel {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
         }
 
-        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating)
-        const hasMdbRatings = item._mdbMetadata && item._mdbMetadata.ratings && item._mdbMetadata.ratings.length > 0;
+        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating).
+        // Cached hero items keep their _mdbMetadata, so re-check the plugin and the hero preference at render time
+        // in case either was turned off since the items were enriched.
+        const mdbData = this._isMdbEnabled() ? item._mdbMetadata : null;
+        const hasMdbRatings = mdbData && mdbData.ratings && mdbData.ratings.length > 0;
         const rating = item.OfficialRating;
         const starRating =
             !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
@@ -268,11 +272,20 @@ class HeroCarousel {
             metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
 
         // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
-        if (item._mdbMetadata && shouldShowScore(item)) {
-            metaHtml += this._renderMdbMetadata(item._mdbMetadata);
+        if (mdbData && shouldShowScore(item)) {
+            metaHtml += this._renderMdbMetadata(mdbData);
         }
 
         return metaHtml;
+    }
+
+    /**
+     * Whether MDBList ratings should be shown on the hero (plugin enabled and hero preference on).
+     * @returns {boolean}
+     * @private
+     */
+    _isMdbEnabled() {
+        return storage.getItem('pref:heroCarouselMdbList') !== 'false' && pluginManager.isEnabled('mdblist-ratings');
     }
 
     /**
