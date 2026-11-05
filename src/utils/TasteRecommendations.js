@@ -96,8 +96,23 @@ function collect(item, weight, maps) {
             directors++;
         }
     }
-    for (const studio of item.Studios || []) {
-        addScore(maps.studio, studio.Id, studio.Name, weight, item.Id);
+    // ------------------------------------------------------------------------
+    // Studio extraction & normalization:
+    // Jellyfin 10.8+ canonical payloads supply StudioItems with Id & Name properties,
+    // while older endpoints or Emby instances may provide Studios containing objects
+    // or bare strings. We prioritize StudioItems and normalize property naming.
+    // ------------------------------------------------------------------------
+    const studios = item.StudioItems && item.StudioItems.length ? item.StudioItems : item.Studios || [];
+    for (const studio of studios) {
+        if (!studio) continue;
+        // Resolve studio identifier and display name safely across backend variants
+        const id = typeof studio === 'object' ? studio.Id || studio.id : null;
+        const name = typeof studio === 'object' ? studio.Name || studio.name : (typeof studio === 'string' ? studio : null);
+
+        // Only register studios having valid IDs since filtering requires StudioIds query
+        if (id && name) {
+            addScore(maps.studio, id, name, weight, item.Id);
+        }
     }
     // Genres are filtered by name, so the name doubles as the id.
     const genres = item.GenreItems && item.GenreItems.length ? item.GenreItems.map((g) => g.Name) : item.Genres || [];

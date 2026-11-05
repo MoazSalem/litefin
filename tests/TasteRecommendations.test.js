@@ -49,6 +49,21 @@ test('buildTasteProfile - only the top billed actors and directors count', () =>
     assert.equal(profile.director.length, 2);
 });
 
+test('buildTasteProfile - supports StudioItems and normalizes studio objects', () => {
+    const profile = buildTasteProfile(
+        [
+            title('t1', { StudioItems: [{ Id: 's1', Name: 'Universal' }] }),
+            title('t2', { StudioItems: [{ id: 's1', name: 'Universal' }] }),
+            title('t3', { Studios: ['Warner Bros.'] })
+        ],
+        []
+    );
+    assert.equal(profile.studio.length, 1);
+    assert.equal(profile.studio[0].id, 's1');
+    assert.equal(profile.studio[0].name, 'Universal');
+    assert.equal(profile.studio[0].support, 2);
+});
+
 test('buildTasteProfile - favorites add weight and studios and genre items are read', () => {
     const profile = buildTasteProfile(
         [title('t1', { Studios: [{ Id: 's1', Name: 'Studio One' }] })],
