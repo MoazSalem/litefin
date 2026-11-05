@@ -1281,7 +1281,8 @@ class HomePage extends Page {
         }
 
         if (tasteKinds.length > 0) {
-            const detailFields = 'People,Studios,Genres,GenreItems,PrimaryImageAspectRatio';
+            // Request canonical metadata fields including StudioItems for robust multi-server compatibility
+            const detailFields = 'People,Studios,StudioItems,Genres,GenreItems,PrimaryImageAspectRatio';
             const tasteExclude = new Set();
             const getProfile = createTasteProfileProvider({
                 getPlayed,
