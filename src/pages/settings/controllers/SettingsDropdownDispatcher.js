@@ -181,6 +181,19 @@ export class SettingsDropdownDispatcher {
             storage.setItem(settingConfig.key, newValue);
         }
 
+        // --------------------------------------------------------------------
+        // The number of recommendation rows changes the Home row structure.
+        // Invalidate Home page cache and update Home layout editor UI immediately
+        // so new or removed recommendation row items reflect in the editor right away.
+        // --------------------------------------------------------------------
+        if (settingConfig.key === 'pref:recommendationRowCount') {
+            state.delete('home:pageCache');
+            if (this.page.homeTab && typeof this.page.homeTab.setupHomeLayoutUI === 'function') {
+                this.page.homeTab.setupHomeLayoutUI();
+                focusManager.invalidateCache('settings-content');
+            }
+        }
+
         // Library paging and layout cache invalidations
         if (settingConfig.key === 'pref:libraryPageSize') {
             state.clearByPrefix('library:state');
