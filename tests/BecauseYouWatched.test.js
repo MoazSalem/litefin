@@ -112,3 +112,17 @@ test('loader - skips sources with fewer suggestions than BYW_MIN_ITEMS', async (
     assert.equal(row.sourceName, 'Full');
     assert.equal(row.items.length, 3);
 });
+
+test('loader - survives unexpected rejection in an earlier slot without cascading', async () => {
+    let callCount = 0;
+    const load = createBecauseWatchedLoader({
+        getPlayed: async () => [movie('m1', 'First'), movie('m2', 'Second')],
+        getSimilar: async (id) => {
+            callCount++;
+            if (id === 'm1') throw new TypeError('unexpected crash');
+            return [{ Id: 'b1' }, { Id: 'b2' }, { Id: 'b3' }];
+        }
+    });
+    const row0 = await load(0);
+    assert.equal(row0.sourceName, 'Second');
+});

@@ -162,7 +162,9 @@ export function createBecauseWatchedLoader({ getPlayed, getSimilar, onError, exc
 
     const load = (index) => {
         if (!slots[index]) {
-            const previous = index > 0 ? load(index - 1) : Promise.resolve();
+            // Prevent rejection cascading: an unexpected failure in an earlier slot
+            // should not prevent downstream recommendation rows from loading.
+            const previous = index > 0 ? load(index - 1).catch(() => null) : Promise.resolve();
             slots[index] = previous.then(() => run(resolveNext));
         }
         return slots[index];
