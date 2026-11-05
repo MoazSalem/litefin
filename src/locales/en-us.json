@@ -325,6 +325,8 @@
     "EnableAV1": "AV1 Decode Force State",
     "EnableBackgroundService": "Enable Background Service",
     "EnableBackgroundServiceDescription": "Enable the background Node.js service for discovery and proxy playback features.",
+    "EnableRecommendationRows": "Enable Recommendation Rows in Home Screen",
+    "EnableRecommendationRowsDescription": "Display personalized recommendations based on viewing history and favorites.",
     "EnableCollectionRows": "Enable Collection Rows in Home Screen",
     "EnableCollectionRowsDescription": "Display custom collection and trending rows on the home screen.",
     "EnableDebugLogs": "Enable Debug Logs",
