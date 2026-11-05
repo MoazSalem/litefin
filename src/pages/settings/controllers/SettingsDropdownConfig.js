@@ -198,6 +198,7 @@ export function getSettingsDropdownMap() {
         'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
         'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
         'hero-carousel-vignette-select': { key: 'pref:heroCarouselVignette', type: 'local' },
+        'home-initial-focus-select': { key: 'pref:homeInitialFocus', type: 'local' },
 
         // Navigation Sidebar Accents & Icon Variants
         'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },

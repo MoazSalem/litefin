@@ -130,6 +130,7 @@ export class HomeTab {
 
                 <h3 class="setting-section-title" data-i18n="HeroCarousel" style="margin-top: 40px;">${i18n.t('HeroCarousel') || 'Hero Carousel'}</h3>
                 ${this._item(i18n.t('EnableHeroCarousel') || 'Hero Carousel', i18n.t('EnableHeroCarouselDescription') || 'Show featured carousel at the top of the home screen.', this._toggle('toggle-hero-carousel', heroEnabled))}
+                ${this._item(i18n.t('HomeInitialFocus') || 'Initial Focus', i18n.t('HomeInitialFocusDescription') || 'Choose what is focused when the home screen first loads.', this._drop('home-initial-focus-select', [{ value: 'hero', label: `${i18n.t('HeroCarousel') || 'Hero Carousel'} (${i18n.t('Default') || 'Default'})` }, { value: 'firstRow', label: i18n.t('HomeInitialFocusFirstRow') || 'First Row' }], storage.getItem('pref:homeInitialFocus') || 'hero'), 'home-initial-focus-item', heroEnabled)}
                 ${this._item(i18n.t('HeroStyle'), i18n.t('HeroStyleDescription') || 'Visual style of the hero carousel', this._drop('hero-carousel-style-select', heroStyles, heroStyle), 'hero-carousel-style-item', heroEnabled)}
                 ${this._item(i18n.t('HeroCarouselCompact') || 'Compact Mode', i18n.t('HeroCarouselCompactDescription') || 'Reduces height of hero section.', this._toggle('toggle-hero-carousel-compact', storage.getItem('pref:heroCarouselCompact') !== 'false'), 'hero-carousel-compact-item', heroEnabled)}
                 ${this._item(i18n.t('HeroImageQuality') || 'Hero Background Quality', i18n.t('HeroImageQualityDescription') || 'Image quality for hero backgrounds.', this._drop('hero-image-quality-select', heroQualities, storage.getItem('pref:heroImageQuality') || 'default'), 'hero-image-quality-item', heroEnabled)}
@@ -314,7 +315,7 @@ export class HomeTab {
                 storage.setItem('pref:heroCarousel', next.toString());
                 heroBtn.classList.toggle('active', next);
 
-                const ids = ['#hero-carousel-text-title-item', '#hero-carousel-compact-item', '#hero-carousel-style-item', '#hero-carousel-zoom-item', '#hero-image-quality-item', '#hero-carousel-indicator-style-item', '#hero-carousel-interval-item', '#hero-carousel-count-item', '#hero-carousel-ignore-watched-item'];
+                const ids = ['#hero-carousel-text-title-item', '#hero-carousel-compact-item', '#hero-carousel-style-item', '#hero-carousel-zoom-item', '#hero-image-quality-item', '#hero-carousel-indicator-style-item', '#hero-carousel-interval-item', '#hero-carousel-count-item', '#hero-carousel-ignore-watched-item', '#home-initial-focus-item'];
                 ids.forEach((id) => {
                     const el = rootEl.querySelector(id);
                     if (el) el.style.display = next ? '' : 'none';
