@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { pickSources, filterSimilar, createBecauseWatchedLoader } from '../src/utils/BecauseYouWatched.js';
+import { pickSources, filterSimilar, createBecauseWatchedLoader, BYW_MIN_ITEMS } from '../src/utils/BecauseYouWatched.js';
 
 const episode = (id, seriesId, seriesName) => ({ Id: id, Type: 'Episode', SeriesId: seriesId, SeriesName: seriesName });
 const movie = (id, name) => ({ Id: id, Type: 'Movie', Name: name });
@@ -40,8 +40,8 @@ test('filterSimilar - drops excluded and already watched items', () => {
 
 test('loader - rows use different sources and never repeat a suggestion', async () => {
     const similarBySource = {
-        s1: [{ Id: 'x' }, { Id: 'y' }],
-        m1: [{ Id: 'y' }, { Id: 'z' }]
+        s1: [{ Id: 'x' }, { Id: 'y' }, { Id: '1' }],
+        m1: [{ Id: 'y' }, { Id: 'z' }, { Id: '2' }, { Id: '3' }]
     };
     const load = createBecauseWatchedLoader({
         getPlayed: async () => [episode('e1', 's1', 'Show A'), movie('m1', 'Movie One')],
@@ -52,12 +52,12 @@ test('loader - rows use different sources and never repeat a suggestion', async 
     assert.equal(first.sourceName, 'Show A');
     assert.deepEqual(
         first.items.map((i) => i.Id),
-        ['x', 'y']
+        ['x', 'y', '1']
     );
     assert.equal(second.sourceName, 'Movie One');
     assert.deepEqual(
         second.items.map((i) => i.Id),
-        ['z']
+        ['z', '2', '3']
     );
 });
 
@@ -68,7 +68,7 @@ test('loader - skips sources with no usable suggestions or failing requests', as
         getSimilar: async (id) => {
             if (id === 'm1') return [];
             if (id === 'm2') throw new Error('boom');
-            return [{ Id: 'r1' }];
+            return [{ Id: 'r1' }, { Id: 'r2' }, { Id: 'r3' }];
         },
         onError: (msg) => errors.push(msg)
     });
@@ -81,12 +81,12 @@ test('loader - skips sources with no usable suggestions or failing requests', as
 test('loader - does not suggest a title the user recently watched', async () => {
     const load = createBecauseWatchedLoader({
         getPlayed: async () => [movie('m1', 'One'), movie('m2', 'Two')],
-        getSimilar: async () => [{ Id: 'm2' }, { Id: 'n1' }]
+        getSimilar: async () => [{ Id: 'm2' }, { Id: 'n1' }, { Id: 'n2' }, { Id: 'n3' }]
     });
     const row = await load(0);
     assert.deepEqual(
         row.items.map((i) => i.Id),
-        ['n1']
+        ['n1', 'n2', 'n3']
     );
 });
 
@@ -98,4 +98,17 @@ test('loader - survives a failing recently played request', async () => {
         getSimilar: async () => []
     });
     assert.equal(await load(0), null);
+});
+
+test('loader - skips sources with fewer suggestions than BYW_MIN_ITEMS', async () => {
+    const load = createBecauseWatchedLoader({
+        getPlayed: async () => [movie('m1', 'Sparse'), movie('m2', 'Full')],
+        getSimilar: async (id) =>
+            id === 'm1'
+                ? [{ Id: 's1' }, { Id: 's2' }] // Only 2 items < 3
+                : [{ Id: 'f1' }, { Id: 'f2' }, { Id: 'f3' }]
+    });
+    const row = await load(0);
+    assert.equal(row.sourceName, 'Full');
+    assert.equal(row.items.length, 3);
 });

@@ -11,6 +11,8 @@
 
 export const BYW_ROW_ID_PREFIX = 'because-watched-';
 export const BYW_MAX_ROWS = 3;
+/** Minimum suggestions required to display a 'Because You Watched' row. */
+export const BYW_MIN_ITEMS = 3;
 
 /**
  * Parses the "rows per recommendation type" setting into 1..BYW_MAX_ROWS (default 1).
@@ -113,7 +115,7 @@ export function filterSimilar(items, excludeIds) {
  * @param {{run: Function}} [deps.queue] - Shared serial queue; defaults to running immediately.
  * @returns {(index: number) => Promise<{sourceName: string, items: Array<Object>}|null>}
  */
-export function createBecauseWatchedLoader({ getPlayed, getSimilar, onError, exclude = new Set(), queue }) {
+export function createBecauseWatchedLoader({ getPlayed, getSimilar, onError, exclude = new Set(), queue, minItems = BYW_MIN_ITEMS }) {
     let sourcesPromise = null;
     let cursor = 0;
     const run = queue ? (fn) => queue.run(fn) : (fn) => fn();
@@ -148,8 +150,10 @@ export function createBecauseWatchedLoader({ getPlayed, getSimilar, onError, exc
                 if (onError) onError(`Failed to load similar items for ${source.name}`, err);
                 continue;
             }
+            // Drop suggestions already watched or claimed by earlier rows
             const items = filterSimilar(similar, exclude);
-            if (items.length === 0) continue;
+            // Skip sources that cannot populate a healthy carousel (minimum 3 items)
+            if (items.length < minItems) continue;
             items.forEach((item) => exclude.add(item.Id));
             return { sourceName: source.name, items };
         }
