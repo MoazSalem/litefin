@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -69,7 +70,7 @@ class MainActivity : TauriActivity() {
   // View Hierarchy References
   // ---------------------------------------------------------------------------
   // Reference to the native TextureView used for video playback
-  private var textureView: TextureView? = null
+  private var surfaceView: SurfaceView? = null
 
   // Reference to the AspectRatioFrameLayout enforcing movie proportions
   private var aspectRatioLayout: AspectRatioFrameLayout? = null
@@ -462,21 +463,32 @@ class MainActivity : TauriActivity() {
     // Uses TextureView for seamless alpha blending with transparent WebView.
     // Wrapped in Media3's AspectRatioFrameLayout to prevent video stretching.
     // -------------------------------------------------------------------------
-    val texture = TextureView(this).apply {
+    // -------------------------------------------------------------------------
+    // Hardware Video Plane (SurfaceView inside AspectRatioFrameLayout)
+    // -------------------------------------------------------------------------
+    // Placed at index 0 (behind WebView at index 1).
+    // Uses SurfaceView for zero-copy hardware video decoding via MediaCodec.
+    // Unlike TextureView, SurfaceView punches through to Hardware Composer (HWC),
+    // preserving 10-bit YUV pixel formats, wide color gamuts (BT.2020),
+    // and CTA-861.3 / SMPTE ST 2086 HDR10, HLG, and Dolby Vision dynamic metadata.
+    // Wrapped in Media3 AspectRatioFrameLayout to prevent video stretching.
+    // -------------------------------------------------------------------------
+    val surface = SurfaceView(this).apply {
       layoutParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
       )
-      // TextureView MUST remain View.VISIBLE at all times so Android creates
-      // and maintains its SurfaceTexture for ExoPlayer MediaCodec decoders.
-      // Alpha is set to 0f so the canvas is transparent until playback is ready.
-      visibility = View.VISIBLE
-      alpha = 0f
+      // SurfaceView is placed behind the window view hierarchy so the transparent
+      // WebView canvas composites cleanly on top of the video plane.
+      setZOrderMediaOverlay(false)
+      setZOrderOnTop(false)
+      // Conceal video decoding canvas on cold launch until playback starts
+      visibility = View.GONE
       // Video decoding canvas must never participate in D-pad focus traversal
       isFocusable = false
     }
 
-    this.textureView = texture
+    this.surfaceView = surface
 
     // Container enforcing native video aspect ratio with centered letterboxing/pillarboxing
     val aspectContainer = AspectRatioFrameLayout(this).apply {
@@ -493,7 +505,7 @@ class MainActivity : TauriActivity() {
     }
     this.aspectRatioLayout = aspectContainer
 
-    aspectContainer.addView(texture)
+    aspectContainer.addView(surface)
     container.addView(aspectContainer)
     container.addView(webView)
 
@@ -522,10 +534,11 @@ class MainActivity : TauriActivity() {
       // -----------------------------------------------------------------------
       // Reveal Hardware Decoding Plane
       // -----------------------------------------------------------------------
-      textureView?.visibility = View.VISIBLE
-      textureView?.alpha = 1f
-      // Clear container and window backgrounds to allow video decode
-      // on the hardware TextureView to show through cleanly to the compositor
+      // Making the SurfaceView visible directs SurfaceFlinger to allocate
+      // its hardware layer and punch the compositor hole through the window.
+      surfaceView?.visibility = View.VISIBLE
+      // Clear container and window backgrounds to allow zero-copy video decode
+      // on the hardware SurfaceView to show through cleanly to the compositor
       rootContainer?.setBackgroundColor(Color.TRANSPARENT)
       window.setBackgroundDrawableResource(android.R.color.transparent)
       // Prevent Android system screensaver / display sleep during active playback
@@ -539,17 +552,16 @@ class MainActivity : TauriActivity() {
   fun hideVideoSurface() {
     runOnUiThread {
       // -----------------------------------------------------------------------
-      // Seamlessly Conceal Video Texture via Alpha
+      // Seamlessly Conceal Video Surface
       // -----------------------------------------------------------------------
-      // Setting alpha = 0f guarantees the last decoded video frame from the
-      // previous movie is completely invisible to the user, while preserving
-      // the active SurfaceTexture so ExoPlayer can decode the next stream's
-      // first frame immediately without stalling in the NO_SURFACE state.
-      // -----------------------------------------------------------------------
-      textureView?.alpha = 0f
+      // Setting visibility to View.GONE cleans up the hardware overlay layer,
+      // closing the compositor punch-through hole.
+      surfaceView?.visibility = View.GONE
       // Restore solid pitch black backgrounds for standard navigation UI
       rootContainer?.setBackgroundColor(Color.BLACK)
       window.setBackgroundDrawableResource(android.R.color.black)
+      // Reset window HDR mode back to standard dynamic range
+      setHdrMode(false)
       // Clear keep-screen-on flag once video plane is hidden
       setKeepScreenOn(false)
     }
@@ -623,64 +635,79 @@ class MainActivity : TauriActivity() {
    * replacing the TextureView in the aspectContainer forces Android to allocate
    * a fresh hardware SurfaceTexture immediately.
    */
-  fun resetTextureView() {
-    runOnUiThread {
-      val current = textureView
-      val container = aspectRatioLayout ?: return@runOnUiThread
-      if (current != null) {
-        container.removeView(current)
-      }
-      val freshTexture = TextureView(this).apply {
-        layoutParams = FrameLayout.LayoutParams(
-          FrameLayout.LayoutParams.MATCH_PARENT,
-          FrameLayout.LayoutParams.MATCH_PARENT
-        )
-        visibility = View.VISIBLE
-        alpha = 0f
-        isFocusable = false
-      }
-      container.addView(freshTexture, 0)
-      this.textureView = freshTexture
-    }
-  }
-
   /**
-   * Retrieves or recreates a fresh, available [TextureView] instance for ExoPlayer attachment.
-   * If the previous TextureView's SurfaceTexture was destroyed upon player release,
-   * detaching and re-attaching a fresh TextureView ensures Android allocates a new
-   * hardware SurfaceTexture immediately.
+   * Backward-compatibility hook. With SurfaceView, Media3 manages the
+   * SurfaceHolder callback lifecycle automatically across playback sessions.
    */
-  fun getTextureView(): TextureView? {
-    val current = textureView
-    if (current != null && current.isAvailable && current.surfaceTexture != null) {
-      return current
-    }
-
-    // Recreate if TextureView has lost its SurfaceTexture
-    aspectRatioLayout?.let { container ->
-      current?.let { container.removeView(it) }
-      val freshTexture = TextureView(this).apply {
-        layoutParams = FrameLayout.LayoutParams(
-          FrameLayout.LayoutParams.MATCH_PARENT,
-          FrameLayout.LayoutParams.MATCH_PARENT
-        )
-        visibility = View.VISIBLE
-        alpha = 0f
-        isFocusable = false
-      }
-      container.addView(freshTexture, 0)
-      this.textureView = freshTexture
-      return freshTexture
-    }
-
-    return current
+  fun resetTextureView() {
+    // No-op for SurfaceView
   }
 
   /**
    * Backward-compatibility accessor.
    */
-  fun getSurfaceView(): android.view.SurfaceView? {
+  fun getTextureView(): TextureView? {
     return null
+  }
+
+  /**
+   * Retrieves the active [SurfaceView] instance for ExoPlayer attachment.
+   */
+  fun getSurfaceView(): SurfaceView? {
+    return surfaceView
+  }
+
+  /**
+   * ===========================================================================
+   * Native Window HDR Color Mode Management
+   * ===========================================================================
+   * Toggles native window color mode between [ActivityInfo.COLOR_MODE_DEFAULT]
+   * and [ActivityInfo.COLOR_MODE_HDR] on Android 8.0+ (API 26+).
+   *
+   * Explicitly signals Android WindowManager and SurfaceFlinger that the active
+   * window presents high dynamic range content (HDR10, HLG, Dolby Vision).
+   * This prevents Android 13/14+ display compositors from clamping output
+   * buffers to standard dynamic range or stripping HDMI HDR InfoFrames.
+   *
+   * @param enableHdr When true, activates HDR color mode. When false, restores SDR.
+   * ===========================================================================
+   */
+  fun setHdrMode(enableHdr: Boolean) {
+    runOnUiThread {
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          val targetColorMode = if (enableHdr) {
+            ActivityInfo.COLOR_MODE_HDR
+          } else {
+            ActivityInfo.COLOR_MODE_DEFAULT
+          }
+          if (window.colorMode != targetColorMode) {
+            window.colorMode = targetColorMode
+          }
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed updating window colorMode: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Checks whether the connected display hardware natively supports Dolby Vision.
+   */
+  fun isDolbyVisionSupported(): Boolean {
+    return try {
+      val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        this.display
+      } else {
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay
+      }
+      val hdrCaps = display?.hdrCapabilities
+      val supportedTypes = hdrCaps?.supportedHdrTypes ?: intArrayOf()
+      supportedTypes.contains(1) // Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION = 1
+    } catch (_: Exception) {
+      false
+    }
   }
 
   /**
@@ -1130,6 +1157,57 @@ class MainActivity : TauriActivity() {
      * Determines whether the host device is an Android TV / Google TV device.
      * Evaluates official Android UiModeManager television state and leanback feature flags.
      */
+    /**
+     * =========================================================================
+     * Connected Display HDR Capabilities Probe
+     * =========================================================================
+     * Queries physical display hardware capabilities via Android Display API
+     * (Display.getHdrCapabilities) to detect HDR10, HLG, HDR10+, and Dolby Vision.
+     *
+     * Returns a structured JSON payload allowing the frontend DeviceProfile
+     * to accurately configure video range types and direct play capabilities.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun getHdrCapabilities(): String {
+      return try {
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          this@MainActivity.display
+        } else {
+          @Suppress("DEPRECATION")
+          this@MainActivity.windowManager.defaultDisplay
+        }
+        val hdrCaps = display?.hdrCapabilities
+        val supportedTypes = hdrCaps?.supportedHdrTypes ?: intArrayOf()
+        val isHdrDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          display?.isHdr == true || supportedTypes.isNotEmpty()
+        } else {
+          supportedTypes.isNotEmpty()
+        }
+
+        // Display.HdrCapabilities constants:
+        // 1 = HDR_TYPE_DOLBY_VISION
+        // 2 = HDR_TYPE_HDR10
+        // 3 = HDR_TYPE_HLG
+        // 4 = HDR_TYPE_HDR10_PLUS
+        val hasDv = supportedTypes.contains(1)
+        val hasHdr10 = supportedTypes.contains(2) || isHdrDisplay
+        val hasHlg = supportedTypes.contains(3) || isHdrDisplay
+        val hasHdr10Plus = supportedTypes.contains(4)
+
+        val json = JSONObject()
+        json.put("supported", isHdrDisplay)
+        json.put("hdr10", hasHdr10)
+        json.put("hlg", hasHlg)
+        json.put("dolbyVision", hasDv)
+        json.put("hdr10Plus", hasHdr10Plus)
+        json.toString()
+      } catch (e: Exception) {
+        val isTv = try { this@MainActivity.isTvDevice() } catch (_: Exception) { true }
+        """{"supported":$isTv,"hdr10":$isTv,"hlg":$isTv,"dolbyVision":$isTv,"hdr10Plus":false}"""
+      }
+    }
+
     @JavascriptInterface
     fun isTv(): Boolean {
       // Delegate to centralized activity device check
@@ -1451,11 +1529,19 @@ class MainActivity : TauriActivity() {
             it.key.equals("Access-Control-Request-Headers", ignoreCase = true)
           }?.value?.trim()?.ifEmpty { null } ?: "*"
 
+          // W3C CORS Specification: Access-Control-Allow-Headers MUST NOT be wildcard '*'
+          // when Access-Control-Allow-Credentials is true; provide explicit header list when absent.
+          val allowedHeaders = if (reqHeaders == "*") {
+            "Authorization, X-Emby-Authorization, X-MediaBrowser-Token, Content-Type, Accept, Origin, User-Agent, X-Requested-With, Cache-Control, Pragma, If-None-Match, " + customProxyHeaders.keys.joinToString(", ")
+          } else {
+            reqHeaders
+          }
+
           // Build preflight response headers dictionary
           val preflightHeaders = mutableMapOf(
             "Access-Control-Allow-Origin" to origin,
             "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
-            "Access-Control-Allow-Headers" to reqHeaders,
+            "Access-Control-Allow-Headers" to allowedHeaders,
             "Access-Control-Max-Age" to "86400"
           )
 
@@ -1527,19 +1613,45 @@ class MainActivity : TauriActivity() {
                   lower != "if-modified-since" &&
                   lower != "if-range" &&
                   !customProxyHeaders.containsKey(key)) {
-                reqBuilder.header(key, value)
+                try {
+                  // Sanitize value to strip CR/LF preventing OkHttp header argument exceptions
+                  val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                  reqBuilder.header(key.trim(), sanitizedVal)
+                } catch (_: Exception) {}
               }
             }
 
             // Inject configured reverse-proxy authentication headers (e.g. Cloudflare Service Tokens)
             customProxyHeaders.forEach { (key, value) ->
-              reqBuilder.header(key, value)
+              try {
+                val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                reqBuilder.header(key.trim(), sanitizedVal)
+              } catch (_: Exception) {}
             }
 
             // Execute network request natively via connection-pooled HTTP client
             val response = httpClient.newCall(reqBuilder.build()).execute()
             val code = response.code
             val body = response.body
+
+            // Android WebResourceResponse reasonPhrase specification strictly requires
+            // ASCII letters and spaces only: regex ^[a-zA-Z ]+$. Numbers or symbols trigger
+            // an immediate IllegalArgumentException, crashing native interception into fallback.
+            val safeReasonPhrase = when (code) {
+              200 -> "OK"
+              201 -> "Created"
+              204 -> "No Content"
+              304 -> "Not Modified"
+              400 -> "Bad Request"
+              401 -> "Unauthorized"
+              403 -> "Forbidden"
+              404 -> "Not Found"
+              500 -> "Internal Server Error"
+              502 -> "Bad Gateway"
+              503 -> "Service Unavailable"
+              504 -> "Gateway Timeout"
+              else -> if (code in 200..299) "OK" else "Error"
+            }
 
             // Handle successful resource payloads (2xx) with non-null response streams
             if (response.isSuccessful && body != null) {
@@ -1585,7 +1697,7 @@ class MainActivity : TauriActivity() {
                 mimeType,
                 encoding,
                 code,
-                response.message.ifEmpty { "OK" },
+                safeReasonPhrase,
                 responseHeaders,
                 body.byteStream()
               )
@@ -1604,7 +1716,7 @@ class MainActivity : TauriActivity() {
                 mimeType,
                 encoding,
                 code,
-                response.message.ifEmpty { if (code == 404) "Not Found" else "Error $code" },
+                safeReasonPhrase,
                 errorHeaders,
                 stream
               )

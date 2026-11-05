@@ -18,6 +18,9 @@ import { logger } from '../../../utils/Logger.js';
 
 const log = logger.create('CustomCollectionsModal');
 
+// Delay before filtering the list after the last keystroke (debouncing rapid typing)
+const SEARCH_DEBOUNCE_MS = 250;
+
 /**
  * Computes a human-readable summary badge indicating how many custom
  * collection and playlist rows are currently selected for the home view.
@@ -57,6 +60,7 @@ export class CustomCollectionsModal {
         this._selectedMap = new Map();
         this._collections = [];
         this._searchQuery = '';
+        this._searchTimer = null;
     }
 
     /**
@@ -122,37 +126,27 @@ export class CustomCollectionsModal {
         // Abort mount if user dismissed the overlay while API request was in-flight
         if (!overlay.classList.contains('visible')) return;
 
+        // Cancel any lingering search debounce timers from prior sessions
+        if (this._searchTimer) {
+            clearTimeout(this._searchTimer);
+            this._searchTimer = null;
+        }
+
+        // Reset search query state and mount the modal shell
         this._searchQuery = '';
         this._renderModal(overlay, onUpdate);
     }
 
     /**
-     * Renders modal dialog structure, filters list items, and binds DOM events.
+     * Renders the persistent modal scaffold (header, search box, list container, actions),
+     * attaches action and search listeners, and initializes spatial navigation.
      *
      * @private
      * @param {HTMLElement} overlay Dialog backdrop container
      * @param {Function} [onUpdate] Layout refresh callback
      */
     _renderModal(overlay, onUpdate) {
-        // Filter collections by case-insensitive name match
-        const filteredCols = this._searchQuery
-            ? this._collections.filter((c) => (c.Name || '').toLowerCase().includes(this._searchQuery.toLowerCase()))
-            : this._collections;
-
-        // Generate checkable button rows
-        const colRowsHtml = filteredCols
-            .map((c) => {
-                const isSelected = this._selectedMap.has(c.Id);
-                return `
-                <button class="modal-option-btn check-btn ${isSelected ? 'selected' : ''}" data-id="${c.Id}" data-name="${escapeHtml(c.Name || '')}" tabindex="0">
-                    <div class="checkbox-box"><span class="check-mark">&#10003;</span></div>
-                    <span class="modal-option-label">${escapeHtml(c.Name || '')}</span>
-                </button>
-            `;
-            })
-            .join('');
-
-        // Populate overlay markup with search input, scrollable list, and footer actions
+        // Build base modal layout skeleton once so inputs are never torn down during filtering
         overlay.innerHTML = `
             <div class="settings-modal custom-collections-modal" role="dialog" aria-modal="true">
                 <div class="modal-header">
@@ -163,12 +157,11 @@ export class CustomCollectionsModal {
                 <div class="fav-lang-search-box">
                     <input type="text" id="custom-col-search-input" class="fav-lang-search-input" 
                            placeholder="${i18n.t('Search') || 'Search...'}" 
-                           value="${escapeHtml(this._searchQuery)}" tabindex="0" />
+                           value="" tabindex="0" />
                 </div>
 
                 <!-- Scrollable Collections List -->
                 <div class="modal-options custom-col-list" id="custom-col-list" style="max-height: 50vh; overflow-y: auto;">
-                    ${colRowsHtml || `<div class="modal-no-options" data-i18n="NoCollectionsFound">${i18n.t('NoCollectionsFound') || 'No collections or playlists found'}</div>`}
                 </div>
 
                 <!-- Action Confirmation Buttons -->
@@ -179,38 +172,25 @@ export class CustomCollectionsModal {
             </div>
         `;
 
-        // Bind row selection toggles
-        overlay.querySelectorAll('.custom-col-list .check-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.id;
-                const name = btn.dataset.name;
-                if (this._selectedMap.has(id)) {
-                    this._selectedMap.delete(id);
-                    btn.classList.remove('selected');
-                } else {
-                    this._selectedMap.set(id, { id, name });
-                    btn.classList.add('selected');
-                }
-                this._saveSelection(onUpdate);
-            });
-        });
+        // Populate initial list rows without destroying outer DOM nodes
+        this._renderList(overlay, onUpdate);
 
-        // Search filtering handler
+        // Search filtering handler: modifies list content only, preserving input focus and virtual keyboard
         const searchInput = overlay.querySelector('#custom-col-search-input');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this._searchQuery = e.target.value;
-                this._renderModal(overlay, onUpdate);
-                const updatedInput = overlay.querySelector('#custom-col-search-input');
-                if (updatedInput) {
-                    updatedInput.focus();
-                    updatedInput.setSelectionRange(updatedInput.value.length, updatedInput.value.length);
+                // Debounce filtering to batch rapid keystrokes smoothly
+                if (this._searchTimer) {
+                    clearTimeout(this._searchTimer);
                 }
+                this._searchTimer = setTimeout(() => {
+                    this._renderList(overlay, onUpdate);
+                }, SEARCH_DEBOUNCE_MS);
             });
         }
 
-        // Clear All selection button
+        // Clear All selection button: clears selections and toggles row states
         const clearBtn = overlay.querySelector('#btn-custom-col-clear');
         if (clearBtn) {
             clearBtn.addEventListener('click', (e) => {
@@ -223,7 +203,7 @@ export class CustomCollectionsModal {
             });
         }
 
-        // Done button to close modal
+        // Done button to close modal and commit updates
         const doneBtn = overlay.querySelector('#btn-custom-col-done');
         if (doneBtn) {
             doneBtn.addEventListener('click', (e) => {
@@ -240,8 +220,64 @@ export class CustomCollectionsModal {
             }
         };
 
-        // Wire spatial navigation focus sections
+        // Wire spatial navigation focus sections on initial mount
         this._setupFocusSections(overlay);
+    }
+
+    /**
+     * Renders or refreshes only the items inside the scrollable list container.
+     * Prevents search input destruction, IME dismissal, or focus thrashing during typing.
+     *
+     * @private
+     * @param {HTMLElement} overlay Dialog backdrop container
+     * @param {Function} [onUpdate] Layout refresh callback
+     */
+    _renderList(overlay, onUpdate) {
+        const listContainer = overlay.querySelector('#custom-col-list');
+        if (!listContainer) return;
+
+        // Filter collections by case-insensitive name match
+        const filteredCols = this._searchQuery
+            ? this._collections.filter((c) => (c.Name || '').toLowerCase().includes(this._searchQuery.toLowerCase()))
+            : this._collections;
+
+        // Generate checkable button rows for filtered results
+        const colRowsHtml = filteredCols
+            .map((c) => {
+                const isSelected = this._selectedMap.has(c.Id);
+                return `
+                <button class="modal-option-btn check-btn ${isSelected ? 'selected' : ''}" data-id="${c.Id}" data-name="${escapeHtml(c.Name || '')}" tabindex="0">
+                    <div class="checkbox-box"><span class="check-mark">&#10003;</span></div>
+                    <span class="modal-option-label">${escapeHtml(c.Name || '')}</span>
+                </button>
+            `;
+            })
+            .join('');
+
+        // Inject new rows or fallback empty state message
+        listContainer.innerHTML =
+            colRowsHtml ||
+            `<div class="modal-no-options" data-i18n="NoCollectionsFound">${i18n.t('NoCollectionsFound') || 'No collections or playlists found'}</div>`;
+
+        // Bind click events on newly rendered collection option buttons
+        listContainer.querySelectorAll('.check-btn').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = btn.dataset.id;
+                const name = btn.dataset.name;
+                if (this._selectedMap.has(id)) {
+                    this._selectedMap.delete(id);
+                    btn.classList.remove('selected');
+                } else {
+                    this._selectedMap.set(id, { id, name });
+                    btn.classList.add('selected');
+                }
+                this._saveSelection(onUpdate);
+            });
+        });
+
+        // Invalidate spatial navigation cache for list items to keep directional mapping fresh
+        focusManager.invalidateCache('custom-col-list');
     }
 
     /**
@@ -272,23 +308,26 @@ export class CustomCollectionsModal {
      * @param {HTMLElement} overlay Dialog backdrop container
      */
     _setupFocusSections(overlay) {
+        // Register search box as horizontal navigation zone
         this.page.registerFocusSection('custom-col-search', overlay.querySelector('.fav-lang-search-box'), {
             orientation: 'horizontal',
             leaveDown: 'custom-col-list'
         });
 
+        // Register collections list as vertical scrolling zone
         this.page.registerFocusSection('custom-col-list', overlay.querySelector('#custom-col-list'), {
             orientation: 'vertical',
             leaveUp: 'custom-col-search',
             leaveDown: 'custom-col-actions'
         });
 
+        // Register bottom action controls (Clear All / Done)
         this.page.registerFocusSection('custom-col-actions', overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
             leaveUp: 'custom-col-list'
         });
 
-        // Establish initial focus on first list option or search box
+        // Establish initial focus on first list option or search box on initial modal open
         const firstOption = overlay.querySelector('#custom-col-list .check-btn');
         if (firstOption) {
             focusManager.setActiveSection('custom-col-list');
@@ -312,6 +351,12 @@ export class CustomCollectionsModal {
     close(onUpdate) {
         const overlay = this.page.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
+
+        // Clear any pending debounce timer before dismissing dialog
+        if (this._searchTimer) {
+            clearTimeout(this._searchTimer);
+            this._searchTimer = null;
+        }
 
         // Detach click listener and hide dialog shell
         overlay.onclick = null;

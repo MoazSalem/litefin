@@ -64,7 +64,8 @@ async function invokeNative(command, args = {}) {
                             headersJson,
                             args.startPositionMs || 0,
                             args.tunneling ?? true,
-                            args.audioOffload ?? true
+                            args.audioOffload ?? true,
+                            args.enableDolbyVision ?? true
                         );
                     } else {
                         res = bridge.prepare(args.url || '', headersJson, args.startPositionMs || 0);
@@ -654,12 +655,17 @@ export class ExoVideoPlayer {
             log.info(`ExoVideoPlayer.play: attaching ${headerCount} custom reverse proxy header(s) to ExoPlayer native data source`);
         }
 
+        // Determine if Dolby Vision pass-through is permitted by user setting
+        const dvSetting = PlayerSettings.get('enableDolbyVision');
+        const enableDolbyVision = dvSetting !== 'disable';
+
         await invokeNative('prepare', {
             url: options.url,
             headers: requestHeaders || {},
             startPositionMs: resumeMs,
             tunneling: enableTunneling,
-            audioOffload: enableAudioOffload
+            audioOffload: enableAudioOffload,
+            enableDolbyVision: enableDolbyVision
         });
 
         // 2. Apply initial volume setting and aspect ratio mode

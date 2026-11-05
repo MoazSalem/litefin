@@ -3913,12 +3913,20 @@ class HomePage extends Page {
     _reconcileItemPlaybackState(item) {
         if (!item) return;
 
-        // Retrieve last stopped snapshot from in-memory state
-        const lastStopped = state.get('playback:lastStopped');
-        if (!lastStopped || lastStopped.itemId !== item.Id) return;
+        // Retrieve last stopped snapshot from item-scoped key, bounded map, or singular fallback
+        const lastStopped =
+            state.get(`playback:lastStopped:${item.Id}`) ||
+            state.get('playback:lastStoppedMap')?.[item.Id] ||
+            (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
 
-        // Only reconcile if stop was recent (within 60 seconds)
-        if (Date.now() - lastStopped.timestamp > 60000) return;
+        if (!lastStopped) return;
+
+        // Determine if local snapshot is still authoritative
+        const lastPlayedMs = item.UserData?.LastPlayedDate ? new Date(item.UserData.LastPlayedDate).getTime() : 0;
+        const isNewerThanServer = lastPlayedMs > 0 && lastStopped.timestamp > lastPlayedMs;
+        const isRecent = Date.now() - lastStopped.timestamp < 900000; // 15 minutes
+
+        if (!isRecent && !isNewerThanServer) return;
 
         item.UserData = item.UserData || {};
         if (lastStopped.isNearComplete) {
