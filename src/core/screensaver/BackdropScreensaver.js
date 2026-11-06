@@ -36,6 +36,9 @@ export class BackdropScreensaver {
         // Hide text option: if true, we don't render titles/taglines
         this._hideText = storage.getItem('pref:backdropHideText') === 'true';
 
+        // Use logo option: show the title logo (when available) instead of plain text; defaults to on
+        this._useLogo = storage.getItem('pref:backdropUseLogo') !== 'false';
+
         // Include music option: if true, we Include MusicArtist in the backdrop search
         this._includeMusic = storage.getItem('pref:backdropIncludeMusic') === 'true';
     }
@@ -173,7 +176,7 @@ export class BackdropScreensaver {
             el.insertBefore(name, el.firstChild);
         };
 
-        const logoTag = item.ImageTags && item.ImageTags.Logo;
+        const logoTag = this._useLogo && item.ImageTags && item.ImageTags.Logo;
         if (logoTag) {
             const dpr = window.devicePixelRatio || 1;
             const logo = document.createElement('img');
