@@ -232,7 +232,7 @@ export class SettingsDropdownDispatcher {
 
         if (id === 'screensaver-type-select') {
             const isBackdrop = newValue === 'backdrop';
-            ['screensaver-dim-item', 'screensaver-hide-text-item', 'screensaver-include-music-item'].forEach((itemId) => {
+            ['screensaver-dim-item', 'screensaver-hide-text-item', 'screensaver-use-logo-item', 'screensaver-include-music-item'].forEach((itemId) => {
                 const el = document.getElementById(itemId);
                 if (el) el.classList.toggle('hidden', !isBackdrop);
             });

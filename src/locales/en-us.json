@@ -92,6 +92,8 @@
     "BackdropHideTextDescription": "Do not show any text over the backdrop screensaver images",
     "BackdropIncludeMusic": "Include music library",
     "BackdropIncludeMusicDescription": "Show backdrops from music artists in the screensaver",
+    "BackdropUseLogo": "Use Logo for Title",
+    "BackdropUseLogoDescription": "Show the title logo instead of plain text when one is available",
     "BackendExoPlayer": "Media3 ExoPlayer (Android Native)",
     "BackendMovi": "Movi Player (Desktop MKV/WebCodecs)",
     "BackendTizen": "Tizen Native (Avplay)",
