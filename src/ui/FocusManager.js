@@ -42,6 +42,7 @@ const KEY_DEBOUNCE_MS = 125;
 // Maximum number of empty sections to skip through when leaving a section.
 // Prevents infinite loops if section linking is misconfigured.
 const MAX_SECTION_SKIP_DEPTH = 20;
+const MINI_PLAYER_SECTION = 'mini-player';
 
 // Rapid navigation threshold (ms) for streak tracking.
 // Remote hardware key repeats fire at ~100-130ms intervals. Setting this to 145ms
@@ -848,6 +849,10 @@ class FocusManager {
             if (!result) return; // Handler took full control (returned false / undefined)
             // If the handler returned a string, treat it as a section to navigate to
             nextSection = result;
+        }
+
+        if (!nextSection && direction === 'down' && this._activeSection !== MINI_PLAYER_SECTION) {
+            nextSection = this._sections.has(MINI_PLAYER_SECTION) ? MINI_PLAYER_SECTION : null;
         }
 
         // Keep searching if target section exists but has no focusable elements

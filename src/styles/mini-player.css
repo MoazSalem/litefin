@@ -1,0 +1,96 @@
+/**
+ * ============================================================================
+ * Litefin - Music Mini-Player Styles
+ * ============================================================================
+ */
+
+:root {
+    --mini-player-height: 96px;
+}
+
+.mini-player {
+    position: fixed;
+    left: var(--sidebar-width-collapsed, 100px);
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    height: var(--mini-player-height);
+    padding: 0 48px;
+    box-sizing: border-box;
+    border: 0;
+    background-color: var(--jf-background-alt, var(--jf-background));
+    color: var(--jf-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mini-player[hidden] {
+    display: none;
+}
+
+.mini-player.focused,
+.mini-player.focused,
+.mini-player:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 3px var(--jf-accent);
+}
+
+.mini-player-cover {
+    flex: 0 0 auto;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--jf-border-radius);
+    object-fit: cover;
+    background-color: var(--jf-action-btn-bg);
+}
+
+.mini-player-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mini-player-title,
+.mini-player-artist {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.mini-player-title {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.mini-player-artist {
+    font-size: 18px;
+    color: var(--jf-text-secondary);
+}
+
+.mini-player-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 4px;
+    background-color: var(--jf-action-btn-bg);
+}
+
+.mini-player-bar-fill {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: var(--jf-accent);
+    transform: scaleX(0);
+    transform-origin: left center;
+}
+
+html[data-mini-player='true'] #page-container {
+    bottom: var(--mini-player-height);
+}
