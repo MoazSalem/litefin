@@ -52,7 +52,7 @@ export class BackdropScreensaver {
             // Fetch random items with backdrops
             const result = await api.getItems({
                 ImageTypes: 'Backdrop',
-                EnableImageTypes: 'Backdrop',
+                EnableImageTypes: 'Backdrop,Logo',
                 IncludeItemTypes: this._includeMusic ? 'Movie,Series,MusicArtist' : 'Movie,Series',
                 SortBy: 'Random',
                 Recursive: true,
@@ -139,15 +139,8 @@ export class BackdropScreensaver {
                 incoming.classList.add('active');
                 outgoing.classList.remove('active');
 
-                // Update text
-                if (this._hideText) {
-                    this._titleElem.innerHTML = '';
-                } else {
-                    this._titleElem.innerHTML = `
-                        <div class="screensaver-text-name">${item.Name}</div>
-                        ${item.Taglines && item.Taglines.length ? `<div class="screensaver-text-tagline">${item.Taglines[0]}</div>` : ''}
-                    `;
-                }
+                // Update title block (logo image, with plain text as fallback)
+                this._renderTitle(item);
 
                 // Swap active tracker
                 this._activeImg = this._activeImg === 1 ? 2 : 1;
@@ -159,6 +152,53 @@ export class BackdropScreensaver {
         this._currentIndex++;
         if (this._currentIndex >= this._items.length) {
             this._currentIndex = 0;
+        }
+    }
+
+    /**
+     * Render the title block for an item. Prefers the item's logo image and falls
+     * back to plain text when no logo exists or the logo fails to load.
+     * @param {Object} item - Jellyfin item
+     */
+    _renderTitle(item) {
+        const el = this._titleElem;
+        if (!el) return;
+        el.innerHTML = '';
+        if (this._hideText) return;
+
+        const renderText = () => {
+            const name = document.createElement('div');
+            name.className = 'screensaver-text-name';
+            name.textContent = item.Name;
+            el.insertBefore(name, el.firstChild);
+        };
+
+        const logoTag = item.ImageTags && item.ImageTags.Logo;
+        if (logoTag) {
+            const dpr = window.devicePixelRatio || 1;
+            const logo = document.createElement('img');
+            logo.className = 'screensaver-logo';
+            logo.alt = item.Name;
+            logo.onerror = () => {
+                if (logo.parentNode) logo.parentNode.removeChild(logo);
+                renderText();
+            };
+            logo.src = api.getImageUrl(item.Id, 'Logo', {
+                fillWidth: Math.round(500 * dpr),
+                fillHeight: Math.round(180 * dpr),
+                quality: 90,
+                tag: logoTag
+            });
+            el.appendChild(logo);
+        } else {
+            renderText();
+        }
+
+        if (item.Taglines && item.Taglines.length) {
+            const tagline = document.createElement('div');
+            tagline.className = 'screensaver-text-tagline';
+            tagline.textContent = item.Taglines[0];
+            el.appendChild(tagline);
         }
     }
 
