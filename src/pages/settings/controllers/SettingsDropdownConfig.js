@@ -192,6 +192,9 @@ export function getSettingsDropdownMap() {
         'play-queue-episode-limit-select': { type: 'player', key: 'playQueueEpisodeLimit' },
 
         // Hero Carousel Banner Styling
+        // Hero Carousel Banner Styling & Initial Focus Target
+        // Controls whether landing on home focuses the hero carousel or the first content row
+        'home-initial-focus-select': { key: 'pref:homeInitialFocus', type: 'local', triggerEvent: true },
         'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
         'hero-carousel-indicator-style-select': { key: 'pref:heroCarouselIndicatorStyle', type: 'local' },
         'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },

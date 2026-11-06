@@ -181,6 +181,12 @@ export class SettingsDropdownDispatcher {
             storage.setItem(settingConfig.key, newValue);
         }
 
+        // Invalidate homepage cached snapshot so returning to the home screen
+        // immediately re-evaluates the newly chosen initial focus target
+        if (settingConfig.key === 'pref:homeInitialFocus') {
+            state.delete('home:pageCache');
+        }
+
         // Library paging and layout cache invalidations
         if (settingConfig.key === 'pref:libraryPageSize') {
             state.clearByPrefix('library:state');

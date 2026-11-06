@@ -353,16 +353,30 @@ export class SeerrClient {
     }
 
     async recommendations(mediaType, tmdbId, page = 1) {
+        // Resolve target entity route segment based on media type
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
+
         try {
-            const raw = await this._request(`/${type}/${tmdbId}/recommendations?page=${page}`);
+            // Attempt primary route casing first
+            let raw;
+            try {
+                raw = await this._request(`/${type}/${tmdbId}/recommendations?page=${page}`);
+            } catch (primaryErr) {
+                // Route casing fallback for strict reverse proxy environments
+                raw = await this._request(`/${type}/${tmdbId}/Recommendations?page=${page}`);
+            }
+
+            // Extract results list from raw response payload
             const list = this._resultsOf(raw);
+
+            // Filter non-person entries and transform into normalized card models
             return list
                 .filter((r) => r && r.mediaType !== 'person')
                 .map((r) => normalizeSeerrItem(r, mediaType))
                 .filter(Boolean)
                 .map(decorateStatusBadge);
         } catch (e) {
+            // Gracefully handle missing recommendations without failing page rendering
             log.warn(`Failed to fetch recommendations for ${mediaType} ${tmdbId}`, e);
             return [];
         }
@@ -669,23 +683,30 @@ export class SeerrClient {
      */
     async requests(take = 12, skip = 0, filter = 'all') {
         let payload = null;
+
         // Fallback route chain: /request -> /Request -> /Requests
         try {
-            payload = await this._request(`/request?take=${take}&skip=${skip}&filter=${filter}`);
-        } catch (err1) {
-            if (err1.status === 404) {
-                try {
-                    payload = await this._request(`/Request?take=${take}&skip=${skip}&filter=${filter}`);
-                } catch (err2) {
-                    if (err2.status === 404) {
-                        payload = await this._request(`/Requests?take=${take}&skip=${skip}&filter=${filter}`);
-                    } else {
-                        throw err2;
+            try {
+                payload = await this._request(`/request?take=${take}&skip=${skip}&filter=${filter}`);
+            } catch (err1) {
+                if (err1.status === 404) {
+                    try {
+                        payload = await this._request(`/Request?take=${take}&skip=${skip}&filter=${filter}`);
+                    } catch (err2) {
+                        if (err2.status === 404) {
+                            payload = await this._request(`/Requests?take=${take}&skip=${skip}&filter=${filter}`);
+                        } else {
+                            throw err2;
+                        }
                     }
+                } else {
+                    throw err1;
                 }
-            } else {
-                throw err1;
             }
+        } catch (err) {
+            // Gracefully handle unlinked accounts or upstream errors by returning an empty list
+            log.warn('Failed to retrieve Seerr requests, returning empty collection', err);
+            return [];
         }
 
         const rawList = this._resultsOf(payload);
@@ -719,15 +740,22 @@ export class SeerrClient {
      */
     async watchlist(page = 1) {
         let payload = null;
+
         // Fallback route chain: /Watchlist -> /watchlist
         try {
-            payload = await this._request(`/Watchlist?page=${page}`);
-        } catch (err1) {
-            if (err1.status === 404) {
-                payload = await this._request(`/watchlist?page=${page}`);
-            } else {
-                throw err1;
+            try {
+                payload = await this._request(`/Watchlist?page=${page}`);
+            } catch (err1) {
+                if (err1.status === 404) {
+                    payload = await this._request(`/watchlist?page=${page}`);
+                } else {
+                    throw err1;
+                }
             }
+        } catch (err) {
+            // Gracefully handle unlinked accounts or network errors with an empty list
+            log.warn('Failed to retrieve Seerr watchlist, returning empty collection', err);
+            return [];
         }
 
         const rawList = this._resultsOf(payload);
@@ -761,9 +789,15 @@ export class SeerrClient {
             payload = await this._request(`/RecentlyAdded?take=${take}`);
         } catch (err1) {
             if (err1.status === 404) {
-                payload = await this._request(`/Media?take=${take}`);
+                try {
+                    payload = await this._request(`/Media?take=${take}`);
+                } catch (err2) {
+                    log.warn('Failed to retrieve recently added Seerr items', err2);
+                    return [];
+                }
             } else {
-                throw err1;
+                log.warn('Failed to retrieve recently added Seerr items', err1);
+                return [];
             }
         }
 
@@ -795,9 +829,14 @@ export class SeerrClient {
     async upcomingMovies(page = 1) {
         let payload = null;
         try {
-            payload = await this._request(`/Discover/Movies/Upcoming?page=${page}`);
+            try {
+                payload = await this._request(`/Discover/Movies/Upcoming?page=${page}`);
+            } catch (err) {
+                payload = await this._request(`/discover/movies/upcoming?page=${page}`);
+            }
         } catch (err) {
-            payload = await this._request(`/discover/movies/upcoming?page=${page}`);
+            log.warn('Failed to retrieve Seerr upcoming movies, returning empty collection', err);
+            return [];
         }
         return this._normalizeList(payload);
     }
@@ -810,9 +849,14 @@ export class SeerrClient {
     async upcomingTv(page = 1) {
         let payload = null;
         try {
-            payload = await this._request(`/Discover/Tv/Upcoming?page=${page}`);
+            try {
+                payload = await this._request(`/Discover/Tv/Upcoming?page=${page}`);
+            } catch (err) {
+                payload = await this._request(`/discover/tv/upcoming?page=${page}`);
+            }
         } catch (err) {
-            payload = await this._request(`/discover/tv/upcoming?page=${page}`);
+            log.warn('Failed to retrieve Seerr upcoming TV series, returning empty collection', err);
+            return [];
         }
         return this._normalizeList(payload);
     }

@@ -58,6 +58,19 @@ export class HomeTab {
     render() {
         const enableRows = storage.getItem('pref:enableCollectionRows') === 'true';
         const heroEnabled = storage.getItem('pref:heroCarousel') !== 'false';
+        const initialFocus = storage.getItem('pref:homeInitialFocus') || 'first-row';
+
+        // Options for homepage initial landing focus
+        const initialFocusOpts = [
+            {
+                value: 'first-row',
+                label: (i18n.t('FirstRow') || 'First Row') + ` (${i18n.t('Default') || 'Default'})`
+            },
+            {
+                value: 'carousel',
+                label: i18n.t('HeroCarousel') || 'Hero Carousel'
+            }
+        ];
         const heroStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
         const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
         const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
@@ -112,6 +125,7 @@ export class HomeTab {
                 <h2 class="content-title" data-i18n="Home">${i18n.t('Home') || 'Home'}</h2>
                 <p class="content-subtitle" data-i18n="HomeTabDescription">${i18n.t('HomeTabDescription') || 'Manage home screen sections, featured hero carousel, and content row limits.'}</p>
 
+                ${this._item(i18n.t('HomeInitialFocus') || 'Initial Focus', i18n.t('HomeInitialFocusDescription') || 'Choose whether the home page initially focuses the hero carousel or the first content row.', this._drop('home-initial-focus-select', initialFocusOpts, initialFocus), 'home-initial-focus-item', heroEnabled)}
                 ${this._item(i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit', i18n.t('HomeRowsLimitDescription') || 'Maximum items per row.', this._drop('home-rows-limit-select', rowsOpts, parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)))}
                 ${this._item(i18n.t('LabelMergeResumeNextUp'), i18n.t('LabelMergeResumeNextUpDescription'), this._toggle('toggle-merge-resume-nextup', storage.getItem('pref:mergeResumeNextUp') === 'true'))}
                 ${this._item(i18n.t('EnableCollectionRows') || 'Enable Collection Rows in Home Screen', i18n.t('EnableCollectionRowsDescription') || 'Display custom collection and trending rows.', this._toggle('toggle-enable-collection-rows', enableRows))}
@@ -314,7 +328,7 @@ export class HomeTab {
                 storage.setItem('pref:heroCarousel', next.toString());
                 heroBtn.classList.toggle('active', next);
 
-                const ids = ['#hero-carousel-text-title-item', '#hero-carousel-compact-item', '#hero-carousel-style-item', '#hero-carousel-zoom-item', '#hero-image-quality-item', '#hero-carousel-indicator-style-item', '#hero-carousel-interval-item', '#hero-carousel-count-item', '#hero-carousel-ignore-watched-item'];
+                const ids = ['#home-initial-focus-item', '#hero-carousel-text-title-item', '#hero-carousel-compact-item', '#hero-carousel-style-item', '#hero-carousel-zoom-item', '#hero-image-quality-item', '#hero-carousel-indicator-style-item', '#hero-carousel-interval-item', '#hero-carousel-count-item', '#hero-carousel-ignore-watched-item'];
                 ids.forEach((id) => {
                     const el = rootEl.querySelector(id);
                     if (el) el.style.display = next ? '' : 'none';

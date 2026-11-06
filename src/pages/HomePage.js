@@ -2434,31 +2434,55 @@ class HomePage extends Page {
                 state.delete('home:lastFocusedItemId');
             }
 
-            // ─── Default: focus the first card in the first rendered row ──────
+            // ─── Default: focus initial landing target (hero carousel vs first row) ───
             if (!restoredFocus) {
-                // Prioritize the hero carousel if a home-hero section exists
-                // (registered during skeleton insertion or by the real carousel).
-                if (focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container')) {
-                    this.setActiveSection('home-hero', false);
-                    focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
-                } else {
-                    // Find the first non-skeleton section that has a card
+                // Read the user's initial focus landing preference (defaults to 'first-row')
+                const initialFocusPref = storage.getItem('pref:homeInitialFocus') || 'first-row';
+                const hasHero = focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container');
+
+                // Helper to attempt focusing the first interactive card in the first rendered content row
+                const focusFirstRowCard = () => {
                     const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
                     if (firstSection) {
                         const rowId = firstSection.getAttribute('data-row-id');
                         const firstCard = firstSection.querySelector('.media-card');
 
                         // Always ensure activeSection and focusedElement point to the same row item.
-                        // Previously, if focus was set to the sidebar as a trap fallback, this check
-                        // was bypassed, leaving activeSection and focusedElement out of sync.
+                        // Synchronizes activeSection and focusedElement across viewport updates.
                         if (firstCard) {
                             this.setActiveSection(`home-row-${rowId}`, false);
                             focusManager.focusElement(firstCard, { instantScroll: true });
-                        } else {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                // Helper to attempt focusing the hero carousel section
+                const focusHero = () => {
+                    if (hasHero) {
+                        this.setActiveSection('home-hero', false);
+                        focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
+                        return true;
+                    }
+                    return false;
+                };
+
+                // Branch according to the user's initial focus preference
+                if (initialFocusPref === 'first-row') {
+                    // When the user prefers first-row, prioritize the topmost content row
+                    if (!focusFirstRowCard()) {
+                        // Fallback to hero carousel if rows failed or have no cards
+                        if (!focusHero()) {
                             this.setActiveSection('sidebar');
                         }
-                    } else {
-                        this.setActiveSection('sidebar');
+                    }
+                } else {
+                    // Default behavior: Prioritize the hero carousel if a home-hero section exists
+                    if (!focusHero()) {
+                        if (!focusFirstRowCard()) {
+                            this.setActiveSection('sidebar');
+                        }
                     }
                 }
             }
@@ -2954,12 +2978,17 @@ class HomePage extends Page {
 
                 // Seamless focus re-establishment: if the hero was the active focus target,
                 // re-establish focus on the newly rendered live carousel container.
+                // Seamless focus re-establishment: if the hero was the active focus target,
+                // re-establish focus on the newly rendered live carousel container.
+                // When initial focus is configured for first-row, avoid claiming focus if
+                // nothing is focused yet during early startup.
                 const activeSec = focusManager.getActiveSection();
                 const curFocused = focusManager.getFocused();
+                const initialFocusPref = storage.getItem('pref:homeInitialFocus') || 'first-row';
+                const shouldFocusHeroByDefault = initialFocusPref !== 'first-row';
                 if (
                     activeSec === 'home-hero' ||
-                    !curFocused ||
-                    !document.contains(curFocused) ||
+                    (shouldFocusHeroByDefault && (!curFocused || !document.contains(curFocused))) ||
                     placeholder.contains(curFocused)
                 ) {
                     if (!focusManager.isTrapped()) {
@@ -3653,12 +3682,16 @@ class HomePage extends Page {
 
                 // Seamless focus re-establishment: if the hero was the active focus target,
                 // re-establish focus on the newly rendered live carousel container.
+                // Seamless focus re-establishment: if the hero was the active focus target,
+                // re-establish focus on the newly rendered live carousel container.
+                // Respect initial focus setting when resolving default focus during cache restore.
                 const activeSecFromCache = focusManager.getActiveSection();
                 const curFocusedFromCache = focusManager.getFocused();
+                const initialFocusPref = storage.getItem('pref:homeInitialFocus') || 'first-row';
+                const shouldFocusHeroByDefault = initialFocusPref !== 'first-row';
                 if (
                     activeSecFromCache === 'home-hero' ||
-                    !curFocusedFromCache ||
-                    !document.contains(curFocusedFromCache) ||
+                    (shouldFocusHeroByDefault && (!curFocusedFromCache || !document.contains(curFocusedFromCache))) ||
                     placeholder.contains(curFocusedFromCache)
                 ) {
                     if (!focusManager.isTrapped()) {
@@ -3714,12 +3747,20 @@ class HomePage extends Page {
     _reconcileItemPlaybackState(item) {
         if (!item) return;
 
-        // Retrieve last stopped snapshot from in-memory state
-        const lastStopped = state.get('playback:lastStopped');
-        if (!lastStopped || lastStopped.itemId !== item.Id) return;
+        // Retrieve last stopped snapshot from item-scoped key, bounded map, or singular fallback
+        const lastStopped =
+            state.get(`playback:lastStopped:${item.Id}`) ||
+            state.get('playback:lastStoppedMap')?.[item.Id] ||
+            (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
 
-        // Only reconcile if stop was recent (within 60 seconds)
-        if (Date.now() - lastStopped.timestamp > 60000) return;
+        if (!lastStopped) return;
+
+        // Determine if local snapshot is still authoritative
+        const lastPlayedMs = item.UserData?.LastPlayedDate ? new Date(item.UserData.LastPlayedDate).getTime() : 0;
+        const isNewerThanServer = lastPlayedMs > 0 && lastStopped.timestamp > lastPlayedMs;
+        const isRecent = Date.now() - lastStopped.timestamp < 900000; // 15 minutes
+
+        if (!isRecent && !isNewerThanServer) return;
 
         item.UserData = item.UserData || {};
         if (lastStopped.isNearComplete) {
@@ -3796,26 +3837,44 @@ class HomePage extends Page {
     _restoreHomepageFocusFallback() {
         if (!this._isMounted) return;
 
-        // 1. Try restoring to the hero carousel if present
-        if (focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container')) {
-            this.setActiveSection('home-hero', false);
-            focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
-            return;
-        }
-
-        // 2. Try the first rendered row that contains media cards
+        const initialFocusPref = storage.getItem('pref:homeInitialFocus') || 'first-row';
+        const hasHero = focusManager.getSectionConfig('home-hero') && this.$('#hero-carousel-container');
         const container = this.$('#home-rows');
-        if (container) {
-            const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
-            if (firstSection) {
-                const rowId = firstSection.getAttribute('data-row-id');
-                const firstCard = firstSection.querySelector('.media-card');
-                if (firstCard) {
-                    this.setActiveSection(`home-row-${rowId}`, false);
-                    focusManager.focusElement(firstCard, { instantScroll: true });
-                    return;
+
+        // Helper to attempt focusing the first rendered row
+        const focusFirstRowCard = () => {
+            if (container) {
+                const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                if (firstSection) {
+                    const rowId = firstSection.getAttribute('data-row-id');
+                    const firstCard = firstSection.querySelector('.media-card');
+                    if (firstCard) {
+                        this.setActiveSection(`home-row-${rowId}`, false);
+                        focusManager.focusElement(firstCard, { instantScroll: true });
+                        return true;
+                    }
                 }
             }
+            return false;
+        };
+
+        // Helper to attempt focusing the hero carousel
+        const focusHero = () => {
+            if (hasHero) {
+                this.setActiveSection('home-hero', false);
+                focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
+                return true;
+            }
+            return false;
+        };
+
+        // Branch according to configured initial focus preference
+        if (initialFocusPref === 'first-row') {
+            if (focusFirstRowCard()) return;
+            if (focusHero()) return;
+        } else {
+            if (focusHero()) return;
+            if (focusFirstRowCard()) return;
         }
 
         // 3. Fall back to the navigation sidebar

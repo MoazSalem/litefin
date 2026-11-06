@@ -256,28 +256,31 @@ class PluginWidgetHost {
                             }
                             el.classList.remove('visible');
                             el.classList.remove('sync-osd');
+                            el.style.bottom = '';
+                            el.style.removeProperty('--widget-stack-index');
+                            el.removeAttribute('data-stack-index');
                         }
+
+                        // Recompute vertical stack offsets for any remaining visible widgets
+                        this._updateWidgetLayout();
 
                         widget.onSelect(api);
 
                         /*
                          * ========================================================================
-                         * PREEMPTIVE FOCUS RESTORATION:
-                         * Immediately shift OSD focus back to the Play/Pause playback controls.
-                         * Selecting a segment skip action (like skip intro or skip outro) renders
-                         * the current overlay button defunct/obsolete (either because we seeked
-                         * past it, or because the track is ending). Leaving focus stranded on
-                         * Row -1 causes navigation issues or carry-over bugs on next episode.
+                         * SEAMLESS FOCUS ADVANCEMENT & CONTROLS RESTORATION:
+                         * If another segment widget is already visible concurrently (e.g. intro
+                         * segment active alongside recap), route remote focus immediately to that
+                         * remaining button. Only restore focus to playback controls when absolutely
+                         * no plugin overlay widgets remain visible on screen.
                          * ========================================================================
                          */
-                        /*
-                         * ========================================================================
-                         * PREEMPTIVE FOCUS RESTORATION:
-                         * Shift focus back to playback controls ONLY if Up Next dialog is not
-                         * currently visible on screen. If Up Next is visible, it owns focus.
-                         * ========================================================================
-                         */
-                        if (
+                        const remainingVisible = [...this._widgets.values()].some((e) => e.visible);
+                        if (remainingVisible) {
+                            if (this._osd && typeof this._osd.focusPluginWidget === 'function') {
+                                this._osd.focusPluginWidget(0);
+                            }
+                        } else if (
                             this._osd &&
                             !this._osd.upNextDialog?.isVisible &&
                             typeof this._osd.restoreControlsFocus === 'function'
@@ -315,6 +318,7 @@ class PluginWidgetHost {
         }
 
         this._widgets.delete(widgetId);
+        this._updateWidgetLayout();
         this._refreshOSDCache();
 
         log.debug(`Widget '${widgetId}' removed`);
@@ -370,10 +374,47 @@ class PluginWidgetHost {
             this._osd.restoreControlsFocus();
         } else {
             // No visible widgets were removed or Up Next dialog is on screen — refresh cache
+            this._updateWidgetLayout();
             this._refreshOSDCache();
         }
 
         log.debug(`All widgets for plugin '${pluginId}' removed`);
+    }
+
+    /**
+     * Updates the vertical layout offsets of visible plugin widgets so that
+     * when 2 or more segments are active concurrently (e.g. recap + intro),
+     * they stack cleanly one below another rather than rendering on top of each other.
+     * @private
+     */
+    _updateWidgetLayout() {
+        const visibleEntries = [];
+        for (const [, entry] of this._widgets) {
+            if (entry.visible && entry.el) {
+                visibleEntries.push(entry);
+            }
+        }
+
+        const count = visibleEntries.length;
+        visibleEntries.forEach((entry, idx) => {
+            // When more than 2 segments are visible concurrently, shift the stack upward
+            // so all items remain cleanly within safe view without colliding with controls.
+            const baseShiftEm = count > 2 ? (count - 2) * 4.4 : 0;
+            const netOffsetEm = (idx * 4.4) - baseShiftEm;
+
+            // Update both custom property and inline style for resilient cross-engine layout
+            entry.el.style.setProperty('--widget-stack-index', String(idx));
+            if (count <= 1) {
+                entry.el.style.bottom = '';
+            } else if (netOffsetEm === 0) {
+                entry.el.style.bottom = '28%';
+            } else if (netOffsetEm > 0) {
+                entry.el.style.bottom = `calc(28% - ${netOffsetEm.toFixed(2)}em)`;
+            } else {
+                entry.el.style.bottom = `calc(28% + ${Math.abs(netOffsetEm).toFixed(2)}em)`;
+            }
+            entry.el.setAttribute('data-stack-index', String(idx));
+        });
     }
 
     // ========================================================================
@@ -455,6 +496,9 @@ class PluginWidgetHost {
                     entry.visible = false;
                     el.classList.remove('visible');
                     el.classList.remove('sync-osd');
+                    el.style.bottom = '';
+                    el.style.removeProperty('--widget-stack-index');
+                    el.removeAttribute('data-stack-index');
                     if (entry.syncTimer) {
                         clearTimeout(entry.syncTimer);
                         entry.syncTimer = null;
@@ -472,14 +516,37 @@ class PluginWidgetHost {
             // Check how many widgets are now visible
             const anyVisible = [...this._widgets.values()].some((e) => e.visible);
 
+            // Recompute stack layout so visible items display one below another
+            this._updateWidgetLayout();
+
             if (justBecameVisible && anyVisible) {
-                // A widget just appeared — claim focus only when the OSD is
-                // hidden (user is watching without controls visible). If the OSD
-                // is visible the user is actively in controls; let them navigate
-                // up to the button themselves instead of stealing focus.
-                // focusPluginWidget() also refreshes the cache internally.
-                const osdIsHidden = this._osd && !this._osd._isOsdVisible;
-                if (osdIsHidden && this._osd && typeof this._osd.focusPluginWidget === 'function') {
+                /*
+                 * ============================================================
+                 * AUTO-FOCUS ON VISIBLE SEGMENTS:
+                 * When a segment widget becomes visible (or subsequent segments
+                 * appear back to back), route focus to the widget so the user
+                 * can press Enter immediately.
+                 *
+                 * Do not steal focus only if:
+                 * 1) A modal dialog or secondary menu is open
+                 * 2) The Up Next dialog is visible
+                 * 3) The user is actively seeking on the seekbar (Row 2)
+                 * ============================================================
+                 */
+                const isModalOrMenuOpen =
+                    this._osd &&
+                    (this._osd.isModalOpen || (this._osd.activeMenu && this._osd.activeMenu.isVisible));
+                const isUpNextActive = this._osd && this._osd.upNextDialog?.isVisible;
+                const isUserSeeking = this._osd && this._osd._currentFocusRow === 2;
+
+                const shouldAutoFocus =
+                    !isModalOrMenuOpen &&
+                    !isUpNextActive &&
+                    !isUserSeeking &&
+                    this._osd &&
+                    typeof this._osd.focusPluginWidget === 'function';
+
+                if (shouldAutoFocus) {
                     this._osd.focusPluginWidget(0);
                 } else {
                     this._refreshOSDCache();

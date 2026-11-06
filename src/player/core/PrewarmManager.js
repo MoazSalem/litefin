@@ -12,6 +12,7 @@
 import { logger } from '../../utils/Logger.js';
 import { eventBus } from '../../core/EventBus.js';
 import { api } from '../../api/index.js';
+import { state } from '../../core/StateManager.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import FontLoader from '../../utils/FontLoader.js';
@@ -50,6 +51,27 @@ export class PrewarmManager {
     prewarm(item, prewarmOptions = {}) {
         // Guard check: Ensure valid item with an ID is provided
         if (!item || !item.Id) return;
+
+        // Reconcile item with authoritative client stop state if server UserData is stale
+        let lastStopped = null;
+        try {
+            if (typeof state !== 'undefined' && state?.get) {
+                lastStopped =
+                    state.get(`playback:lastStopped:${item.Id}`) ||
+                    state.get('playback:lastStoppedMap')?.[item.Id] ||
+                    (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
+            }
+        } catch (_) { }
+
+        if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+            item.UserData = item.UserData || {};
+            if (lastStopped.isNearComplete) {
+                item.UserData.Played = true;
+                item.UserData.PlaybackPositionTicks = 0;
+            } else if (lastStopped.positionTicks > 0) {
+                item.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+            }
+        }
 
         // Verify user hasn't disabled zero-latency prewarm in settings
         if (PlayerSettings.get('enablePrewarm') === false) return;
@@ -417,6 +439,24 @@ export class PrewarmManager {
     getPrewarmedItem(itemId) {
         // Ensure cache matches requested item ID and is within validity TTL window
         if (this._cachedItemId === itemId && this._cachedItem && Date.now() - this._timestamp < this._ttlMs) {
+            // Reconcile with latest stop snapshot if client recorded recent stop progress
+            try {
+                const lastStopped =
+                    state.get(`playback:lastStopped:${itemId}`) ||
+                    state.get('playback:lastStoppedMap')?.[itemId] ||
+                    (state.get('playback:lastStopped')?.itemId === itemId ? state.get('playback:lastStopped') : null);
+
+                if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+                    this._cachedItem.UserData = this._cachedItem.UserData || {};
+                    if (lastStopped.isNearComplete) {
+                        this._cachedItem.UserData.Played = true;
+                        this._cachedItem.UserData.PlaybackPositionTicks = 0;
+                    } else if (lastStopped.positionTicks > 0) {
+                        this._cachedItem.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+                    }
+                }
+            } catch (_) { }
+
             log.info(`Cache hit! Reusing pre-loaded item metadata for: ${itemId}`);
             return this._cachedItem;
         }
@@ -547,6 +587,9 @@ export class PrewarmManager {
 
             log.info(`Zero-Latency Cache Hit! Consuming prewarmed PlaybackInfo for: ${itemId}`);
             const promise = this._playbackInfoPromise;
+            // Clear cached item references upon consumption so they cannot be reused stale
+            this._cachedItemId = null;
+            this._cachedItem = null;
             // Prevent duplicate consumption; subsequent calls will trigger fresh request
             this._playbackInfoPromise = null;
             return promise;

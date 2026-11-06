@@ -131,6 +131,48 @@ function detectAndroidVersion() {
  * ============================================================================
  * @returns {Object} Capabilities descriptor
  */
+/**
+ * Detects physical display HDR capabilities (HDR10, HLG, Dolby Vision, HDR10+)
+ * via the native Android Display API exposed on window.LitefinAndroid.
+ * Falls back to Android TV classification heuristics and CSS media queries.
+ */
+function detectHdrCapabilities() {
+    try {
+        if (typeof window !== 'undefined' && window.LitefinAndroid?.getHdrCapabilities) {
+            const raw = window.LitefinAndroid.getHdrCapabilities();
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                log.info('Detected hardware HDR capabilities via Android Display:', parsed);
+                return parsed;
+            }
+        }
+    } catch (e) {
+        log.warn('Failed to parse HDR capabilities from LitefinAndroid bridge:', e);
+    }
+
+    const isTv =
+        (typeof window !== 'undefined' && typeof window.LitefinAndroid?.isTv === 'function' && !!window.LitefinAndroid.isTv()) ||
+        (typeof window !== 'undefined' && typeof window.AndroidBridge?.isTv === 'function' && !!window.AndroidBridge.isTv()) ||
+        (typeof navigator !== 'undefined' &&
+            navigator.userAgent &&
+            /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(navigator.userAgent)) ||
+        false;
+
+    // Detect HDR display capabilities via media queries when bridge is unavailable
+    const mediaQueryHdr =
+        typeof window !== 'undefined' && window.matchMedia
+            ? window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches
+            : false;
+
+    return {
+        supported: isTv || mediaQueryHdr,
+        hdr10: isTv || mediaQueryHdr,
+        hlg: isTv || mediaQueryHdr,
+        dolbyVision: isTv,
+        hdr10Plus: false
+    };
+}
+
 export function getDeviceCapabilities() {
     // -------------------------------------------------------------------------
     // HTML5 Player Engine Check
@@ -145,13 +187,13 @@ export function getDeviceCapabilities() {
 
     if (_cachedCapabilities) return _cachedCapabilities;
 
-    // Detect HDR display capabilities via media queries
-    const hdr10 =
-        typeof window !== 'undefined' && window.matchMedia
-            ? window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches
-            : true; // Default true on modern Android TV displays
-
-    const hlg = hdr10;
+    // -------------------------------------------------------------------------
+    // Physical Display HDR Capabilities Probe
+    // -------------------------------------------------------------------------
+    // Query native Android Display API to accurately detect HDR10, HLG, and
+    // Dolby Vision capabilities of the connected TV or mobile screen panel.
+    // -------------------------------------------------------------------------
+    const hdrCaps = detectHdrCapabilities();
 
     // Detect actual viewport and screen resolutions
     const screenWidth = typeof window !== 'undefined' ? window.screen?.width || window.innerWidth || 1920 : 1920;
@@ -176,9 +218,10 @@ export function getDeviceCapabilities() {
         screenHeight,
         uhd,
         uhd8K,
-        hdr10: hdr10,
-        hlg: hlg,
-        dolbyVision: true,
+        hdr10: hdrCaps.hdr10 !== false,
+        hlg: hdrCaps.hlg !== false,
+        hdr10Plus: hdrCaps.hdr10Plus === true,
+        dolbyVision: hdrCaps.dolbyVision === true,
         hevc: hwCodecs.hevc !== false,
         av1: hwCodecs.av1 === true,
         vp9: hwCodecs.vp9 !== false,
@@ -363,18 +406,88 @@ export function buildJellyfinProfile(options = {}) {
             : [];
 
     // -------------------------------------------------------------------------
-    // Codec Profiles (Levels and Audio Channel Ceiling)
+    // Dynamic Range & VideoRangeType Resolution
+    // -------------------------------------------------------------------------
+    // Evaluate HDR and Dolby Vision user overrides against hardware capabilities.
+    // If the user forces HDR or Dolby Vision enable/disable, respect that preference.
+    // -------------------------------------------------------------------------
+    const caps = getDeviceCapabilities();
+    const hdrSetting = PlayerSettings.get('enableHDR');
+    const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : !!caps.hdr10;
+
+    const dvSetting = PlayerSettings.get('enableDolbyVision');
+    const enableDolbyVision = dvSetting === 'enable' ? true : dvSetting === 'disable' ? false : !!caps.dolbyVision;
+
+    const allowedRangeTypesList = ['SDR'];
+    if (enableHDR) {
+        allowedRangeTypesList.push(
+            'HDR10',
+            'HDR10Plus',
+            'HLG',
+            'DOVIWithHDR10',
+            'DOVIWithHDR10Plus',
+            'DOVIWithHLG',
+            'DOVIWithSDR',
+            'DOVIWithEL',
+            'DOVIWithELHDR10Plus',
+            'DOVIInvalid'
+        );
+        if (enableDolbyVision) {
+            allowedRangeTypesList.push('DOVI');
+        }
+    } else if (enableDolbyVision) {
+        allowedRangeTypesList.push('DOVI', 'DOVIWithSDR');
+    } else {
+        allowedRangeTypesList.push('DOVIWithSDR');
+    }
+
+    const hevcVideoRangeTypes = allowedRangeTypesList.join('|');
+
+    // -------------------------------------------------------------------------
+    // Codec Profiles (Levels, Dynamic Range, and Audio Channel Ceiling)
     // -------------------------------------------------------------------------
     const codecProfiles = [
-        // HEVC Main, Main 10, HDR10 up to Level 6.1
+        // HEVC Main, Main 10, HDR10 up to Level 6.1 with VideoRangeType enforcement
         {
             Type: 'Video',
             Codec: 'hevc',
             Conditions: [
                 {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
+                    IsRequired: false
+                },
+                {
                     Condition: 'LessThanEqual',
                     Property: 'VideoLevel',
                     Value: '183',
+                    IsRequired: false
+                }
+            ]
+        },
+        // VP9 Profile 0, Profile 2 (HDR)
+        {
+            Type: 'Video',
+            Codec: 'vp9',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
+                    IsRequired: false
+                }
+            ]
+        },
+        // AV1 Main Profile (SDR / HDR10)
+        {
+            Type: 'Video',
+            Codec: 'av1',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
                     IsRequired: false
                 }
             ]

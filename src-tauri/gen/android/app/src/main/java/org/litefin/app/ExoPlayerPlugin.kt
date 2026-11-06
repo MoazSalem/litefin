@@ -11,6 +11,8 @@ import android.webkit.JavascriptInterface
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ColorInfo
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -151,6 +153,9 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
   @Volatile
   private var isAudioOffloadEnabled: Boolean = true
 
+  @Volatile
+  private var isDolbyVisionAllowed: Boolean = true
+
   /**
    * Applies hardware tunneling and audio offload parameters to the track selector.
    *
@@ -235,7 +240,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
    * ===========================================================================
    */
   @OptIn(UnstableApi::class)
-  private class LitefinRenderersFactory(
+  private inner class LitefinRenderersFactory(
     context: Context
   ) : DefaultRenderersFactory(context) {
 
@@ -253,10 +258,28 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       // -----------------------------------------------------------------------
       // Primary Hardware Video Decoder Construction
       // -----------------------------------------------------------------------
+      // -----------------------------------------------------------------------
+      // Filter Dolby Vision Decoders when Display or Configuration Lacks DV Support
+      // -----------------------------------------------------------------------
+      // If the connected display panel (e.g. Samsung TV) lacks native Dolby Vision
+      // capabilities or the user explicitly disabled DV, filtering out DV decoders
+      // directs MediaCodecVideoRenderer to fall back to the standard HEVC decoder.
+      // The standard HEVC decoder processes the HDR10 base layer of Profile 8.1 / 7
+      // streams cleanly without dark or distorted video output.
+      // -----------------------------------------------------------------------
+      val effectiveCodecSelector = MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+        if (mimeType.equals(MimeTypes.VIDEO_DOLBY_VISION, ignoreCase = true) && !isDolbyVisionAllowed) {
+          android.util.Log.i("ExoPlayerPlugin", "Dolby Vision decoding filtered (disabled or unsupported by connected display); falling back to HEVC HDR10 base layer")
+          emptyList()
+        } else {
+          mediaCodecSelector.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+        }
+      }
+
       // Configures MediaCodecVideoRenderer with low-latency and jitter-tolerant
       // settings for smooth 4K/60fps and HDR video streams.
       var videoRendererBuilder = MediaCodecVideoRenderer.Builder(context)
-        .setMediaCodecSelector(mediaCodecSelector)
+        .setMediaCodecSelector(effectiveCodecSelector)
         .setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
         .setEnableDecoderFallback(enableDecoderFallback)
         .setEventHandler(eventHandler)
@@ -313,8 +336,8 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
    */
   private fun ensurePlayer(): ExoPlayer {
     player?.let { existing ->
-      MainActivity.instance?.getTextureView()?.let { textureView ->
-        existing.setVideoTextureView(textureView)
+      MainActivity.instance?.getSurfaceView()?.let { surfaceView ->
+        existing.setVideoSurfaceView(surfaceView)
       }
       // Guarantee MediaSession remains active for existing player instance
       ensureMediaSession(existing)
@@ -378,12 +401,14 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     ensureMediaSession(newPlayer)
 
     // -------------------------------------------------------------------------
-    // Bind Hardware TextureView
+    // Bind Hardware SurfaceView
     // -------------------------------------------------------------------------
-    // Connect player output to the TextureView hosted behind the transparent WebView.
-    // Unlike SurfaceView, TextureView composites seamlessly with the Android View tree.
-    MainActivity.instance?.getTextureView()?.let { textureView ->
-      newPlayer.setVideoTextureView(textureView)
+    // Connect player output to the SurfaceView hosted behind the transparent WebView.
+    // Unlike TextureView, SurfaceView punches through to Hardware Composer (HWC),
+    // preserving 10-bit YUV pixel formats, wide color gamuts (BT.2020),
+    // and CTA-861.3 / SMPTE ST 2086 HDR10, HLG, and Dolby Vision dynamic metadata.
+    MainActivity.instance?.getSurfaceView()?.let { surfaceView ->
+      newPlayer.setVideoSurfaceView(surfaceView)
     }
 
     // -------------------------------------------------------------------------
@@ -417,6 +442,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
           stopProgressHeartbeat()
           MainActivity.instance?.setKeepScreenOn(false)
           MainActivity.instance?.hideVideoSurface()
+          MainActivity.instance?.setHdrMode(false)
           MainActivity.instance?.resetDisplayMode()
         }
       }
@@ -525,6 +551,11 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
               val format = trackGroup.getFormat(i)
               val isSupported = group.isTrackSupported(i)
               val isSelected = group.isTrackSelected(i)
+              if (isSelected) {
+                val isHdrTrack = (format.colorInfo != null && ColorInfo.isTransferHdr(format.colorInfo)) ||
+                                 format.sampleMimeType?.equals(MimeTypes.VIDEO_DOLBY_VISION, ignoreCase = true) == true
+                MainActivity.instance?.setHdrMode(isHdrTrack)
+              }
               if (!isSupported) {
                 android.util.Log.w("ExoPlayerPlugin", "Video track (${format.sampleMimeType}) is NOT supported by device hardware decoders!")
               }
@@ -649,8 +680,11 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
         val tunneling = args.tunneling ?: isTunnelingEnabled
         val audioOffload = args.audioOffload ?: isAudioOffloadEnabled
+        val dvRequested = args.enableDolbyVision != false
+        val dvHardwareSupported = MainActivity.instance?.isDolbyVisionSupported() != false
         this.isTunnelingEnabled = tunneling
         this.isAudioOffloadEnabled = audioOffload
+        this.isDolbyVisionAllowed = dvRequested && dvHardwareSupported
         trackSelector?.let { sel ->
           applyTrackSelectorParameters(sel, tunneling, audioOffload)
         }
@@ -936,7 +970,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         pendingAudioTrackIndex = null
         MainActivity.instance?.setKeepScreenOn(false)
         MainActivity.instance?.hideVideoSurface()
-        MainActivity.instance?.resetTextureView()
+        MainActivity.instance?.setHdrMode(false)
         MainActivity.instance?.resetDisplayMode()
         invoke.resolve()
       } catch (e: Exception) {
@@ -1123,12 +1157,15 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
       headersJson: String?,
       startPositionMs: Long,
       tunneling: Boolean,
-      audioOffload: Boolean
+      audioOffload: Boolean,
+      enableDolbyVision: Boolean = true
     ) {
       activity.runOnUiThread {
         try {
           isTunnelingEnabled = tunneling
           isAudioOffloadEnabled = audioOffload
+          val dvHardwareSupported = MainActivity.instance?.isDolbyVisionSupported() != false
+          isDolbyVisionAllowed = enableDolbyVision && dvHardwareSupported
 
           val exo = ensurePlayer()
           trackSelector?.let { sel ->
@@ -1243,7 +1280,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         pendingAudioTrackIndex = null
         MainActivity.instance?.setKeepScreenOn(false)
         MainActivity.instance?.hideVideoSurface()
-        MainActivity.instance?.resetTextureView()
+        MainActivity.instance?.setHdrMode(false)
       }
     }
 
@@ -1335,6 +1372,7 @@ class ExoPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     var startPositionMs: Long? = null
     var tunneling: Boolean? = null
     var audioOffload: Boolean? = null
+    var enableDolbyVision: Boolean? = null
   }
 
   class BooleanArgs {

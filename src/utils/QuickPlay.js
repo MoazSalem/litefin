@@ -22,6 +22,7 @@ import { eventBus } from '../core/EventBus.js';
 import { logger } from './Logger.js';
 import BackdropManager from './BackdropManager.js';
 import { imageService } from './ImageService.js';
+import { state } from '../core/StateManager.js';
 
 const log = logger.create('QuickPlay');
 
@@ -112,7 +113,26 @@ export async function quickPlayItem(itemOrId) {
         quality: backdropParams.quality
     });
 
-    eventBus.emit('player:play', { item: itemToPlay, resume, fromBrowse: true, backdropUrl });
+    // Reconcile item with authoritative client stop state if server UserData is stale
+    const lastStopped =
+        state.get(`playback:lastStopped:${itemToPlay.Id}`) ||
+        state.get('playback:lastStoppedMap')?.[itemToPlay.Id] ||
+        (state.get('playback:lastStopped')?.itemId === itemToPlay.Id ? state.get('playback:lastStopped') : null);
+
+    if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+        itemToPlay.UserData = itemToPlay.UserData || {};
+        if (lastStopped.isNearComplete) {
+            itemToPlay.UserData.Played = true;
+            itemToPlay.UserData.PlaybackPositionTicks = 0;
+            resume = false;
+        } else if (lastStopped.positionTicks > 0) {
+            itemToPlay.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+            resume = true;
+        }
+    }
+
+    const startPositionTicks = resume ? (itemToPlay.UserData?.PlaybackPositionTicks || 0) : 0;
+    eventBus.emit('player:play', { item: itemToPlay, resume, startPositionTicks, fromBrowse: true, backdropUrl });
     return true;
 }
 
