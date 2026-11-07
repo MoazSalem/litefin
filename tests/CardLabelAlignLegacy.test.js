@@ -250,5 +250,117 @@ test('Media Card Progress Bar: CardRenderer constructs progress bar for playback
         false,
         'Games must never render a playback progress bar'
     );
+
+    // 4. Completed movie (Played: true) must never render a progress bar
+    const completedMovie = {
+        Id: 'movie-done-1',
+        Name: 'Completed Movie',
+        Type: 'Movie',
+        RunTimeTicks: 72000000000,
+        UserData: {
+            Played: true,
+            PlaybackPositionTicks: 72000000000,
+            PlayedPercentage: 100
+        }
+    };
+    const htmlCompletedMovie = CardRenderer.createCardHtml(completedMovie);
+    assert.strictEqual(
+        htmlCompletedMovie.includes('card-progress'),
+        false,
+        'Completed movie must never render a playback progress bar'
+    );
+    assert.strictEqual(
+        htmlCompletedMovie.includes('has-progress'),
+        false,
+        'Completed movie media card must not have has-progress class'
+    );
+
+    // 5. Completed movie via 100% position without explicit Played flag
+    const completedMovieByTicks = {
+        Id: 'movie-done-2',
+        Name: 'Fully Watched Movie',
+        Type: 'Movie',
+        RunTimeTicks: 72000000000,
+        UserData: {
+            Played: false,
+            PlaybackPositionTicks: 72000000000
+        }
+    };
+    const htmlMovieTicks = CardRenderer.createCardHtml(completedMovieByTicks);
+    assert.strictEqual(
+        htmlMovieTicks.includes('card-progress'),
+        false,
+        'Movie at 100% progress must never render a progress bar'
+    );
+
+    // 6. Series card (completed) must never render a progress bar
+    const completedSeries = {
+        Id: 'series-1',
+        Name: 'Breaking Bad',
+        Type: 'Series',
+        UserData: {
+            Played: true,
+            PlayedPercentage: 100,
+            UnplayedItemCount: 0
+        }
+    };
+    const htmlCompletedSeries = CardRenderer.createCardHtml(completedSeries);
+    assert.strictEqual(
+        htmlCompletedSeries.includes('card-progress'),
+        false,
+        'Series card with completed progress must never render a progress bar'
+    );
+
+    // 7. Series card (in-progress episodes) must never render a progress bar
+    const inProgressSeries = {
+        Id: 'series-2',
+        Name: 'Better Call Saul',
+        Type: 'Series',
+        UserData: {
+            Played: false,
+            PlayedPercentage: 45.5,
+            UnplayedItemCount: 12
+        }
+    };
+    const htmlInProgressSeries = CardRenderer.createCardHtml(inProgressSeries);
+    assert.strictEqual(
+        htmlInProgressSeries.includes('card-progress'),
+        false,
+        'Series card with partial progress must never render a progress bar'
+    );
+
+    // 8. Season card must never render a progress bar
+    const seasonCard = {
+        Id: 'season-1',
+        Name: 'Season 1',
+        Type: 'Season',
+        UserData: {
+            PlayedPercentage: 60
+        }
+    };
+    const htmlSeason = CardRenderer.createCardHtml(seasonCard);
+    assert.strictEqual(
+        htmlSeason.includes('card-progress'),
+        false,
+        'Season card must never render a progress bar'
+    );
+
+    // 9. Completed episode must never render a progress bar
+    const completedEpisode = {
+        Id: 'ep-done-1',
+        Name: 'Finale',
+        Type: 'Episode',
+        RunTimeTicks: 36000000000,
+        UserData: {
+            Played: true,
+            PlayedPercentage: 100
+        }
+    };
+    const htmlCompletedEpisode = CardRenderer.createCardHtml(completedEpisode);
+    assert.strictEqual(
+        htmlCompletedEpisode.includes('card-progress'),
+        false,
+        'Completed episode must never render a progress bar'
+    );
 });
 
