@@ -907,32 +907,78 @@ class CardRenderer {
 
         // --- 2. Overlays (Progress & Badges) ---
 
-        // --- Resume Progress Bar ---
-        //
+        // ====================================================================
+        // --- Resume Playback Progress Bar ---
+        // ====================================================================
         // Renders the playback progress indicator along the bottom of the card artwork.
         // Controlled by user preference 'pref:hideProgressBar' (defaults to shown/false).
+        // --------------------------------------------------------------------
+        // Progress bars are strictly intended for playable media in active progress:
+        // - In-progress movies and episodes (e.g. paused midway).
+        // - Excludes container types (Series, Seasons, BoxSets, Playlists, Folders)
+        //   which may carry aggregate watched episode statistics in PlayedPercentage.
+        // - Excludes completed items (UserData.Played === true or progress >= 100%).
+        // ====================================================================
         let progressHtml = '';
         const hideProgressBar = prefs.hideProgressBar;
 
-        // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
-        const hasPlaybackTicks = item.UserData?.PlaybackPositionTicks && item.RunTimeTicks;
-        const hasPlayedPercentage = item.UserData?.PlayedPercentage != null && item.UserData.PlayedPercentage > 0;
+        // --------------------------------------------------------------------
+        // Playable Media Validation
+        // --------------------------------------------------------------------
+        // Container items (series, seasons, box sets, folders) do not possess a
+        // single playback timeline. We restrict progress bar rendering to individual
+        // episodic or standalone video entities.
+        // --------------------------------------------------------------------
+        const isPlayableMedia =
+            item &&
+            !item.IsFolder &&
+            (item.Type === 'Episode' ||
+                item.Type === 'Movie' ||
+                item.Type === 'Video' ||
+                item.Type === 'MusicVideo' ||
+                item.Type === 'Trailer' ||
+                item.Type === 'Recording' ||
+                (!item.Type && item.MediaType === 'Video'));
+
+        // --------------------------------------------------------------------
+        // Playback Position Metadata Detection
+        // --------------------------------------------------------------------
+        // Detect either exact playback ticks with total duration or a reported
+        // playback percentage from server UserData.
+        // --------------------------------------------------------------------
+        const hasPlaybackTicks = Boolean(item?.UserData?.PlaybackPositionTicks && item?.RunTimeTicks);
+        const hasPlayedPercentage =
+            item?.UserData?.PlayedPercentage != null && item.UserData.PlayedPercentage > 0;
 
         if (
             !hideProgressBar &&
+            isPlayableMedia &&
             !CardRenderer.isGame(item) &&
             (hasPlaybackTicks || hasPlayedPercentage)
         ) {
-            // Calculate playback percentage completed and clamp to integer
-            const rawProgress = hasPlayedPercentage
-                ? item.UserData.PlayedPercentage
-                : (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            const progress = Math.min(Math.max(Math.round(rawProgress), 1), 100);
-            progressHtml = `
-                <div class="card-progress-container">
-                    <progress class="card-progress" value="${progress}" max="100"></progress>
-                </div>
-            `;
+            // -----------------------------------------------------------------
+            // Percentage Calculation & Completed State Evaluation
+            // -----------------------------------------------------------------
+            // Calculate playback percentage completed. When playback ticks exist,
+            // compute the exact mathematical ratio against total runtime.
+            // -----------------------------------------------------------------
+            const rawProgress = hasPlaybackTicks
+                ? (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100
+                : item.UserData.PlayedPercentage;
+
+            // An item is considered completed if flagged as Played in UserData
+            // or if the calculated progress rounds to 100% or greater.
+            const isCompleted = Boolean(item.UserData?.Played) || Math.round(rawProgress) >= 100;
+
+            // Only mount the progress bar if the item is genuinely in progress (< 100% and unplayed)
+            if (!isCompleted && rawProgress > 0) {
+                const progress = Math.min(Math.max(Math.round(rawProgress), 1), 99);
+                progressHtml = `
+                    <div class="card-progress-container">
+                        <progress class="card-progress" value="${progress}" max="100"></progress>
+                    </div>
+                `;
+            }
         }
 
         // ====================================================================

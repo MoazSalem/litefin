@@ -371,3 +371,14 @@ test('HomePage: Home Screen Sections rows follow the plugin switch and are cache
     assert.match(source, /hssEnabled: isHomeScreenSectionsEnabled\(storage\)/);
     assert.match(source, /if \(!!cache\.hssEnabled !== isHomeScreenSectionsEnabled\(storage\)\)/);
 });
+
+test('modern/home.css: card-rank-badge defines modern layout coordinates and hover scaling', () => {
+    // Read stylesheet to ensure modern media row cards reflect updated rank styling
+    const css = readFileSync(path.resolve('src/styles/modern/home.css'), 'utf8');
+
+    // Confirm coordinates mirror standard modern badges (top/left 22px)
+    assert.match(css, /html\[data-media-rows-family="modern"\]\s+\.card-rank-badge\s*\{[^}]*left:\s*22px/);
+
+    // Confirm hover and focus transitions apply consistent 1.05 scale transform
+    assert.match(css, /\.card-rank-badge[^}]*transform:\s*scale\(1\.05\)/);
+});
