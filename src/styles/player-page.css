@@ -628,16 +628,29 @@ html[data-light-music-player="true"] .audio-subtitle {
     transition: padding 0.38s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Secondary Subtitle (Top) */
+/* ==========================================================================
+ * Secondary Subtitle Container & Line Styling
+ * ==========================================================================
+ * Positions the secondary subtitle overlay near the top of the viewport by
+ * default with an anchored transform origin for smooth scaling and dodging.
+ *
+ * Visual Presentation & Opacity:
+ * Secondary subtitles inherit identical visual styling (brightness, hue,
+ * font weight, drop shadow blur/opacity, outline strokes, and text color)
+ * directly from the primary subtitle appearance settings.
+ *
+ * We intentionally avoid setting a diminished opacity (such as 0.9) on the
+ * secondary .subtitle-line element so that its luminance, chromaticity,
+ * and text-shadow depth remain fully consistent with the primary subtitle.
+ * ========================================================================== */
 .subtitle-overlay.secondary {
+    /* Clear bottom pin from base subtitle-overlay */
     bottom: auto;
+    /* Baseline top offset for standard placement */
     top: 10%;
+    /* Anchor scaling transitions to top center */
     -webkit-transform-origin: top center;
     transform-origin: top center;
-}
-
-.subtitle-overlay.secondary .subtitle-line {
-    opacity: 0.9;
 }
 
 /* ==========================================================================

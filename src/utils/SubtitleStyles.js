@@ -77,6 +77,16 @@ export function getTextStyles(isHdr = false) {
     styles.push({ name: 'webkitTextStroke', value: '' });
     styles.push({ name: 'paintOrder', value: '' });
 
+    /* -----------------------------------------------------------------
+       Normalize container element opacity to full 1.0.
+       Ensures that fine-grained opacity values (text opacity, background
+       opacity, drop shadow opacity, and border stroke opacity) are applied
+       deterministically via RGBA channels rather than being attenuated by
+       an inherited or stale CSS opacity property. Both primary and
+       secondary subtitles maintain identical brightness and hue.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'opacity', value: '1' });
+
     // ========================================================================
     // Font Size
     // Options: small, medium, large, larger, extralarge
@@ -389,14 +399,15 @@ export function getWindowStyles() {
 // ============================================================================
 // Secondary Subtitle Style Generators
 // Secondary subtitles inherit ALL primary appearance settings (color, shadow,
-// font family, weight, opacity, background) but have their own independent
-// size and position controls.
+// font family, weight, opacity, background) ensuring identical brightness, hue,
+// and drop shadow appearance, while maintaining independent size and position controls.
 // ============================================================================
 
 /**
  * Generate text styles for the secondary subtitle overlay.
- * Inherits all primary text styles, then overrides fontSize with the
- * secondary-specific size setting.
+ * Inherits all primary text styles (color, hue, brightness, text shadow, border,
+ * font family, weight, and background), ensuring visual parity with the primary
+ * subtitle while applying the secondary-specific font size setting.
  *
  * @param {boolean} isHdr - Whether the active playback stream is High Dynamic Range
  * @returns {Object[]} Array of {name, value} CSS properties
@@ -405,6 +416,8 @@ export function getSecondaryTextStyles(isHdr = false) {
     /* -------------------------------------------------------------
        Fetch baseline visual attributes from the primary text styles.
        Pass down HDR context to apply appropriate opacity setting.
+       Secondary subtitles inherit identical brightness, hue, drop
+       shadows, borders, and color opacity from primary settings.
        ------------------------------------------------------------- */
     const styles = getTextStyles(isHdr);
 

@@ -18,6 +18,8 @@ globalThis.document = {
 
 const { PlayerSettings } = await import('../src/utils/PlayerSettings.js');
 const {
+    getTextStyles,
+    getSecondaryTextStyles,
     getSecondaryWindowStyles,
     isPrimarySubtitleInBottomHalf,
     isSecondarySubtitleInBottomHalf
@@ -259,6 +261,50 @@ test('CSS rules ensure secondary subtitle does not have hardcoded top !important
         /html\[data-layout-tier="ultra-legacy"\]\s+\.subtitle-overlay\.secondary[^{]*\{[^}]*top:\s*10%\s*!important/s,
         'Ultra-legacy secondary subtitle must not force top: 10% !important'
     );
+});
+
+test('CSS rules ensure secondary subtitle does not have diminished opacity override', () => {
+    const cssPath = path.resolve('src/styles/player-page.css');
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+    // Ensure secondary subtitles do not declare custom fractional opacity (e.g. 0.9)
+    // so brightness, chromaticity, and drop shadow contrast match primary subtitles.
+    assert.doesNotMatch(
+        cssContent,
+        /\.subtitle-overlay\.secondary\s+\.subtitle-line[^{]*\{[^}]*opacity:\s*0\.[0-9]+/s,
+        'Secondary subtitle must not force reduced opacity on .subtitle-line'
+    );
+});
+
+test('Secondary subtitle text styles match primary brightness, hue, and shadow appearance', () => {
+    storageMap.clear();
+
+    // Configure distinct subtitle appearance attributes
+    PlayerSettings.set('subtitleTextColor', '#ffff00');
+    PlayerSettings.set('subtitleTextOpacity', 90);
+    PlayerSettings.set('subtitleTextBackground', '#000000');
+    PlayerSettings.set('subtitleBackgroundOpacity', 75);
+    PlayerSettings.set('subtitleDropShadow', 'uniform_border');
+    PlayerSettings.set('subtitleDropShadowColor', '#00ffff');
+    PlayerSettings.set('subtitleDropShadowOpacity', 80);
+    PlayerSettings.set('subtitleDropShadowBlur', 8);
+    PlayerSettings.set('subtitleBorderWidth', 4);
+    PlayerSettings.set('subtitleBorderOpacity', 95);
+
+    // Fetch primary and secondary style property arrays
+    const primaryStyles = getTextStyles(false);
+    const secondaryStyles = getSecondaryTextStyles(false);
+
+    // Helper to extract CSS style property values by name
+    const getVal = (styles, name) => styles.find((s) => s.name === name)?.value;
+
+    // Verify exact parity across brightness, hue, color opacity, and shadows
+    assert.equal(getVal(secondaryStyles, 'color'), getVal(primaryStyles, 'color'), 'Text color and opacity must match');
+    assert.equal(getVal(secondaryStyles, 'opacity'), getVal(primaryStyles, 'opacity'), 'Layer opacity must match');
+    assert.equal(getVal(secondaryStyles, 'textShadow'), getVal(primaryStyles, 'textShadow'), 'Text drop shadow must match');
+    assert.equal(getVal(secondaryStyles, 'webkitTextStroke'), getVal(primaryStyles, 'webkitTextStroke'), 'Border stroke outline must match');
+    assert.equal(getVal(secondaryStyles, 'paintOrder'), getVal(primaryStyles, 'paintOrder'), 'Paint order must match');
+    assert.equal(getVal(secondaryStyles, 'backgroundColor'), getVal(primaryStyles, 'backgroundColor'), 'Background color and opacity must match');
 });
 
 test('Smart Hemisphere Detection correctly classifies subtitle positions', () => {
