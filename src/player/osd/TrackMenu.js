@@ -1,6 +1,9 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
 import { languageManager } from '../../utils/LanguageManager.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
+import { isDtsSupported } from '../core/StreamUtils.js';
 
 /**
  * TrackMenu
@@ -200,7 +203,18 @@ export default class TrackMenu extends BaseMenu {
                     ? !player.isAudioTrackNativelyPlayable(track)
                     : false;
 
-                if (isUnsupported) {
+                // webOS: a forced TrueHD or DTS track is passed through to the soundbar, not transcoded.
+                // A DTS track the TV plays itself is not marked as a transcode.
+                const codec = (track.Codec || '').toLowerCase();
+                const isTrueHd = codec === 'truehd' || codec === 'mlp';
+                const isDts = codec.includes('dts') || codec === 'dca';
+                const onWebOS = !!platformInfo?.isWebOS;
+                if (onWebOS && ((isTrueHd && PlayerSettings.get('enableTrueHd') === 'enable') ||
+                    (isDts && PlayerSettings.get('enableDts') === 'enable'))) {
+                    metadataHtml += `<span class="track-badge">${i18n.t('Passthrough') || 'PASSTHROUGH'}</span>`;
+                } else if (onWebOS && isDts && isDtsSupported()) {
+                    // The TV plays DTS itself: no badge
+                } else if (isUnsupported) {
                     metadataHtml += `<span class="track-badge track-badge-unsupported">${i18n.t('Transcode') || 'TRANSCODE'}</span>`;
                 }
             }

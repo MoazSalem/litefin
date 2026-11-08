@@ -1975,7 +1975,12 @@ export class WebOSPlayer {
                 const defaultStream = options.mediaSource?.MediaStreams?.find(
                     s => s.Type === 'Audio' && s.Index === Number(defaultIndex)
                 );
-                const isDefaultPlayable = isWebOSAudioTrackPlayable(defaultStream);
+                // A TrueHD default is never treated as playing: with TrueHD forced on the check above
+                // passes, but the TV stays silent until the track is switched explicitly (mid-play
+                // switches to TrueHD work), so the switch must still run at start.
+                const defaultCodec = (defaultStream?.Codec || '').toLowerCase();
+                const isDefaultPlayable = defaultCodec !== 'truehd' && defaultCodec !== 'mlp' &&
+                    isWebOSAudioTrackPlayable(defaultStream);
 
                 // If the requested track is already the container's default track AND
                 // that default track is confirmed natively decodable, WebOS hardware

@@ -13,7 +13,7 @@ import { AUDIO_FALLBACK_STORAGE_KEYS } from '../src/utils/AudioFallbackConfig.js
 // plain VM stubs instead.
 const source = readFileSync(new URL('../src/player/core/StreamUtils.js', import.meta.url), 'utf8');
 
-function setup(settings = {}, caps = {}, initialStorage = {}) {
+function setup(settings = {}, caps = {}, initialStorage = {}, platform = { isTizen: true, isWebOS: false }) {
     const defaultCaps = {
         dts: false,
         truehd: false,
@@ -43,7 +43,7 @@ function setup(settings = {}, caps = {}, initialStorage = {}) {
             set: (key, val) => { currentSettings[key] = val; }
         },
         getDeviceCapabilities: () => defaultCaps,
-        platformInfo: { isTizen: true, isWebOS: false },
+        platformInfo: platform,
         AUDIO_FALLBACK_STORAGE_KEYS,
         storage: {
             getItem: (key) => storageMap.get(key) || null,
@@ -261,7 +261,7 @@ test('doesAudioTrackRequireDirectStream: Avatar (DTS default track) plays Direct
 
 test('doesAudioTrackRequireDirectStream: Edge of Tomorrow (non-default DTS track) requires DirectStream remux on WebOS', () => {
     const { doesAudioTrackRequireDirectStream } = setup({
-        enableDts: 'enable',
+        enableDts: 'auto',
         enableTrueHd: 'disable'
     });
 
@@ -592,6 +592,67 @@ test('C5: unconfigured fallback slots (none or Default) are cleanly bypassed in 
 // ============================================================================
 // TrueHD Remux & DirectStream Tests
 // ============================================================================
+
+test('doesAudioTrackRequireDirectStream: webOS with DTS and TrueHD forced on plays a non-default track directly', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'enable'
+    }, {
+        dts: true,
+        truehd: true,
+        webosVersion: 4
+    });
+
+    const mediaSource = {
+        Id: 'forced-dts-truehd-source',
+        Container: 'mkv',
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), false, 'forced DTS track');
+    assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 3, 'webos'), false, 'AC3 track');
+});
+
+test('doesAudioTrackRequireDirectStream: webOS on Auto keeps the remux for a non-default DTS or TrueHD track', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'auto',
+        enableTrueHd: 'auto'
+    }, {
+        dts: false,
+        truehd: false,
+        webosVersion: 24
+    });
+
+    const mediaSource = {
+        Id: 'auto-dts-truehd-source',
+        Container: 'mkv',
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), true, 'DTS track');
+    assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 3, 'webos'), true, 'TrueHD track');
+});
+
+test('isAudioTrackNativelyPlayable: webOS 7.1 TrueHD is playable only when TrueHD is forced on', () => {
+    const webOS = { isTizen: false, isWebOS: true };
+    const caps = { truehd: false, maxAudioChannels: 6, webosVersion: 24 };
+    const track = { Index: 1, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true };
+    const mediaSource = { Container: 'mkv', MediaStreams: [track] };
+
+    const forced = setup({ enableTrueHd: 'enable' }, caps, {}, webOS);
+    assert.strictEqual(forced.isAudioTrackNativelyPlayable(track, mediaSource, 'webos'), true, 'forced TrueHD, 7.1');
+
+    const auto = setup({ enableTrueHd: 'auto' }, caps, {}, webOS);
+    assert.strictEqual(auto.isAudioTrackNativelyPlayable(track, mediaSource, 'webos'), false, 'auto TrueHD stays off');
+});
 
 test('doesAudioTrackRequireDirectStream: Single TrueHD track requires DirectStream remux on WebOS', () => {
     // WebOS devices do not decode TrueHD in internal web apps.
