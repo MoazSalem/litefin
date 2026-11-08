@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "主畫面每列最多顯示的項目數。",
     "HomeScreenCache": "Home Screen Caching",
     "HomeScreenCacheDescription": "Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.",
+    "HomeScreenSectionsDescription": "將伺服器外掛程式 Home Screen Sections 中設定的列加入主畫面。Litefin 已顯示的列（我的媒體、繼續觀看、即將播放、電視直播、最近新增）將會略過。可在 設定 → 首頁 中調整順序或隱藏這些列。",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "管理首頁區塊、精選主視覺輪播與每列內容數量上限。",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

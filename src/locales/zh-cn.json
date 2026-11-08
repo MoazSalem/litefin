@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "主屏幕上每行显示的最大项目数。",
     "HomeScreenCache": "主屏幕缓存",
     "HomeScreenCacheDescription": "在页面之间缓存主屏幕数据，以实现即时返回。如果您经常切换用户或服务器，请关闭此选项。",
+    "HomeScreenSectionsDescription": "将服务器插件 Home Screen Sections 中配置的行添加到主屏幕。Litefin 已显示的行（我的媒体、继续观看、接下来、电视直播、最近添加）将被跳过。可在 设置 → 首页 中调整顺序或隐藏这些行。",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "管理主页板块、焦点轮播图及内容行显示上限。",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

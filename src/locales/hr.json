@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maksimalni broj stavki prikazanih po retku na početnom zaslonu.",
     "HomeScreenCache": "Predmemoriranje početnog zaslona",
     "HomeScreenCacheDescription": "Predmemorirajte podatke početnog zaslona između stranica kako bi navigacija unatrag bila trenutna. Isključite ako često mijenjate korisnike ili poslužitelje.",
+    "HomeScreenSectionsDescription": "Dodaje na početni zaslon retke konfigurirane u dodatku poslužitelja Home Screen Sections. Retci koje Litefin već prikazuje (Moji mediji, Nastavi gledati, Slijedi, TV uživo, Nedavno dodano) se preskaču. Redoslijed i vidljivost redaka mijenjajte u Postavke → Početna.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Upravljajte odjeljcima početnog zaslona, istaknutim sadržajem i ograničenjima redova.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

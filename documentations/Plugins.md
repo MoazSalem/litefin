@@ -12,7 +12,7 @@ The plugin system is built around three main components:
 
 ## Bundled Plugins
 
-Litefin ships with 4 bundled plugins registered in `PluginManager.js`:
+Litefin ships with 5 bundled plugins registered in `PluginManager.js`:
 
 | Plugin ID         | Description                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------- |
@@ -20,6 +20,7 @@ Litefin ships with 4 bundled plugins registered in `PluginManager.js`:
 | `syncplay`        | Real-time synchronized group playback via WebSockets                                              |
 | `local-intros`    | Play custom local video files before media content                                                |
 | `mdblist-ratings` | Fetch and display IMDb, Rotten Tomatoes, Metacritic, Trakt, TMDB, and Letterboxd ratings on cards |
+| `home-screen-sections` | Add the rows configured in the Home Screen Sections server plugin to the Home screen |
 
 ## Creating a Plugin
 

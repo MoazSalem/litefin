@@ -1259,9 +1259,14 @@ class CardRenderer {
             subtitleText = parts.join(' · ');
         }
 
+        // Server-provided secondary line (e.g. Home Screen Sections "Upcoming" countdown)
+        if (item._subtitleOverride) {
+            subtitleText = item._subtitleOverride;
+        }
+
         // --- 3.4. Label Visibility Styles & Special Card Overrides ---
         const cardLabelStyle = prefs.cardLabelStyle || 'default';
-        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard) {
+        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard || item._hideCardLabels) {
             titleText = '';
             subtitleText = '';
         } else if (!options.showMeta) {
@@ -1562,7 +1567,11 @@ class CardRenderer {
          * - Outside overlays: Seerr request/type chips
          * ====================================================================
          */
+        // Rank badge for ordered rows (Home Screen Sections "Top Ten")
+        const rankBadgeHtml = item._rank ? `<div class="card-rank-badge">${parseInt(item._rank, 10)}</div>` : '';
+
         const badgeContainer = `
+            ${rankBadgeHtml}
             ${episodeBadgeHtml}
             ${unplayedCountBadgeHtml}
             ${qualityBadgeHtml}

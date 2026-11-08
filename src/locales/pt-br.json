@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Número máximo de itens exibidos por linha na tela inicial.",
     "HomeScreenCache": "Cache da tela inicial",
     "HomeScreenCacheDescription": "Armazena em cache os dados da tela inicial entre as páginas para tornar a navegação de retorno instantânea. Desative se você alterna frequentemente de usuário ou servidor.",
+    "HomeScreenSectionsDescription": "Adiciona à tela inicial as fileiras configuradas no plugin do servidor Home Screen Sections. Fileiras que o Litefin já mostra (Minha mídia, Continuar assistindo, A seguir, TV ao Vivo, Adicionados Recentemente) são ignoradas. Reordene ou oculte as fileiras em Configurações → Início.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Gerenciar seções da tela inicial, carrossel em destaque e limites de linhas de conteúdo.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

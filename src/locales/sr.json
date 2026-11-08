@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Максималан број ставки приказаних по реду на почетном екрану.",
     "HomeScreenCache": "Кеширање почетног екрана",
     "HomeScreenCacheDescription": "Кеширајте податке почетног екрана између страница како би навигација уназад била тренутна. Искључите ако често мењате кориснике или сервере.",
+    "HomeScreenSectionsDescription": "Додаје на почетни екран редове подешене у серверском додатку Home Screen Sections. Редови које Litefin већ приказује (Моји медији, Настави гледање, Следи, ТВ уживо, Недавно додато) се прескачу. Редослед и видљивост редова мењајте у Подешавања → Почетна.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Управљајте одељцима почетног екрана, истакнутим рингишпилом и границама редова садржаја.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

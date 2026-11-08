@@ -79,6 +79,15 @@ const KNOWN_PROBES = {
         dataEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`
     },
 
+    // Home Screen Sections: https://github.com/IAmParadox27/jellyfin-plugin-home-sections
+    // /HomeScreen/Meta only needs an authenticated user, so non-admins can probe
+    // it at startup without a media item.
+    'home-screen-sections': {
+        probeEndpoint: () => `/HomeScreen/Meta`,
+        noItemRequired: true,
+        dataEndpoint: () => `/HomeScreen/Sections`
+    },
+
     // Litefin Companion Server Plugin
     litefin: {
         probeEndpoint: () => `/Litefin/Hero?limit=1`,
@@ -301,6 +310,7 @@ class ServerPluginClient {
             'open-subtitles': ['open subtitles', 'opensubtitles'],
             'local-intros': ['local intros', 'localintros'],
             'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings'],
+            'home-screen-sections': ['home screen sections', 'homescreensections'],
             litefin: ['litefin']
         };
 
@@ -348,7 +358,7 @@ class ServerPluginClient {
         // Some probes need an item — if not provided, we can't probe yet.
         // Return deferred:true so PluginManager enables the plugin tentatively
         // and re-checks at playback time (when we have a real item).
-        if (!item) {
+        if (!item && !probe.noItemRequired) {
             log.debug(`Plugin '${pluginId}' probe requires an item — deferring until playback`);
             return { available: false, deferred: true, data: null };
         }

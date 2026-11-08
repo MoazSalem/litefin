@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Максимальна кількість елементів, що відображаються в рядку на головному екрані.",
     "HomeScreenCache": "Кешування головного екрана",
     "HomeScreenCacheDescription": "Кешувати дані головного екрана між сторінками для миттєвого повернення назад. Вимкніть, якщо ви часто змінюєте користувачів або сервери.",
+    "HomeScreenSectionsDescription": "Додає на головний екран рядки, налаштовані в серверному плагіні Home Screen Sections. Рядки, які Litefin уже показує (Мої медіафайли, Продовжити перегляд, Далі, Телеканали, Нещодавно додані), пропускаються. Порядок і видимість рядків змінюються в Налаштування → Головна.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Керуйте секціями головного екрана, каруселлю рекомендацій та лімітами рядків контенту.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

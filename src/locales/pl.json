@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maksymalna liczba elementów wyświetlanych w wierszu na ekranie głównym.",
     "HomeScreenCache": "Pamięć podręczna ekranu głównego",
     "HomeScreenCacheDescription": "Zapisuj dane ekranu głównego w pamięci podręcznej między stronami, aby powrót był natychmiastowy. Wyłącz, jeśli często zmieniasz użytkowników lub serwery.",
+    "HomeScreenSectionsDescription": "Dodaje do ekranu głównego wiersze skonfigurowane we wtyczce serwera Home Screen Sections. Wiersze, które Litefin już pokazuje (Moje multimedia, Kontynuuj odtwarzanie, Do obejrzenia, Telewizja, Ostatnio dodane), są pomijane. Kolejność i widoczność wierszy zmienisz w Ustawienia → Strona główna.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Zarządzaj sekcjami ekranu głównego, karuzelą polecanych i limitami wierszy zawartości.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

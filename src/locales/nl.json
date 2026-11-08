@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maximaal aantal items dat per rij op het startscherm wordt weergegeven.",
     "HomeScreenCache": "Caching van startscherm",
     "HomeScreenCacheDescription": "Sla gegevens van het startscherm op in het cachegeheugen tussen pagina's om terugnavigatie direct te maken. Schakel uit als u vaak van gebruiker of server wisselt.",
+    "HomeScreenSectionsDescription": "Voegt de rijen die in de serverplug-in Home Screen Sections zijn ingesteld toe aan het startscherm. Rijen die Litefin al toont (Mijn media, Verder kijken, Volgende, Live-tv, Onlangs toegevoegd) worden overgeslagen. Wijzig de volgorde of verberg rijen via Instellingen → Start.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Beheer startschermsecties, uitgelichte carrousel en inhoudsrijlimieten.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

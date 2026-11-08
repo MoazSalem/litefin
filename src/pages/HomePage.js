@@ -54,6 +54,9 @@ import HeroCarousel from '../ui/HeroCarousel.js';
 import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
 import { fireHomeRowPrefetch, consumeHomeRowPrefetch } from '../utils/HomeRowPrefetch.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+// -----------------------------------------------------------------------------
+// Recommendation Engine & Taste Profiling (Because You Watched / Similar)
+// -----------------------------------------------------------------------------
 import {
     createBecauseWatchedLoader,
     createSerialQueue,
@@ -70,6 +73,13 @@ import {
     TASTE_HEADER_KEYS,
     TASTE_TITLE_KEYS
 } from '../utils/TasteRecommendations.js';
+
+// -----------------------------------------------------------------------------
+// Home Screen Sections Server Plugin Integration
+// -----------------------------------------------------------------------------
+import { saveSectionList, isHomeScreenSectionsEnabled } from '../utils/HomeScreenSections.js';
+import { createAppHomeScreenSectionsProvider, isSeerrAvailable } from '../utils/HomeScreenSectionsRuntime.js';
+import { isHssPseudoId } from '../utils/HomeScreenSectionsMapper.js';
 
 const log = logger.create('HomePage');
 
@@ -157,6 +167,16 @@ class HomePage extends Page {
          * @type {Map<string, Object>}
          */
         this._rowRegistry = new Map();
+
+        /**
+         * Rows configured in the Home Screen Sections server plugin, loaded once
+         * per pipeline run (or restored from the page cache).
+         * @type {Array<Object>}
+         */
+        this._hssSections = [];
+
+        /** @type {Object|null} Lazily created Home Screen Sections provider */
+        this._hssProvider = null;
 
         /**
          * Count of rows that have been fully rendered (data loaded + DOM updated).
@@ -1173,6 +1193,12 @@ class HomePage extends Page {
             descriptors.splice(firstLatest < 0 ? descriptors.length : firstLatest, 0, ...recommendationDescriptors);
         }
 
+        // ── Priority 2: Home Screen Sections server plugin rows ──────────────
+        // Appended after the native rows; the layout editor can move or hide them.
+        if (isHomeScreenSectionsEnabled(storage) && this._hssSections.length > 0) {
+            descriptors.push(...this._getHssProvider().buildDescriptors(this._hssSections, homeRowLimit));
+        }
+
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
 
@@ -1449,6 +1475,7 @@ class HomePage extends Page {
             if (cache) {
                 log.info('Restoring homepage from cache');
                 this._restoreFromCache(cache);
+                this._hssSections = cache.hssSections || [];
 
                 // Re-initialize the hero carousel from cached items — no API call needed.
                 // The enableHero preference is re-checked so the user's current setting
@@ -1471,6 +1498,10 @@ class HomePage extends Page {
                 // promises via _consumePrefetch().
                 this._fireRowPrefetch();
 
+                // Home Screen Sections list loads in parallel with the Views request
+                // below; it resolves to [] on any failure and never rejects.
+                const hssPromise = this._loadHomeScreenSections();
+
                 // ─── Step 1: Load core dependencies ──────────────────────────────
                 // Libraries are shared across multiple descriptors.
                 // Check in-memory state cache first to avoid redundant network calls
@@ -1485,6 +1516,8 @@ class HomePage extends Page {
                         state.set('home:libraries', this._libraries);
                     }
                 }
+
+                this._hssSections = await hssPromise;
 
                 if (!this._isMounted) return;
 
@@ -2733,6 +2766,12 @@ class HomePage extends Page {
                 });
             }
 
+            // Home Screen Sections Discover / Upcoming cards are not library items
+            if (isHssPseudoId(card.dataset.itemId)) {
+                this._activateHssCard(card);
+                return;
+            }
+
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
@@ -2837,6 +2876,8 @@ class HomePage extends Page {
         // page — neither is directly playable, so let the Play key fall through.
         if (contextType === 'library') return;
         if (['Person', 'MusicArtist', 'Artist', 'AlbumArtist'].includes(type)) return;
+        // Home Screen Sections Discover / Upcoming cards have no playable item
+        if (isHssPseudoId(itemId)) return;
 
         // Persist focus for back-nav restoration, mirroring handleActivate().
         if (storage.getItem('pref:disableFocusRestore') !== 'true') {
@@ -3218,6 +3259,66 @@ class HomePage extends Page {
         if (!sectionEl) return null;
         const rowId = sectionEl.getAttribute('data-row-id');
         return this._rowRegistry.get(rowId) || null;
+    }
+
+    // =========================================================================
+    // Home Screen Sections (server plugin)
+    // =========================================================================
+
+    /**
+     * Returns the Home Screen Sections provider for this page instance.
+     * @returns {Object}
+     * @private
+     */
+    _getHssProvider() {
+        if (!this._hssProvider) {
+            this._hssProvider = createAppHomeScreenSectionsProvider();
+        }
+        return this._hssProvider;
+    }
+
+    /**
+     * Loads the Home Screen Sections list when the feature is enabled.
+     * Never rejects: any failure yields an empty list so Home renders as usual.
+     * @returns {Promise<Array<Object>>}
+     * @private
+     */
+    async _loadHomeScreenSections() {
+        if (!isHomeScreenSectionsEnabled(storage)) return [];
+        try {
+            const sections = await this._getHssProvider().loadSections();
+            saveSectionList(storage, sections);
+            return sections;
+        } catch (err) {
+            log.warn('Home Screen Sections unavailable', err);
+            return [];
+        }
+    }
+
+    /**
+     * Handles OK / click on a Home Screen Sections pseudo card. Discover cards
+     * open the Seerr details page when Seerr is still available; Upcoming cards
+     * are display-only. Neither case surfaces an error to the user.
+     * @param {HTMLElement} card
+     * @private
+     */
+    async _activateHssCard(card) {
+        try {
+            const entry = this._getRowEntryForCard(card);
+            const items = (entry && entry.virtualRow && entry.virtualRow.items) || [];
+            const item = items.find((i) => i && i.Id === card.dataset.itemId);
+            const link = item && item._hssSeerr;
+            if (!link) return;
+
+            if (!(await isSeerrAvailable())) {
+                log.info('Seerr is not available; ignoring Home Screen Sections Discover card');
+                return;
+            }
+            if (!this._isMounted) return;
+            router.navigate(`/seerr/${link.mediaType}/${link.tmdbId}`);
+        } catch (err) {
+            log.warn('Could not open Home Screen Sections card', err);
+        }
     }
 
     // =========================================================================
@@ -3819,6 +3920,12 @@ class HomePage extends Page {
             return null;
         }
 
+        // Invalidate when the Home Screen Sections plugin was switched on or off since caching
+        if (!!cache.hssEnabled !== isHomeScreenSectionsEnabled(storage)) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
         return cache;
     }
 
@@ -4061,6 +4168,8 @@ class HomePage extends Page {
             rows,
             rowTitles,
             heroItems,
+            hssSections: this._hssSections,
+            hssEnabled: isHomeScreenSectionsEnabled(storage),
             homeRowLimit,
             serverUrl: api._serverUrl,
             userId: api._userId,

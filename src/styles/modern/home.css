@@ -758,6 +758,7 @@ html[data-layout-media-rows="modern-posters"] .game-card-badge,
 html[data-layout-media-rows="expanding"] .game-card-badge,
 html[data-media-rows-family="modern"] .count-badge,
 html[data-media-rows-family="modern"] .episode-badge,
+html[data-media-rows-family="modern"] .card-rank-badge,
 html[data-media-rows-family="modern"] .quality-badge {
     position: absolute;
     top: 22px;
@@ -869,7 +870,10 @@ html[data-layout-media-rows="expanding"] .media-card:hover .media-source-count-b
 html[data-layout-media-rows="expanding"] .media-card:hover .favorite-badge,
 html[data-media-rows-family="modern"] .media-card:focus .count-badge,
 html[data-media-rows-family="modern"] .media-card:focus .played-badge,
-html[data-media-rows-family="modern"] .media-card:focus .episode-badge {
+html[data-media-rows-family="modern"] .media-card:focus .episode-badge,
+html[data-media-rows-family="modern"] .media-card:focus .card-rank-badge,
+html[data-media-rows-family="modern"] .media-card.focused .card-rank-badge,
+html[data-media-rows-family="modern"] .media-card:hover .card-rank-badge {
     transform: scale(1.05);
 }
 
@@ -1131,6 +1135,26 @@ html[data-media-rows-family="modern"] .episode-badge {
     padding: 5px 12px;
     border-radius: 10px;
     font-size: 1.2rem;
+    letter-spacing: 0.5px;
+}
+
+/* =========================================================================
+   Top Left: Rank Badge (Home Screen Sections "Top Ten")
+   =========================================================================
+   Mirrors the top-left coordinate positioning of episode badges in modern
+   media rows. Enhances visual prominence with enlarged geometry, curved
+   corners, and prominent numeric typography for ranked lists.
+   ========================================================================= */
+html[data-media-rows-family="modern"] .card-rank-badge {
+    left: 22px;
+    top: 22px;
+    min-width: 44px;
+    height: 44px;
+    line-height: 44px;
+    padding: 0 10px;
+    border-radius: 12px;
+    font-size: 1.5rem;
+    font-weight: 800;
     letter-spacing: 0.5px;
 }
 

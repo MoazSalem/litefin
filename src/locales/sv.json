@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maximalt antal objekt som visas per rad på startskärmen.",
     "HomeScreenCache": "Cachning av startskärmen",
     "HomeScreenCacheDescription": "Cacha startskärmsdata mellan sidor för att göra bakåtnavigering omedelbar. Stäng av om du ofta byter användare eller server.",
+    "HomeScreenSectionsDescription": "Lägger till raderna som är konfigurerade i servertillägget Home Screen Sections på startskärmen. Rader som Litefin redan visar (Min media, Fortsätt titta, Nästa på tur, Direktsänd TV, Nyligen tillaggda) hoppas över. Ändra ordning eller dölj rader under Inställningar → Hem.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Hantera hemskärmssektioner, framhävd karusell och innehållsradsgränser.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

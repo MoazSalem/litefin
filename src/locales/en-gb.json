@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maximum number of items displayed per row on the home screen.",
     "HomeScreenCache": "Disable Home Screen Caching",
     "HomeScreenCacheDescription": "Skip caching home screen data between pages. The home screen will reload from the server on every visit. Saves memory at the cost of slower back-navigation.",
+    "HomeScreenSectionsDescription": "Adds the rows configured in the Home Screen Sections server plugin to the Home screen. Rows that Litefin already shows (My Media, Continue Watching, Next Up, Live TV, Recently Added) are skipped. Reorder or hide the rows in Settings → Home.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Manage home screen sections, featured hero carousel, and content row limits.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

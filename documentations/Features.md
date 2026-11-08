@@ -145,6 +145,10 @@ The player includes 23 modular interactive overlays managed by `OSDController.js
     - Multi-source ratings badge rendering (IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, TMDB) across media cards and hero headers.
 - **Local Intros**:
     - Pre-roll cinema trailers and custom intro video sequences executed before main media playback.
+- **Home Screen Sections (`HomeScreenSections.js`)**:
+    - Bundled plugin (Settings → Plugins, off by default) that adds the rows configured in the [Home Screen Sections](https://github.com/IAmParadox27/jellyfin-plugin-home-sections) server plugin to the Home screen (Because You Watched, Genre, Top Ten, Watch Again, My List, Upcoming, Discover and more). Detected for non-admin users too.
+    - Sections Litefin already renders (My Media, Continue Watching, Next Up, Live TV, the per-library Recently Added rows) are skipped, while release-date "Latest" rows and Recently Added Artists are kept; the other rows can be reordered or hidden in the Home layout editor (Settings → Home).
+    - Top Ten rows show rank badges, Upcoming rows (Sonarr / Radarr / Lidarr / Readarr) show the release countdown, and Discover cards open the Seerr details page. Discover rows only appear when Seerr is available in Litefin.
 - **webOS Launch Deep Links (`LaunchTargetManager.js`)**:
     - Other apps can open a title by launching Litefin through `luna://com.webos.applicationManager/launch` with `{ "id": "org.litefin.app", "params": { "tmdbId": 603, "mediaType": "movie" } }` (`mediaType` is `movie` or `tv`; an optional `title` helps find the item on servers that ignore the TMDB id filter).
     - Opens the library item's details page when the library has that TMDB id, otherwise the Seerr details page to request it; works at launch and while Litefin runs, with Back leading to Home.

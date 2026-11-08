@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Numărul maxim de elemente afișate pe rând pe ecranul de start.",
     "HomeScreenCache": "Home Screen Caching",
     "HomeScreenCacheDescription": "Cache home screen data between pages to make back-navigation instant. Turn off if you frequently switch users or servers.",
+    "HomeScreenSectionsDescription": "Adaugă pe ecranul principal rândurile configurate în pluginul de server Home Screen Sections. Rândurile pe care Litefin le afișează deja (Fișierele mele Media, Vizionează în continuare, Urmează, TV în Direct, Adăugate recent) sunt omise. Reordonează sau ascunde rândurile în Setări → Acasă.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Gestionați secțiunile ecranului principal, caruselul de titluri și limitele rândurilor de conținut.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

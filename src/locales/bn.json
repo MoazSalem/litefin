@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "হোম স্ক্রিনে প্রতি সারিতে প্রদর্শিত আইটেমের সর্বাধিক সংখ্যা৷",
     "HomeScreenCache": "হোম স্ক্রীন ক্যাশিং",
     "HomeScreenCacheDescription": "পেজগুলোর মধ্যে হোম স্ক্রীনের ডেটা ক্যাশে করুন যাতে ব্যাক-নেভিগেশন তাৎক্ষণিক হয়। আপনি যদি ঘন ঘন ব্যবহারকারী বা সার্ভার পরিবর্তন করেন তবে এটি বন্ধ করুন।",
+    "HomeScreenSectionsDescription": "Home Screen Sections সার্ভার প্লাগইনে কনফিগার করা সারিগুলো হোম স্ক্রিনে যোগ করে। Litefin যে সারিগুলো আগে থেকেই দেখায় (আমার মিডিয়া, দেখতে থাকুন, পরবর্তী, লাইভ টিভি, সম্প্রতি যুক্ত) সেগুলো বাদ দেওয়া হয়। সেটিংস → হোম-এ সারিগুলোর ক্রম বদলান বা লুকান।",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "হোম স্ক্রিনের বিভাগ, বৈশিষ্ট্যযুক্ত হিরো ক্যারোজেল এবং কনটেন্ট সারির সীমা পরিচালনা করুন।",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",
