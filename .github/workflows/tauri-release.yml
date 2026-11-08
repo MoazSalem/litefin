@@ -55,8 +55,12 @@ jobs:
               Litefin_*_setup.exe
               Litefin_*.msi
 
+          # Linux compilation pinned strictly to Ubuntu 22.04 LTS (GLIBC 2.35).
+          # Building on ubuntu-latest (Ubuntu 24.04) introduces dynamic linkages
+          # against GLIBC 2.38 / 2.39, breaking portability on older LTS distributions
+          # and failing AppImage automated catalog validation tests.
           - name: Linux
-            os: ubuntu-latest
+            os: ubuntu-22.04
             script: npm run package:linux
             artifacts: |
               *.deb
