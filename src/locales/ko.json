@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "홈 화면에 행당 표시되는 최대 항목 수입니다.",
     "HomeScreenCache": "홈 화면 캐싱",
     "HomeScreenCacheDescription": "이전 페이지로의 이동을 즉각적으로 만들기 위해 페이지 간에 홈 화면 데이터를 캐싱합니다. 사용자나 서버를 자주 전환하는 경우 이 기능을 끄십시오.",
+    "HomeScreenSectionsDescription": "Home Screen Sections 서버 플러그인에 설정된 행을 홈 화면에 추가합니다. Litefin이 이미 표시하는 행(내 미디어, 계속 시청하기, 다음, 실시간 TV, 최근 추가됨)은 건너뜁니다. 설정 → 홈에서 행 순서를 바꾸거나 숨길 수 있습니다.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "홈 화면 섹션, 주요 히어로 회전 슬라이드 및 콘텐츠 행 제한을 관리합니다.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

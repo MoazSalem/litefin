@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Numero massimo di elementi visualizzati per riga nella schermata iniziale.",
     "HomeScreenCache": "Caching della schermata iniziale",
     "HomeScreenCacheDescription": "Memorizza nella cache i dati della schermata iniziale tra le pagine per rendere istantanea la navigazione a ritroso. Disattiva se cambi frequentemente utenti o server.",
+    "HomeScreenSectionsDescription": "Aggiunge alla schermata Home le righe configurate nel plugin del server Home Screen Sections. Le righe che Litefin mostra già (I miei media, Continua a guardare, Prossimo, Diretta TV, Aggiunti di Recente) vengono saltate. Riordina o nascondi le righe in Impostazioni → Home.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Gestisci le sezioni della schermata principale, il carosello in evidenza e i limiti delle righe di contenuto.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

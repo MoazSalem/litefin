@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "ホーム画面の 1 行あたりに表示されるアイテムの最大数。",
     "HomeScreenCache": "ホーム画面のキャッシュ",
     "HomeScreenCacheDescription": "戻るナビゲーションを瞬時に行うため、ページ間でホーム画面のデータをキャッシュします。ユーザーやサーバーを頻繁に切り替える場合はオフにしてください。",
+    "HomeScreenSectionsDescription": "サーバープラグイン Home Screen Sections で設定された行をホーム画面に追加します。Litefin がすでに表示している行（マイメディア、再生を続ける、まずは、ライブTV、最近追加された項目）はスキップされます。行の並べ替えや非表示は 設定 → ホーム で行えます。",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "ホーム画面のセクション、注目のヒーローカルーセル、表示行数の上限を設定します。",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

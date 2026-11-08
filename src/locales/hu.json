@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "A kezdőképernyő sorainként megjelenő elemek maximális száma.",
     "HomeScreenCache": "Kezdőképernyő gyorsítótárának kikapcsolása",
     "HomeScreenCacheDescription": "Nem gyorsítótárazza a kezdőképernyő adatait az oldalak között. A kezdőképernyő minden megnyitáskor újratöltődik a kiszolgálóról. Memóriát spórol, cserébe lassabb a visszalépés.",
+    "HomeScreenSectionsDescription": "Hozzáadja a kezdőlaphoz a Home Screen Sections szerverbővítményben beállított sorokat. A Litefin által már megjelenített sorok (Saját média, Megtekintés folytatása, Következik, Élő TV, Nemrég hozzáadva) kimaradnak. A sorok sorrendje és láthatósága a Beállítások → Kezdőlap menüben módosítható.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "A kezdőképernyő szakaszai, a kiemelt forgó és a sorok elemszáma.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

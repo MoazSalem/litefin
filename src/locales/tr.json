@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Ana ekranda satır başına görüntülenecek maksimum öge sayısı.",
     "HomeScreenCache": "Ana Ekran Önbelleğe Alma",
     "HomeScreenCacheDescription": "Geri gezinmeyi anında yapmak için ana ekran verilerini sayfalar arasında önbelleğe alın. Kullanıcıları veya sunucuları sık sık değiştiriyorsanız kapatın.",
+    "HomeScreenSectionsDescription": "Home Screen Sections sunucu eklentisinde yapılandırılan satırları ana ekrana ekler. Litefin'in zaten gösterdiği satırlar (Benim Medyam, İzlemeye Devam Et, Sıradaki Bölümler, Canlı TV, Son Eklenenler) atlanır. Satırların sırasını Ayarlar → Ana Ekran bölümünden değiştirebilir veya gizleyebilirsiniz.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Ana ekran bölümlerini, öne çıkan içerik döngüsünü ve içerik satırı sınırlarını yönetin.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

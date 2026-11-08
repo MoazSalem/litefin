@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Maximale Anzahl der pro Zeile auf dem Startbildschirm angezeigten Elemente.",
     "HomeScreenCache": "Startbildschirm-Caching",
     "HomeScreenCacheDescription": "Daten des Startbildschirms zwischen Seiten zwischenspeichern, um die Zurück-Navigation zu beschleunigen. Deaktivieren, wenn Sie häufig Benutzer oder Server wechseln.",
+    "HomeScreenSectionsDescription": "Fügt der Startseite die im Server-Plugin Home Screen Sections konfigurierten Reihen hinzu. Reihen, die Litefin bereits anzeigt (Meine Medien, Weiterschauen, Als Nächstes, Live-TV, Kürzlich hinzugefügt), werden übersprungen. Reihenfolge und Sichtbarkeit lassen sich unter Einstellungen → Startseite ändern.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Startbildschirm-Bereiche, Karussell und Inhalte-Reihen-Limits verwalten.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

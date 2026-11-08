@@ -20,6 +20,7 @@ import { state } from '../../../core/StateManager.js';
 import { logger } from '../../../utils/Logger.js';
 import { UP_SVG, DOWN_SVG, EYE_OFF, EYE_ON } from '../../../utils/Icons.js';
 import { CustomCollectionsModal, getCustomCollectionsLabel } from '../modals/CustomCollectionsModal.js';
+import { appendHomeScreenSectionsRows } from '../helpers/HomeScreenSectionsSettings.js';
 
 const log = logger.create('HomeTab');
 
@@ -196,6 +197,8 @@ export class HomeTab {
                     customList.forEach((c) => { if (c && c.id) descriptors.push({ id: `collection-${c.id}`, title: c.name || 'Collection' }); });
                 }
             } catch (_) {}
+
+            appendHomeScreenSectionsRows(descriptors);
 
             const layoutVars = homeLayoutManager.buildSettingsLayout(descriptors);
 

@@ -80,6 +80,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'mdblist-ratings',
         load: () => import('./installed/mdblist-ratings/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // Home Screen Sections — extra Home rows configured on the server
+    // Server dependency: home-screen-sections
+    // -------------------------------------------------------------------------
+    {
+        id: 'home-screen-sections',
+        load: () => import('./installed/home-screen-sections/index.js')
     }
 ];
 

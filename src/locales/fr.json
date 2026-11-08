@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Nombre maximum d'éléments affichés par ligne sur l'écran d'accueil.",
     "HomeScreenCache": "Mise en cache de l'écran d'accueil",
     "HomeScreenCacheDescription": "Mettre en cache les données de l'écran d'accueil entre les pages pour rendre la navigation retour instantanée. Désactivez cette option si vous changez fréquemment d'utilisateur ou de serveur.",
+    "HomeScreenSectionsDescription": "Ajoute à l'écran d'accueil les rangées configurées dans le plugin serveur Home Screen Sections. Les rangées que Litefin affiche déjà (Mes médias, Continuer de regarder, À suivre, TV en direct, Ajoutés récemment) sont ignorées. Réorganisez ou masquez les rangées dans Paramètres → Accueil.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Gérer les sections de l'écran d'accueil, le carrousel vedette et les limites de lignes de contenu.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

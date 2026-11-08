@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Максимален брой елементи в един ред на началния екран.",
     "HomeScreenCache": "Изключване на кеша на началния екран",
     "HomeScreenCacheDescription": "Данните на началния екран няма да се кешират между страниците. Началният екран ще се зарежда от сървъра при всяко отваряне. Пести памет за сметка на по-бавно връщане назад.",
+    "HomeScreenSectionsDescription": "Добавя редовете, конфигурирани в сървърния плъгин Home Screen Sections, към началния екран. Редовете, които Litefin вече показва (Моите медии, Продължи гледането, Следващи епизоди, ТВ на живо, Наскоро добавени), се пропускат. Подредете или скрийте редовете в Настройки → Начало.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Управлявай секциите на началния екран, карусела с акценти и броя елементи в редовете.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

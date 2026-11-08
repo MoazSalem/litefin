@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "الحد الأقصى لعدد العناصر في كل صف بالشاشة الرئيسية.",
     "HomeScreenCache": "تخزين الشاشة الرئيسية مؤقتًا",
     "HomeScreenCacheDescription": "تخزين بيانات الشاشة الرئيسية مؤقتًا بين الصفحات لجعل الرجوع فوريًا. أوقف تشغيله إذا كنت تقوم بتبديل المستخدمين أو الخوادم بشكل متكرر.",
+    "HomeScreenSectionsDescription": "يضيف الصفوف المُعدّة في إضافة الخادم Home Screen Sections إلى الشاشة الرئيسية. يتم تخطي الصفوف التي يعرضها Litefin بالفعل (مكتبتي، متابعة المشاهدة، التالي، البث التلفزيوني المباشر، أضيف حديثاً). يمكنك ترتيب الصفوف أو إخفاؤها من الإعدادات ← الصفحة الرئيسية.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "إدارة أقسام الشاشة الرئيسية، شريط العرض الرئيسي المميز، وحدود صفوف المحتوى.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

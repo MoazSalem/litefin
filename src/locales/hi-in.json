@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "होम स्क्रीन पर प्रति पंक्ति प्रदर्शित होने वाली अधिकतम आइटम संख्या।",
     "HomeScreenCache": "होम स्क्रीन कैशिंग",
     "HomeScreenCacheDescription": "वापस नेविगेट करने को त्वरित बनाने के लिए पेजों के बीच होम स्क्रीन डेटा को कैश करें। यदि आप अक्सर उपयोगकर्ताओं या सर्वरों को बदलते हैं तो इसे बंद कर दें।",
+    "HomeScreenSectionsDescription": "Home Screen Sections सर्वर प्लगइन में कॉन्फ़िगर की गई पंक्तियाँ होम स्क्रीन पर जोड़ता है। जो पंक्तियाँ Litefin पहले से दिखाता है (मेरा मीडिया, देखना जारी रखें, अगला एपिसोड, लाइव टीवी, हाल ही में जोड़ा गया), उन्हें छोड़ दिया जाता है। सेटिंग्स → होम में पंक्तियों का क्रम बदलें या उन्हें छिपाएँ।",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "होम स्क्रीन अनुभागों, चुनिंदा हीरो कैरोसेल और सामग्री पंक्ति सीमाओं को प्रबंधित करें।",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",

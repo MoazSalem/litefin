@@ -553,6 +553,8 @@
     "HomeRowsLimitDescription": "Số lượng mục tối đa được hiển thị trên mỗi hàng trên màn hình chính.",
     "HomeScreenCache": "Bộ nhớ đệm màn hình chính",
     "HomeScreenCacheDescription": "Lưu dữ liệu màn hình chính vào bộ nhớ đệm giữa các trang để quay lại ngay lập tức. Tắt đi nếu bạn thường xuyên chuyển đổi người dùng hoặc máy chủ.",
+    "HomeScreenSectionsDescription": "Thêm các hàng được cấu hình trong plugin máy chủ Home Screen Sections vào màn hình chính. Các hàng Litefin đã hiển thị (Phương Tiện Của Tôi, Xem Tiếp, Tiếp Theo, TV Trực Tiếp, Vừa thêm gần đây) sẽ được bỏ qua. Sắp xếp lại hoặc ẩn các hàng trong Cài đặt → Trang chủ.",
+    "HomeScreenSectionsRowTitle": "{0} (Home Screen Sections)",
     "HomeTabDescription": "Quản lý các phần trên màn hình chính, ảnh nổi bật và giới hạn hàng nội dung.",
     "HorizontalScrollMode": "Horizontal Scroll Animation",
     "HorizontalScrollModeDescription": "Choose how horizontal media row scrolling is animated (GPU Accelerated, Smooth, or Instant).",
