@@ -13,6 +13,8 @@ import { i18n } from '../../../utils/i18n.js';
 import { api } from '../../../api/index.js';
 import { focusManager } from '../../../ui/FocusManager.js';
 import { homeLayoutManager } from '../../../utils/HomeLayoutManager.js';
+import { BYW_ROW_ID_PREFIX, RECO_ROW_ID_PREFIX, clampRowCount } from '../../../utils/BecauseYouWatched.js';
+import { TASTE_KINDS, TASTE_PREF_KEYS, TASTE_HEADER_KEYS, TASTE_LABEL_KEYS } from '../../../utils/TasteRecommendations.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { pluginManager } from '../../../plugins/PluginManager.js';
 import { router } from '../../../core/Router.js';
@@ -41,6 +43,13 @@ export class HomeTab {
         const idAttr = id ? ` id="${id}"` : '';
         const styleAttr = show ? '' : ' style="display: none;"';
         return `<div class="setting-item"${idAttr}${styleAttr}><div class="setting-label"><span class="setting-name">${name}</span><span class="setting-description">${desc}</span></div><div class="setting-control">${control}</div></div>`;
+    }
+
+    _anyRecommendationEnabled() {
+        return (
+            storage.getItem('pref:becauseYouWatched') === 'true' ||
+            TASTE_KINDS.some((kind) => storage.getItem(TASTE_PREF_KEYS[kind]) === 'true')
+        );
     }
 
     _toggle(id, active) {
@@ -78,6 +87,13 @@ export class HomeTab {
         const rowsOpts = [8, 10, 12, 15, 20, 25, 30, 50, 100, 200].map((v) => ({
             value: v,
             label: (i18n.t('ItemCountValue', [v]) || `${v} items`) + (v === 12 ? ` (${i18n.t('Default') || 'Default'})` : '')
+        }));
+
+        const enableRecommendations = storage.getItem('pref:enableRecommendationRows') === 'true';
+        const bywEnabled = storage.getItem('pref:becauseYouWatched') === 'true';
+        const recoCountOpts = [1, 2, 3].map((v) => ({
+            value: v,
+            label: String(v) + (v === 1 ? ` (${i18n.t('Default') || 'Default'})` : '')
         }));
 
         const buildTrending = (colKey, nameKey) => {
@@ -128,6 +144,10 @@ export class HomeTab {
                 ${this._item(i18n.t('HomeInitialFocus') || 'Initial Focus', i18n.t('HomeInitialFocusDescription') || 'Choose whether the home page initially focuses the hero carousel or the first content row.', this._drop('home-initial-focus-select', initialFocusOpts, initialFocus), 'home-initial-focus-item', heroEnabled)}
                 ${this._item(i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit', i18n.t('HomeRowsLimitDescription') || 'Maximum items per row.', this._drop('home-rows-limit-select', rowsOpts, parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)))}
                 ${this._item(i18n.t('LabelMergeResumeNextUp'), i18n.t('LabelMergeResumeNextUpDescription'), this._toggle('toggle-merge-resume-nextup', storage.getItem('pref:mergeResumeNextUp') === 'true'))}
+                ${this._item(i18n.t('LabelEnableRecommendationRows') || i18n.t('EnableRecommendationRows') || 'Enable Recommendation Rows', i18n.t('LabelEnableRecommendationRowsDescription') || i18n.t('EnableRecommendationRowsDescription') || 'Display personalized recommendations based on viewing history and favorites.', this._toggle('toggle-enable-recommendations', enableRecommendations))}
+                ${this._item(i18n.t('LabelBecauseYouWatched'), i18n.t('LabelBecauseYouWatchedDescription'), this._toggle('toggle-because-you-watched', bywEnabled), 'recommendation-byw-item', enableRecommendations)}
+                ${TASTE_KINDS.map((kind) => this._item(i18n.t(TASTE_LABEL_KEYS[kind]), i18n.t(TASTE_LABEL_KEYS[kind] + 'Description'), this._toggle(`toggle-reco-${kind}`, storage.getItem(TASTE_PREF_KEYS[kind]) === 'true'), `recommendation-kind-${kind}-item`, enableRecommendations)).join('')}
+                ${this._item(i18n.t('LabelRecommendationRowCount'), i18n.t('LabelRecommendationRowCountDescription'), this._drop('recommendation-row-count-select', recoCountOpts, clampRowCount(storage.getItem('pref:recommendationRowCount'))), 'recommendation-row-count-item', enableRecommendations && this._anyRecommendationEnabled())}
                 ${this._item(i18n.t('EnableCollectionRows') || 'Enable Collection Rows in Home Screen', i18n.t('EnableCollectionRowsDescription') || 'Display custom collection and trending rows.', this._toggle('toggle-enable-collection-rows', enableRows))}
                 ${this._item(i18n.t('LabelTrendingMoviesCollection'), i18n.t('LabelTrendingMoviesCollectionDescription'), this._drop('trending-movies-collection-select', mTrend.opts, mTrend.val), 'trending-movies-collection-item', enableRows)}
                 ${this._item(i18n.t('LabelTrendingSeriesCollection'), i18n.t('LabelTrendingSeriesCollectionDescription'), this._drop('trending-series-collection-select', sTrend.opts, sTrend.val), 'trending-series-collection-item', enableRows)}
@@ -187,6 +207,18 @@ export class HomeTab {
             addTrending('pref:trendingMoviesCollection', 'pref:trendingMoviesCollectionName', 'HeaderTrendingMovies', 'trending');
             addTrending('pref:trendingSeriesCollection', 'pref:trendingSeriesCollectionName', 'HeaderTrendingSeries', 'trending-series');
             if (!mergeResumeNextUp) descriptors.push({ id: 'next-up', title: i18n.t('NextUp') });
+            // Only append recommendation rows if the master recommendation switch is enabled
+            if (storage.getItem('pref:enableRecommendationRows') === 'true') {
+                const recoCount = clampRowCount(storage.getItem('pref:recommendationRowCount'));
+                const recoTitle = (key, n) => (recoCount > 1 ? `${i18n.t(key)} (${n})` : i18n.t(key));
+                if (storage.getItem('pref:becauseYouWatched') === 'true') {
+                    for (let n = 1; n <= recoCount; n++) descriptors.push({ id: `${BYW_ROW_ID_PREFIX}${n}`, title: recoTitle('HeaderBecauseYouWatched', n) });
+                }
+                TASTE_KINDS.forEach((kind) => {
+                    if (storage.getItem(TASTE_PREF_KEYS[kind]) !== 'true') return;
+                    for (let n = 1; n <= recoCount; n++) descriptors.push({ id: `${RECO_ROW_ID_PREFIX}${kind}-${n}`, title: recoTitle(TASTE_HEADER_KEYS[kind], n) });
+                });
+            }
             views.forEach((lib) => descriptors.push({ id: `latest-${lib.Id}`, title: i18n.t('LatestFromLibrary', [lib.Name]) }));
 
             try {
@@ -307,6 +339,58 @@ export class HomeTab {
         bindToggle('#toggle-hero-carousel-blurhash-fill', 'pref:heroCarouselBlurhashFill');
         bindToggle('#toggle-indicator-animation', 'pref:heroCarouselIndicatorAnimation', true);
         bindToggle('#toggle-hero-carousel-mdb', 'pref:heroCarouselMdbList', true);
+        // --------------------------------------------------------------------
+        // Master Recommendation Rows Toggle:
+        // Controls visibility of individual recommendation row types and row count,
+        // and enables/disables recommendation processing on the Home screen.
+        // --------------------------------------------------------------------
+        const recoMasterBtn = rootEl.querySelector('#toggle-enable-recommendations');
+        const recoSubItemIds = [
+            '#recommendation-byw-item',
+            ...TASTE_KINDS.map((kind) => `#recommendation-kind-${kind}-item`)
+        ];
+        if (recoMasterBtn) {
+            recoMasterBtn.addEventListener('click', () => {
+                const nextVal = storage.getItem('pref:enableRecommendationRows') !== 'true';
+                storage.setItem('pref:enableRecommendationRows', nextVal.toString());
+                recoMasterBtn.classList.toggle('active', nextVal);
+
+                // If turning on with no sub-toggles currently active, default Because You Watched to on
+                if (nextVal && !this._anyRecommendationEnabled()) {
+                    storage.setItem('pref:becauseYouWatched', 'true');
+                    const bywBtn = rootEl.querySelector('#toggle-because-you-watched');
+                    if (bywBtn) bywBtn.classList.add('active');
+                }
+
+                // Synchronize visibility of child recommendation controls
+                recoSubItemIds.forEach((sel) => {
+                    const el = rootEl.querySelector(sel);
+                    if (el) el.style.display = nextVal ? '' : 'none';
+                });
+                const countItem = rootEl.querySelector('#recommendation-row-count-item');
+                if (countItem) {
+                    countItem.style.display = nextVal && this._anyRecommendationEnabled() ? '' : 'none';
+                }
+
+                this.setupHomeLayoutUI();
+                focusManager.invalidateCache('settings-content');
+                state.delete('home:pageCache');
+            });
+        }
+
+        // Every recommendation toggle reshapes the Home rows and decides whether the shared row count applies.
+        const onRecommendationToggle = () => {
+            const isMasterOn = storage.getItem('pref:enableRecommendationRows') === 'true';
+            const countItem = rootEl.querySelector('#recommendation-row-count-item');
+            if (countItem) countItem.style.display = isMasterOn && this._anyRecommendationEnabled() ? '' : 'none';
+            this.setupHomeLayoutUI();
+            focusManager.invalidateCache('settings-content');
+            state.delete('home:pageCache');
+        };
+        TASTE_KINDS.forEach((kind) => {
+            bindToggle(`#toggle-reco-${kind}`, TASTE_PREF_KEYS[kind], false, onRecommendationToggle);
+        });
+        bindToggle('#toggle-because-you-watched', 'pref:becauseYouWatched', false, onRecommendationToggle);
         bindToggle('#toggle-hero-carousel-ignore-watched', 'pref:heroCarouselIgnoreWatched');
 
         const mergeBtn = rootEl.querySelector('#toggle-merge-resume-nextup');
