@@ -18,9 +18,10 @@ import '../styles/profiles.css';
 
 import Page from './Page.js';
 import { auth } from '../api/index.js';
-import { api } from '../api/ApiClient.js';
+import { api, ServerUnreachableError } from '../api/ApiClient.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
+import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
@@ -122,7 +123,7 @@ class ProfilesPage extends Page {
         `;
     }
 
-    onMounted() {
+    async onMounted() {
         // Translate any i18n-tagged text nodes
         i18n.translateDOM(this.el);
 
@@ -135,7 +136,25 @@ class ProfilesPage extends Page {
         // Register focus sections for spatial navigation
         this._setupFocus();
 
-        // Signal app to hide the splash screen
+        /*
+         * If background session verification is running from cold boot optimistic restore,
+         * wait for it to settle before dropping the splash screen.
+         * If the Jellyfin server is offline, this completely prevents the Profiles page
+         * from flashing on screen for several seconds before transitioning to OfflinePage.
+         */
+        if (auth.isValidationPending && auth.isValidationPending()) {
+            try {
+                await auth.waitForValidation();
+            } catch (_) {}
+        }
+
+        // If the server was marked offline by the validation probe, abort splash removal here
+        // as the application is already actively transitioning directly to OfflinePage.
+        if (state.get('server:offline')) {
+            return;
+        }
+
+        // Signal app to hide the splash screen once verified online
         eventBus.emit('app:hideSplash');
         log.info('ProfilesPage mounted');
     }
@@ -369,6 +388,21 @@ class ProfilesPage extends Page {
         } catch (e) {
             log.error('Failed to switch user:', e);
             this._isSwitching = false;
+
+            // Evaluate if failure was due to server unreachability / network failure
+            const isUnreachable =
+                e instanceof ServerUnreachableError ||
+                e.isNetworkError ||
+                (e.message && e.message.toLowerCase().includes('fetch'));
+
+            if (isUnreachable) {
+                log.warn('Switch user failed due to server unreachability — navigating to OfflinePage');
+                state.set('server:connected', false);
+                state.set('server:offline', true);
+                state.set('offline:returnPath', '/profiles');
+                router.navigate('/offline?returnUrl=%2Fprofiles', { replace: true });
+                return;
+            }
 
             // Re-render — the expired session was already pruned by AuthManager,
             // so the grid will reflect the current (trimmed) sessions list.

@@ -15,6 +15,8 @@ import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { logger } from '../utils/Logger.js';
+import { pinManager } from '../utils/PinManager.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('OfflinePage');
 
@@ -67,9 +69,18 @@ class OfflinePage extends Page {
         // Translate static UI labels
         i18n.translateDOM(this.el);
 
-        // Start auto-retry interval
+        // Start auto-retry polling interval
         this._startAutoRetry();
 
+        // Listen for hardware / browser network interface coming back online
+        // Allows instant recovery without waiting for the 5-second polling tick
+        this._onNetworkOnline = () => {
+            log.info('Network online event detected on OfflinePage — triggering immediate auto-recovery');
+            this._retry();
+        };
+        window.addEventListener('online', this._onNetworkOnline);
+
+        // Hide boot splash screen if it was waiting for this view
         eventBus.emit('app:hideSplash');
         log.info('Offline page mounted');
     }
@@ -99,6 +110,12 @@ class OfflinePage extends Page {
     }
 
     destroy() {
+        // Remove network online listener
+        if (this._onNetworkOnline) {
+            window.removeEventListener('online', this._onNetworkOnline);
+            this._onNetworkOnline = null;
+        }
+
         this._stopAutoRetry();
         super.destroy();
     }
@@ -138,6 +155,7 @@ class OfflinePage extends Page {
             changeServerBtn.addEventListener('click', () => {
                 log.info('Navigating to login to change server');
                 state.set('server:offline', false); // Clear offline flag for a fresh start
+                state.set('offline:returnPath', null); // Wipe pending return route
                 // Explicitly clear the saved server URL and all associated users
                 auth.logoutAll();
             });
@@ -157,18 +175,78 @@ class OfflinePage extends Page {
         this._isRetrying = true;
 
         this.setLoading(true);
-        log.info('Retrying connection...');
+        log.info('Retrying connection to server...');
 
         try {
-            const restored = await auth.init();
-            if (restored) {
-                log.info('Retry successful, navigating to home');
-                router.navigate('/home', { replace: true });
-            } else {
-                log.warn('Retry failed, server still unreachable');
+            // 1. Verify that server endpoint is physically reachable and responding
+            const isOnline = await auth.checkServerStatus();
+
+            if (!isOnline) {
+                log.warn('Retry failed: server is still unreachable');
                 this.setLoading(false);
                 this._isRetrying = false;
+                return;
             }
+
+            log.info('Server is reachable! Re-authenticating session and restoring route...');
+
+            // Clear global server offline flags now that server response is confirmed
+            state.set('server:connected', true);
+            state.set('server:offline', false);
+
+            // 2. Restore active authentication session if saved server credentials exist
+            const hasSavedServer = Boolean(auth.getSavedServerUrl());
+            const hasSessions = auth.getSessions().length > 0;
+
+            if (hasSavedServer && hasSessions) {
+                const restored = await auth.init();
+                log.info('Session restore on retry result:', restored);
+
+                // If background token verification is running, wait for it to settle
+                if (auth.isValidationPending && auth.isValidationPending()) {
+                    await auth.waitForValidation();
+                }
+            }
+
+            // 3. Resolve target destination return path
+            let targetPath = this.params?.returnUrl || state.get('offline:returnPath');
+
+            if (targetPath) {
+                try {
+                    targetPath = decodeURIComponent(targetPath);
+                } catch (_) {}
+            }
+
+            // Sanitize target path: prevent redirect loops into /offline or invalid routes
+            if (
+                !targetPath ||
+                targetPath === '/offline' ||
+                targetPath.startsWith('/offline?') ||
+                targetPath.startsWith('/offline/')
+            ) {
+                const sessionCount = state.get('user:sessionCount', 0);
+                const activeUser = auth.getCurrentUser();
+                const activeHasPin = activeUser ? pinManager.hasPin(activeUser.Id) : false;
+                const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+
+                if (state.get('user:authenticated')) {
+                    if ((sessionCount > 1 && !rememberLastUser) || activeHasPin) {
+                        targetPath = '/profiles';
+                    } else {
+                        targetPath = '/home';
+                    }
+                } else {
+                    targetPath = '/login';
+                }
+            }
+
+            log.info(`Server back online! Navigating back to previous route: "${targetPath}"`);
+
+            // Clear the stored offline return path
+            state.set('offline:returnPath', null);
+
+            // Navigate back to the target route, cleanly replacing /offline in router history
+            router.navigate(targetPath, { replace: true });
         } catch (e) {
             log.error('Retry error', e);
             this.setLoading(false);

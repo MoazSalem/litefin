@@ -1719,10 +1719,11 @@ class HomePage extends Page {
 
             // Check for network/server-offline errors
             if (error.name === 'ServerUnreachableError' || error.isNetworkError) {
-                log.warn('Server unreachable. Redirecting to OfflinePage.');
+                log.warn('Server unreachable. Redirecting to OfflinePage with returnUrl set to /home.');
                 state.set('server:offline', true);
-                state.set('user:authenticated', false);
-                router.navigate('/offline', { replace: true });
+                state.set('server:connected', false);
+                state.set('offline:returnPath', '/home');
+                router.navigate('/offline?returnUrl=%2Fhome', { replace: true });
                 return;
             }
 

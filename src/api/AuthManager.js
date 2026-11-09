@@ -144,6 +144,11 @@ class AuthManager {
         // after the entry page's data is on the wire).
         this._splashHidden = false;
         this._pendingCapsAfterSplash = false;
+
+        // Track in-flight optimistic background token validation promise and state
+        this._isVerificationPending = false;
+        this._verificationPromise = null;
+
         eventBus.on('app:hideSplash', () => {
             this._splashHidden = true;
             if (this._pendingCapsAfterSplash) {
@@ -506,6 +511,34 @@ class AuthManager {
     }
 
     /**
+     * Check if background token validation is currently in flight.
+     * Used by boot screens (like ProfilesPage) to avoid dropping the splash
+     * screen prematurely while reachability is still undetermined.
+     *
+     * @returns {boolean} True if background token validation is actively running
+     */
+    isValidationPending() {
+        return Boolean(this._isVerificationPending);
+    }
+
+    /**
+     * Await completion of the background token validation probe.
+     * Safe to invoke at any point: resolves immediately if no validation is pending.
+     *
+     * @returns {Promise<boolean>} True if session validated, false if rejected or unreachable
+     */
+    async waitForValidation() {
+        if (this._verificationPromise) {
+            try {
+                return await this._verificationPromise;
+            } catch (_) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Background token verification for an optimistically restored session
      * (non-WOL path). Runs entirely off the boot critical path:
      *   • success: refreshes the stored session + user:data with the
@@ -521,35 +554,63 @@ class AuthManager {
      * @private
      */
     _verifyRestoredSession(session) {
-        api.getCurrentUser({ timeout: 8000 })
+        // Mark validation in-flight so UI coordinators can track readiness
+        this._isVerificationPending = true;
+
+        // Use a 3.5s timeout: fast enough to detect a dead/unreachable host quickly
+        // while still giving remote reverse proxies sufficient handshake latency.
+        this._verificationPromise = api
+            .getCurrentUser({ timeout: 3500 })
             .then((user) => {
                 log.info('Background token validation succeeded:', user?.Name);
+
+                // Commit updated user details to persistent storage
                 this._saveSession({
                     userId: user.Id,
                     accessToken: session.accessToken,
                     userName: user.Name || '',
                     primaryImageTag: user.PrimaryImageTag || null
                 });
+
+                // Update authoritative user and server state
                 state.set('user:data', user);
+                state.set('server:connected', true);
+                state.set('server:offline', false);
                 state.set('user:sessionCount', this._loadSessions().length);
+
+                // Notify interested subsystems of verified credentials
                 eventBus.emit('auth:verified');
+                return true;
             })
             .catch((error) => {
+                // Handle token invalidation vs unreachability
                 if (error.status === 401 || error.status === 403) {
                     log.warn('Optimistically restored session was rejected — pruning session.');
                     this._onUnauthorized();
+                    return false;
                 } else if (this._isUnreachableError(error)) {
                     log.warn('Server unreachable during background session validation.');
                     state.set('server:connected', false);
                     state.set('server:offline', true);
+
+                    // Signal global offline routing
                     eventBus.emit('auth:server-unreachable');
+                    return false;
                 } else {
                     log.warn(
                         `Unexpected background validation error (status ${error.status ?? '??'}) — preserving session.`,
                         error
                     );
+                    return true;
                 }
+            })
+            .finally(() => {
+                // Clear in-flight markers once settled
+                this._isVerificationPending = false;
+                this._verificationPromise = null;
             });
+
+        return this._verificationPromise;
     }
 
     /**
