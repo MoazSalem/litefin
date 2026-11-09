@@ -1,10 +1,11 @@
 /*
  * ============================================================================
- * Performance Diagnostic Overlay Stylesheet
+ * Performance Diagnostic Overlay Stylesheet (Ultra-Lightweight / TV-Tuned)
  * ============================================================================
- * High-density performance monitoring HUD and compact pill overlay.
- * Uses translucent backdrop filters, crisp borders, and physics-driven spring
- * animations for desktop, tablet, and mobile displays.
+ * High-efficiency diagnostic HUD and compact pill overlay.
+ * Specifically tuned for low-power Smart TV chipsets and constrained webviews.
+ * Completely avoids expensive CSS backdrop-filter blurs, box-shadows, and
+ * continuous @keyframes repaint loops to ensure zero compositing penalty.
  * ============================================================================
  */
 
@@ -17,11 +18,7 @@
     color: #f5f5f7;
     user-select: none;
     -webkit-user-select: none;
-    /* Spring physics transition for smooth position and scale morphing */
-    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity 0.25s ease-out,
-                box-shadow 0.25s ease;
-    will-change: transform, opacity;
+    pointer-events: none;
 }
 
 /* Positioning anchors */
@@ -45,25 +42,21 @@
     left: 20px;
 }
 
-/* Custom dragged position flag */
-#performance-diagnostic-overlay[data-dragged="true"] {
-    transition: none; /* Disable transitions during live drag operations */
-}
-
 /* -------------------------------------------------------------------------- */
 /* FULL HUD PANEL MODE                                                        */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Flat, high-contrast opaque container.
+ * Uses solid dark fill instead of backdrop blur filters to guarantee instant
+ * layer compositing on Tizen, webOS, and low-end hardware.
+ */
 .perf-hud-panel {
     width: 380px;
     max-width: calc(100vw - 32px);
-    background: rgba(18, 18, 24, 0.82);
-    -webkit-backdrop-filter: blur(28px) saturate(190%);
-    backdrop-filter: blur(28px) saturate(190%);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 18px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55),
-                0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    background: #111116;
+    border: 1px solid #2e2e38;
+    border-radius: 10px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -73,7 +66,7 @@
 /* Transparent click-through modifier for live UI testing under HUD */
 #performance-diagnostic-overlay.perf-clickthrough .perf-hud-panel {
     pointer-events: none;
-    opacity: 0.72;
+    opacity: 0.65;
 }
 
 #performance-diagnostic-overlay.perf-clickthrough .perf-hud-header {
@@ -86,8 +79,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #181820;
+    border-bottom: 1px solid #262630;
     cursor: grab;
     user-select: none;
 }
@@ -103,24 +96,12 @@
     gap: 8px;
 }
 
+/* Static flat status indicator dot (zero @keyframes animation loops) */
 .perf-status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background-color: #30d158;
-    box-shadow: 0 0 8px rgba(48, 209, 88, 0.8);
-    animation: perf-pulse 2s infinite ease-in-out;
-}
-
-@keyframes perf-pulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 0.9;
-    }
-    50% {
-        transform: scale(1.25);
-        opacity: 0.45;
-    }
 }
 
 .perf-hud-title {
@@ -134,10 +115,10 @@
     font-size: 10px;
     font-weight: 700;
     padding: 2px 6px;
-    border-radius: 6px;
-    background: rgba(10, 132, 255, 0.2);
+    border-radius: 4px;
+    background: #152840;
     color: #5ac8fa;
-    border: 1px solid rgba(10, 132, 255, 0.35);
+    border: 1px solid #1e4270;
     letter-spacing: 0.02em;
 }
 
@@ -149,33 +130,32 @@
 }
 
 .perf-btn-icon {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #20202a;
+    border: 1px solid #323240;
     color: #e5e5ea;
     width: 26px;
     height: 26px;
-    border-radius: 7px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .perf-btn-icon:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: #2a2a38;
     color: #ffffff;
 }
 
 .perf-btn-icon:active {
-    transform: scale(0.92);
+    background: #323244;
 }
 
 .perf-btn-icon.active {
-    background: rgba(10, 132, 255, 0.3);
-    border-color: #0a84ff;
-    color: #5ac8fa;
+    background: #1a365d;
+    border-color: #2b6cb0;
+    color: #63b3ed;
 }
 
 .perf-btn-icon svg {
@@ -189,32 +169,31 @@
     display: flex;
     padding: 8px 12px 4px 12px;
     gap: 6px;
-    background: transparent;
+    background: #111116;
 }
 
 .perf-tab-btn {
     flex: 1;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid transparent;
-    border-radius: 8px;
+    background: #181820;
+    border: 1px solid #262630;
+    border-radius: 6px;
     color: #8e8e93;
     font-size: 11px;
     font-weight: 500;
     padding: 6px 4px;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     text-align: center;
 }
 
 .perf-tab-btn:hover {
     color: #d1d1d6;
-    background: rgba(255, 255, 255, 0.08);
+    background: #20202a;
 }
 
 .perf-tab-btn.active {
     color: #ffffff;
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.14);
+    background: #242432;
+    border-color: #3b3b4e;
     font-weight: 600;
 }
 
@@ -223,12 +202,12 @@
     padding: 10px 14px 14px 14px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     max-height: 480px;
     overflow-y: auto;
 }
 
-/* Custom discreet scrollbar for HUD */
+/* Discreet scrollbar */
 .perf-hud-body::-webkit-scrollbar {
     width: 4px;
 }
@@ -238,7 +217,7 @@
 }
 
 .perf-hud-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: #323240;
     border-radius: 4px;
 }
 
@@ -247,9 +226,9 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    background: rgba(0, 0, 0, 0.28);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
     padding: 10px 14px;
 }
 
@@ -302,9 +281,9 @@
 }
 
 .perf-stat-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 10px;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
     padding: 8px 6px;
     text-align: center;
     display: flex;
@@ -346,9 +325,9 @@
 
 /* Canvas performance graph container */
 .perf-graph-container {
-    background: rgba(0, 0, 0, 0.42);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    background: #0d0d12;
+    border: 1px solid #22222a;
+    border-radius: 8px;
     padding: 8px 10px 6px 10px;
     display: flex;
     flex-direction: column;
@@ -377,9 +356,9 @@
 }
 
 .perf-vital-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -414,33 +393,33 @@
     font-size: 9px;
     font-weight: 700;
     padding: 2px 7px;
-    border-radius: 5px;
+    border-radius: 4px;
     letter-spacing: 0.04em;
     text-transform: uppercase;
 }
 
 .perf-badge-good {
-    background: rgba(48, 209, 88, 0.2);
+    background: #102d18;
     color: #30d158;
-    border: 1px solid rgba(48, 209, 88, 0.35);
+    border: 1px solid #1a522a;
 }
 
 .perf-badge-warn {
-    background: rgba(255, 214, 10, 0.2);
+    background: #332800;
     color: #ffd60a;
-    border: 1px solid rgba(255, 214, 10, 0.35);
+    border: 1px solid #665000;
 }
 
 .perf-badge-poor {
-    background: rgba(255, 69, 58, 0.2);
+    background: #330d0a;
     color: #ff453a;
-    border: 1px solid rgba(255, 69, 58, 0.35);
+    border: 1px solid #661a14;
 }
 
 .perf-badge-waiting {
-    background: rgba(255, 255, 255, 0.1);
+    background: #1f1f26;
     color: #8e8e93;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid #30303a;
 }
 
 .perf-vital-metric-row {
@@ -463,8 +442,9 @@
 }
 
 .perf-vital-element-box {
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 6px;
+    background: #0d0d12;
+    border: 1px solid #22222a;
+    border-radius: 4px;
     padding: 4px 7px;
     font-size: 10px;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -486,9 +466,9 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
 }
 
 .perf-system-label {
@@ -508,16 +488,16 @@
 .perf-memory-bar-track {
     width: 100%;
     height: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
+    background: #242430;
+    border-radius: 4px;
     overflow: hidden;
     margin-top: 5px;
 }
 
 .perf-memory-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #30d158 0%, #0a84ff 100%);
-    border-radius: 999px;
+    background: #30d158;
+    border-radius: 4px;
     transition: width 0.3s ease;
 }
 
@@ -525,34 +505,28 @@
 /* COMPACT PILL MODE                                                          */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Flat, solid floating badge.
+ * Zero box-shadow and zero backdrop blur to eliminate compositing overhead.
+ */
 .perf-pill {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 14px;
-    background: rgba(20, 20, 26, 0.88);
-    -webkit-backdrop-filter: blur(24px) saturate(190%);
-    backdrop-filter: blur(24px) saturate(190%);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 6px 14px;
+    background: #14141a;
+    border: 1px solid #323240;
     border-radius: 9999px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(255, 255, 255, 0.08) inset;
     cursor: grab;
     pointer-events: auto;
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-                box-shadow 0.2s ease,
-                background 0.2s ease;
 }
 
 .perf-pill:hover {
-    background: rgba(28, 28, 36, 0.95);
-    transform: scale(1.03);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    background: #1c1c24;
 }
 
 .perf-pill:active {
     cursor: grabbing;
-    transform: scale(0.97);
 }
 
 .perf-pill-item {
@@ -578,7 +552,7 @@
 .perf-pill-divider {
     width: 1px;
     height: 12px;
-    background: rgba(255, 255, 255, 0.15);
+    background: #323240;
 }
 
 .perf-pill-expand-btn {
@@ -591,7 +565,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.15s ease;
 }
 
 .perf-pill-expand-btn:hover {

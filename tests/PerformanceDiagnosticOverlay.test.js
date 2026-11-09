@@ -98,6 +98,7 @@ function createMockElement(tagName = 'div') {
             lineTo: () => {},
             stroke: () => {},
             fill: () => {},
+            fillRect: () => {},
             arc: () => {},
             closePath: () => {},
             setLineDash: () => {},

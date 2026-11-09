@@ -1067,19 +1067,11 @@ export class PerformanceDiagnosticOverlay {
                 ctx.lineTo(x, y);
             }
 
-            // Create translucent vertical gradient fill underneath the curve
-            const gradient = ctx.createLinearGradient(0, 0, 0, h);
-            gradient.addColorStop(0, 'rgba(48, 209, 88, 0.35)');
-            gradient.addColorStop(1, 'rgba(48, 209, 88, 0.0)');
-
-            // Fill area
-            ctx.lineTo(w, h);
-            ctx.lineTo(startOffset, h);
-            ctx.closePath();
-            ctx.fillStyle = gradient;
-            ctx.fill();
-
-            // Stroke the frame curve
+            /*
+             * Render single-pass frame duration curve.
+             * Omits heavy canvas gradient fills and multi-pass alpha blits
+             * to keep GPU compositing overhead negligible on Smart TV hardware.
+             */
             ctx.beginPath();
             ctx.moveTo(prevX, prevY);
             for (let i = 1; i < samples.length; i++) {
@@ -1093,15 +1085,13 @@ export class PerformanceDiagnosticOverlay {
             ctx.strokeStyle = '#30d158';
             ctx.stroke();
 
-            // Highlight any jank frame spike above 30ms with warning dots
+            // Highlight dropped frames and jank spikes with flat pixel markers
             ctx.fillStyle = '#ff453a';
             for (let i = 0; i < samples.length; i++) {
                 if (samples[i] > 30) {
                     const x = startOffset + i * step;
                     const y = h - (Math.min(maxTimeMs, samples[i]) / maxTimeMs) * h;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
                 }
             }
         }
@@ -1180,15 +1170,13 @@ export class PerformanceDiagnosticOverlay {
         }
 
         if (pillDot) {
+            // Flat status indicator color without compositing box shadows
             if (this._currentFps < 30) {
                 pillDot.style.backgroundColor = '#ff453a';
-                pillDot.style.boxShadow = '0 0 8px rgba(255, 69, 58, 0.8)';
             } else if (this._currentFps < 50) {
                 pillDot.style.backgroundColor = '#ffd60a';
-                pillDot.style.boxShadow = '0 0 8px rgba(255, 214, 10, 0.8)';
             } else {
                 pillDot.style.backgroundColor = '#30d158';
-                pillDot.style.boxShadow = '0 0 8px rgba(48, 209, 88, 0.8)';
             }
         }
 
