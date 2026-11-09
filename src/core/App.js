@@ -941,6 +941,7 @@ import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
+import { scheduleDeferredPerformanceOverlay } from '../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
@@ -1045,6 +1046,14 @@ class App {
         const DEBUG_POSITION = storage.getItem('debug_position') || 'bottom-right';
 
         debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
+
+        /*
+         * Performance Diagnostic HUD initialization.
+         * Only evaluates and downloads if explicitly enabled in user settings.
+         * Defers loading to idle callback so critical startup, DOM hydration,
+         * and initial LCP metrics remain completely unperturbed.
+         */
+        scheduleDeferredPerformanceOverlay();
 
         // Calculate early-boot telemetry
         // Measures time from HTML <head> parse and browser navigationStart

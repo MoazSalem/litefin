@@ -1,0 +1,630 @@
+/*
+ * ============================================================================
+ * Performance Diagnostic Overlay Stylesheet
+ * ============================================================================
+ * High-density performance monitoring HUD and compact pill overlay.
+ * Uses translucent backdrop filters, crisp borders, and physics-driven spring
+ * animations for desktop, tablet, and mobile displays.
+ * ============================================================================
+ */
+
+/* Root overlay container anchored in viewport */
+#performance-diagnostic-overlay {
+    position: fixed;
+    z-index: 100000;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #f5f5f7;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Spring physics transition for smooth position and scale morphing */
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.25s ease-out,
+                box-shadow 0.25s ease;
+    will-change: transform, opacity;
+}
+
+/* Positioning anchors */
+#performance-diagnostic-overlay[data-position="top-right"] {
+    top: 20px;
+    right: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="top-left"] {
+    top: 20px;
+    left: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="bottom-right"] {
+    bottom: 20px;
+    right: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="bottom-left"] {
+    bottom: 20px;
+    left: 20px;
+}
+
+/* Custom dragged position flag */
+#performance-diagnostic-overlay[data-dragged="true"] {
+    transition: none; /* Disable transitions during live drag operations */
+}
+
+/* -------------------------------------------------------------------------- */
+/* FULL HUD PANEL MODE                                                        */
+/* -------------------------------------------------------------------------- */
+
+.perf-hud-panel {
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    background: rgba(18, 18, 24, 0.82);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55),
+                0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+/* Transparent click-through modifier for live UI testing under HUD */
+#performance-diagnostic-overlay.perf-clickthrough .perf-hud-panel {
+    pointer-events: none;
+    opacity: 0.72;
+}
+
+#performance-diagnostic-overlay.perf-clickthrough .perf-hud-header {
+    pointer-events: auto; /* Allow header interaction to disable clickthrough */
+}
+
+/* Header toolbar */
+.perf-hud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: grab;
+    user-select: none;
+}
+
+.perf-hud-header:active {
+    cursor: grabbing;
+}
+
+/* Title and live status indicator */
+.perf-hud-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.perf-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #30d158;
+    box-shadow: 0 0 8px rgba(48, 209, 88, 0.8);
+    animation: perf-pulse 2s infinite ease-in-out;
+}
+
+@keyframes perf-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        transform: scale(1.25);
+        opacity: 0.45;
+    }
+}
+
+.perf-hud-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+}
+
+.perf-badge-target-hz {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(10, 132, 255, 0.2);
+    color: #5ac8fa;
+    border: 1px solid rgba(10, 132, 255, 0.35);
+    letter-spacing: 0.02em;
+}
+
+/* Header control buttons */
+.perf-hud-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.perf-btn-icon {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e5e5ea;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.perf-btn-icon:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.perf-btn-icon:active {
+    transform: scale(0.92);
+}
+
+.perf-btn-icon.active {
+    background: rgba(10, 132, 255, 0.3);
+    border-color: #0a84ff;
+    color: #5ac8fa;
+}
+
+.perf-btn-icon svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+/* Navigation tabs inside HUD */
+.perf-hud-nav {
+    display: flex;
+    padding: 8px 12px 4px 12px;
+    gap: 6px;
+    background: transparent;
+}
+
+.perf-tab-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #8e8e93;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 4px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: center;
+}
+
+.perf-tab-btn:hover {
+    color: #d1d1d6;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.perf-tab-btn.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.14);
+    font-weight: 600;
+}
+
+/* Scrollable metrics viewport */
+.perf-hud-body {
+    padding: 10px 14px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* Custom discreet scrollbar for HUD */
+.perf-hud-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.perf-hud-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.perf-hud-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+/* Hero primary readout section */
+.perf-hero-section {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+.perf-hero-fps-box {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.perf-hero-fps-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: #30d158;
+}
+
+.perf-hero-fps-unit {
+    font-size: 13px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.perf-hero-frametime {
+    text-align: right;
+}
+
+.perf-hero-frametime-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: #f5f5f7;
+}
+
+.perf-hero-frametime-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #8e8e93;
+    text-transform: uppercase;
+}
+
+/* Frame rate statistics 4-column metric card grid */
+.perf-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.perf-stat-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    padding: 8px 6px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.perf-stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #8e8e93;
+}
+
+.perf-stat-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+/* Status colors */
+.perf-val-good {
+    color: #30d158 !important;
+}
+
+.perf-val-warn {
+    color: #ffd60a !important;
+}
+
+.perf-val-poor {
+    color: #ff453a !important;
+}
+
+.perf-val-info {
+    color: #5ac8fa !important;
+}
+
+/* Canvas performance graph container */
+.perf-graph-container {
+    background: rgba(0, 0, 0, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 8px 10px 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.perf-graph-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 600;
+    color: #8e8e93;
+}
+
+.perf-graph-canvas {
+    width: 100%;
+    height: 72px;
+    display: block;
+}
+
+/* Web Vitals cards list */
+.perf-vitals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perf-vital-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.perf-vital-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.perf-vital-name-group {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.perf-vital-acronym {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.perf-vital-title {
+    font-size: 11px;
+    color: #8e8e93;
+}
+
+.perf-vital-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.perf-badge-good {
+    background: rgba(48, 209, 88, 0.2);
+    color: #30d158;
+    border: 1px solid rgba(48, 209, 88, 0.35);
+}
+
+.perf-badge-warn {
+    background: rgba(255, 214, 10, 0.2);
+    color: #ffd60a;
+    border: 1px solid rgba(255, 214, 10, 0.35);
+}
+
+.perf-badge-poor {
+    background: rgba(255, 69, 58, 0.2);
+    color: #ff453a;
+    border: 1px solid rgba(255, 69, 58, 0.35);
+}
+
+.perf-badge-waiting {
+    background: rgba(255, 255, 255, 0.1);
+    color: #8e8e93;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.perf-vital-metric-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.perf-vital-value {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
+
+.perf-vital-target {
+    font-size: 10px;
+    color: #636366;
+}
+
+.perf-vital-element-box {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: #aeaeb2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* System & Runtime metrics tab layout */
+.perf-system-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perf-system-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+}
+
+.perf-system-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #8e8e93;
+}
+
+.perf-system-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #f5f5f7;
+}
+
+/* Memory progress bar */
+.perf-memory-bar-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.perf-memory-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #30d158 0%, #0a84ff 100%);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+/* -------------------------------------------------------------------------- */
+/* COMPACT PILL MODE                                                          */
+/* -------------------------------------------------------------------------- */
+
+.perf-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    background: rgba(20, 20, 26, 0.88);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 9999px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    cursor: grab;
+    pointer-events: auto;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s ease,
+                background 0.2s ease;
+}
+
+.perf-pill:hover {
+    background: rgba(28, 28, 36, 0.95);
+    transform: scale(1.03);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.perf-pill:active {
+    cursor: grabbing;
+    transform: scale(0.97);
+}
+
+.perf-pill-item {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.perf-pill-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.perf-pill-unit {
+    font-size: 10px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+}
+
+.perf-pill-divider {
+    width: 1px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.perf-pill-expand-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    color: #8e8e93;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.perf-pill-expand-btn:hover {
+    color: #ffffff;
+}
+
+.perf-pill-expand-btn svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
+/* -------------------------------------------------------------------------- */
+/* RESPONSIVE ADAPTATIONS                                                     */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+    #performance-diagnostic-overlay[data-position="top-right"],
+    #performance-diagnostic-overlay[data-position="top-left"] {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    #performance-diagnostic-overlay[data-position="bottom-right"],
+    #performance-diagnostic-overlay[data-position="bottom-left"] {
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .perf-hud-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+}

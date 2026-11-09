@@ -9,6 +9,7 @@
  */
 
 import { storage } from '../../../utils/StorageService.js';
+import { isPerformanceOverlayEnabled, togglePerformanceOverlay } from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { platformInfo } from '../../../utils/PlatformInfo.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { PlayerSettings } from '../../../utils/PlayerSettings.js';
@@ -259,6 +260,17 @@ export class PerformanceTab {
                     <div class="setting-label"><span class="setting-name" data-i18n="LabelDisableLibraryCache">${i18n.t('LabelDisableLibraryCache') || 'Disable Library Cache'}</span><span class="setting-description" data-i18n="LabelDisableLibraryCacheDescription">${i18n.t('LabelDisableLibraryCacheDescription') || 'Skip caching library content between page visits.'}</span></div>
                     <div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:disableLibraryCache') === 'true' ? 'active' : ''}" id="toggle-disable-library-cache" tabindex="0"></button></div>
                 </div>
+
+                <!-- Performance Diagnostic HUD Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceDiagnostics">${i18n.t('PerformanceDiagnostics') || 'Diagnostics & Profiling'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowPerformanceOverlay">${i18n.t('ShowPerformanceOverlay') || 'Performance Diagnostics HUD'}</span>
+                        <span class="setting-description" data-i18n="ShowPerformanceOverlayDescription">${i18n.t('ShowPerformanceOverlayDescription') || 'Display on-screen real-time frame rate, frame time graph, Core Web Vitals (LCP, FCP, CLS), and memory metrics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${isPerformanceOverlayEnabled() ? 'active' : ''}" id="toggle-perf-overlay-tab" tabindex="0"></button></div>
+                </div>
             </div>
         `;
     }
@@ -435,6 +447,20 @@ export class PerformanceTab {
                 storage.setItem('pref:disableLibraryCache', String(nextState));
                 disableLibCacheToggle.classList.toggle('active', nextState);
                 log.info(`Disable library cache set to: ${nextState}`);
+            });
+        }
+
+        /*
+         * Toggle Performance Diagnostic HUD.
+         * Activates real-time frame telemetry and Core Web Vitals profiling.
+         */
+        const perfOverlayToggle = root.querySelector('#toggle-perf-overlay-tab');
+        if (perfOverlayToggle) {
+            this._addListener(perfOverlayToggle, 'click', async () => {
+                const isCurrentlyActive = perfOverlayToggle.classList.contains('active');
+                const nextState = !isCurrentlyActive;
+                perfOverlayToggle.classList.toggle('active', nextState);
+                await togglePerformanceOverlay(nextState);
             });
         }
     }

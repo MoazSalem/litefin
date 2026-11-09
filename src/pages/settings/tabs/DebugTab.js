@@ -9,6 +9,7 @@
  */
 
 import { debugOverlay } from '../../../ui/DebugOverlay.js';
+import { isPerformanceOverlayEnabled, togglePerformanceOverlay } from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { storage } from '../../../utils/StorageService.js';
 import { logger } from '../../../utils/Logger.js';
 import { eventBus } from '../../../core/EventBus.js';
@@ -53,6 +54,9 @@ export class DebugTab {
         const overlayEnabled = debugOverlay.isOverlayEnabled;
         const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
         const exoLogsEnabled = storage.getItem('debug_exoplayer_logs') === 'true';
+        const perfOverlayEnabled = isPerformanceOverlayEnabled();
+        const perfMode = storage.getItem('debug_perf_mode') || 'full';
+        const perfPosition = storage.getItem('debug_perf_position') || 'top-right';
 
         return `
             <div class="settings-tab-content">
@@ -129,6 +133,44 @@ export class DebugTab {
                         <span class="setting-description" data-i18n="OverlayPositionDescription">${i18n.t('OverlayPositionDescription')}</span>
                     </div>
                     <div class="setting-control">${this._renderDropdown('debug-position-select', [{ value: 'top-left', label: i18n.t('TopLeft') }, { value: 'top-right', label: i18n.t('TopRight') }, { value: 'bottom-left', label: i18n.t('BottomLeft') }, { value: 'bottom-right', label: i18n.t('BottomRight') }], debugOverlay.Position || 'bottom-right')}</div>
+                </div>
+
+                <!-- Performance Diagnostics Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceDiagnostics">${i18n.t('PerformanceDiagnostics') || 'Performance Diagnostics'}</h3>
+
+                <!-- Performance Diagnostics HUD Master Switch -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowPerformanceOverlay">${i18n.t('ShowPerformanceOverlay') || 'Performance Diagnostics HUD'}</span>
+                        <span class="setting-description" data-i18n="ShowPerformanceOverlayDescription">${i18n.t('ShowPerformanceOverlayDescription') || 'Display on-screen real-time frame rate, frame time graph, Core Web Vitals (LCP, FCP, CLS), and memory metrics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${perfOverlayEnabled ? 'active' : ''}" id="toggle-debug-perf-overlay" tabindex="0"></button></div>
+                </div>
+
+                <!-- Performance HUD Display Mode (Full Panel vs Compact Pill) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PerformanceOverlayMode">${i18n.t('PerformanceOverlayMode') || 'HUD Display Mode'}</span>
+                        <span class="setting-description" data-i18n="PerformanceOverlayModeDescription">${i18n.t('PerformanceOverlayModeDescription') || 'Choose between an expanded telemetry panel with performance graphs or an unobtrusive compact status pill.'}</span>
+                    </div>
+                    <div class="setting-control">${this._renderDropdown('debug-perf-mode-select', [
+                        { value: 'full', label: i18n.t('ModeFull') || 'Full Telemetry Panel' },
+                        { value: 'compact', label: i18n.t('ModeCompact') || 'Compact Status Pill' }
+                    ], perfMode)}</div>
+                </div>
+
+                <!-- Performance HUD Screen Position Anchor -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PerformanceOverlayPosition">${i18n.t('PerformanceOverlayPosition') || 'HUD Screen Position'}</span>
+                        <span class="setting-description" data-i18n="PerformanceOverlayPositionDescription">${i18n.t('PerformanceOverlayPositionDescription') || 'Default screen anchor for the performance diagnostic HUD.'}</span>
+                    </div>
+                    <div class="setting-control">${this._renderDropdown('debug-perf-position-select', [
+                        { value: 'top-right', label: i18n.t('TopRight') || 'Top Right' },
+                        { value: 'top-left', label: i18n.t('TopLeft') || 'Top Left' },
+                        { value: 'bottom-right', label: i18n.t('BottomRight') || 'Bottom Right' },
+                        { value: 'bottom-left', label: i18n.t('BottomLeft') || 'Bottom Left' }
+                    ], perfPosition)}</div>
                 </div>
 
                 <!-- Storage Management Section -->
@@ -244,6 +286,18 @@ export class DebugTab {
             toggleOverlay.classList.toggle('active');
             debugOverlay.setOverlayEnabled(newState);
             storage.setItem('debug_overlay_enabled', newState);
+        });
+
+        /*
+         * Performance Diagnostic HUD master toggle.
+         * Dynamically imports and activates the overlay on demand.
+         */
+        addListener('#toggle-debug-perf-overlay', 'click', async () => {
+            const togglePerf = root.querySelector('#toggle-debug-perf-overlay');
+            if (!togglePerf) return;
+            const newState = !togglePerf.classList.contains('active');
+            togglePerf.classList.toggle('active');
+            await togglePerformanceOverlay(newState);
         });
 
         // Engine logs: Movi WebAssembly demuxer
