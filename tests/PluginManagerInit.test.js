@@ -7,7 +7,7 @@ import vm from 'node:vm';
 const appSource = readFileSync(new URL('../src/core/App.js', import.meta.url), 'utf8');
 
 const initBlock = appSource.slice(
-    appSource.indexOf("        if (state.get('user:authenticated')) {"),
+    appSource.indexOf("// 4.6. Plugin Manager Initialization"),
     appSource.indexOf('        // Initialize ScreensaverManager')
 );
 

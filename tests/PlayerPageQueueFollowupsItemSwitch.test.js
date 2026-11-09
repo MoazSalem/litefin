@@ -107,6 +107,8 @@ function createPage({ repeatMode = 'RepeatNone', live = false } = {}) {
         playQueue,
         state: { get: () => null, delete() {}, getAll: () => ({}) },
         pluginManager: { notifyPlayerStop() {} },
+        // Prewarm subsystem mock for playback info prefetching
+        prewarmManager: { clear() {}, getPrewarmedItem: () => null },
         eventBus: { emit() {} },
         platformInfo: { isWeb: false, isAndroid: false },
         router: {

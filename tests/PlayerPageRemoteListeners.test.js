@@ -78,7 +78,8 @@ function createSession() {
         androidAdapter: { setOrientation: noop },
         SubtitleStyles: { getCurrentFontId: () => null },
         FontLoader: { loadFont: async () => {} },
-        prewarmManager: { getPrewarmedItem: () => null },
+        // Prewarm cache manager mock providing query and invalidation hooks
+        prewarmManager: { getPrewarmedItem: () => null, clear() {} },
         PlayerSettings: { get: () => null },
         storage: { getItem: () => null },
         // Samsung: without a player, the volume keys change the TV volume
