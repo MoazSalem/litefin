@@ -456,6 +456,16 @@ class ScrollController {
      * @private
      */
     _pauseImagePrewarm() {
+        // Cancel any pending CSS-track resume so a vertical RAF scroll that
+        // starts during the horizontal settle window fully owns the pause.
+        // Without this, a stale horizontal timer could call resume() again
+        // after the vertical animation already resumed, pushing the settle
+        // delay out by another full cooldown window.
+        if (this._imageResumeTimer) {
+            clearTimeout(this._imageResumeTimer);
+            this._imageResumeTimer = null;
+        }
+
         if (imageCache && typeof imageCache.pause === 'function') {
             imageCache.pause();
         }
