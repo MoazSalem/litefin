@@ -49,6 +49,7 @@ import { pinManager } from '../utils/PinManager.js';
 import { storage } from '../utils/StorageService.js';
 import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { idleGate } from '../utils/IdleGate.js';
 
 const log = logger.create('SmartHubManager');
 
@@ -78,6 +79,12 @@ const ACK_PORT_NAME = 'SmartHubAck';
 /* Give up waiting for the service ACK after this many milliseconds. */
 const SERVICE_TIMEOUT_MS = 15000;
 
+/* Quiet window (ms) required before background sync / process creation. */
+const USER_ACTIVITY_IDLE_MS = 5000;
+
+/* Wait for the previous ytresolver process to exit after a preview commit. */
+const SERVICE_RELAUNCH_DELAY_MS = 3000;
+
 // ============================================================================
 // SmartHubManager Class
 // ============================================================================
@@ -95,6 +102,24 @@ class SmartHubManager {
 
         /** @type {number|null} - setTimeout handle for the next scheduled refresh. */
         this._refreshTimer = null;
+
+        /** @type {number} - IdleGate task waiting to run the deferred update. */
+        this._deferredUpdateTask = null;
+
+        /** @type {number|null} - Delay before relaunching the ytresolver service. */
+        this._serviceRelaunchTimer = null;
+
+        /** @type {number} - IdleGate task waiting to relaunch the service. */
+        this._serviceRelaunchTask = null;
+
+        /** @type {number|null} - 2s post-playback refresh delay. */
+        this._playbackRefreshTimer = null;
+
+        /** @type {number} - IdleGate task waiting to spawn the resolver service. */
+        this._serviceDispatchTask = null;
+
+        /** @type {Function|null} - Resolver for the in-flight _sendToService promise. */
+        this._serviceDispatchResolve = null;
 
         /** @type {Object|null} - Last successfully built preview JSON (in-memory cache). */
         this._cachedJson = null;
@@ -200,7 +225,9 @@ class SmartHubManager {
             // Re-lock: the next entry into a PIN profile must re-prompt.
             this._unlocked = false;
             this._pendingDeepLink = null;
-            this._stopRefreshCycle();
+            // Cancel the refresh chain plus any deferred update/service launch
+            // that was waiting for the UI to go idle.
+            this.stop();
         });
 
         // ── Playback lifecycle — suspend background sync during playback ─
@@ -223,7 +250,11 @@ class SmartHubManager {
             this._isPlaying = false;
             if (this._cycleActive) {
                 log.info('Playback finished or stopped — scheduling Smart Hub preview refresh in 2s');
-                setTimeout(() => {
+                if (this._playbackRefreshTimer !== null) {
+                    clearTimeout(this._playbackRefreshTimer);
+                }
+                this._playbackRefreshTimer = setTimeout(() => {
+                    this._playbackRefreshTimer = null;
                     if (this._cycleActive && !this._isPlaying) {
                         this.update();
                     }
@@ -493,6 +524,15 @@ class SmartHubManager {
             return;
         }
 
+        /* Never run while the user is navigating or scrolling. The service
+         * spawn (tizen.application.launchAppControl) plus JSON fetch decoding
+         * can preempt the WebKit main thread for over a second on legacy TVs. */
+        if (idleGate.isUserActive(USER_ACTIVITY_IDLE_MS)) {
+            log.info('User is active — deferring Smart Hub update until idle');
+            this._scheduleIdleUpdate();
+            return;
+        }
+
         // Lock the updating process
         this._updating = true;
 
@@ -723,6 +763,26 @@ class SmartHubManager {
     // ========================================================================
 
     /**
+     * Arms a single idle-gated retry for update(). Called when update() is
+     * invoked during active navigation; the retry waits for the full 5s quiet
+     * window before spawning the resolver service. Repeated update() calls
+     * while active reuse the same pending task instead of stacking timers.
+     * @private
+     */
+    _scheduleIdleUpdate() {
+        if (this._deferredUpdateTask !== null) return;
+
+        this._deferredUpdateTask = idleGate.runWhenIdle(
+            () => {
+                this._deferredUpdateTask = null;
+                if (this._ready) this.update();
+            },
+            USER_ACTIVITY_IDLE_MS,
+            0
+        );
+    }
+
+    /**
      * Start the periodic update cycle.
      *
      * Uses a cooperative setTimeout chain rather than setInterval so each
@@ -770,11 +830,72 @@ class SmartHubManager {
     _stopRefreshCycle() {
         this._cycleActive = false;
 
+        let stopped = false;
+
         if (this._refreshTimer !== null) {
             clearTimeout(this._refreshTimer);
             this._refreshTimer = null;
+            stopped = true;
+        }
+
+        // A deferred update may be parked waiting for the UI to go idle.
+        if (this._deferredUpdateTask !== null) {
+            idleGate.cancel(this._deferredUpdateTask);
+            this._deferredUpdateTask = null;
+            stopped = true;
+        }
+
+        if (stopped) {
             log.info('Refresh cycle stopped');
         }
+    }
+
+    /**
+     * Stop all background activity and cancel every pending timer. Used on
+     * logout and by destroy(); safe to call repeatedly. Does not clear the
+     * deep-link state or the version-gate flag.
+     * @public
+     */
+    stop() {
+        this._stopRefreshCycle();
+
+        if (this._playbackRefreshTimer !== null) {
+            clearTimeout(this._playbackRefreshTimer);
+            this._playbackRefreshTimer = null;
+        }
+
+        if (this._serviceRelaunchTimer !== null) {
+            clearTimeout(this._serviceRelaunchTimer);
+            this._serviceRelaunchTimer = null;
+        }
+
+        if (this._serviceRelaunchTask !== null) {
+            idleGate.cancel(this._serviceRelaunchTask);
+            this._serviceRelaunchTask = null;
+        }
+
+        // An update may be parked waiting to spawn the resolver service, or
+        // already waiting on its ACK. Cancel the task and settle the promise
+        // so a stopped manager can never leave update() awaiting forever.
+        if (this._serviceDispatchTask !== null) {
+            idleGate.cancel(this._serviceDispatchTask);
+            this._serviceDispatchTask = null;
+        }
+        if (this._serviceDispatchResolve) {
+            this._serviceDispatchResolve();
+        }
+
+        log.info('Smart Hub background activity stopped');
+    }
+
+    /**
+     * Full teardown. Cancels pending work and prevents future idle-gated
+     * updates from running.
+     * @public
+     */
+    destroy() {
+        this.stop();
+        this._ready = false;
     }
 
     // ========================================================================
@@ -1013,6 +1134,11 @@ class SmartHubManager {
      *      Either way, _relaunchService() restarts the service 3 s later so the
      *      trailer/discovery HTTP proxy keeps working.
      *
+     * The actual launchAppControl() is idle-gated: on legacy Tizen panels the
+     * service process spawn can stall the WebKit main thread for over a second,
+     * so it must never preempt a D-pad scroll. The ACK timeout starts only once
+     * the launch has been attempted, not while the request is parked.
+     *
      * @param {Object} json - Samsung Preview JSON
      * @returns {Promise<void>}
      * @private
@@ -1026,6 +1152,7 @@ class SmartHubManager {
             let localPort = null;
             let listenerId = null;
             let timeoutHandle = null;
+            let settled = false;
 
             /*
              * Cleanup is idempotent — safe to call from multiple paths
@@ -1045,6 +1172,22 @@ class SmartHubManager {
                 }
             };
 
+            /*
+             * Idempotent completion. Every exit path (ACK, timeout, launch
+             * failure, stop()) funnels through here so the promise can only be
+             * resolved once and the pending-dispatch guard is always cleared.
+             */
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                this._serviceDispatchResolve = null;
+                cleanup();
+                resolve();
+            };
+
+            /* Allows stop()/destroy() to settle an in-flight dispatch. */
+            this._serviceDispatchResolve = finish;
+
             /* ── Step 1: Open local MessagePort for ACK ──────────────────── */
             try {
                 /*
@@ -1054,80 +1197,123 @@ class SmartHubManager {
                  */
                 localPort = tizen.messageport.requestLocalMessagePort(ACK_PORT_NAME);
                 listenerId = localPort.addMessagePortListener((msgData) => {
+                    if (settled) return;
                     const status = msgData?.[0]?.value || 'unknown';
                     log.info('Smart Hub service ACK:', status);
-                    cleanup();
+                    finish();
                     this._relaunchService(serviceId);
-                    resolve();
                 });
             } catch (e) {
                 /* MessagePort unavailable (e.g. browser dev mode) — skip ACK
                  * and let the launch proceed without waiting for confirmation. */
                 log.error('Could not open local MessagePort:', e.message);
-                resolve();
+                finish();
                 return;
             }
 
-            /* Safety timeout — guards against the service crashing silently
-             * or the ACK never arriving on misbehaving hardware. */
-            timeoutHandle = setTimeout(() => {
-                log.warn(`Smart Hub ACK timed out after ${SERVICE_TIMEOUT_MS / 1000}s — continuing`);
-                cleanup();
-                this._relaunchService(serviceId);
-                resolve();
-            }, SERVICE_TIMEOUT_MS);
+            /* ── Step 2: Launch the ytresolver service when the UI is idle ─ */
+            this._serviceDispatchTask = idleGate.runWhenIdle(
+                () => {
+                    this._serviceDispatchTask = null;
+                    if (settled) return;
 
-            /* ── Step 2: Launch the ytresolver service ────────────────────── */
-            try {
-                tizen.application.launchAppControl(
-                    new tizen.ApplicationControl(
-                        'http://tizen.org/appcontrol/operation/pick',
-                        null,
-                        'image/jpeg',
-                        null,
-                        /* Embed the preview JSON as a single ApplicationControlData entry.
-                         * The service reads this key inside its onRequest handler. */
-                        [new tizen.ApplicationControlData('SmartHubPreview', [JSON.stringify(json)])]
-                    ),
-                    serviceId,
-                    () => log.info('Smart Hub data dispatched to ytresolver service'),
-                    (err) => {
-                        log.error('Service launch failed:', err?.message || err);
-                        cleanup();
-                        resolve(); /* Don't block the refresh cycle on a failing service. */
+                    /* Safety timeout — guards against the service crashing
+                     * silently or the ACK never arriving on misbehaving
+                     * hardware. Armed here so idle deferral does not consume
+                     * the ACK window. */
+                    timeoutHandle = setTimeout(() => {
+                        if (settled) return;
+                        log.warn(`Smart Hub ACK timed out after ${SERVICE_TIMEOUT_MS / 1000}s — continuing`);
+                        finish();
+                        this._relaunchService(serviceId);
+                    }, SERVICE_TIMEOUT_MS);
+
+                    try {
+                        tizen.application.launchAppControl(
+                            new tizen.ApplicationControl(
+                                'http://tizen.org/appcontrol/operation/pick',
+                                null,
+                                'image/jpeg',
+                                null,
+                                /* Embed the preview JSON as a single ApplicationControlData entry.
+                                 * The service reads this key inside its onRequest handler. */
+                                [new tizen.ApplicationControlData('SmartHubPreview', [JSON.stringify(json)])]
+                            ),
+                            serviceId,
+                            () => log.info('Smart Hub data dispatched to ytresolver service'),
+                            (err) => {
+                                log.error('Service launch failed:', err?.message || err);
+                                finish(); /* Don't block the refresh cycle on a failing service. */
+                            }
+                        );
+                    } catch (e) {
+                        log.error('Exception during service launch:', e.message);
+                        finish();
                     }
-                );
-            } catch (e) {
-                log.error('Exception during service launch:', e.message);
-                cleanup();
-                resolve();
-            }
+                },
+                USER_ACTIVITY_IDLE_MS,
+                0
+            );
         });
     }
 
     /**
      * Relaunch the ytresolver service after it exits to commit preview data,
      * so the trailer/discovery HTTP proxy on localhost:8123 comes back.
-     * Launching an already-running service is harmless.
+     * Launching an already-running service is harmless — but process creation
+     * is expensive on legacy Tizen panels, so it is deferred until the user
+     * has stopped interacting or scrolling.
      *
      * @param {string} serviceId - Full service application ID
      * @private
      */
     _relaunchService(serviceId) {
+        /* Drop a previous request: another ACK already superseded it. */
+        if (this._serviceRelaunchTimer !== null) {
+            clearTimeout(this._serviceRelaunchTimer);
+            this._serviceRelaunchTimer = null;
+        }
+        if (this._serviceRelaunchTask !== null) {
+            idleGate.cancel(this._serviceRelaunchTask);
+            this._serviceRelaunchTask = null;
+        }
+
         /* 3 s comfortably covers the service's 500 ms exit delay plus process
          * teardown; relaunching while it is still alive would be a no-op and
          * leave the proxy down once it exits. */
-        setTimeout(() => {
-            try {
-                tizen.application.launch(
-                    serviceId,
-                    () => log.info('ytresolver service relaunched after preview commit'),
-                    (e) => log.warn('Service relaunch failed:', e?.message || e)
-                );
-            } catch (e) {
-                log.warn('Service relaunch threw:', e.message);
-            }
-        }, 3000);
+        this._serviceRelaunchTimer = setTimeout(() => {
+            this._serviceRelaunchTimer = null;
+
+            if (!this._ready) return;
+
+            this._serviceRelaunchTask = idleGate.runWhenIdle(
+                () => {
+                    this._serviceRelaunchTask = null;
+                    if (!this._ready) return;
+                    this._launchResolverService(serviceId);
+                },
+                USER_ACTIVITY_IDLE_MS,
+                0
+            );
+        }, SERVICE_RELAUNCH_DELAY_MS);
+    }
+
+    /**
+     * Performs the actual tizen.application.launch() for the resolver service.
+     * Split out so the idle gate owns all scheduling and cancellation.
+     * @param {string} serviceId - Full service application ID
+     * @private
+     */
+    _launchResolverService(serviceId) {
+        try {
+            tizen.application.launch(
+                serviceId,
+                () => log.info('ytresolver service relaunched after preview commit'),
+                (e) => log.warn('Service relaunch failed:', e?.message || e)
+            );
+        } catch (e) {
+            log.warn('Service relaunch threw:', e.message);
+        }
     }
 }
 
