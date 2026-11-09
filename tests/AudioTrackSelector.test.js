@@ -654,6 +654,18 @@ test('isAudioTrackNativelyPlayable: webOS 7.1 TrueHD is playable only when TrueH
     assert.strictEqual(auto.isAudioTrackNativelyPlayable(track, mediaSource, 'webos'), false, 'auto TrueHD stays off');
 });
 
+test('isAudioTrackNativelyPlayable: webOS 7.1 DTS-HD MA is playable only when DTS is forced on', () => {
+    const caps = { dts: true, maxAudioChannels: 6, webosVersion: 24 };
+    const track = { Index: 1, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: true };
+    const mediaSource = { Container: 'mkv', MediaStreams: [track] };
+
+    const forced = setup({ enableDts: 'enable', enableTrueHd: 'auto' }, caps);
+    assert.strictEqual(forced.isAudioTrackNativelyPlayable(track, mediaSource, 'webos'), true, 'forced DTS, 7.1');
+
+    const auto = setup({ enableDts: 'auto', enableTrueHd: 'auto' }, caps);
+    assert.strictEqual(auto.isAudioTrackNativelyPlayable(track, mediaSource, 'webos'), false, 'auto DTS stays capped at 6 channels');
+});
+
 test('doesAudioTrackRequireDirectStream: Single TrueHD track requires DirectStream remux on WebOS', () => {
     // WebOS devices do not decode TrueHD in internal web apps.
     // When a media file contains only a single TrueHD audio stream, it CANNOT DirectPlay

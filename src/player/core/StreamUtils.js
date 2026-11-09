@@ -141,13 +141,32 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // 3. Maximum Audio Channels Resolution & Constraint Checking
     // -------------------------------------------------------------------------
     const userAllowedChannels = PlayerSettings.get('allowedAudioChannels');
-    // webOS with TrueHD forced on: the TV passes a 7.1 TrueHD track through to eARC, so the
-    // 6-channel default from the device caps must not mark it as needing a transcode.
-    const trueHdForcedOnWebOS = typeof platformInfo !== 'undefined' && platformInfo.isWebOS &&
+
+    // Resolve whether the webOS player backend is currently active, checking both
+    // explicit backend parameter or runtime platform environment detection.
+    const isWebOSActive =
+        backendType === 'webos' ||
+        (!backendType && typeof platformInfo !== 'undefined' && Boolean(platformInfo.isWebOS));
+
+    // webOS with TrueHD or DTS forced on: when the user explicitly forces passthrough,
+    // the TV forwards uncompressed 7.1 bitstreams over HDMI eARC to the sound system.
+    // The default 6-channel ceiling from device capabilities must not reject 8-channel
+    // TrueHD or DTS-HD MA tracks and falsely flag them for server transcoding.
+    const isForcedTrueHdWebOS =
+        isWebOSActive &&
+        (codec === 'truehd' || codec === 'mlp') &&
         PlayerSettings.get('enableTrueHd') === 'enable';
+
+    const isForcedDtsWebOS =
+        isWebOSActive &&
+        (codec.includes('dts') || codec === 'dca') &&
+        PlayerSettings.get('enableDts') === 'enable';
+
+    const passthroughForcedOnWebOS = isForcedTrueHdWebOS || isForcedDtsWebOS;
+
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : (isAdvancedBackend || trueHdForcedOnWebOS ? 8 : caps?.maxAudioChannels);
+        : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
 
     if (effectiveMaxChannels && typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
         return false;
