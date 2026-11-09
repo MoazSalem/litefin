@@ -841,15 +841,6 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         return false;
     }
 
-    // webOS with DTS or TrueHD forced on: the user has said the TV passes it through, so the
-    // native track switch selects it directly. A remux puts it into HLS, where it goes silent
-    // (WebOSProfile.js). On Auto the remux stays.
-    if (backendType === 'webos') {
-        const codec = (targetStream.Codec || '').toLowerCase();
-        if ((codec.includes('dts') || codec === 'dca') && PlayerSettings.get('enableDts') === 'enable') return false;
-        if ((codec === 'truehd' || codec === 'mlp') && PlayerSettings.get('enableTrueHd') === 'enable') return false;
-    }
-
     if (!isAudioTrackNativelyPlayable(targetStream, mediaSource, backendType)) {
         return true;
     }
@@ -884,12 +875,26 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     // On WebOS and HTML5, the browser cannot switch to non-default tracks of these
     // formats in DirectPlay mode without server remuxing isolating the audio stream.
     const codec = (targetStream.Codec || '').toLowerCase();
+
+    // webOS with DTS or TrueHD forced on: the user has confirmed that the TV and
+    // connected external sound system support direct bitstream passthrough over eARC.
+    // In DirectPlay, native audioTracks switching selects the bitstream directly.
+    // Server-side remuxing packages audio into HLS where bitstreams become silent.
+    // On Auto or Disabled, remuxing remains required as before.
+    const isWebOSForcedPassthrough =
+        backendType === 'webos' && (
+            ((codec.includes('dts') || codec === 'dca') && PlayerSettings.get('enableDts') === 'enable') ||
+            ((codec === 'truehd' || codec === 'mlp') && PlayerSettings.get('enableTrueHd') === 'enable')
+        );
+
     const isPassthroughOrDropped =
-        codec.includes('dts') ||
-        codec === 'dca' ||
-        codec === 'truehd' ||
-        codec === 'flac' ||
-        codec === 'alac';
+        !isWebOSForcedPassthrough && (
+            codec.includes('dts') ||
+            codec === 'dca' ||
+            codec === 'truehd' ||
+            codec === 'flac' ||
+            codec === 'alac'
+        );
 
     if (isPassthroughOrDropped) {
         return true;

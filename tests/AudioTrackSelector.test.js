@@ -617,6 +617,30 @@ test('doesAudioTrackRequireDirectStream: webOS with DTS and TrueHD forced on pla
     assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 3, 'webos'), false, 'AC3 track');
 });
 
+test('doesAudioTrackRequireDirectStream: webOS with forced DTS still requires remux when physical default stream is unplayable', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({
+        enableDts: 'enable',
+        enableTrueHd: 'disable'
+    }, {
+        dts: true,
+        truehd: false,
+        webosVersion: 24
+    });
+
+    const mediaSource = {
+        Id: 'unplayable-default-source',
+        Container: 'mkv',
+        MediaStreams: [
+            // Default track is unplayable TrueHD while TrueHD is disabled
+            { Index: 1, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Because container default track cannot play directly in hardware, remux is required to swap it
+    assert.strictEqual(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), true, 'remux required due to unplayable default');
+});
+
 test('doesAudioTrackRequireDirectStream: webOS on Auto keeps the remux for a non-default DTS or TrueHD track', () => {
     const { doesAudioTrackRequireDirectStream } = setup({
         enableDts: 'auto',
