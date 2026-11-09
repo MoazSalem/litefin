@@ -142,6 +142,8 @@
     "BtnStyleThemeDefault": "Themenakzent (Standard)",
     "BtnStyleThemeInverted": "Thema invertiert",
     "BtnStyleWhiteAccent": "Weiß & Akzent",
+    "BufferSize": "Puffergröße",
+    "BufferSizeDescription": "Ziel-Vorwärtspuffer in Sekunden, wirkt sowohl auf DirectPlay (clientseitiger Prefetch) als auch auf HLS-Transkodierung.",
     "ButtonAdd": "Hinzufügen",
     "ButtonApply": "Anwenden",
     "ButtonBack": "Zurück",
