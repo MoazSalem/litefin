@@ -435,3 +435,29 @@ test('PerformanceDiagnosticOverlay: Interactive controls dispatching (minimize, 
 
     overlay.destroy();
 });
+
+test('PerformanceDiagnosticOverlay: Display zoom scaling compensation during drag and positioning', () => {
+    const overlay = new PerformanceDiagnosticOverlay();
+    overlay.init();
+
+    // Default zoom without styles should be 1.0
+    assert.equal(overlay._getEffectiveZoom(), 1.0, 'Default zoom should be 1.0');
+
+    // Simulate auto-fit 1080p in 1280x720 windowed browser (scale factor ~0.67)
+    globalThis.document.documentElement.style.zoom = '0.67';
+    assert.equal(overlay._getEffectiveZoom(), 0.67, 'Effective zoom reads 0.67 from documentElement.style.zoom');
+
+    // Drag coordinate placed beyond physical window dimensions in canvas coordinates
+    overlay._dragCoord = { x: 1500, y: 800 };
+    overlay._reconstrainPosition();
+
+    // Verify it clamped inside virtual canvas bounds, keeping it on screen
+    assert.ok(overlay._dragCoord.x >= 10 / 0.67, 'X coord is >= minimum margin');
+    assert.ok(overlay._dragCoord.y >= 10 / 0.67, 'Y coord is >= minimum margin');
+    assert.equal(overlay._container.style.left, `${overlay._dragCoord.x}px`);
+    assert.equal(overlay._container.style.top, `${overlay._dragCoord.y}px`);
+
+    // Reset document zoom style
+    delete globalThis.document.documentElement.style.zoom;
+    overlay.destroy();
+});

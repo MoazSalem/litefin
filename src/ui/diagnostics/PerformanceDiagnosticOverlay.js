@@ -255,6 +255,11 @@ export class PerformanceDiagnosticOverlay {
             this._container.setAttribute('data-mode', mode);
         }
 
+        // If the overlay was manually dragged, re-clamp to prevent overflow in newly expanded state
+        if (this._dragCoord) {
+            this._reconstrainPosition();
+        }
+
         // Ensure canvas graphics context is attached when expanding to full mode
         if (mode === 'full') {
             this._bindCanvas();
@@ -957,9 +962,70 @@ export class PerformanceDiagnosticOverlay {
     }
 
     /**
+     * Resolves the active root display scaling / CSS zoom factor.
+     * Accounts for Litefin's responsive auto-fit 1080p canvas engine on desktop,
+     * mobile webviews, and television framebuffer scaling.
+     * @private
+     * @returns {number} Active zoom ratio (e.g. 0.67 for 1080p auto-fit in 720p window)
+     */
+    _getEffectiveZoom() {
+        if (typeof document === 'undefined' || !document.documentElement) {
+            return 1.0;
+        }
+
+        // Inline zoom property set directly on root element by LayoutManager
+        const inlineZoom = parseFloat(document.documentElement.style.zoom);
+        if (!isNaN(inlineZoom) && inlineZoom > 0) {
+            return inlineZoom;
+        }
+
+        // Fall back to computed style zoom if available in current browser engine
+        if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+            const computedZoom = parseFloat(window.getComputedStyle(document.documentElement).zoom);
+            if (!isNaN(computedZoom) && computedZoom > 0) {
+                return computedZoom;
+            }
+        }
+
+        return 1.0;
+    }
+
+    /**
+     * Re-clamps custom coordinates within current viewport boundaries.
+     * Called during window resizing or mode expansion to keep HUD within view.
+     * @private
+     */
+    _reconstrainPosition() {
+        if (!this._dragCoord || !this._container) return;
+
+        // Resolve display scale factor
+        const zoom = this._getEffectiveZoom();
+
+        // Calculate virtual viewport dimensions matching the scaled canvas
+        const viewportW = (window.innerWidth || 1920) / zoom;
+        const viewportH = (window.innerHeight || 1080) / zoom;
+        const width = this._container.offsetWidth || (this._mode === 'compact' ? 220 : 380);
+        const height = this._container.offsetHeight || (this._mode === 'compact' ? 36 : 240);
+
+        // Safe margin in design canvas coordinates
+        const marginX = 10 / zoom;
+        const marginY = 10 / zoom;
+
+        // Clamp stored coordinate within safe bounds
+        const x = Math.max(marginX, Math.min(this._dragCoord.x, viewportW - width - marginX));
+        const y = Math.max(marginY, Math.min(this._dragCoord.y, viewportH - height - marginY));
+
+        this._dragCoord = { x, y };
+        this._container.style.left = `${x}px`;
+        this._container.style.top = `${y}px`;
+        this._container.style.right = 'auto';
+        this._container.style.bottom = 'auto';
+    }
+
+    /**
      * Enables pointer and touch dragging for repositioning the HUD or pill.
-     * Uses a movement threshold to prevent drag handlers from intercepting
-     * or swallowing legitimate click events on buttons or the pill badge.
+     * Fully compensates for root CSS zoom and responsive auto-fit 1080p scaling,
+     * allowing the overlay to smoothly track the cursor and reach all viewport edges.
      * @private
      */
     _setupDraggable() {
@@ -994,10 +1060,17 @@ export class PerformanceDiagnosticOverlay {
             startX = clientX;
             startY = clientY;
 
+            // Account for display zoom scaling when computing grab offset within container
+            const zoom = this._getEffectiveZoom();
             const rect = this._container.getBoundingClientRect();
+            const pointerCanvasX = clientX / zoom;
+            const pointerCanvasY = clientY / zoom;
+            const containerCanvasLeft = rect.left / zoom;
+            const containerCanvasTop = rect.top / zoom;
+
             this._dragOffset = {
-                x: clientX - rect.left,
-                y: clientY - rect.top
+                x: pointerCanvasX - containerCanvasLeft,
+                y: pointerCanvasY - containerCanvasTop
             };
 
             // Note: We deliberately avoid calling preventDefault() here to allow
@@ -1006,6 +1079,7 @@ export class PerformanceDiagnosticOverlay {
 
         /**
          * Pointer move handler: repositions container once threshold is exceeded.
+         * Scales motion and viewport boundary clamps by the active root zoom factor.
          * @param {MouseEvent|TouchEvent} e Pointer or touch move event
          */
         const onPointerMove = (e) => {
@@ -1014,7 +1088,7 @@ export class PerformanceDiagnosticOverlay {
             const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
             const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
 
-            // Require 5px movement before engaging drag state
+            // Require 5px movement in physical screen pixels before engaging drag state
             if (!dragThresholdPassed) {
                 const distance = Math.hypot(clientX - startX, clientY - startY);
                 if (distance > 5) {
@@ -1033,17 +1107,26 @@ export class PerformanceDiagnosticOverlay {
                 e.preventDefault();
             }
 
-            const viewportW = window.innerWidth;
-            const viewportH = window.innerHeight;
+            // Compute virtual viewport dimensions in scaled canvas coordinates
+            const zoom = this._getEffectiveZoom();
+            const viewportW = (window.innerWidth || 1920) / zoom;
+            const viewportH = (window.innerHeight || 1080) / zoom;
             const width = this._container.offsetWidth;
             const height = this._container.offsetHeight;
 
-            // Constrain coordinates within safe viewport boundaries
-            let newX = clientX - this._dragOffset.x;
-            let newY = clientY - this._dragOffset.y;
+            // Convert pointer position into design canvas coordinate space
+            const pointerCanvasX = clientX / zoom;
+            const pointerCanvasY = clientY / zoom;
 
-            newX = Math.max(10, Math.min(newX, viewportW - width - 10));
-            newY = Math.max(10, Math.min(newY, viewportH - height - 10));
+            let newX = pointerCanvasX - this._dragOffset.x;
+            let newY = pointerCanvasY - this._dragOffset.y;
+
+            // Safe boundary margin calibrated to physical viewport padding
+            const marginX = 10 / zoom;
+            const marginY = 10 / zoom;
+
+            newX = Math.max(marginX, Math.min(newX, viewportW - width - marginX));
+            newY = Math.max(marginY, Math.min(newY, viewportH - height - marginY));
 
             this._container.style.left = `${newX}px`;
             this._container.style.top = `${newY}px`;
@@ -1076,17 +1159,26 @@ export class PerformanceDiagnosticOverlay {
             dragThresholdPassed = false;
         };
 
-        // Attach global move/up handlers on window for smooth off-element dragging
+        // Window resize listener to re-clamp custom positions if viewport size changes
+        const onResize = () => {
+            if (this._dragCoord && this._container) {
+                this._reconstrainPosition();
+            }
+        };
+
+        // Attach global move/up/resize handlers on window for smooth off-element dragging
         window.addEventListener('mousemove', onPointerMove, { passive: false });
         window.addEventListener('mouseup', onPointerUp, { passive: true });
         window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp, { passive: true });
+        window.addEventListener('resize', onResize, { passive: true });
 
         this._listeners.push(
             { element: window, event: 'mousemove', handler: onPointerMove },
             { element: window, event: 'mouseup', handler: onPointerUp },
             { element: window, event: 'touchmove', handler: onPointerMove },
-            { element: window, event: 'touchend', handler: onPointerUp }
+            { element: window, event: 'touchend', handler: onPointerUp },
+            { element: window, event: 'resize', handler: onResize }
         );
 
         // Attach pointerdown listeners directly to the container
@@ -1533,11 +1625,13 @@ export class PerformanceDiagnosticOverlay {
             valRoute.textContent = router && typeof router.getCurrentPath === 'function' ? router.getCurrentPath() : window.location.hash || '/';
         }
 
-        // Viewport and screen resolution
+        // Viewport and screen resolution (with active CSS zoom factor)
         const valView = this._container.querySelector('#perf-val-viewport');
         if (valView) {
             const dpr = (window.devicePixelRatio || 1).toFixed(2);
-            valView.textContent = `${window.innerWidth}×${window.innerHeight} (Screen: ${window.screen.width}×${window.screen.height} @ ${dpr}x)`;
+            const zoom = this._getEffectiveZoom();
+            const zoomSuffix = zoom !== 1.0 ? ` | Zoom: ${zoom.toFixed(2)}x` : '';
+            valView.textContent = `${window.innerWidth}×${window.innerHeight} (Screen: ${window.screen.width}×${window.screen.height} @ ${dpr}x${zoomSuffix})`;
         }
 
         // Platform target identifier
