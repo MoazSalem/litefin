@@ -1259,13 +1259,16 @@ export class PerformanceDiagnosticOverlay {
         }
 
         // Render live canvas graph if on FPS tab in full mode
-        if (this._mode === 'full' && this._activeTab === 'fps') {
+        // Throttled to every 3 frames (~20 FPS) to eliminate canvas layout and draw overhead on Smart TV hardware
+        if (this._mode === 'full' && this._activeTab === 'fps' && this._sessionFrames % 3 === 0) {
             this._renderGraph();
         }
     }
 
     /**
      * Renders smooth anti-aliased frame time history curve on HTML5 canvas.
+     * Uses box metrics instead of getBoundingClientRect() to avoid layout flushes,
+     * and compiles data in a single clean path.
      * @private
      */
     _renderGraph() {
@@ -1274,18 +1277,19 @@ export class PerformanceDiagnosticOverlay {
         const canvas = this._canvas;
         const ctx = this._ctx;
 
-        const rect = canvas.getBoundingClientRect();
+        // Query element client dimensions to avoid forced synchronous layout recalculation
         const dpr = window.devicePixelRatio || 1;
-
-        const displayWidth = Math.round(rect.width);
-        const displayHeight = Math.round(rect.height);
+        const displayWidth = canvas.clientWidth || (canvas.offsetWidth ? Math.round(canvas.offsetWidth) : 320);
+        const displayHeight = canvas.clientHeight || (canvas.offsetHeight ? Math.round(canvas.offsetHeight) : 72);
 
         if (displayWidth === 0 || displayHeight === 0) return;
 
         // Adjust internal buffer size to match physical display pixels for crisp lines
-        if (canvas.width !== displayWidth * dpr || canvas.height !== displayHeight * dpr) {
-            canvas.width = displayWidth * dpr;
-            canvas.height = displayHeight * dpr;
+        const targetWidth = displayWidth * dpr;
+        const targetHeight = displayHeight * dpr;
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
         }
 
         ctx.save();
@@ -1325,26 +1329,12 @@ export class PerformanceDiagnosticOverlay {
             const step = w / (this._maxHistorySamples - 1);
             const startOffset = w - (samples.length - 1) * step;
 
-            // Build path for stroke and gradient fill
+            // Build single-pass frame duration curve
             ctx.beginPath();
             const prevX = startOffset;
             const prevY = h - Math.min(1, samples[0] / maxTimeMs) * h;
             ctx.moveTo(prevX, prevY);
 
-            for (let i = 1; i < samples.length; i++) {
-                const x = startOffset + i * step;
-                const clamped = Math.min(maxTimeMs, Math.max(0, samples[i]));
-                const y = h - (clamped / maxTimeMs) * h;
-                ctx.lineTo(x, y);
-            }
-
-            /*
-             * Render single-pass frame duration curve.
-             * Omits heavy canvas gradient fills and multi-pass alpha blits
-             * to keep GPU compositing overhead negligible on Smart TV hardware.
-             */
-            ctx.beginPath();
-            ctx.moveTo(prevX, prevY);
             for (let i = 1; i < samples.length; i++) {
                 const x = startOffset + i * step;
                 const clamped = Math.min(maxTimeMs, Math.max(0, samples[i]));
