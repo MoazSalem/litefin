@@ -39,15 +39,41 @@ const log = logger.create('ImageCache');
 // ============================================================================
 
 /**
- * Ultra-legacy WebKit (Tizen 2.x / webOS 1–2 / AppleWebKit 530–538) needs a
- * far gentler pre-warm cadence: a single connection at a time plus a longer
+ * Legacy browser engine detection.
+ * Older engines (such as Tizen 2.x / webOS 1–2 / ancient rendering engines) need
+ * a far gentler pre-warm cadence: a single connection at a time plus a longer
  * cooldown lets the single-core CPU + compositor keep painting scroll frames.
+ *
+ * Modern Chromium browsers include the legacy engine token in their User-Agent
+ * string (e.g. AppleWebKit/537.36). A naive pattern matching against versions 530-538
+ * causes modern platforms (like Tizen 9.0 running Chromium 120) to be falsely
+ * classified as legacy, unnecessarily retaining image DOM nodes in memory.
+ *
+ * We verify that Chromium versions 50+ are never classified as legacy, while
+ * preserving legacy classifications for true older engines and early Chromium (< 50).
  */
 const _userAgent =
     typeof navigator !== 'undefined' && navigator && typeof navigator.userAgent === 'string'
         ? navigator.userAgent
         : '';
-const isLegacyWebKit = /AppleWebKit\/53[0-8]|Tizen 2\.|Web0S; Linux\/SmartTV/i.test(_userAgent);
+
+// Evaluate legacy engine status with guard against false-positive modern Chromium
+const isLegacyWebKit = (() => {
+    // Check if a Chromium engine token is present (standard or Tizen format)
+    const chromeMatch =
+        _userAgent.match(/(?:Chrome|Chromium|CriOS)\/(\d+)/i) ||
+        _userAgent.match(/like Gecko\)\s+(\d+)\.\d+/i);
+
+    // If Chromium is detected, evaluate the major version
+    if (chromeMatch) {
+        const majorVersion = parseInt(chromeMatch[1], 10);
+        // Only Chromium versions prior to 50 require the legacy profile
+        return !isNaN(majorVersion) && majorVersion < 50;
+    }
+
+    // When no Chromium token exists, verify legacy engine indicators
+    return /AppleWebKit\/53[0-8]|Tizen 2\.|Web0S; Linux\/SmartTV/i.test(_userAgent);
+})();
 
 /**
  * Maximum number of parallel image pre-load requests at any given time.
