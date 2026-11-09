@@ -188,6 +188,10 @@ function loadPlayerModule() {
 // ============================================================================
 const PLAYER_PREWARM_IDLE_MS = 12000;
 const DETAILS_PREWARM_DELAY_MS = 600;
+// Primary views (Details, Library) are non-urgent: wait for a genuinely quiet
+// UI after splash dismissal. The router still loads them on demand if the user
+// navigates first, so an unbounded wait is safe.
+const PRIMARY_CHUNK_PREWARM_IDLE_MS = 4000;
 let playerPrewarmTimer = null;
 let detailsPrewarmTimer = null;
 
@@ -940,8 +944,12 @@ import MobileNav from '../components/MobileNav.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { idleGate } from '../utils/IdleGate.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
-import { scheduleDeferredPerformanceOverlay } from '../ui/diagnostics/PerformanceDiagnosticLauncher.js';
+import {
+    scheduleDeferredPerformanceOverlay,
+    scheduleDeferredPerformanceCollector
+} from '../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
@@ -1048,12 +1056,13 @@ class App {
         debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
 
         /*
-         * Performance Diagnostic HUD initialization.
+         * Performance Diagnostic HUD & Profiling Telemetry initialization.
          * Only evaluates and downloads if explicitly enabled in user settings.
          * Defers loading to idle callback so critical startup, DOM hydration,
          * and initial LCP metrics remain completely unperturbed.
          */
         scheduleDeferredPerformanceOverlay();
+        scheduleDeferredPerformanceCollector();
 
         // Calculate early-boot telemetry
         // Measures time from HTML <head> parse and browser navigationStart
@@ -1403,16 +1412,27 @@ class App {
             // ====================================================================
             // Staged Background Prewarming
             // ====================================================================
-            // 1. Prewarm primary view chunks (DetailsPage, LibraryPage)
-            //    500ms after splash dismissal so user navigation is instantaneous.
-            //    LiveTv is excluded: like search, settings and all the seerr/
-            //    discover routes it loads strictly on demand through its proxy.
-            setTimeout(() => {
-                log.info('Prewarming primary view chunks (Details, Library)...');
-                Promise.all([loadDetailsPageModule(), loadLibraryPageModule()])
-                    .then(() => log.info('Primary view chunks successfully prewarmed in background'))
-                    .catch((err) => log.warn('Primary view chunks prewarm warning:', err));
-            }, 500);
+            // 1. Prewarm primary view chunks (DetailsPage, LibraryPage) only
+            //    after the user has been idle for 4s. A fixed 500ms timer used
+            //    to fire while users were already scrolling the Home rows, and
+            //    the chunk parse/compile produced 1s+ D-pad stalls on legacy
+            //    Tizen panels. markActivity() anchors the window to splash
+            //    dismissal, so a key pressed during the splash does not count
+            //    as idle time after it.
+            //
+            //    No max wait: if the user keeps navigating, the router's own
+            //    dynamic import loads the chunk on demand anyway.
+            idleGate.markActivity();
+            idleGate.runWhenIdle(
+                () => {
+                    log.info('Prewarming primary view chunks (Details, Library)...');
+                    Promise.all([loadDetailsPageModule(), loadLibraryPageModule()])
+                        .then(() => log.info('Primary view chunks successfully prewarmed in background'))
+                        .catch((err) => log.warn('Primary view chunks prewarm warning:', err));
+                },
+                PRIMARY_CHUNK_PREWARM_IDLE_MS,
+                0
+            );
 
             // 2. Player chunk is intentionally NOT prewarmed here: it used to
             //    fire 1500ms after splash and steal CPU/RAM from HomePage's

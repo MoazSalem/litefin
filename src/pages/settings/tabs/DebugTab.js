@@ -9,7 +9,13 @@
  */
 
 import { debugOverlay } from '../../../ui/DebugOverlay.js';
-import { isPerformanceOverlayEnabled, togglePerformanceOverlay } from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
+import {
+    isPerformanceOverlayEnabled,
+    togglePerformanceOverlay,
+    isPerformanceCollectorEnabled,
+    togglePerformanceCollector,
+    uploadPerformanceReport
+} from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { storage } from '../../../utils/StorageService.js';
 import { logger } from '../../../utils/Logger.js';
 import { eventBus } from '../../../core/EventBus.js';
@@ -55,6 +61,7 @@ export class DebugTab {
         const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
         const exoLogsEnabled = storage.getItem('debug_exoplayer_logs') === 'true';
         const perfOverlayEnabled = isPerformanceOverlayEnabled();
+        const perfCollectorEnabled = isPerformanceCollectorEnabled();
         const perfMode = storage.getItem('debug_perf_mode') || 'full';
         const perfPosition = storage.getItem('debug_perf_position') || 'top-right';
 
@@ -171,6 +178,24 @@ export class DebugTab {
                         { value: 'bottom-right', label: i18n.t('BottomRight') || 'Bottom Right' },
                         { value: 'bottom-left', label: i18n.t('BottomLeft') || 'Bottom Left' }
                     ], perfPosition)}</div>
+                </div>
+
+                <!-- Performance Profiler & Telemetry Collector Master Switch -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnablePerformanceCollector">${i18n.t('EnablePerformanceCollector') || 'Performance Profiling Collector'}</span>
+                        <span class="setting-description" data-i18n="EnablePerformanceCollectorDescription">${i18n.t('EnablePerformanceCollectorDescription') || 'Background collector capturing main-thread long tasks (>50ms), framerate pacing histograms, memory peaks, and route transition delays for server diagnostics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${perfCollectorEnabled ? 'active' : ''}" id="toggle-debug-perf-collector" tabindex="0"></button></div>
+                </div>
+
+                <!-- Client Performance Audit Report Upload Button -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UploadPerformanceReport">${i18n.t('UploadPerformanceReport') || 'Upload Performance Report'}</span>
+                        <span class="setting-description" data-i18n="UploadPerformanceReportDescription">${i18n.t('UploadPerformanceReportDescription') || 'Generates an in-depth diagnostic audit report and uploads it directly to the Jellyfin server logs.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="btn btn-option" id="btn-upload-perf-report" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="UploadReport">${i18n.t('UploadReport') || 'Upload Report'}</button></div>
                 </div>
 
                 <!-- Storage Management Section -->
@@ -298,6 +323,41 @@ export class DebugTab {
             const newState = !togglePerf.classList.contains('active');
             togglePerf.classList.toggle('active');
             await togglePerformanceOverlay(newState);
+        });
+
+        /*
+         * Performance Profiling Collector master toggle.
+         * Starts background telemetry observation only when enabled.
+         */
+        addListener('#toggle-debug-perf-collector', 'click', async () => {
+            const toggle = root.querySelector('#toggle-debug-perf-collector');
+            if (!toggle) return;
+            const newState = !toggle.classList.contains('active');
+            toggle.classList.toggle('active');
+            await togglePerformanceCollector(newState);
+        });
+
+        /*
+         * Client performance report upload action button.
+         * Generates and uploads the diagnostic report document to Jellyfin /ClientLog/Document.
+         */
+        addListener('#btn-upload-perf-report', 'click', async () => {
+            const btn = root.querySelector('#btn-upload-perf-report');
+            if (!btn) return;
+            btn.disabled = true;
+            btn.textContent = i18n.t('Uploading') || 'Uploading...';
+            try {
+                await uploadPerformanceReport();
+                btn.textContent = i18n.t('Success') || 'Success';
+            } catch (error) {
+                log.error('Failed to upload performance report:', error);
+                btn.textContent = i18n.t('Failed') || 'Failed';
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = i18n.t('UploadReport') || 'Upload Report';
+                }, 2000);
+            }
         });
 
         // Engine logs: Movi WebAssembly demuxer

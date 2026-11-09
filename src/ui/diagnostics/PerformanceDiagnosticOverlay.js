@@ -635,6 +635,10 @@ export class PerformanceDiagnosticOverlay {
                         <button type="button" class="perf-btn-icon" id="perf-btn-reset" title="Reset Statistics" aria-label="Reset Statistics">
                             <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                         </button>
+                        <!-- Upload Performance Audit Report to Server -->
+                        <button type="button" class="perf-btn-icon" id="perf-btn-upload-report" title="Upload Performance Report to Server" aria-label="Upload Performance Report">
+                            <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+                        </button>
                         <!-- Minimize to Pill -->
                         <button type="button" class="perf-btn-icon" id="perf-btn-minimize" title="Minimize to Compact Pill" aria-label="Minimize to Compact Pill">
                             <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
@@ -900,7 +904,26 @@ export class PerformanceDiagnosticOverlay {
                 return;
             }
 
-            // 5. Toggle click-through mode button
+            // 5. Upload performance report to server button
+            const uploadBtn = target.closest('#perf-btn-upload-report');
+            if (uploadBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadBtn.style.opacity = '0.5';
+                import('./PerformanceReportCollector.js')
+                    .then(({ performanceReportCollector }) => performanceReportCollector.uploadReport())
+                    .then(() => {
+                        uploadBtn.style.opacity = '1';
+                        uploadBtn.classList.add('active');
+                        setTimeout(() => uploadBtn.classList.remove('active'), 2500);
+                    })
+                    .catch(() => {
+                        uploadBtn.style.opacity = '1';
+                    });
+                return;
+            }
+
+            // 6. Toggle click-through mode button
             const clickthroughBtn = target.closest('#perf-btn-clickthrough');
             if (clickthroughBtn) {
                 e.preventDefault();
