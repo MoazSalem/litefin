@@ -65,6 +65,7 @@ export class PerformanceDiagnosticOverlay {
         this._dragCoord = null;
         this._isDragging = false;
         this._dragOffset = { x: 0, y: 0 };
+        this._justDragged = false;
 
         // Frame rate monitoring telemetry
         this._rafId = null;
@@ -238,16 +239,58 @@ export class PerformanceDiagnosticOverlay {
 
     /**
      * Toggles between full expanded telemetry panel and compact status pill.
+     * Uses CSS data attributes on the persistent container to switch layout
+     * visibility without incurring innerHTML rebuilds or listener invalidation.
      * @param {'full'|'compact'} mode Desired display mode
      */
     setMode(mode) {
         if (mode !== 'full' && mode !== 'compact') return;
+
+        // Persist user preference to local storage
         this._mode = mode;
         storage.setItem('debug_perf_mode', mode);
 
-        // Re-render markup to match requested layout structure
-        this._renderContent();
+        // Switch visible view in DOM via data-mode attribute
+        if (this._container) {
+            this._container.setAttribute('data-mode', mode);
+        }
+
+        // Ensure canvas graphics context is attached when expanding to full mode
+        if (mode === 'full') {
+            this._bindCanvas();
+        }
+
+        // Refresh text metrics for newly displayed layout
         this._updateMetricsDisplay();
+    }
+
+    /**
+     * Switches the active telemetry tab and updates navigation styles.
+     * @param {'fps'|'vitals'|'system'} tab Target tab identifier
+     */
+    setActiveTab(tab) {
+        if (!this._container) return;
+        this._activeTab = tab;
+
+        // Update tab navigation button styles
+        const tabBtns = this._container.querySelectorAll('.perf-tab-btn');
+        tabBtns.forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+
+        // Toggle corresponding tab panel visibility
+        const fpsTab = this._container.querySelector('#perf-tab-content-fps');
+        const vitalsTab = this._container.querySelector('#perf-tab-content-vitals');
+        const systemTab = this._container.querySelector('#perf-tab-content-system');
+
+        if (fpsTab) fpsTab.style.display = tab === 'fps' ? 'block' : 'none';
+        if (vitalsTab) vitalsTab.style.display = tab === 'vitals' ? 'block' : 'none';
+        if (systemTab) systemTab.style.display = tab === 'system' ? 'block' : 'none';
+
+        // Bind canvas context if switching back to framerate tab
+        if (tab === 'fps') {
+            this._bindCanvas();
+        }
     }
 
     /**
@@ -476,37 +519,57 @@ export class PerformanceDiagnosticOverlay {
     }
 
     /**
-     * Constructs root container element and attaches to document body.
+     * Constructs root container element and renders persistent DOM hierarchy.
+     * Both the compact status pill and the full telemetry HUD panel are mounted
+     * into the DOM simultaneously to eliminate runtime innerHTML serialization
+     * churn, garbage collection pauses, and dropped event listeners.
      * @private
      */
     _buildDom() {
         if (this._container) return;
 
+        // Create main overlay container element
         this._container = document.createElement('div');
         this._container.id = 'performance-diagnostic-overlay';
+
+        // Configure persistent layout attributes
         this._container.setAttribute('data-position', this._position);
+        this._container.setAttribute('data-mode', this._mode);
+
+        // Apply click-through mode if persisted
         if (this._isClickThrough) {
             this._container.classList.add('perf-clickthrough');
         }
+
+        // Overlay remains hidden until explicitly invoked via show()
         this._container.style.display = 'none';
 
-        // Render current template markup
-        this._renderContent();
+        // Mount both compact pill and full panel simultaneously into DOM
+        this._container.innerHTML = `
+            ${this._getCompactPillHtml()}
+            ${this._getFullHudHtml()}
+        `;
 
+        // Cache 2D canvas context for performance graphing
+        this._bindCanvas();
+
+        // Attach overlay element directly to document body root
         document.body.appendChild(this._container);
     }
 
     /**
-     * Generates inner HTML depending on active mode (full vs compact).
+     * Synchronizes DOM attributes with the active display mode.
+     * With dual persistent DOM templates, this eliminates innerHTML destruction.
      * @private
      */
     _renderContent() {
         if (!this._container) return;
 
-        if (this._mode === 'compact') {
-            this._container.innerHTML = this._getCompactPillHtml();
-        } else {
-            this._container.innerHTML = this._getFullHudHtml();
+        // Synchronize mode attribute with current state
+        this._container.setAttribute('data-mode', this._mode);
+
+        // Re-bind canvas reference when in full mode
+        if (this._mode === 'full') {
             this._bindCanvas();
         }
     }
@@ -517,7 +580,7 @@ export class PerformanceDiagnosticOverlay {
      */
     _getCompactPillHtml() {
         return `
-            <div class="perf-pill" id="perf-pill-root" title="Drag to move, click to expand">
+            <div class="perf-pill" id="perf-pill-root" role="button" tabindex="0" title="Drag to move, click to expand">
                 <div class="perf-status-dot" id="perf-pill-dot"></div>
                 <div class="perf-pill-item">
                     <span class="perf-pill-val" id="perf-pill-fps">--</span>
@@ -533,7 +596,7 @@ export class PerformanceDiagnosticOverlay {
                     <span class="perf-pill-val" id="perf-pill-mem">--</span>
                     <span class="perf-pill-unit">MB</span>
                 </div>
-                <button class="perf-pill-expand-btn" id="perf-btn-expand" title="Expand Full HUD" aria-label="Expand Full HUD">
+                <button type="button" class="perf-pill-expand-btn" id="perf-btn-expand" title="Expand Full HUD" aria-label="Expand Full HUD">
                     <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                 </button>
             </div>
@@ -546,7 +609,7 @@ export class PerformanceDiagnosticOverlay {
      */
     _getFullHudHtml() {
         return `
-            <div class="perf-hud-panel" role="region" aria-label="Performance Diagnostics">
+            <div class="perf-hud-panel" id="perf-hud-panel-root" role="region" aria-label="Performance Diagnostics">
                 <!-- Header Toolbar with Drag Handle -->
                 <div class="perf-hud-header" id="perf-hud-header">
                     <div class="perf-hud-title-group">
@@ -556,21 +619,23 @@ export class PerformanceDiagnosticOverlay {
                     </div>
                     <div class="perf-hud-controls">
                         <!-- Click-Through Passthrough Toggle -->
-                        <button class="perf-btn-icon ${this._isClickThrough ? 'active' : ''}" 
+                        <button type="button" 
+                                class="perf-btn-icon ${this._isClickThrough ? 'active' : ''}" 
                                 id="perf-btn-clickthrough" 
-                                title="Toggle Click-Through Mode (Interact with app underneath)">
+                                title="Toggle Click-Through Mode (Interact with app underneath)" 
+                                aria-label="Toggle Click-Through">
                             <svg viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.09-.35-.14-.54-.14H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.44-.72c-.09-.02-.17-.02-.26-.02-.37 0-.71.15-.96.39l-.83.84 5.34 5.34c.33.33.78.53 1.25.53h7.13c.87 0 1.57-.65 1.68-1.51l.73-5.18c.13-.9-.4-1.74-1.2-2.04z"/></svg>
                         </button>
                         <!-- Reset Metrics -->
-                        <button class="perf-btn-icon" id="perf-btn-reset" title="Reset Statistics">
+                        <button type="button" class="perf-btn-icon" id="perf-btn-reset" title="Reset Statistics" aria-label="Reset Statistics">
                             <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                         </button>
                         <!-- Minimize to Pill -->
-                        <button class="perf-btn-icon" id="perf-btn-minimize" title="Minimize to Compact Pill">
+                        <button type="button" class="perf-btn-icon" id="perf-btn-minimize" title="Minimize to Compact Pill" aria-label="Minimize to Compact Pill">
                             <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
                         </button>
                         <!-- Close and Dismiss -->
-                        <button class="perf-btn-icon" id="perf-btn-close" title="Close Diagnostics">
+                        <button type="button" class="perf-btn-icon" id="perf-btn-close" title="Close Diagnostics" aria-label="Close Diagnostics">
                             <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
                         </button>
                     </div>
@@ -578,9 +643,9 @@ export class PerformanceDiagnosticOverlay {
 
                 <!-- Navigation Tabs -->
                 <div class="perf-hud-nav">
-                    <button class="perf-tab-btn ${this._activeTab === 'fps' ? 'active' : ''}" data-tab="fps">Framerate & Graph</button>
-                    <button class="perf-tab-btn ${this._activeTab === 'vitals' ? 'active' : ''}" data-tab="vitals">Web Vitals (LCP)</button>
-                    <button class="perf-tab-btn ${this._activeTab === 'system' ? 'active' : ''}" data-tab="system">System & Memory</button>
+                    <button type="button" class="perf-tab-btn ${this._activeTab === 'fps' ? 'active' : ''}" data-tab="fps">Framerate & Graph</button>
+                    <button type="button" class="perf-tab-btn ${this._activeTab === 'vitals' ? 'active' : ''}" data-tab="vitals">Web Vitals (LCP)</button>
+                    <button type="button" class="perf-tab-btn ${this._activeTab === 'system' ? 'active' : ''}" data-tab="system">System & Memory</button>
                 </div>
 
                 <!-- Scrollable Body Container -->
@@ -761,112 +826,173 @@ export class PerformanceDiagnosticOverlay {
      * @private
      */
     _bindCanvas() {
-        this._canvas = this._container.querySelector('#perf-graph-canvas');
+        this._canvas = this._container ? this._container.querySelector('#perf-graph-canvas') : null;
         if (this._canvas) {
             this._ctx = this._canvas.getContext('2d');
         }
     }
 
     /**
-     * Binds mouse and touch drag handles and click listeners.
+     * Binds mouse, touch drag handles, keyboard navigation, and centralized
+     * delegated click listeners across all diagnostic overlay controls.
      * @private
      */
     _bindEvents() {
         if (!this._container) return;
 
-        // Centralized helper to record listeners for cleanup
-        const addListener = (selector, event, handler) => {
-            const el = this._container.querySelector(selector);
-            if (el) {
-                el.addEventListener(event, handler);
-                this._listeners.push({ element: el, event, handler });
+        // Initialize drag interaction handlers for header and compact badge
+        this._setupDraggable();
+
+        /**
+         * Delegated click dispatcher handling all overlay controls deterministically.
+         * Resolves targets with closest() matching to support nested SVG icons.
+         * @param {MouseEvent} e Click event
+         */
+        const onContainerClick = (e) => {
+            const target = e.target;
+            if (!target) return;
+
+            // 1. Close overlay button
+            const closeBtn = target.closest('#perf-btn-close');
+            if (closeBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.hide();
+                storage.setItem('debug_perf_overlay_enabled', false);
+
+                // Synchronize with any active settings toggle
+                const settingToggle = document.querySelector('#toggle-debug-perf-overlay');
+                if (settingToggle) {
+                    settingToggle.classList.remove('active');
+                }
+                return;
+            }
+
+            // 2. Minimize to compact pill button
+            const minBtn = target.closest('#perf-btn-minimize');
+            if (minBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.setMode('compact');
+                return;
+            }
+
+            // 3. Expand from pill to full HUD button
+            const expandBtn = target.closest('#perf-btn-expand');
+            if (expandBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.setMode('full');
+                return;
+            }
+
+            // 4. Reset telemetry statistics button
+            const resetBtn = target.closest('#perf-btn-reset');
+            if (resetBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.resetMetrics();
+                return;
+            }
+
+            // 5. Toggle click-through mode button
+            const clickthroughBtn = target.closest('#perf-btn-clickthrough');
+            if (clickthroughBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleClickThrough();
+                return;
+            }
+
+            // 6. Navigation tab buttons
+            const tabBtn = target.closest('.perf-tab-btn');
+            if (tabBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const tab = tabBtn.dataset.tab;
+                if (tab) {
+                    this.setActiveTab(tab);
+                }
+                return;
+            }
+
+            // 7. Click on compact pill body (expand to full if not dragged)
+            if (this._mode === 'compact') {
+                const pill = target.closest('#perf-pill-root');
+                if (pill) {
+                    // Ignore synthetic click triggered right after drag completion
+                    if (this._justDragged) {
+                        this._justDragged = false;
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.setMode('full');
+                    return;
+                }
             }
         };
 
-        // Header dragging and repositioning
-        this._setupDraggable();
+        // Attach delegated click listener to root container
+        this._container.addEventListener('click', onContainerClick);
+        this._listeners.push({ element: this._container, event: 'click', handler: onContainerClick });
 
-        // Control button bindings
-        addListener('#perf-btn-minimize', 'click', (e) => {
-            e.stopPropagation();
-            this.setMode('compact');
-        });
-
-        addListener('#perf-btn-expand', 'click', (e) => {
-            e.stopPropagation();
-            this.setMode('full');
-        });
-
-        addListener('#perf-btn-reset', 'click', (e) => {
-            e.stopPropagation();
-            this.resetMetrics();
-        });
-
-        addListener('#perf-btn-clickthrough', 'click', (e) => {
-            e.stopPropagation();
-            this.toggleClickThrough();
-        });
-
-        addListener('#perf-btn-close', 'click', (e) => {
-            e.stopPropagation();
-            this.hide();
-            storage.setItem('debug_perf_overlay_enabled', false);
-            // Synchronize with any open Settings toggles
-            const settingToggle = document.querySelector('#toggle-debug-perf-overlay');
-            if (settingToggle) {
-                settingToggle.classList.remove('active');
-            }
-        });
-
-        // Tab navigation switching
-        const tabBtns = this._container.querySelectorAll('.perf-tab-btn');
-        tabBtns.forEach((btn) => {
-            const handler = (e) => {
-                e.stopPropagation();
-                const tab = btn.dataset.tab;
-                if (!tab) return;
-                this._activeTab = tab;
-
-                tabBtns.forEach((b) => b.classList.toggle('active', b === btn));
-
-                const fpsTab = this._container.querySelector('#perf-tab-content-fps');
-                const vitalsTab = this._container.querySelector('#perf-tab-content-vitals');
-                const systemTab = this._container.querySelector('#perf-tab-content-system');
-
-                if (fpsTab) fpsTab.style.display = tab === 'fps' ? 'block' : 'none';
-                if (vitalsTab) vitalsTab.style.display = tab === 'vitals' ? 'block' : 'none';
-                if (systemTab) systemTab.style.display = tab === 'system' ? 'block' : 'none';
-
-                if (tab === 'fps') {
-                    this._bindCanvas();
+        /**
+         * Keyboard event handler for TV remote and accessibility navigation.
+         * Enables Enter/Space activation on focused interactive pill.
+         * @param {KeyboardEvent} e Keydown event
+         */
+        const onContainerKeyDown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                const target = e.target;
+                if (target && target.id === 'perf-pill-root' && this._mode === 'compact') {
+                    e.preventDefault();
+                    this.setMode('full');
                 }
-            };
-            btn.addEventListener('click', handler);
-            this._listeners.push({ element: btn, event: 'click', handler });
-        });
+            }
+        };
+
+        this._container.addEventListener('keydown', onContainerKeyDown);
+        this._listeners.push({ element: this._container, event: 'keydown', handler: onContainerKeyDown });
     }
 
     /**
-     * Enables draggable positioning on the header toolbar or compact pill.
+     * Enables pointer and touch dragging for repositioning the HUD or pill.
+     * Uses a movement threshold to prevent drag handlers from intercepting
+     * or swallowing legitimate click events on buttons or the pill badge.
      * @private
      */
     _setupDraggable() {
-        const getDragTarget = () => {
-            if (this._mode === 'compact') {
-                return this._container.querySelector('#perf-pill-root');
-            }
-            return this._container.querySelector('#perf-hud-header');
-        };
+        let isPointerDown = false;
+        let dragThresholdPassed = false;
+        let startX = 0;
+        let startY = 0;
 
+        /**
+         * Pointer down handler: identifies valid drag handles and records coords.
+         * @param {MouseEvent|TouchEvent} e Pointer or touch down event
+         */
         const onPointerDown = (e) => {
-            // Ignore clicks originating from header control buttons
-            if (e.target.closest('button') || e.target.closest('.perf-btn-icon')) return;
+            // Ignore events originating directly on interactive buttons or tabs
+            if (e.target && e.target.closest('button, .perf-btn-icon, .perf-pill-expand-btn, .perf-tab-btn')) {
+                return;
+            }
 
-            this._isDragging = true;
-            this._container.setAttribute('data-dragged', 'true');
+            // Verify event target falls within valid drag handles
+            const isHeader = Boolean(e.target && e.target.closest('#perf-hud-header'));
+            const isPill = Boolean(e.target && e.target.closest('#perf-pill-root'));
+            if (!isHeader && !isPill) return;
+
+            // Track initial pointer coordinates
+            isPointerDown = true;
+            dragThresholdPassed = false;
+            this._justDragged = false;
 
             const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
             const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+
+            startX = clientX;
+            startY = clientY;
 
             const rect = this._container.getBoundingClientRect();
             this._dragOffset = {
@@ -874,24 +1000,45 @@ export class PerformanceDiagnosticOverlay {
                 y: clientY - rect.top
             };
 
-            // Prevent unwanted text selection while dragging
-            if (e.preventDefault && e.type !== 'touchstart') {
-                e.preventDefault();
-            }
+            // Note: We deliberately avoid calling preventDefault() here to allow
+            // native click events to fire when the user merely clicks without dragging.
         };
 
+        /**
+         * Pointer move handler: repositions container once threshold is exceeded.
+         * @param {MouseEvent|TouchEvent} e Pointer or touch move event
+         */
         const onPointerMove = (e) => {
-            if (!this._isDragging) return;
+            if (!isPointerDown) return;
 
             const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
             const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+
+            // Require 5px movement before engaging drag state
+            if (!dragThresholdPassed) {
+                const distance = Math.hypot(clientX - startX, clientY - startY);
+                if (distance > 5) {
+                    dragThresholdPassed = true;
+                    this._isDragging = true;
+                    if (this._container) {
+                        this._container.setAttribute('data-dragged', 'true');
+                    }
+                } else {
+                    return;
+                }
+            }
+
+            // Prevent window scrolling while actively dragging HUD
+            if (e.preventDefault && e.cancelable) {
+                e.preventDefault();
+            }
 
             const viewportW = window.innerWidth;
             const viewportH = window.innerHeight;
             const width = this._container.offsetWidth;
             const height = this._container.offsetHeight;
 
-            // Constrain within viewport boundaries with safety padding
+            // Constrain coordinates within safe viewport boundaries
             let newX = clientX - this._dragOffset.x;
             let newY = clientY - this._dragOffset.y;
 
@@ -906,18 +1053,33 @@ export class PerformanceDiagnosticOverlay {
             this._dragCoord = { x: newX, y: newY };
         };
 
+        /**
+         * Pointer up handler: releases drag state and handles synthetic click guard.
+         */
         const onPointerUp = () => {
-            if (!this._isDragging) return;
-            this._isDragging = false;
-            if (this._container) {
-                this._container.removeAttribute('data-dragged');
+            if (!isPointerDown) return;
+            isPointerDown = false;
+
+            if (dragThresholdPassed) {
+                this._isDragging = false;
+                if (this._container) {
+                    this._container.removeAttribute('data-dragged');
+                }
+
+                // Suppress immediate trailing click event following a drag operation
+                this._justDragged = true;
+                setTimeout(() => {
+                    this._justDragged = false;
+                }, 100);
             }
+
+            dragThresholdPassed = false;
         };
 
-        // Attach global move/up handlers
-        window.addEventListener('mousemove', onPointerMove, { passive: true });
+        // Attach global move/up handlers on window for smooth off-element dragging
+        window.addEventListener('mousemove', onPointerMove, { passive: false });
         window.addEventListener('mouseup', onPointerUp, { passive: true });
-        window.addEventListener('touchmove', onPointerMove, { passive: true });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp, { passive: true });
 
         this._listeners.push(
@@ -927,20 +1089,14 @@ export class PerformanceDiagnosticOverlay {
             { element: window, event: 'touchend', handler: onPointerUp }
         );
 
-        // Bind mousedown and touchstart to active drag handles
-        const attachTargetListener = () => {
-            const target = getDragTarget();
-            if (target) {
-                target.addEventListener('mousedown', onPointerDown);
-                target.addEventListener('touchstart', onPointerDown, { passive: true });
-                this._listeners.push(
-                    { element: target, event: 'mousedown', handler: onPointerDown },
-                    { element: target, event: 'touchstart', handler: onPointerDown }
-                );
-            }
-        };
+        // Attach pointerdown listeners directly to the container
+        this._container.addEventListener('mousedown', onPointerDown);
+        this._container.addEventListener('touchstart', onPointerDown, { passive: true });
 
-        attachTargetListener();
+        this._listeners.push(
+            { element: this._container, event: 'mousedown', handler: onPointerDown },
+            { element: this._container, event: 'touchstart', handler: onPointerDown }
+        );
     }
 
     /**

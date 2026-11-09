@@ -23,7 +23,7 @@ globalThis.localStorage = {
 };
 
 // Polyfill minimal browser DOM globals
-function createMockElement(tagName = 'div') {
+function createMockElement(tagName = 'div', id = '') {
     const listeners = new Map();
     const children = [];
     const classListSet = new Set();
@@ -31,7 +31,7 @@ function createMockElement(tagName = 'div') {
 
     const el = {
         tagName: tagName.toUpperCase(),
-        id: '',
+        id,
         style: {},
         dataset: {},
         innerHTML: '',
@@ -80,13 +80,21 @@ function createMockElement(tagName = 'div') {
         },
         querySelector: (sel) => {
             if (sel.startsWith('#')) {
-                const id = sel.slice(1);
-                return createMockElement('div');
+                const queryId = sel.slice(1);
+                return createMockElement('div', queryId);
             }
             return createMockElement('div');
         },
         querySelectorAll: () => [createMockElement('button')],
-        closest: () => null,
+        closest: (sel) => {
+            const selectors = sel.split(',').map((s) => s.trim());
+            for (const s of selectors) {
+                if (s.startsWith('#') && el.id === s.slice(1)) return el;
+                if (s.startsWith('.') && classListSet.has(s.slice(1))) return el;
+                if (s.toLowerCase() === el.tagName.toLowerCase()) return el;
+            }
+            return el.parentNode && typeof el.parentNode.closest === 'function' ? el.parentNode.closest(sel) : null;
+        },
         getBoundingClientRect: () => ({ left: 20, top: 20, width: 380, height: 240 }),
         getContext: () => ({
             save: () => {},
@@ -198,6 +206,14 @@ test('PerformanceDiagnosticLauncher: Storage state query and toggling', async ()
     assert.equal(stateDisabled, false, 'Should return false after disabling');
     assert.equal(storage.getItem('debug_perf_overlay_enabled'), 'false', 'Storage should persist false');
     assert.equal(isPerformanceOverlayEnabled(), false, 'Query should report false');
+
+    // Test load, unload, and deferred scheduling facades
+    const loaded = await loadPerformanceOverlay();
+    assert.ok(loaded, 'Overlay instance loaded successfully');
+    unloadPerformanceOverlay();
+
+    storage.setItem('debug_perf_overlay_enabled', 'false');
+    scheduleDeferredPerformanceOverlay();
 });
 
 test('PerformanceDiagnosticOverlay: Lifecycle init, show, hide, and destroy', () => {
@@ -315,4 +331,107 @@ test('Localization: en-us.json and en-gb.json contain performance diagnostic key
         assert.ok(enUs[key], `en-us.json must define key: ${key}`);
         assert.ok(enGb[key], `en-gb.json must define key: ${key}`);
     }
+});
+
+test('PerformanceDiagnosticOverlay: Interactive controls dispatching (minimize, expand, reset, clickthrough, close, tabs)', () => {
+    const overlay = new PerformanceDiagnosticOverlay();
+    overlay.init();
+    overlay.show();
+
+    // 1. Minimize button click via container event delegation
+    const minBtn = createMockElement('button', 'perf-btn-minimize');
+    minBtn.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: minBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._mode, 'compact', 'Clicking minimize button switches mode to compact');
+    assert.equal(overlay._container.getAttribute('data-mode'), 'compact', 'Container data-mode attribute is compact');
+
+    // 2. Expand button click via container event delegation
+    const expandBtn = createMockElement('button', 'perf-btn-expand');
+    expandBtn.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: expandBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._mode, 'full', 'Clicking expand button switches mode to full');
+    assert.equal(overlay._container.getAttribute('data-mode'), 'full', 'Container data-mode attribute is full');
+
+    // 3. Compact pill body click expands to full HUD
+    overlay.setMode('compact');
+    assert.equal(overlay._mode, 'compact');
+    const pill = createMockElement('div', 'perf-pill-root');
+    pill.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: pill,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._mode, 'full', 'Clicking pill body expands HUD to full');
+
+    // 4. Reset button clears frame metrics and session counters
+    overlay._frameTimes = [16.6, 16.7, 33.3];
+    overlay._jankCount = 2;
+    const resetBtn = createMockElement('button', 'perf-btn-reset');
+    resetBtn.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: resetBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._frameTimes.length, 0, 'Clicking reset button clears frame buffer');
+    assert.equal(overlay._jankCount, 0, 'Clicking reset button resets jank count');
+
+    // 5. Click-through toggle button
+    const clickthroughBtn = createMockElement('button', 'perf-btn-clickthrough');
+    clickthroughBtn.parentNode = overlay._container;
+    assert.equal(overlay._isClickThrough, false);
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: clickthroughBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._isClickThrough, true, 'Clicking clickthrough button enables clickthrough mode');
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: clickthroughBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._isClickThrough, false, 'Clicking clickthrough button again disables clickthrough mode');
+
+    // 6. Navigation tabs switching
+    const tabVitalsBtn = createMockElement('button');
+    tabVitalsBtn.classList.add('perf-tab-btn');
+    tabVitalsBtn.dataset.tab = 'vitals';
+    tabVitalsBtn.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: tabVitalsBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._activeTab, 'vitals', 'Clicking vitals tab switches activeTab to vitals');
+
+    // 7. Close button hides overlay and sets storage item to false
+    const closeBtn = createMockElement('button', 'perf-btn-close');
+    closeBtn.parentNode = overlay._container;
+    overlay._container.dispatchEvent({
+        type: 'click',
+        target: closeBtn,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+    });
+    assert.equal(overlay._isVisible, false, 'Clicking close button hides overlay');
+    assert.equal(storage.getItem('debug_perf_overlay_enabled'), 'false', 'Storage updated on close');
+
+    overlay.destroy();
 });
