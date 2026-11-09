@@ -210,6 +210,30 @@ test('PerformanceReportCollector: Build formatted report output (ASCII text & JS
     collector.stop();
 });
 
+test('PerformanceReportCollector: Route transitions capture accurate source/target pairs and quick jumps', async () => {
+    // Import event bus to trigger navigation events
+    const { eventBus } = await import('../src/core/EventBus.js');
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    // Trigger initial navigation to library
+    eventBus.emit('router:navigate', { path: '/library/123' });
+
+    // Verify first recorded navigation pair
+    assert.equal(collector._routeNavigations.length, 1, 'First navigation registered');
+    assert.equal(collector._routeNavigations[0].to, '/library/123', 'Target route captured');
+
+    // Trigger immediate subsequent jump to details before settle window finishes
+    eventBus.emit('router:navigate', { path: '/details/456' });
+
+    // Ensure earlier route was resolved and from/to chain is preserved
+    assert.equal(collector._routeNavigations.length, 2, 'Second navigation registered');
+    assert.equal(collector._routeNavigations[1].from, '/library/123', 'Previous route tracked as source');
+    assert.equal(collector._routeNavigations[1].to, '/details/456', 'New route tracked as target');
+
+    collector.stop();
+});
+
 test('PerformanceDiagnosticLauncher: Performance collector state and facades', async () => {
     storage.removeItem('debug_perf_collector_enabled');
 

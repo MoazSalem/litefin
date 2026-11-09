@@ -379,18 +379,35 @@ export class PerformanceReportCollector {
 
     /**
      * Subscribes to router navigation events to measure page transition durations.
+     * Records route source/destination pairs and correlates frame drops during navigation.
      * @private
      */
     _setupRouteListener() {
+        // Track the current active route path so source navigation can be attributed
+        this._currentRoute = router && typeof router.getCurrentPath === 'function'
+            ? router.getCurrentPath()
+            : '/';
+
         const onNavigate = ({ path }) => {
             const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-            const from = router && typeof router.getCurrentPath === 'function' ? router.getCurrentPath() : '/';
+            // Resolve source from previously tracked route
+            const from = this._currentRoute || '/';
+            const to = path || 'unknown';
+            // Update current route tracker to destination path
+            this._currentRoute = to;
             const relativeOffsetMs = Math.round(now - this._startTime);
+
+            // Conclude preceding in-flight transition measurement immediately if still pending
+            if (this._activeNavigation && this._activeNavigation.entry) {
+                const elapsedPrior = Math.round(now - this._activeNavigation.startTime);
+                this._activeNavigation.entry.durationMs = elapsedPrior;
+                this._activeNavigation = null;
+            }
 
             const navEntry = {
                 timestampMs: relativeOffsetMs,
                 from,
-                to: path || 'unknown',
+                to,
                 durationMs: 0,
                 jankCount: 0
             };
@@ -651,11 +668,12 @@ export class PerformanceReportCollector {
                 cpuCores: typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 'N/A') : 'N/A',
                 deviceMemoryGb: typeof navigator !== 'undefined' ? (navigator.deviceMemory || 'N/A') : 'N/A',
                 activeSettings: {
-                    lowVram: storage.getItem('pref:lowVram'),
-                    disableCardScaling: storage.getItem('pref:disableCardScaling'),
-                    disableBlurhash: storage.getItem('pref:disableBlurhash'),
-                    loaderStyle: storage.getItem('pref:loaderStyle'),
-                    mediaRowsLayout: storage.getItem('pref:mediaRowsLayout')
+                    // Check canonical litefin settings and legacy preference keys
+                    lowVram: storage.getItem('litefin:lowVramMode') === 'true' || storage.getItem('pref:lowVram') === 'true',
+                    disableCardScaling: storage.getItem('litefin:disableCardScaling') === 'true' || storage.getItem('pref:disableCardScaling') === 'true',
+                    disableBlurhash: storage.getItem('litefin:disableBlurhash') === 'true' || storage.getItem('pref:disableBlurhash') === 'true',
+                    loaderStyle: storage.getItem('litefin:loaderStyle') || storage.getItem('pref:loaderStyle') || 'ring',
+                    mediaRowsLayout: storage.getItem('pref:mediaRowsLayout') || 'modern'
                 }
             },
             framerates: {
@@ -738,9 +756,9 @@ export class PerformanceReportCollector {
             `CPU Cores (Logical):  ${e.cpuCores}`,
             `Device RAM (Est):     ${e.deviceMemoryGb !== 'N/A' ? `${e.deviceMemoryGb} GB` : 'N/A'}`,
             `Active UI Settings:`,
-            `  • Low VRAM Mode:         ${e.activeSettings.lowVram === 'true' ? 'Enabled' : 'Disabled'}`,
-            `  • Disable Card Scaling:  ${e.activeSettings.disableCardScaling === 'true' ? 'Enabled' : 'Disabled'}`,
-            `  • Disable Blurhash:      ${e.activeSettings.disableBlurhash === 'true' ? 'Enabled' : 'Disabled'}`,
+            `  • Low VRAM Mode:         ${e.activeSettings.lowVram ? 'Enabled' : 'Disabled'}`,
+            `  • Disable Card Scaling:  ${e.activeSettings.disableCardScaling ? 'Enabled' : 'Disabled'}`,
+            `  • Disable Blurhash:      ${e.activeSettings.disableBlurhash ? 'Enabled' : 'Disabled'}`,
             `  • Loader Animation:      ${e.activeSettings.loaderStyle || 'ring'}`,
             `  • Media Rows Layout:     ${e.activeSettings.mediaRowsLayout || 'modern'}`,
             '',
