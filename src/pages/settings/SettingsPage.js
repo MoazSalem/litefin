@@ -93,6 +93,12 @@ class SettingsPage extends Page {
         this._onResize = null;
         this._fallbackFonts = [];
 
+        // Fingerprint of the registered focus layout (portrait/landscape).
+        // Used to make _setupFocus() idempotent: the sidebar/content containers
+        // survive tab re-renders, so re-registering them only duplicates work
+        // and grows the tracked-section list.
+        this._focusLayoutSignature = null;
+
         // Encapsulated tab controllers (Phase 1 modularization)
         this.aboutTab = typeof AboutTab !== 'undefined' ? new AboutTab(this) : null;
         this.librariesTab = typeof LibrariesTab !== 'undefined' ? new LibrariesTab(this) : null;
@@ -128,9 +134,10 @@ class SettingsPage extends Page {
         if (typeof loadCultureOptions !== 'undefined') {
             const cultures = await loadCultureOptions();
             this.prefLanguages = cultures;
-            if (this.activeTab === 'player' || this.activeTab === 'subtitles') {
-                this._switchTab(this.activeTab, true);
-            }
+            // Update the already-rendered language dropdown options in place.
+            // A full tab re-render here rebuilds the whole settings DOM and
+            // re-registers focus sections, causing a 100ms+ freeze mid-route.
+            this._refreshCultureOptions();
         } else if (!cachedCultures) {
             try {
                 const cultures = await api.getCultures();
@@ -142,9 +149,7 @@ class SettingsPage extends Page {
                         label: i18n.ensureBiDi(c.DisplayName)
                     }));
                     this.prefLanguages = cachedCultures;
-                    if (this.activeTab === 'player' || this.activeTab === 'subtitles') {
-                        this._switchTab(this.activeTab, true);
-                    }
+                    this._refreshCultureOptions();
                 }
             } catch (err) {
                 log.error('Failed to fetch cultures:', err);
@@ -885,6 +890,32 @@ class SettingsPage extends Page {
     }
 
     /**
+     * Updates the preferred-subtitle-language dropdown in place after cultures
+     * resolve from the server.
+     *
+     * The dropdown options live entirely in the button's `data-options`
+     * attribute, so refreshing them is a string write plus a label update —
+     * no innerHTML rebuild, no event re-binding, no FocusManager churn.
+     *
+     * @private
+     */
+    _refreshCultureOptions() {
+        const btn = this.$('#subtitle-lang-select-btn');
+        if (!btn) return;
+
+        const options = [{ value: 'none', label: i18n.t('None') }, ...(this.prefLanguages || [])];
+        const currentValue = btn.dataset.value || storage.getItem('pref:subtitleLang') || 'none';
+
+        btn.dataset.options = JSON.stringify(options);
+
+        const selected = options.find((option) => String(option.value) === String(currentValue)) || options[0];
+        const label = btn.querySelector('.btn-label');
+        if (selected && label) {
+            label.innerText = i18n.ensureBiDi(selected.label);
+        }
+    }
+
+    /**
      * Loads server fallback fonts and updates dropdown options and button labels.
      * Delegated to the extracted SettingsFontOptions helper.
      */
@@ -1400,6 +1431,15 @@ class SettingsPage extends Page {
         // We define these purely logically (LTR space).
         // FocusManager automatically inverts 'leaveLeft' and 'leaveRight' when document dir is 'rtl'.
         const isPortrait = this._isPortraitMode();
+
+        // Idempotency guard: the containers (#settings-sidebar and
+        // #settings-content-panel) are never replaced — only their innerHTML is.
+        // Re-registering on every tab switch / initial mount produced duplicate
+        // "Registered section" calls in the same millisecond and leaked entries
+        // into Page._focusSections.
+        const signature = isPortrait ? 'settings:portrait' : 'settings:landscape';
+        if (this._focusLayoutSignature === signature) return;
+        this._focusLayoutSignature = signature;
 
         this.registerFocusSection('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',

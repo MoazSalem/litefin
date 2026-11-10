@@ -192,7 +192,11 @@ class Page extends Component {
      */
     registerFocusSection(name, container, options = {}) {
         focusManager.register(name, container, options);
-        this._focusSections.push(name);
+        // Track each section once — repeated registration of the same section
+        // (mount + layout refresh) must not grow the teardown list.
+        if (this._focusSections.indexOf(name) === -1) {
+            this._focusSections.push(name);
+        }
     }
 
     /**
