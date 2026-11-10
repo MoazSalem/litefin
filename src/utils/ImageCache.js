@@ -31,6 +31,7 @@
 
 import { logger } from './Logger.js';
 import { customHeaders } from './CustomHeaders.js';
+import { platformInfo } from './PlatformInfo.js';
 
 const log = logger.create('ImageCache');
 
@@ -52,28 +53,13 @@ const log = logger.create('ImageCache');
  * We verify that Chromium versions 50+ are never classified as legacy, while
  * preserving legacy classifications for true older engines and early Chromium (< 50).
  */
-const _userAgent =
-    typeof navigator !== 'undefined' && navigator && typeof navigator.userAgent === 'string'
-        ? navigator.userAgent
-        : '';
-
-// Evaluate legacy engine status with guard against false-positive modern Chromium
-const isLegacyWebKit = (() => {
-    // Check if a Chromium engine token is present (standard or Tizen format)
-    const chromeMatch =
-        _userAgent.match(/(?:Chrome|Chromium|CriOS)\/(\d+)/i) ||
-        _userAgent.match(/like Gecko\)\s+(\d+)\.\d+/i);
-
-    // If Chromium is detected, evaluate the major version
-    if (chromeMatch) {
-        const majorVersion = parseInt(chromeMatch[1], 10);
-        // Only Chromium versions prior to 50 require the legacy profile
-        return !isNaN(majorVersion) && majorVersion < 50;
-    }
-
-    // When no Chromium token exists, verify legacy engine indicators
-    return /AppleWebKit\/53[0-8]|Tizen 2\.|Web0S; Linux\/SmartTV/i.test(_userAgent);
-})();
+/**
+ * Legacy browser engine detection.
+ * Evaluates whether the active runtime requires conservative image concurrency
+ * (majorVersion < 50 or older engines without modern chromeMatch tokens).
+ * Delegates to centralized platformInfo.isLegacyEngine single source of truth.
+ */
+const isLegacyWebKit = platformInfo.isLegacyEngine;
 
 /**
  * Maximum number of parallel image pre-load requests at any given time.

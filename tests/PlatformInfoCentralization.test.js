@@ -163,3 +163,46 @@ test('PlatformInfo: Desktop runtime operating system and vendor brand detection'
     // Cleanup globals
     delete globalThis.window.__TAURI__;
 });
+
+test('PlatformInfo: Legacy engine classification and ImageCache compatibility', () => {
+    // 1. Modern Tizen 9.0 (Chromium 120) must be modern (isLegacyEngine = false)
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 9.0) AppleWebKit/537.36 (KHTML, like Gecko) 120.0.6099.5/9.0 TV Safari/537.36',
+        configurable: true
+    });
+    platformInfo.refresh();
+    assert.strictEqual(platformInfo.isLegacyEngine, false, 'Tizen 9.0 Chrome 120 must not be legacy');
+    assert.strictEqual(platformInfo.isLegacyWebKit, false, 'isLegacyWebKit alias must be false');
+
+    // 2. Desktop Chrome 120 must be modern
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        configurable: true
+    });
+    platformInfo.refresh();
+    assert.strictEqual(platformInfo.isLegacyEngine, false, 'Desktop Chrome 120 must not be legacy');
+
+    // 3. Tizen 3.0 (Chrome 47) must be legacy (< Chrome 50)
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 3.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/3.0 TV Safari/538.1 Chrome/47.0.2526.69',
+        configurable: true
+    });
+    platformInfo.refresh();
+    assert.strictEqual(platformInfo.isLegacyEngine, true, 'Chrome 47 on Tizen 3 must be legacy');
+
+    // 4. Tizen 2.4 (pure WebKit 538.1) must be legacy
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
+        configurable: true
+    });
+    platformInfo.refresh();
+    assert.strictEqual(platformInfo.isLegacyEngine, true, 'Tizen 2.4 pure WebKit must be legacy');
+
+    // 5. webOS 1.2 must be legacy
+    Object.defineProperty(globalThis.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/538.2 (KHTML, like Gecko) Large Screen WebAppManager Safari/538.2',
+        configurable: true
+    });
+    platformInfo.refresh();
+    assert.strictEqual(platformInfo.isLegacyEngine, true, 'webOS 1.2 must be legacy');
+});

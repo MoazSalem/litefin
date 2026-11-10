@@ -3500,14 +3500,12 @@ export function testServer(address, timeout = 1000, parentSignal = null, headers
 
 /**
  * Checks whether the current runtime environment is a Tauri application shell.
- * Returns true on Windows, macOS, Linux, and Android TV running via Tauri.
+ * Delegates to centralized platformInfo single source of truth.
  *
  * @returns {boolean} True if running under Tauri runtime.
  */
 function _isTauriRuntime() {
-    return (
-        typeof window !== 'undefined' && !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__)
-    );
+    return platformInfo.isTauri;
 }
 
 /**
@@ -3951,7 +3949,7 @@ export async function sendWakeOnLan(macAddress, options = {}) {
 
         // Helper function to launch the ytresolver companion service
         const launchYtResolver = () => {
-            if (typeof tizen === 'undefined') return;
+            if (!platformInfo.isTizen || typeof tizen === 'undefined') return;
             try {
                 const appId = tizen.application.getCurrentApplication().appInfo.id;
                 const pkgId = appId.split('.')[0];
@@ -4053,7 +4051,7 @@ export function hasBackgroundDiscoveryService() {
     }
 
     // 3. Tizen HTTP Proxy / Discovery Service check
-    if (typeof tizen !== 'undefined') {
+    if (platformInfo.isTizen && typeof tizen !== 'undefined') {
         try {
             const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
             return bgEnabled;
@@ -4199,7 +4197,7 @@ export async function discoverServers(onProgress = null, onServerFound = null, o
      * the user still gets discovery — just slower.
      * =========================================================================
      */
-    if (typeof tizen !== 'undefined') {
+    if (platformInfo.isTizen && typeof tizen !== 'undefined') {
         const { PlayerSettings } = await import('../utils/PlayerSettings.js');
         const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
 

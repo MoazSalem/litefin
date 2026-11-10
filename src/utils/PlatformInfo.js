@@ -26,6 +26,15 @@ const log = logger.create('PlatformInfo');
 
 class PlatformInfo {
     constructor() {
+        // Flag controlling whether dynamic environment checking is performed in getters.
+        // True in Node.js test runners; false in real production runtimes for pure O(1) property reads.
+        const proc = typeof globalThis !== 'undefined' ? globalThis.process : null;
+        this._dynamicEnvCheckEnabled = Boolean(
+            proc &&
+            proc.versions?.node &&
+            proc.env?.LITEFIN_PRODUCTION !== '1'
+        );
+
         // Cached environment fingerprint to detect dynamic mocks in test harnesses
         this._cachedFingerprint = '';
 
@@ -47,6 +56,7 @@ class PlatformInfo {
         this._isDesktop = false;
         this._isWeb = true;
         this._isTauri = false;
+        this._isLegacyEngine = false;
 
         // Platform-specific operating system versions (evaluated strictly once)
         this._tizenVersion = null;
@@ -124,6 +134,9 @@ class PlatformInfo {
         this._isTv = Boolean(this._isTizen || this._isWebOS || this._isAndroidTv);
         this._isTauri = this._detectTauri();
 
+        // Detect legacy WebKit / pre-Chrome 50 engine classification
+        this._isLegacyEngine = this._detectLegacyEngine();
+
         // Detect OS-specific release versions and underlying operating system names
         this._tizenVersion = this._detectTizenVersion();
         this._webosVersion = this._detectWebOSVersion();
@@ -148,11 +161,12 @@ class PlatformInfo {
 
     /**
      * Verifies whether runtime User Agent or global environment has changed.
-     * In production, navigator.userAgent is static and this is a single string comparison.
+     * In production, this is a no-op because _dynamicEnvCheckEnabled is false.
      * In unit test environments, dynamic UA/window manipulation triggers re-detection.
      * @private
      */
     _ensureUpToDate() {
+        if (!this._dynamicEnvCheckEnabled) return;
         if (this._getEnvFingerprint() !== this._cachedFingerprint) {
             this._detectAll();
         }
@@ -206,6 +220,38 @@ class PlatformInfo {
 
         // Default to modern baseline for desktop browsers (Firefox, Safari, etc.)
         return 999;
+    }
+
+    /**
+     * =========================================================================
+     * Legacy Engine Detection
+     * =========================================================================
+     * Evaluates whether the current browser engine is a legacy WebKit or early
+     * Chromium release (< Chrome 50). Modern Chromium (such as Tizen 9.0 running
+     * Chrome 120) is guaranteed to return false despite WebKit/537.36 tokens.
+     *
+     * @private
+     * @returns {boolean} True if running on a legacy browser engine.
+     */
+    _detectLegacyEngine() {
+        if (typeof navigator === 'undefined' || !navigator.userAgent) {
+            return false;
+        }
+
+        const ua = navigator.userAgent;
+
+        // Check if a Chromium engine token is present (standard or modern Tizen format)
+        const chromeMatch =
+            ua.match(/(?:Chrome|Chromium|CriOS)\/(\d+)/i) ||
+            ua.match(/like Gecko\)\s+(\d+)\.\d+/i);
+
+        if (chromeMatch) {
+            const majorVersion = parseInt(chromeMatch[1], 10);
+            return !isNaN(majorVersion) && majorVersion < 50;
+        }
+
+        // When no Chromium token exists, verify legacy engine indicators
+        return /AppleWebKit\/53[0-8]|Tizen 2\.|Web0S; Linux\/SmartTV/i.test(ua);
     }
 
     /**
@@ -552,11 +598,26 @@ class PlatformInfo {
     }
 
     /**
+     * Explicitly re-runs platform detection. Can be called on resume or settings change.
+     */
+    refresh() {
+        this._detectAll();
+    }
+
+    /**
+     * Controls whether getters evaluate dynamic environment changes.
+     * @param {boolean} [enabled=true]
+     */
+    enableDynamicEnvChecks(enabled = true) {
+        this._dynamicEnvCheckEnabled = Boolean(enabled);
+    }
+
+    /**
      * Internal raw platform string getter.
      * @returns {'tizen'|'webos'|'android'|'desktop'|'web'}
      */
     get _platform() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__platform;
     }
 
@@ -574,7 +635,7 @@ class PlatformInfo {
      * @returns {number}
      */
     get _chromeVersion() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__chromeVersion;
     }
 
@@ -588,7 +649,7 @@ class PlatformInfo {
 
     /** @returns {boolean} True if running on a Samsung Tizen TV */
     get isTizen() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isTizen;
     }
 
@@ -601,13 +662,13 @@ class PlatformInfo {
      * @returns {number|null} Parsed version float (e.g., 3.0, 4.0) or null if not Tizen.
      */
     get tizenVersion() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._tizenVersion;
     }
 
     /** @returns {boolean} True if running on an LG WebOS TV */
     get isWebOS() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isWebOS;
     }
 
@@ -619,13 +680,13 @@ class PlatformInfo {
      * @returns {number|null} webOS major version (e.g., 1, 3, 5, 23, 24, 25) or null.
      */
     get webosVersion() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._webosVersion;
     }
 
     /** @returns {boolean} True if running in a standard web browser (excluding Android TV, Smart TVs, and desktop app shells) */
     get isWeb() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isWeb;
     }
 
@@ -638,7 +699,7 @@ class PlatformInfo {
      * @returns {boolean} True if running on an Android platform.
      */
     get isAndroid() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isAndroid;
     }
 
@@ -648,13 +709,13 @@ class PlatformInfo {
      * @returns {boolean} True if running on Android TV hardware
      */
     get isAndroidTv() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isAndroidTv;
     }
 
     /** @returns {boolean} True if running on any television runtime (Tizen, WebOS, or Android TV) */
     get isTv() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isTv;
     }
 
@@ -666,7 +727,7 @@ class PlatformInfo {
      * @returns {string|null} Parsed Android version string or null if not Android.
      */
     get androidVersion() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._androidVersion;
     }
 
@@ -681,7 +742,7 @@ class PlatformInfo {
      * @returns {boolean} True if running under the Tauri application shell.
      */
     get isTauri() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isTauri;
     }
 
@@ -696,8 +757,31 @@ class PlatformInfo {
      * @returns {boolean} True if running on a desktop platform.
      */
     get isDesktop() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._isDesktop;
+    }
+
+    /**
+     * =========================================================================
+     * Legacy Engine Classification
+     * =========================================================================
+     * Evaluates whether the current browser engine is a legacy WebKit or early
+     * Chromium release (< Chrome 50). Modern Chromium (such as Tizen 9.0 running
+     * Chrome 120) is guaranteed to return false despite WebKit/537.36 tokens.
+     * @returns {boolean} True if running on a legacy browser engine.
+     */
+    get isLegacyEngine() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isLegacyEngine;
+    }
+
+    /**
+     * Legacy WebKit compatibility alias.
+     * @returns {boolean} True if running on a legacy WebKit engine.
+     */
+    get isLegacyWebKit() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isLegacyEngine;
     }
 
     /**
@@ -708,7 +792,7 @@ class PlatformInfo {
      * @returns {string} Operating system name ('Tizen', 'webOS', 'Android TV', 'Android', 'Windows', 'macOS', 'Linux', 'Unknown')
      */
     get operatingSystem() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._operatingSystem;
     }
 
@@ -720,13 +804,13 @@ class PlatformInfo {
      * @returns {'Edge'|'Chrome'|'Firefox'|'Safari'|'Browser'}
      */
     get browserName() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._browserName;
     }
 
     /** @returns {string} The raw platform string ('tizen', 'webos', 'android', 'desktop', 'web') */
     get platformString() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__platform;
     }
 
@@ -735,7 +819,7 @@ class PlatformInfo {
      * @returns {'tizen'|'webos'|'android'|'desktop'|'web'} The detected device platform identifier.
      */
     get platform() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__platform;
     }
 
@@ -747,7 +831,7 @@ class PlatformInfo {
      *   'ultra-legacy' — Chrome <47, fallen-back rendering (Tizen 2.x / WebOS 1.x)
      */
     get layoutTier() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._layoutTier;
     }
 
@@ -756,7 +840,7 @@ class PlatformInfo {
      * @returns {number} Chrome version number or 999 for modern browser environments.
      */
     get chromeVersion() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__chromeVersion;
     }
 
@@ -767,7 +851,7 @@ class PlatformInfo {
      * @returns {boolean} True if Chromium engine is < 32.
      */
     get isAncientChrome() {
-        this._ensureUpToDate();
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this.__chromeVersion < 32;
     }
 
