@@ -12,6 +12,7 @@ import { logger } from './utils/Logger.js';
 import { PlayerSettings } from './utils/PlayerSettings.js';
 // Centralized platform identification
 import { platformInfo } from './utils/PlatformInfo.js';
+import { idleGate } from './utils/IdleGate.js';
 
 const log = logger.create('Bootstrap');
 
@@ -46,49 +47,61 @@ async function bootstrap() {
     }, 3000);
 
     /*
-     * Wake up the Node.js background service early.
+     * Wake up the Node.js background service.
      * Tizen: AppSharedURI will silently wake up the companion web service.
      * WebOS: A dummy luna request will wake up the service context.
+     *
+     * Gated behind idleGate with a 6s quiet window: spawning the OS service
+     * process (and its HTTP endpoint) while HomePage is still fetching and
+     * mounting its initial rows competes for CPU, IO and network slots with
+     * the first paint and the first D-pad press. Unbounded max-wait (0) means
+     * it will wait for genuine idleness instead of forcing a collision.
      */
-    try {
-        const isSvcEnabled = PlayerSettings.get('enableBackgroundService');
-        if (isSvcEnabled !== false) {
-            if (typeof tizen !== 'undefined') {
-                try {
-                    const appId = tizen.application.getCurrentApplication().appInfo.id;
-                    const pkgId = appId.split('.')[0];
-                    tizen.application.launch(
-                        pkgId + '.ytresolver',
-                        function () {
-                            log.info('Tizen background service launched successfully');
-                        },
-                        function (err) {
-                            log.error('Failed to launch Tizen background service: ' + err.message);
+    idleGate.runWhenIdle(
+        function () {
+            try {
+                const isSvcEnabled = PlayerSettings.get('enableBackgroundService');
+                if (isSvcEnabled !== false) {
+                    if (typeof tizen !== 'undefined') {
+                        try {
+                            const appId = tizen.application.getCurrentApplication().appInfo.id;
+                            const pkgId = appId.split('.')[0];
+                            tizen.application.launch(
+                                pkgId + '.ytresolver',
+                                function () {
+                                    log.info('Tizen background service launched successfully');
+                                },
+                                function (err) {
+                                    log.error('Failed to launch Tizen background service: ' + err.message);
+                                }
+                            );
+                        } catch (e) {
+                            log.error('Exception launching Tizen service: ' + e.message);
                         }
-                    );
-                } catch (e) {
-                    log.error('Exception launching Tizen service: ' + e.message);
+                    } else if (
+                        platformInfo.isWebOS &&
+                        typeof window.PalmServiceBridge !== 'undefined' &&
+                        window.webOS &&
+                        window.webOS.service
+                    ) {
+                        // Wake up webOS background service via Luna bus strictly when running on LG webOS hardware
+                        window.webOS.service.request('luna://org.litefin.app.service', {
+                            method: 'discover',
+                            parameters: { subscribe: false },
+                            onSuccess: function () {},
+                            onFailure: function () {}
+                        });
+                    }
+                } else {
+                    log.info('Background service launch skipped (disabled in settings)');
                 }
-            } else if (
-                platformInfo.isWebOS &&
-                typeof window.PalmServiceBridge !== 'undefined' &&
-                window.webOS &&
-                window.webOS.service
-            ) {
-                // Wake up webOS background service via Luna bus strictly when running on LG webOS hardware
-                window.webOS.service.request('luna://org.litefin.app.service', {
-                    method: 'discover',
-                    parameters: { subscribe: false },
-                    onSuccess: function () {},
-                    onFailure: function () {}
-                });
+            } catch (e) {
+                log.warn('Failed to wake up background service:', e);
             }
-        } else {
-            log.info('Background service launch skipped (disabled in settings)');
-        }
-    } catch (e) {
-        log.warn('Failed to wake up background service:', e);
-    }
+        },
+        6000,
+        0
+    );
 
     log.info('Bootstrap entry complete');
 }
