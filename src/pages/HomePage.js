@@ -3962,14 +3962,24 @@ class HomePage extends Page {
         const mdblist = pluginManager.getPlugin('mdblist-ratings');
         if (!mdblist || !mdblist.plugin) return false;
 
+        // Skip immediately if the plugin's server endpoints were flagged as unavailable
+        if (mdblist.plugin._isServerAvailable === false) {
+            log.info('MDBList server plugin capability unavailable for this session; skipping hero enrichment.');
+            return false;
+        }
+
         log.info('Enriching hero items with MDBList data...');
         try {
             await Promise.all(
                 items.map(async (item) => {
-                    if (item._mdbMetadata) return;
+                    // Short-circuit if already enriched or server capability failed during this batch
+                    if (item._mdbMetadata || mdblist.plugin._isServerAvailable === false) return;
                     // Prefer ProviderIds.Imdb to avoid extra API calls; skip awards for carousel performance
                     const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                    item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                    const meta = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                    if (meta) {
+                        item._mdbMetadata = meta;
+                    }
                 })
             );
         } catch (err) {

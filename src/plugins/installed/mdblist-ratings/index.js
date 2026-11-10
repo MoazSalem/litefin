@@ -26,12 +26,16 @@ export default {
     serverDependency: 'mdblist-ratings',
     defaultEnabled: false,
 
+    // Runtime flag tracking whether the server plugin endpoints are responsive and compatible
+    _isServerAvailable: true,
+
     async init(api) {
         this.api = api;
         this.log = api.log;
         this._settings = null;
         this._settingsPromise = null;
         this._awardsEnabledOnServer = true; // Default to true until checked
+        this._isServerAvailable = true;
         this.log.info('MDBList Ratings plugin initialization started');
 
         // Fetch and cache server-side WebClientSettings (safe for non-admins)
@@ -57,13 +61,28 @@ export default {
                 const cfg = await this.api.serverPlugins.call('/Plugins/MdbListRatings/WebClientSettings');
                 this._settings = normalizeWebClientSettings(cfg);
                 this._awardsEnabledOnServer = this._settings.awards.enabled;
+                this._isServerAvailable = true;
                 this.log.info(
                     `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}, clickable=${this._settings.clickable}`
                 );
             } catch (err) {
+                const status = err?.status;
                 // Fallback for legacy 10.xx plugins where WebClientSettings endpoint does not exist
-                this.log.info('MDBList WebClientSettings endpoint not available; probing legacy awards capability...');
-                await this._checkAwardsCapabilityLegacy(this.api);
+                this.log.info(`MDBList WebClientSettings endpoint not available (HTTP ${status || 'err'}); probing legacy awards capability...`);
+                const legacyAvailable = await this._checkAwardsCapabilityLegacy(this.api);
+
+                // If both modern WebClientSettings and legacy fallback endpoints failed with incompatible
+                // status codes (404 Not Found, 405 Method Not Allowed, or 403 Forbidden), mark capability
+                // unavailable for the entire session so subsequent calls become fast no-ops.
+                if (!legacyAvailable) {
+                    this._isServerAvailable = false;
+                    this._awardsEnabledOnServer = false;
+                    this.log.warn(`MDBList server plugin endpoints are incompatible or unavailable (HTTP ${status}). Disabling MDBList queries for this session.`);
+                    try {
+                        storage.setItem('serverPlugin:available:mdblist-ratings', 'false');
+                    } catch (_) {}
+                }
+
                 this._settings = normalizeWebClientSettings({
                     enableWebAwardBadges: this._awardsEnabledOnServer
                 });
@@ -78,8 +97,11 @@ export default {
 
     /**
      * Legacy probe for older Jellyfin 10.xx plugin versions without WebClientSettings.
+     * @param {Object} api - Plugin API client
+     * @returns {Promise<boolean>} True if any legacy endpoint succeeded
      */
     async _checkAwardsCapabilityLegacy(api) {
+        let legacyAvailable = false;
         try {
             const pluginId = 'ab96f8b5-45ef-44be-81d6-99bc01e26b9d';
             const config = await api.serverPlugins.call(`/Plugins/${pluginId}/Configuration`);
@@ -90,19 +112,23 @@ export default {
             } else {
                 this._awardsEnabledOnServer = true;
             }
+            legacyAvailable = true;
         } catch (e) {
+            // Configuration endpoint might be 403 (non-admin) or 404/405.
+            // Try AwardsDefinitions endpoint.
             try {
                 await api.serverPlugins.call('/Plugins/MdbListRatings/AwardsDefinitions');
                 this._awardsEnabledOnServer = true;
+                legacyAvailable = true;
             } catch (err) {
-                if (err.status === 404) {
-                    this._awardsEnabledOnServer = false;
-                    this.log.info(
-                        'Server-side Awards API not found (legacy plugin version). Awards will not be loaded.'
-                    );
-                }
+                this._awardsEnabledOnServer = false;
+                this.log.info(
+                    `Server-side Awards API not found or unsupported (HTTP ${err?.status || 'err'}). Awards will not be loaded.`
+                );
+                legacyAvailable = false;
             }
         }
+        return legacyAvailable;
     },
 
     /**
@@ -112,15 +138,41 @@ export default {
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
-     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string, context: Object }>}
+     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string, context: Object }|null>}
      */
     async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
+        // Fast no-op if the server plugin endpoints were marked unavailable
+        if (this._isServerAvailable === false) {
+            return null;
+        }
+
         try {
             // Ensure server settings are loaded first so filtering can be applied
             const settings = await this.getSettings();
 
+            // Re-check availability in case initial probe resolved while waiting
+            if (this._isServerAvailable === false) {
+                return null;
+            }
+
             // 1. Try to get IDs, ratings, and features from MDBList cache
-            const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            let data = null;
+            try {
+                data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            } catch (cacheErr) {
+                const status = cacheErr?.status;
+                // If endpoint returns 404, 405, or 403, server plugin route is missing or incompatible
+                if (status === 404 || status === 405 || status === 403) {
+                    this._isServerAvailable = false;
+                    this.log.warn(
+                        `MDBList CachedByItemId failed (HTTP ${status}). Marking server capability unavailable for this session.`
+                    );
+                    try {
+                        storage.setItem('serverPlugin:available:mdblist-ratings', 'false');
+                    } catch (_) {}
+                }
+                return null;
+            }
 
             // 2. Filter and order ratings strictly according to user settings & deduplicate
             const rawRatings = data && data.hasCache ? data.ratings || [] : [];
@@ -265,9 +317,9 @@ export default {
     },
 
     async _fetchAndRenderAwards(pageEl, imdbId, retryCount = 0) {
-        // Skip if awards are explicitly disabled or unsupported on the server, or locally
+        // Skip if awards or the server plugin are explicitly disabled or unsupported on the server, or locally
         const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
-        if (this._awardsEnabledOnServer === false || !userWantsAwards) {
+        if (this._isServerAvailable === false || this._awardsEnabledOnServer === false || !userWantsAwards) {
             return;
         }
 
@@ -286,6 +338,10 @@ export default {
                 this._fetchAndRenderAwards(pageEl, imdbId, retryCount + 1);
             }
         } catch (err) {
+            const status = err?.status;
+            if (status === 404 || status === 405 || status === 403) {
+                this._awardsEnabledOnServer = false;
+            }
             this.log.warn('Awards fetch failed:', err);
         }
     },
