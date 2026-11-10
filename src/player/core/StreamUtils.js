@@ -854,7 +854,14 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     }
 
     const physicalDefaultStream = audioStreams.find((s) => s.IsDefault) || audioStreams[0];
-    if (physicalDefaultStream && !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
+    // With Force DTS on webOS, an unplayable default track (e.g. TrueHD) must not force a remux
+    // of a DTS track: the DTS bitstream is selected natively once the default is in place.
+    const targetCodec = (targetStream.Codec || '').toLowerCase();
+    const isForcedDtsTarget = backendType === 'webos' &&
+        (targetCodec.includes('dts') || targetCodec === 'dca') &&
+        PlayerSettings.get('enableDts') === 'enable';
+    if (physicalDefaultStream && !isForcedDtsTarget &&
+        !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
         return true;
     }
 

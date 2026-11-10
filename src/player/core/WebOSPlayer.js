@@ -28,6 +28,7 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { getDeviceCapabilities } from '../../api/DeviceProfile.js';
+import { mapDefaultFirstAudioIndex } from './AudioTrackMap.js';
 
 const log = logger.create('WebOSPlayer');
 
@@ -3061,6 +3062,17 @@ export class WebOSPlayer {
         }
 
         log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language, 'Codec:', targetStream.Codec);
+
+        // ====================================================================
+        // Default-first mapping: when the TV's list is exactly one shorter and starts
+        // with TrueHD, the TV drops TrueHD and moves its default track to the front.
+        // Other cases fall through to the strategies below.
+        // ====================================================================
+        const defaultFirstIndex = mapDefaultFirstAudioIndex(jellyfinAudioStreams, nativeTracks.length, targetStream.Index);
+        if (defaultFirstIndex !== null) {
+            log.info('  - Default-first mapping: stream', targetStream.Index, '→ native index', defaultFirstIndex);
+            return defaultFirstIndex;
+        }
 
         // ====================================================================
         // Strategy 1: Codec-Aware Playable Stream Mapping (PRIMARY)
