@@ -897,16 +897,10 @@ class FocusManager {
         if (nextSection && this._sections.has(nextSection)) {
             const originElement = this._focusedElement; // Capture for spatial handover
 
-            // Unfocus current
-            if (this._focusedElement) {
-                this._focusedElement.classList.remove('focused');
-
-                // Remove generic .focused-row from parent settings items
-                const oldSettingItem = this._focusedElement.closest('.setting-item');
-                if (oldSettingItem) {
-                    oldSettingItem.classList.remove('focused-row');
-                }
-            }
+            // NOTE: the old element's `.focused` class is intentionally left in
+            // place here. focusElement() clears it AFTER computing the scroll
+            // target, so the geometry reads run against an un-dirtied layout
+            // instead of forcing a synchronous reflow on the keypress path.
 
             // ----------------------------------------------------------------
             // ADAPTIVE SECTION TRANSITION
@@ -965,20 +959,6 @@ class FocusManager {
         const defaults = { scroll: true, skipScroll: false, instantScroll: false };
         options = { ...defaults, ...options };
 
-        // Cleanup old focus FIRST (lightweight)
-        // TIZEN FIX: Explicitly blur the old element to remove native :focus state
-        if (this._focusedElement && this._focusedElement !== element) {
-            this._focusedElement.classList.remove('focused');
-
-            // Remove generic .focused-row from parent settings items
-            const oldSettingItem = this._focusedElement.closest('.setting-item');
-            if (oldSettingItem) {
-                oldSettingItem.classList.remove('focused-row');
-            }
-
-            this._focusedElement.blur(); // Clear native :focus styling on Tizen
-        }
-
         // PERFORMANCE: Use provided sectionName hint to skip DOM closest() traversal.
         // _move() always knows the section and passes it via options.
         const sectionName = options.sectionName || this.getSectionForElement(element);
@@ -1002,9 +982,29 @@ class FocusManager {
             }
         }
 
-        // Delegate scroll positioning to ScrollController
-        // Passes section config for custom offsets (scrollOffsetTop, etc.)
+        // Delegate scroll positioning to ScrollController.
+        //
+        // PERFORMANCE ORDERING: compute the scroll target BEFORE mutating any
+        // focus classes. The old element keeps its `.focused` class during the
+        // measurement, but that class only applies a transform / z-index — it
+        // does not change layout metrics. Doing the reads first means the layout
+        // tree is still clean, avoiding a forced synchronous reflow in the
+        // middle of a D-pad keypress (50-120ms on Tizen).
         this._scroll.scrollIntoView(element, config || {}, options);
+
+        // Cleanup old focus AFTER the geometry reads (style-only writes).
+        // TIZEN FIX: Explicitly blur the old element to remove native :focus state
+        if (this._focusedElement && this._focusedElement !== element) {
+            this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+
+            this._focusedElement.blur(); // Clear native :focus styling on Tizen
+        }
 
         // NOW set focus (after scroll is done)
         this._focusedElement = element;

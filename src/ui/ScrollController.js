@@ -206,6 +206,25 @@ class ScrollController {
         // ====================================================================
         this._offsetCache = new WeakMap();
 
+        // PERFORMANCE: stable layout metrics for vertical D-pad navigation.
+        //
+        // Even with the offsetTop cache above, the row-scroll branch still read
+        // row.offsetHeight, pageContent.clientHeight and rowItems.clientWidth on
+        // EVERY up/down press. Each of those is a layout read, and because the
+        // keypress path also mutates focus classes, the first read flushed a
+        // full synchronous reflow of the whole page (50-120ms on Tizen).
+        //
+        // Rows, row tracks and the page viewport do not change dimensions while
+        // the user navigates, so cache them once and invalidate on resize /
+        // layout preference changes / page navigation.
+        this._rowMetrics = new WeakMap();
+        this._containerMetrics = new WeakMap();
+
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('resize', () => this.invalidateMetrics());
+        }
+        eventBus.on('layout:changed', () => this.invalidateMetrics());
+
         // Expose to window for lazy-load checking to bypass circular imports
         window.__scrollController = this;
 
@@ -1612,6 +1631,67 @@ class ScrollController {
     }
 
     /**
+     * Read-only metrics for a scroll container.
+     *
+     * `clientHeight` is cached for `.page-content` only — the page viewport is
+     * stable between resizes, while modals/popovers may be resized while open
+     * and must always be measured live.
+     *
+     * @param {HTMLElement} container
+     * @returns {{width: number, height: number}}
+     * @private
+     */
+    _getContainerMetrics(container) {
+        if (!container) return { width: 0, height: 0 };
+
+        const isPageContent = container.classList && container.classList.contains('page-content');
+        if (!isPageContent) {
+            return { width: container.clientWidth, height: container.clientHeight };
+        }
+
+        let metrics = this._containerMetrics.get(container);
+        if (!metrics) {
+            metrics = { width: container.clientWidth, height: container.clientHeight };
+            this._containerMetrics.set(container, metrics);
+        }
+        return metrics;
+    }
+
+    /**
+     * Cached row geometry for vertical D-pad row transitions.
+     *
+     * A `.media-row` keeps the same height and layout-exception flags for its
+     * entire lifetime; only doc-level layout changes invalidate this cache.
+     *
+     * @param {HTMLElement} row - `.media-row` element
+     * @param {HTMLElement} container - Scroll container the row lives in
+     * @returns {{container: HTMLElement, height: number, hasPersonGrid: boolean}}
+     * @private
+     */
+    _getRowMetrics(row, container) {
+        let metrics = this._rowMetrics.get(row);
+        if (metrics && metrics.container === container) return metrics;
+
+        metrics = {
+            container,
+            height: row.offsetHeight || 0,
+            hasPersonGrid: Boolean(row.querySelector('.person-grid'))
+        };
+        this._rowMetrics.set(row, metrics);
+        return metrics;
+    }
+
+    /**
+     * Clears cached layout metrics. Called on viewport resize, layout
+     * preference changes, and page navigation.
+     * @public
+     */
+    invalidateMetrics() {
+        this._rowMetrics = new WeakMap();
+        this._containerMetrics = new WeakMap();
+    }
+
+    /**
      * Scroll an element into view with intelligent positioning.
      *
      * Handles multiple scroll strategies:
@@ -1667,7 +1747,8 @@ class ScrollController {
                 // who prefer instant jumps don't wait for animations.
                 // ============================================================
                 const currentScroll = this.getVerticalScroll(pageContent);
-                const viewHeight = pageContent.clientHeight;
+                // Cached viewport height — no clientHeight read on the keypress path.
+                const viewHeight = this._getContainerMetrics(pageContent).height;
                 const scrollDelta = Math.abs(currentScroll);
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
@@ -1765,7 +1846,7 @@ class ScrollController {
             const cardEl = element.closest('.episode-row-card') || element;
             const cardTop = getCumulativeOffsetTop(cardEl, pageContent);
             const cardHeight = cardEl.offsetHeight || 100;
-            const viewHeight = pageContent.clientHeight;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const currentScroll = this.getVerticalScroll(pageContent);
             const alignment = this.getVerticalScrollAlignment();
 
@@ -1811,8 +1892,12 @@ class ScrollController {
         const row = pageContent ? element.closest('.media-row') : null;
         let useRowScroll = !!row;
         let activePageContent = pageContent; // May be nulled for hero
+        let rowMetrics = null; // Populated once, reused by the alignment branch
 
         if (useRowScroll) {
+            // Cached once per row — no offsetHeight read on subsequent keypresses.
+            rowMetrics = this._getRowMetrics(row, pageContent);
+
             // HERO EXCEPTION: Hero sections always snap to scroll position 0
             const isHero = row.classList.contains('details-main-split');
 
@@ -1823,7 +1908,7 @@ class ScrollController {
                 // navigation up to hero snaps cleanly without forcing animation.
                 // ============================================================
                 const currentScroll = this.getVerticalScroll(pageContent);
-                const viewHeight = pageContent.clientHeight;
+                const viewHeight = this._getContainerMetrics(pageContent).height;
                 const scrollDelta = Math.abs(currentScroll);
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
@@ -1839,12 +1924,12 @@ class ScrollController {
             }
             // TALL ROW EXCEPTION: If the row is much taller than the viewport,
             // disable row-alignment to prevent jarring jumps.
-            else if (row.offsetHeight > pageContent.clientHeight * TALL_ROW_MULTIPLIER) {
+            else if (rowMetrics.height > this._getContainerMetrics(pageContent).height * TALL_ROW_MULTIPLIER) {
                 useRowScroll = false;
             }
             // GRID EXCEPTION: If the row contains a wrap-grid (like Season episodes),
             // row-based snapping will fail spectacularly on deep navigation.
-            else if (row.querySelector('.person-grid')) {
+            else if (rowMetrics.hasPersonGrid) {
                 useRowScroll = false;
             }
         }
@@ -1874,7 +1959,7 @@ class ScrollController {
 
         if (isRichMeta && pageContent && pageContent.querySelector('.details-main-split')) {
             const currentScroll = this.getVerticalScroll(pageContent);
-            const viewHeight = pageContent.clientHeight;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const scrollDelta = Math.abs(currentScroll);
 
             // If already browsing near the top of the details page, stay grounded at 0
@@ -1913,11 +1998,13 @@ class ScrollController {
         // packed items (e.g. genre header → genre grid in the same row).
         // ----------------------------------------------------------------
         if (useRowScroll && row) {
-            // Batch all DOM reads first (Samsung Tizen optimization)
+            // Batch all DOM reads first (Samsung Tizen optimization).
+            // Row height / viewport height come from the metrics cache so no
+            // layout flush is triggered here.
             const rowTop = getCumulativeOffsetTop(row, pageContent);
-            const rowHeight = row.offsetHeight || 0;
+            const rowHeight = (rowMetrics || this._getRowMetrics(row, pageContent)).height;
             const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
-            const viewHeight = pageContent.clientHeight;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const currentScroll = this.getVerticalScroll(pageContent);
             const alignment = this.getVerticalScrollAlignment();
 
@@ -2024,9 +2111,9 @@ class ScrollController {
                 const parentRow = element.closest('.media-row');
                 if (parentRow && pageContent && !useRowScroll) {
                     const rowTop = getCumulativeOffsetTop(parentRow, pageContent);
-                    const rowHeight = parentRow.offsetHeight;
+                    const rowHeight = this._getRowMetrics(parentRow, pageContent).height;
                     const rowBottom = rowTop + rowHeight;
-                    const viewHeight = pageContent.clientHeight;
+                    const viewHeight = this._getContainerMetrics(pageContent).height;
                     const currentScroll = this.getVerticalScroll(pageContent);
                     const viewBottom = currentScroll + viewHeight;
 
@@ -2254,7 +2341,7 @@ class ScrollController {
 
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
-                const viewHeight = activePageContent.clientHeight;
+                const viewHeight = this._getContainerMetrics(activePageContent).height;
                 const currentScroll = this.getVerticalScroll(activePageContent);
 
                 // ================================================================
@@ -2363,6 +2450,8 @@ class ScrollController {
         // Clear the offsetTop cache so stale row positions don't persist
         // across page navigations (rows on the new page have different offsets).
         this._offsetCache = new WeakMap();
+        // Row heights and viewport dimensions also belong to the old page.
+        this.invalidateMetrics();
     }
 }
 

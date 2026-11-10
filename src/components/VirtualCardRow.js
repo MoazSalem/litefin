@@ -480,6 +480,15 @@ export class VirtualCardRow {
 
         this.domNodes = new Map(); // Maps index -> HTMLElement
 
+        /**
+         * Last window range materialized in the DOM ({ start, end }).
+         * Used to short-circuit _updateWindow() when the sliding window has not
+         * actually moved — the diff loops and child-order sort are pure overhead
+         * when the focused card stays inside the same rendered range.
+         * @type {{start: number, end: number}|null}
+         */
+        this._renderedRange = null;
+
         if (this._initialWindow != null && this.currentIndex === 0) {
             this._isBootRender = true;
         }
@@ -812,6 +821,22 @@ export class VirtualCardRow {
                 }
             }
         }
+
+        // ── No-op window fast path ──────────────────────────────────────────
+        // If the computed range is identical to the range already in the DOM and
+        // every index in it is still materialized, there is nothing to diff.
+        // Avoids re-allocating a Set, walking domNodes, and re-sorting children
+        // on every D-pad press that stays inside the current window.
+        const prevRange = this._renderedRange;
+        if (
+            prevRange &&
+            prevRange.start === start &&
+            prevRange.end === end &&
+            this.domNodes.size === end - start + 1
+        ) {
+            return;
+        }
+        this._renderedRange = { start, end };
 
         const requiredIndices = new Set();
         for (let i = start; i <= end; i++) {

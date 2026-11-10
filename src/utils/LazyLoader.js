@@ -101,16 +101,21 @@ class LazyLoader {
             // MARQUEE CLEANUP: Ensure any previously animating text elements
             // are reset to their default static states. This drops animation
             // loops and releases Compositor layers when they are off focus.
+            // PERFORMANCE: probe with a single querySelector first — the vast
+            // majority of focus moves have no marquee running, and this avoids
+            // allocating a NodeList + forEach callback on every keypress.
             // ----------------------------------------------------------------
-            document.querySelectorAll('.marquee-active').forEach((el) => {
-                el.classList.remove('marquee-active');
-                const span = el.querySelector('span');
-                if (span) {
-                    span.style.removeProperty('transform');
-                }
-                el.style.removeProperty('--scroll-dist');
-                el.style.removeProperty('--marquee-duration');
-            });
+            if (document.querySelector('.marquee-active')) {
+                document.querySelectorAll('.marquee-active').forEach((el) => {
+                    el.classList.remove('marquee-active');
+                    const span = el.querySelector('span');
+                    if (span) {
+                        span.style.removeProperty('transform');
+                    }
+                    el.style.removeProperty('--scroll-dist');
+                    el.style.removeProperty('--marquee-duration');
+                });
+            }
 
             // If it's a media card
             if (target.classList.contains('media-card')) {
@@ -122,8 +127,15 @@ class LazyLoader {
                 // PERFORMANCE: Defer to the next animation frame so the 20-sibling
                 // DOM walk doesn't block the critical focus transition paint.
                 // The focus ring appears instantly; images preload before the next frame.
-                const preloadTarget = img || target;
-                requestAnimationFrame(() => this._batchPreloadImages(preloadTarget));
+                //
+                // VirtualCardRow cards are skipped: that row materializes only the
+                // slides in its window and eager-loads every card it mounts, so a
+                // sibling walk here would only touch cards outside the window.
+                const isVirtualCard = target.dataset && target.dataset.virtualIndex !== undefined;
+                if (!isVirtualCard) {
+                    const preloadTarget = img || target;
+                    requestAnimationFrame(() => this._batchPreloadImages(preloadTarget));
+                }
 
                 // ----------------------------------------------------------------
                 // DYNAMIC TEXT MARQUEE SCROLL DETECTOR
