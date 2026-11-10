@@ -9,6 +9,13 @@
  */
 
 import { storage } from '../../../utils/StorageService.js';
+import {
+    isPerformanceOverlayEnabled,
+    togglePerformanceOverlay,
+    isPerformanceCollectorEnabled,
+    togglePerformanceCollector,
+    uploadPerformanceReport
+} from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { platformInfo } from '../../../utils/PlatformInfo.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { PlayerSettings } from '../../../utils/PlayerSettings.js';
@@ -259,6 +266,35 @@ export class PerformanceTab {
                     <div class="setting-label"><span class="setting-name" data-i18n="LabelDisableLibraryCache">${i18n.t('LabelDisableLibraryCache') || 'Disable Library Cache'}</span><span class="setting-description" data-i18n="LabelDisableLibraryCacheDescription">${i18n.t('LabelDisableLibraryCacheDescription') || 'Skip caching library content between page visits.'}</span></div>
                     <div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:disableLibraryCache') === 'true' ? 'active' : ''}" id="toggle-disable-library-cache" tabindex="0"></button></div>
                 </div>
+
+                <!-- Performance Diagnostic HUD Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceDiagnostics">${i18n.t('PerformanceDiagnostics') || 'Diagnostics & Profiling'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowPerformanceOverlay">${i18n.t('ShowPerformanceOverlay') || 'Performance Diagnostics HUD'}</span>
+                        <span class="setting-description" data-i18n="ShowPerformanceOverlayDescription">${i18n.t('ShowPerformanceOverlayDescription') || 'Display on-screen real-time frame rate, frame time graph, Core Web Vitals (LCP, FCP, CLS), and memory metrics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${isPerformanceOverlayEnabled() ? 'active' : ''}" id="toggle-perf-overlay-tab" tabindex="0"></button></div>
+                </div>
+
+                <!-- Performance Profiling & Telemetry Collector Master Switch -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnablePerformanceCollector">${i18n.t('EnablePerformanceCollector') || 'Performance Profiling Collector'}</span>
+                        <span class="setting-description" data-i18n="EnablePerformanceCollectorDescription">${i18n.t('EnablePerformanceCollectorDescription') || 'Background collector capturing main-thread long tasks (>50ms), framerate pacing histograms, memory peaks, and route transition delays for server diagnostics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${isPerformanceCollectorEnabled() ? 'active' : ''}" id="toggle-perf-collector-tab" tabindex="0"></button></div>
+                </div>
+
+                <!-- Client Performance Audit Report Upload Button -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UploadPerformanceReport">${i18n.t('UploadPerformanceReport') || 'Upload Performance Report'}</span>
+                        <span class="setting-description" data-i18n="UploadPerformanceReportDescription">${i18n.t('UploadPerformanceReportDescription') || 'Generates an in-depth diagnostic audit report and uploads it directly to the Jellyfin server logs.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="btn btn-option" id="btn-upload-perf-report-tab" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="UploadReport">${i18n.t('UploadReport') || 'Upload Report'}</button></div>
+                </div>
             </div>
         `;
     }
@@ -435,6 +471,57 @@ export class PerformanceTab {
                 storage.setItem('pref:disableLibraryCache', String(nextState));
                 disableLibCacheToggle.classList.toggle('active', nextState);
                 log.info(`Disable library cache set to: ${nextState}`);
+            });
+        }
+
+        /*
+         * Toggle Performance Diagnostic HUD.
+         * Activates real-time frame telemetry and Core Web Vitals profiling.
+         */
+        const perfOverlayToggle = root.querySelector('#toggle-perf-overlay-tab');
+        if (perfOverlayToggle) {
+            this._addListener(perfOverlayToggle, 'click', async () => {
+                const isCurrentlyActive = perfOverlayToggle.classList.contains('active');
+                const nextState = !isCurrentlyActive;
+                perfOverlayToggle.classList.toggle('active', nextState);
+                await togglePerformanceOverlay(nextState);
+            });
+        }
+
+        /*
+         * Toggle Performance Profiling & Telemetry Collector.
+         */
+        const perfCollectorToggle = root.querySelector('#toggle-perf-collector-tab');
+        if (perfCollectorToggle) {
+            this._addListener(perfCollectorToggle, 'click', async () => {
+                const isCurrentlyActive = perfCollectorToggle.classList.contains('active');
+                const nextState = !isCurrentlyActive;
+                perfCollectorToggle.classList.toggle('active', nextState);
+                await togglePerformanceCollector(nextState);
+            });
+        }
+
+        /*
+         * Client performance report upload action button.
+         * Uploads complete diagnostic audit bundle directly to Jellyfin server.
+         */
+        const uploadReportBtn = root.querySelector('#btn-upload-perf-report-tab');
+        if (uploadReportBtn) {
+            this._addListener(uploadReportBtn, 'click', async () => {
+                uploadReportBtn.disabled = true;
+                uploadReportBtn.textContent = i18n.t('Uploading') || 'Uploading...';
+                try {
+                    await uploadPerformanceReport();
+                    uploadReportBtn.textContent = i18n.t('Success') || 'Success';
+                } catch (error) {
+                    log.error('Failed to upload performance report:', error);
+                    uploadReportBtn.textContent = i18n.t('Failed') || 'Failed';
+                } finally {
+                    setTimeout(() => {
+                        uploadReportBtn.disabled = false;
+                        uploadReportBtn.textContent = i18n.t('UploadReport') || 'Upload Report';
+                    }, 2000);
+                }
             });
         }
     }

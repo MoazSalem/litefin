@@ -112,6 +112,10 @@ export function getSettingsDropdownMap() {
         'debug-height-select': { key: 'debug_height', type: 'debug' },
         'debug-position-select': { key: 'debug_position', type: 'debug' },
 
+        // Performance Diagnostic Telemetry Overlay Controls
+        'debug-perf-mode-select': { key: 'debug_perf_mode', type: 'debug' },
+        'debug-perf-position-select': { key: 'debug_perf_position', type: 'debug' },
+
         // Screensaver & Ambient Backdrop Control
         'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
         'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },

@@ -66,8 +66,14 @@ function createAuthManager(reports) {
         buildJellyfinProfile: WebOSProfile.buildJellyfinProfile,
         clearCapabilitiesCache: WebOSProfile.clearCapabilitiesCache
     });
-    const methods = vm.runInContext(`({\n${extractMethod(authSource, '_onWebosDeviceInfo(info) {')}\n})`, context);
-    return Object.assign(Object.create(methods), { isAuthenticated: () => true });
+    const methods = vm.runInContext(
+        `({\n${[
+            '_onWebosDeviceInfo(info) {',
+            '_reportCapabilitiesNow() {'
+        ].map((sig) => extractMethod(authSource, sig)).join(',\n')}\n})`,
+        context
+    );
+    return Object.assign(Object.create(methods), { isAuthenticated: () => true, _splashHidden: true });
 }
 
 test('AuthManager: the capability report after webOS device info carries the real 4K / Dolby Vision profile', () => {

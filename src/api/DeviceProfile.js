@@ -30,7 +30,7 @@ export function getActiveProfileModule() {
  */
 export function detectTizenVersion() {
     if (platformInfo.isTizen) {
-        return TizenProfile.detectTizenVersion();
+        return platformInfo.tizenVersion || 4;
     }
     return 99; // Legacy fallback for non-Tizen
 }

@@ -5700,8 +5700,14 @@ class PlayerPage extends Page {
             api.clearEtagCache();
             api.clearEtagCacheForItem?.(this._item.Id);
 
-            // Clear prewarm cache so stale playback info and pre-stop metadata are discarded
-            prewarmManager.clear();
+            // =================================================================
+            // Prewarm Cache Invalidation
+            // =================================================================
+            // Clear prewarm cache so stale playback info and pre-stop metadata
+            // are discarded when leaving playback or switching media items.
+            if (typeof prewarmManager !== 'undefined' && typeof prewarmManager.clear === 'function') {
+                prewarmManager.clear();
+            }
 
             // Invalidate home page's rendered row cache so returning to Home loads fresh rows
             state.delete('home:pageCache');
@@ -6017,8 +6023,13 @@ class PlayerPage extends Page {
             eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'destroy' });
         }
 
+        // =====================================================================
+        // Session Teardown Cache Purge
+        // =====================================================================
         // Clear prewarm manager to ensure stale item state does not linger across sessions
-        prewarmManager.clear();
+        if (typeof prewarmManager !== 'undefined' && typeof prewarmManager.clear === 'function') {
+            prewarmManager.clear();
+        }
 
         // Cancel any pending auto-recovery timers
         this._cancelAutoRecovery();

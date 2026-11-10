@@ -2,35 +2,174 @@
  * ============================================================================
  * Litefin - Platform Info Utility
  * ============================================================================
- * Centralized platform detection. Instead of checking `window.tizen` across
- * the codebase, this utility evaluates the platform once and exposes strictly
- * typed boolean flags for feature detection and analytics.
+ * Centralized, single-source-of-truth platform detection for the Litefin client.
+ *
+ * All platform identifiers, operating system versions, and layout tiers are
+ * evaluated strictly once upon startup and cached in memory. Component and
+ * adapter consumers read pre-calculated boolean flags and version numbers
+ * with zero regex execution or DOM overhead at runtime.
+ *
+ * Supported Runtime Platforms:
+ *   - 'tizen'   : Samsung Smart TVs (Tizen OS 2.4 through 9.0+)
+ *   - 'webos'   : LG Smart TVs (webOS 1.0 through 25+)
+ *   - 'android' : Android TV / Google TV / Android Mobile & Tablet
+ *   - 'desktop' : Packaged desktop application shells (Tauri, Electron)
+ *   - 'web'     : Standard desktop & mobile web browsers (Chrome, Firefox, Safari, Edge)
  * ============================================================================
  */
 
 import { storage } from './StorageService.js';
 import { logger } from './Logger.js';
 
+// Dedicated logger instance for platform detection and lifecycle events
 const log = logger.create('PlatformInfo');
 
 class PlatformInfo {
     constructor() {
-        // Evaluate platform eagerly during instantiation to support capability checks
-        // and setting defaults (e.g. recommended video backend) at module import time
-        this._platform = this._detectPlatform();
+        // Flag controlling whether dynamic environment checking is performed in getters.
+        // True in Node.js test runners; false in real production runtimes for pure O(1) property reads.
+        const proc = typeof globalThis !== 'undefined' ? globalThis.process : null;
+        this._dynamicEnvCheckEnabled = Boolean(
+            proc &&
+            proc.versions?.node &&
+            proc.env?.LITEFIN_PRODUCTION !== '1'
+        );
 
-        /*
-         * Layout tier controls which CSS rendering path is used.
-         *   'modern'       — Chrome 57+:  CSS Grid available (Tizen 5.0+)
-         *   'legacy'       — Chrome 47–56: No CSS Grid but flexbox works fine (Tizen 3.0 / 4.0)
-         *   'ultra-legacy' — Chrome <47:  Broken flex, no CSS vars, no Grid (Tizen 2.x / WebOS 1.x)
-         * Stamped onto <html data-layout-tier> by LayoutManager.init().
-         */
-        this._layoutTier = 'modern'; // Safe default
+        // Cached environment fingerprint to detect dynamic mocks in test harnesses
+        this._cachedFingerprint = '';
 
-        // Cache browser engine version eagerly to support capability detection at module import time
-        // Defaults to detected Chromium version from User Agent, or 999 if unknown/modern browser
-        this._chromeVersion = this._detectChromeVersion();
+        // Core platform identifier ('tizen', 'webos', 'android', 'desktop', 'web')
+        this.__platform = 'web';
+
+        // Underlying Chromium browser engine major version (default 999 for modern browsers)
+        this.__chromeVersion = 999;
+
+        // CSS rendering layout tier ('modern', 'legacy', 'ultra-legacy')
+        this._layoutTier = 'modern';
+
+        // Pre-calculated platform boolean flags (evaluated strictly once)
+        this._isTizen = false;
+        this._isWebOS = false;
+        this._isAndroid = false;
+        this._isAndroidTv = false;
+        this._isTv = false;
+        this._isDesktop = false;
+        this._isWeb = true;
+        this._isTauri = false;
+        this._isLegacyEngine = false;
+
+        // Platform-specific operating system versions (evaluated strictly once)
+        this._tizenVersion = null;
+        this._webosVersion = null;
+        this._androidVersion = null;
+
+        // Host operating system and browser vendor descriptions
+        this._operatingSystem = 'Unknown';
+        this._browserName = 'Browser';
+
+        // Eagerly perform comprehensive detection on instantiation
+        this._detectAll();
+    }
+
+    /**
+     * Build an environment fingerprint string from UA and hardware globals.
+     * In production, this fingerprint is static across the lifetime of the application.
+     * In unit testing environments, changes to globals (tizen, LitefinAndroid, UA) trigger re-detection.
+     * @private
+     * @returns {string}
+     */
+    _getEnvFingerprint() {
+        const ua = typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent : '';
+        const hasTizen = typeof window !== 'undefined' && Boolean(window.tizen);
+        const hasAvPlay = typeof window !== 'undefined' && Boolean(window.webapis?.avplay);
+        const isTvBridge =
+            typeof window !== 'undefined'
+                ? Boolean(window.LitefinAndroid?.isTv?.() || window.AndroidBridge?.isTv?.())
+                : false;
+        const hasLitefinAndroid = typeof window !== 'undefined' && Boolean(window.LitefinAndroid);
+        const hasAndroidBridge = typeof window !== 'undefined' && Boolean(window.AndroidBridge);
+        const hasTauri = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+        return `${ua}|${hasTizen}|${hasAvPlay}|${isTvBridge}|${hasLitefinAndroid}|${hasAndroidBridge}|${hasTauri}`;
+    }
+
+    /**
+     * =========================================================================
+     * Comprehensive Platform & Hardware Detection
+     * =========================================================================
+     * Evaluates hardware globals, browser engine tokens, operating system, and
+     * runtime platform identifiers once at initialization. Results are cached
+     * in private fields to guarantee zero regex overhead or redundant DOM access
+     * during component lifecycle or UI render cycles.
+     * =========================================================================
+     * @private
+     */
+    _detectAll() {
+        // Record current environment fingerprint for change-tracking in test environments
+        this._cachedFingerprint = this._getEnvFingerprint();
+
+        // Detect core runtime platform identifier
+        this.__platform = this._detectPlatform();
+
+        // Cached engine version from User Agent
+        this.__chromeVersion = this._detectChromeVersion();
+
+        // Detect layout rendering tier based on engine capabilities
+        if (this.__chromeVersion >= 57) {
+            this._layoutTier = 'modern';
+        } else if (this.__chromeVersion >= 47) {
+            this._layoutTier = 'legacy';
+        } else {
+            this._layoutTier = 'ultra-legacy';
+        }
+
+        // Cache primary platform flags strictly as booleans
+        this._isTizen = this.__platform === 'tizen';
+        this._isWebOS = this.__platform === 'webos';
+        this._isAndroid = this.__platform === 'android';
+        this._isDesktop = this._detectDesktop();
+        this._isWeb = !this._isTizen && !this._isWebOS && !this._isAndroid && !this._isDesktop;
+
+        // Detect TV-specific runtime sub-profiles and shell environments
+        this._isAndroidTv = this._detectAndroidTv();
+        this._isTv = Boolean(this._isTizen || this._isWebOS || this._isAndroidTv);
+        this._isTauri = this._detectTauri();
+
+        // Detect legacy WebKit / pre-Chrome 50 engine classification
+        this._isLegacyEngine = this._detectLegacyEngine();
+
+        // Detect OS-specific release versions and underlying operating system names
+        this._tizenVersion = this._detectTizenVersion();
+        this._webosVersion = this._detectWebOSVersion();
+        this._androidVersion = this._detectAndroidVersion();
+        this._operatingSystem = this._detectOperatingSystem();
+        this._browserName = this._detectBrowserName();
+    }
+
+    /**
+     * Synchronize boolean convenience flags from the primary platform identifier.
+     * Ensures all platform-related boolean properties match this.__platform.
+     * @private
+     */
+    _syncPlatformFlags() {
+        this._isTizen = this.__platform === 'tizen';
+        this._isWebOS = this.__platform === 'webos';
+        this._isAndroid = this.__platform === 'android';
+        this._isDesktop = this._detectDesktop();
+        this._isWeb = !this._isTizen && !this._isWebOS && !this._isAndroid && !this._isDesktop;
+        this._isTv = Boolean(this._isTizen || this._isWebOS || this._isAndroidTv);
+    }
+
+    /**
+     * Verifies whether runtime User Agent or global environment has changed.
+     * In production, this is a no-op because _dynamicEnvCheckEnabled is false.
+     * In unit test environments, dynamic UA/window manipulation triggers re-detection.
+     * @private
+     */
+    _ensureUpToDate() {
+        if (!this._dynamicEnvCheckEnabled) return;
+        if (this._getEnvFingerprint() !== this._cachedFingerprint) {
+            this._detectAll();
+        }
     }
 
     /**
@@ -85,13 +224,42 @@ class PlatformInfo {
 
     /**
      * =========================================================================
+     * Legacy Engine Detection
+     * =========================================================================
+     * Evaluates whether the current browser engine is a legacy WebKit or early
+     * Chromium release (< Chrome 50). Modern Chromium (such as Tizen 9.0 running
+     * Chrome 120) is guaranteed to return false despite WebKit/537.36 tokens.
+     *
+     * @private
+     * @returns {boolean} True if running on a legacy browser engine.
+     */
+    _detectLegacyEngine() {
+        if (typeof navigator === 'undefined' || !navigator.userAgent) {
+            return false;
+        }
+
+        const ua = navigator.userAgent;
+
+        // Check if a Chromium engine token is present (standard or modern Tizen format)
+        const chromeMatch =
+            ua.match(/(?:Chrome|Chromium|CriOS)\/(\d+)/i) ||
+            ua.match(/like Gecko\)\s+(\d+)\.\d+/i);
+
+        if (chromeMatch) {
+            const majorVersion = parseInt(chromeMatch[1], 10);
+            return !isNaN(majorVersion) && majorVersion < 50;
+        }
+
+        // When no Chromium token exists, verify legacy engine indicators
+        return /AppleWebKit\/53[0-8]|Tizen 2\.|Web0S; Linux\/SmartTV/i.test(ua);
+    }
+
+    /**
+     * =========================================================================
      * Device Platform Detection
      * =========================================================================
      * Evaluates global hardware APIs and User Agent signatures to identify the
      * active runtime environment (Tizen, webOS, Android, Desktop, or Web).
-     *
-     * Evaluated eagerly in the constructor so platform getters work reliably
-     * at module import time before App.init() runs.
      *
      * @private
      * @returns {'tizen'|'webos'|'android'|'desktop'|'web'}
@@ -153,138 +321,75 @@ class PlatformInfo {
     }
 
     /**
-     * Determine the current platform and cache it in storage.
-     * Should be called exactly once during App init.
+     * =========================================================================
+     * Desktop Environment Detection
+     * =========================================================================
+     * Identifies packaged desktop shells (Tauri or Electron).
+     * @private
+     * @returns {boolean}
      */
-    init() {
-        log.info(`Initializing platform detection. UA: ${navigator.userAgent}`);
-        // Force re-detection on every boot to ensure hardware changes/updates are caught
-        // const savedPlatform = storage.getItem('app_platform');
-        const savedPlatform = null;
-
-        if (savedPlatform) {
-            this._platform = savedPlatform;
-            log.info(`Platform restored from cache: ${this._platform}`);
-        } else {
-            // Run device platform detection
-            this._platform = this._detectPlatform();
-
-            log.info(`Detected platform: ${this._platform}`);
-
-            // Cache the result
-            storage.setItem('app_platform', this._platform);
+    _detectDesktop() {
+        // Dedicated TV or mobile/Android platforms are never desktop runtimes
+        if (this._isTizen || this._isWebOS || this._isAndroid) {
+            return false;
         }
 
-        // -------------------------------------------------------------------
-        // Layout Tier Detection — based on Chrome version in the UA string.
-        //   CSS Grid landed in Chrome 57. Tizen 3.0 ships Chrome 47,
-        //   Tizen 4.0 ships Chrome 56 — both pre-Grid. We stamp this as a
-        //   data attribute on <html> so CSS can switch rendering paths without
-        //   any runtime JS branching in components.
-        //
-        // CRITICAL: This MUST run even if platform is cached, otherwise
-        // layoutTier stays at default 'modern' on subsequent app launches
-        // on legacy hardware.
-        // -------------------------------------------------------------------
-        const chromeVersion = this._detectChromeVersion();
-        this._chromeVersion = chromeVersion;
-
-        // Three-tier CSS rendering path:
-        //   Chrome 57+ → modern   (CSS Grid + native custom properties)
-        //   Chrome 47–56 → legacy (flexbox only, no CSS Grid; Tizen 3.0 / 4.0)
-        //   Chrome <47 → ultra-legacy (broken flex in many contexts, no CSS vars,
-        //                              no CSS Grid; Tizen 2.x / WebOS 1.x / Chrome 32)
-        if (chromeVersion >= 57) {
-            this._layoutTier = 'modern';
-        } else if (chromeVersion >= 47) {
-            this._layoutTier = 'legacy';
-        } else {
-            this._layoutTier = 'ultra-legacy';
+        // If explicitly detected as desktop application shell during platform scan
+        if (this.__platform === 'desktop') {
+            return true;
         }
 
-        log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
-    }
-
-    /** @returns {boolean} True if running on a Samsung Tizen TV */
-    get isTizen() {
-        return (
-            this._platform === 'tizen' ||
-            (typeof window !== 'undefined' &&
-                (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined')) ||
-            (typeof navigator !== 'undefined' && /Tizen/i.test(navigator.userAgent || ''))
-        );
-    }
-
-    /**
-     * =========================================================================
-     * Tizen OS Version Getter
-     * =========================================================================
-     * Retrieves the decimal Tizen version directly from the platform User Agent.
-     * Essential for handling legacy API differences (e.g., power controls on <4.0).
-     * @returns {number|null} Parsed version float (e.g., 3.0, 4.0) or null if not Tizen.
-     */
-    get tizenVersion() {
-        if (!this.isTizen) {
-            return null;
+        // Check for dedicated desktop application shell wrappers
+        if (typeof window !== 'undefined') {
+            if (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__) {
+                return true;
+            }
+            if (
+                window.process?.versions?.electron ||
+                (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent || ''))
+            ) {
+                return true;
+            }
         }
 
-        const match = navigator.userAgent.match(/Tizen\s+(\d+(?:\.\d+)?)/i);
-        if (match) {
-            const version = parseFloat(match[1]);
-            log.debug(`Parsed Tizen OS Version: ${version}`);
-            return version;
-        }
-
-        return null;
-    }
-
-    /** @returns {boolean} True if running on an LG WebOS TV */
-    get isWebOS() {
-        return (
-            this._platform === 'webos' ||
-            (typeof navigator !== 'undefined' && /Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent || ''))
-        );
-    }
-
-    /** @returns {boolean} True if running in a standard web browser (excluding Android TV, Smart TVs, and desktop app shells) */
-    get isWeb() {
-        return this._platform === 'web' || (!this.isTizen && !this.isWebOS && !this.isAndroid && !this.isDesktop);
-    }
-
-    /**
-     * =========================================================================
-     * Android Environment Detection
-     * =========================================================================
-     * Evaluates whether the application is currently running inside an Android
-     * runtime environment (e.g. Android TV, Google TV, or mobile Android).
-     * =========================================================================
-     * @returns {boolean} True if running on an Android platform.
-     */
-    get isAndroid() {
-        if (this._platform === 'android') return true;
-        if (typeof window !== 'undefined' && typeof window.LitefinAndroid !== 'undefined') return true;
-        if (typeof navigator !== 'undefined' && navigator.userAgent) {
-            return /Android/i.test(navigator.userAgent);
-        }
         return false;
     }
 
     /**
-     * Evaluates whether the application is running specifically on an Android TV
-     * or Google TV runtime (excluding Android phones and touch tablets).
-     * @returns {boolean} True if running on Android TV hardware
+     * =========================================================================
+     * Tauri Shell Runtime Detection
+     * =========================================================================
+     * @private
+     * @returns {boolean} True if running inside a Tauri application shell.
      */
-    get isAndroidTv() {
-        if (!this.isAndroid) return false;
+    _detectTauri() {
+        if (typeof window === 'undefined') return false;
+        return Boolean(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+    }
+
+    /**
+     * =========================================================================
+     * Android TV Hardware Detection
+     * =========================================================================
+     * Distinguishes Android TV / Google TV boxes from mobile touchscreen devices.
+     * @private
+     * @returns {boolean}
+     */
+    _detectAndroidTv() {
         try {
+            // Check native Android application bridge methods
             if (typeof window !== 'undefined') {
                 if (typeof window.LitefinAndroid?.isTv === 'function') {
-                    return !!window.LitefinAndroid.isTv();
+                    return Boolean(window.LitefinAndroid.isTv());
                 }
                 if (typeof window.AndroidBridge?.isTv === 'function') {
-                    return !!window.AndroidBridge.isTv();
+                    return Boolean(window.AndroidBridge.isTv());
                 }
             }
+
+            if (!this._isAndroid) return false;
+
+            // Check User Agent tokens and input capabilities
             if (typeof navigator !== 'undefined' && navigator.userAgent) {
                 const ua = navigator.userAgent;
                 const hasTvToken =
@@ -294,32 +399,336 @@ class PlatformInfo {
                 const isNonMobileWithoutTouch =
                     !/Mobile/i.test(ua) &&
                     (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
-                return hasTvToken || isNonMobileWithoutTouch;
+                return Boolean(hasTvToken || isNonMobileWithoutTouch);
             }
-        } catch (_) {}
+        } catch (_) {
+            // Fall through safely
+        }
         return false;
+    }
+
+    /**
+     * =========================================================================
+     * Tizen OS Version Detection
+     * =========================================================================
+     * Queries native Tizen systeminfo capability or User Agent token once.
+     * @private
+     * @returns {number|null} Tizen version float (e.g. 3.0, 4.0, 9.0) or null.
+     */
+    _detectTizenVersion() {
+        if (!this._isTizen) {
+            return null;
+        }
+
+        // 1. Query native Tizen platform capability if systeminfo namespace exists
+        if (typeof window !== 'undefined' && window.tizen && window.tizen.systeminfo) {
+            try {
+                const platformVersion = window.tizen.systeminfo.getCapability(
+                    'http://tizen.org/feature/platform.version'
+                );
+                if (platformVersion) {
+                    const ver = parseFloat(platformVersion);
+                    if (!isNaN(ver) && ver >= 2) {
+                        return ver;
+                    }
+                }
+            } catch (_) {
+                // Capability probe failed or restricted in sandbox
+            }
+        }
+
+        // 2. Query User Agent string for explicit Tizen version marker
+        if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            const match = navigator.userAgent.match(/Tizen\s+(\d+(?:\.\d+)?)/i);
+            if (match) {
+                const ver = parseFloat(match[1]);
+                if (!isNaN(ver) && ver >= 2) {
+                    return ver;
+                }
+            }
+        }
+
+        // 3. Fallback safe default for Samsung Smart TV hardware
+        return 4;
+    }
+
+    /**
+     * =========================================================================
+     * LG webOS Version Detection
+     * =========================================================================
+     * Resolves the LG webOS major release version from User Agent Chromium/WebKit
+     * engine tokens once at startup.
+     * @private
+     * @returns {number|null} webOS major version (e.g. 1, 3, 5, 23, 24, 25) or null.
+     */
+    _detectWebOSVersion() {
+        if (!this._isWebOS) {
+            return null;
+        }
+
+        if (typeof navigator === 'undefined' || !navigator.userAgent) {
+            return 1;
+        }
+
+        const userAgent = navigator.userAgent.toLowerCase();
+        const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
+        if (!match) {
+            // Ancient WebOS 1.x/2.x platforms use pure WebKit without Chrome in UserAgent.
+            // Fall back to parsing the AppleWebKit version number:
+            //   AppleWebKit/538.2 -> WebOS 2.x
+            //   AppleWebKit/537.41 -> WebOS 1.x
+            const webkitMatch = /applewebkit\/([0-9.]+)/.exec(userAgent);
+            if (webkitMatch) {
+                const webkitVersion = parseFloat(webkitMatch[1]);
+                if (webkitVersion >= 538) return 2;
+                if (webkitVersion >= 537) return 1;
+            }
+            return 1; // Minimum safe fallback
+        }
+
+        const versionMajor = parseInt(match[1].split('.')[0], 10);
+
+        if (versionMajor >= 120) return 25; // Estimate for WebOS 25
+        if (versionMajor >= 108) return 24;
+        if (versionMajor >= 94) return 23;
+        if (versionMajor >= 87) return 22;
+        if (versionMajor >= 79) return 6;
+        if (versionMajor >= 68) return 5;
+        if (versionMajor >= 53) return 4;
+        if (versionMajor >= 38) return 3;
+        if (versionMajor >= 34) return 2;
+        if (versionMajor >= 26) return 1;
+
+        return 1; // Fallback for very old versions
+    }
+
+    /**
+     * =========================================================================
+     * Android OS Version Detection
+     * =========================================================================
+     * Parses the Android OS release version string from User Agent once.
+     * @private
+     * @returns {string|null} Android OS version string (e.g. '9', '11', '14') or null.
+     */
+    _detectAndroidVersion() {
+        if (!this._isAndroid) {
+            return null;
+        }
+
+        if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            const match = navigator.userAgent.match(/Android\s+([0-9.]+)/i);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * =========================================================================
+     * Host Operating System Name Detection
+     * =========================================================================
+     * Resolves human-readable operating system name for logging, diagnostics,
+     * and Jellyfin client device specification metadata.
+     * @private
+     * @returns {string} Operating system name (e.g. 'Tizen', 'webOS', 'Android', 'Windows', 'macOS', 'Linux')
+     */
+    _detectOperatingSystem() {
+        if (this._isTizen) return 'Tizen';
+        if (this._isWebOS) return 'webOS';
+        if (this._isAndroid) return this._isAndroidTv ? 'Android TV' : 'Android';
+
+        if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            const ua = navigator.userAgent;
+            if (/Win32|Win64|Windows/i.test(ua)) return 'Windows';
+            if (/Macintosh|Mac OS X/i.test(ua)) return 'macOS';
+            if (/Linux/i.test(ua)) return 'Linux';
+        }
+
+        return 'Unknown';
+    }
+
+    /**
+     * =========================================================================
+     * Web Browser Brand Detection
+     * =========================================================================
+     * Detects major browser vendor name (Edge, Chrome, Firefox, Safari) once.
+     * @private
+     * @returns {string} Browser brand name
+     */
+    _detectBrowserName() {
+        if (typeof navigator === 'undefined' || !navigator.userAgent) {
+            return 'Browser';
+        }
+        const ua = navigator.userAgent;
+        if (/Edg\//i.test(ua)) return 'Edge';
+        if (/Chrome\//i.test(ua)) return 'Chrome';
+        if (/Firefox\//i.test(ua)) return 'Firefox';
+        if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) return 'Safari';
+        return 'Browser';
+    }
+
+    /**
+     * Determine the current platform and cache it in storage.
+     * Should be called exactly once during App init.
+     */
+    init() {
+        log.info(
+            `Initializing platform detection. UA: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
+        );
+
+        // Re-evaluate to capture hardware globals registered after module import
+        this._detectAll();
+
+        log.info(
+            `Platform: ${this.__platform} (OS: ${this._operatingSystem}), ` +
+                `Layout tier: ${this._layoutTier} (Chrome ${this.__chromeVersion === 999 ? 'unknown' : this.__chromeVersion})`
+        );
+
+        // Cache the result in storage
+        storage.setItem('app_platform', this.__platform);
+    }
+
+    /**
+     * Re-runs full detection. Useful for testing environments.
+     */
+    reset() {
+        this._detectAll();
+    }
+
+    /**
+     * Explicitly re-runs platform detection. Can be called on resume or settings change.
+     */
+    refresh() {
+        this._detectAll();
+    }
+
+    /**
+     * Controls whether getters evaluate dynamic environment changes.
+     * @param {boolean} [enabled=true]
+     */
+    enableDynamicEnvChecks(enabled = true) {
+        this._dynamicEnvCheckEnabled = Boolean(enabled);
+    }
+
+    /**
+     * Internal raw platform string getter.
+     * @returns {'tizen'|'webos'|'android'|'desktop'|'web'}
+     */
+    get _platform() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__platform;
+    }
+
+    /**
+     * Internal raw platform setter. Supports unit tests mutating platform state.
+     * @param {'tizen'|'webos'|'android'|'desktop'|'web'} val
+     */
+    set _platform(val) {
+        this.__platform = val;
+        this._syncPlatformFlags();
+    }
+
+    /**
+     * Internal chrome engine version getter.
+     * @returns {number}
+     */
+    get _chromeVersion() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__chromeVersion;
+    }
+
+    /**
+     * Internal chrome engine version setter. Supports unit tests mutating engine version.
+     * @param {number} val
+     */
+    set _chromeVersion(val) {
+        this.__chromeVersion = val;
+    }
+
+    /** @returns {boolean} True if running on a Samsung Tizen TV */
+    get isTizen() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isTizen;
+    }
+
+    /**
+     * =========================================================================
+     * Tizen OS Version Getter
+     * =========================================================================
+     * Retrieves the numeric Tizen version directly from cached platform detection.
+     * Essential for handling legacy API differences (e.g., power controls on <4.0).
+     * @returns {number|null} Parsed version float (e.g., 3.0, 4.0) or null if not Tizen.
+     */
+    get tizenVersion() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._tizenVersion;
+    }
+
+    /** @returns {boolean} True if running on an LG WebOS TV */
+    get isWebOS() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isWebOS;
+    }
+
+    /**
+     * =========================================================================
+     * LG webOS Version Getter
+     * =========================================================================
+     * Retrieves the numeric webOS major release version from cached detection.
+     * @returns {number|null} webOS major version (e.g., 1, 3, 5, 23, 24, 25) or null.
+     */
+    get webosVersion() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._webosVersion;
+    }
+
+    /** @returns {boolean} True if running in a standard web browser (excluding Android TV, Smart TVs, and desktop app shells) */
+    get isWeb() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isWeb;
+    }
+
+    /**
+     * =========================================================================
+     * Android Environment Detection
+     * =========================================================================
+     * Evaluates whether the application is currently running inside an Android
+     * runtime environment (e.g. Android TV, Google TV, or mobile Android).
+     * @returns {boolean} True if running on an Android platform.
+     */
+    get isAndroid() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isAndroid;
+    }
+
+    /**
+     * Evaluates whether the application is running specifically on an Android TV
+     * or Google TV runtime (excluding Android phones and touch tablets).
+     * @returns {boolean} True if running on Android TV hardware
+     */
+    get isAndroidTv() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isAndroidTv;
     }
 
     /** @returns {boolean} True if running on any television runtime (Tizen, WebOS, or Android TV) */
     get isTv() {
-        return this.isTizen || this.isWebOS || this.isAndroidTv;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isTv;
     }
 
     /**
      * =========================================================================
      * Android OS Version Getter
      * =========================================================================
-     * Retrieves the Android OS version (e.g. 9, 11, 14) from the User Agent.
-     * =========================================================================
+     * Retrieves the Android OS version (e.g. 9, 11, 14) from cached detection.
      * @returns {string|null} Parsed Android version string or null if not Android.
      */
     get androidVersion() {
-        // Only evaluate when running in an Android browser or webview environment
-        if (!this.isAndroid) return null;
-
-        // Extract numerical Android release version following 'Android' token
-        const match = navigator.userAgent.match(/Android\s+([0-9.]+)/i);
-        return match && match[1] ? match[1].trim() : null;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._androidVersion;
     }
 
     /**
@@ -330,12 +739,11 @@ class PlatformInfo {
      * Evaluates true across all Tauri distribution targets:
      *  - Desktop targets (Windows, macOS, Linux)
      *  - Android TV & Amazon Fire TV targets
-     * =========================================================================
      * @returns {boolean} True if running under the Tauri application shell.
      */
     get isTauri() {
-        if (typeof window === 'undefined') return false;
-        return !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isTauri;
     }
 
     /**
@@ -346,41 +754,64 @@ class PlatformInfo {
      * operating system environment (packaged via Tauri, Electron, or a
      * desktop browser on Windows, macOS, or Linux). Excludes TV runtimes
      * (Tizen, webOS, Android TV) and mobile devices.
-     *
-     * Used to default to high-performance, container-capable player backends
-     * (such as MoviPlayer via WebCodecs and WASM) on desktop machines.
-     * =========================================================================
      * @returns {boolean} True if running on a desktop platform.
      */
     get isDesktop() {
-        // Quick exit for dedicated Smart TV platforms and Android runtimes
-        if (this.isTizen || this.isWebOS || this.isAndroid) {
-            return false;
-        }
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isDesktop;
+    }
 
-        // Direct flag check if platform detected as desktop application shell
-        if (this._platform === 'desktop') {
-            return true;
-        }
+    /**
+     * =========================================================================
+     * Legacy Engine Classification
+     * =========================================================================
+     * Evaluates whether the current browser engine is a legacy WebKit or early
+     * Chromium release (< Chrome 50). Modern Chromium (such as Tizen 9.0 running
+     * Chrome 120) is guaranteed to return false despite WebKit/537.36 tokens.
+     * @returns {boolean} True if running on a legacy browser engine.
+     */
+    get isLegacyEngine() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isLegacyEngine;
+    }
 
-        // Check for dedicated desktop application shell wrapper (Tauri on desktop)
-        if (typeof window !== 'undefined') {
-            if (window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__) {
-                return true;
-            }
-            // Check for Electron runtime wrapper
-            if (window.process?.versions?.electron || /Electron/i.test(navigator?.userAgent || '')) {
-                return true;
-            }
-        }
+    /**
+     * Legacy WebKit compatibility alias.
+     * @returns {boolean} True if running on a legacy WebKit engine.
+     */
+    get isLegacyWebKit() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._isLegacyEngine;
+    }
 
-        // Standard web browsers running on PC fall through to false (isWeb = true)
-        return false;
+    /**
+     * =========================================================================
+     * Host Operating System Identifier
+     * =========================================================================
+     * Retrieves human-readable operating system identifier.
+     * @returns {string} Operating system name ('Tizen', 'webOS', 'Android TV', 'Android', 'Windows', 'macOS', 'Linux', 'Unknown')
+     */
+    get operatingSystem() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._operatingSystem;
+    }
+
+    /**
+     * =========================================================================
+     * Web Browser Vendor Brand
+     * =========================================================================
+     * Retrieves detected browser brand.
+     * @returns {'Edge'|'Chrome'|'Firefox'|'Safari'|'Browser'}
+     */
+    get browserName() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this._browserName;
     }
 
     /** @returns {string} The raw platform string ('tizen', 'webos', 'android', 'desktop', 'web') */
     get platformString() {
-        return this._platform;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__platform;
     }
 
     /**
@@ -388,7 +819,8 @@ class PlatformInfo {
      * @returns {'tizen'|'webos'|'android'|'desktop'|'web'} The detected device platform identifier.
      */
     get platform() {
-        return this._platform;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__platform;
     }
 
     /**
@@ -399,6 +831,7 @@ class PlatformInfo {
      *   'ultra-legacy' — Chrome <47, fallen-back rendering (Tizen 2.x / WebOS 1.x)
      */
     get layoutTier() {
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
         return this._layoutTier;
     }
 
@@ -407,7 +840,8 @@ class PlatformInfo {
      * @returns {number} Chrome version number or 999 for modern browser environments.
      */
     get chromeVersion() {
-        return this._chromeVersion;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__chromeVersion;
     }
 
     /**
@@ -417,7 +851,8 @@ class PlatformInfo {
      * @returns {boolean} True if Chromium engine is < 32.
      */
     get isAncientChrome() {
-        return this._chromeVersion < 32;
+        if (this._dynamicEnvCheckEnabled) this._ensureUpToDate();
+        return this.__chromeVersion < 32;
     }
 
     /**

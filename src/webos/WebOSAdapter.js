@@ -14,6 +14,7 @@ import 'webostvjs';
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('WebOSAdapter');
 
@@ -106,14 +107,20 @@ class WebOSAdapter {
 
     /**
      * Detect if running on WebOS platform
+     * Uses centralized platformInfo single source of truth when available,
+     * falling back safely to User Agent parsing in isolated VM sandboxes.
      * @private
      */
     _detectPlatform() {
-        const ua = navigator.userAgent;
-        // Rely strictly on hardware UA strings. window.webOS is defined on all platforms via script tag.
-        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(ua)) {
-            this._isWebOS = true;
-            log.info('Running on WebOS adapter mode');
+        if (typeof platformInfo !== 'undefined') {
+            this._isWebOS = platformInfo.isWebOS;
+        } else {
+            const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+            this._isWebOS = /Web[O0]S|NetCast|LG[ -]Browser/i.test(ua);
+        }
+        if (this._isWebOS) {
+            const ver = typeof platformInfo !== 'undefined' ? platformInfo.webosVersion : null;
+            log.info(`Running on WebOS adapter mode (OS v${ver || 'unknown'})`);
         }
     }
 

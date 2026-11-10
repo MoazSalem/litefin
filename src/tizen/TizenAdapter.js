@@ -13,6 +13,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('TizenAdapter');
 
@@ -79,22 +80,34 @@ class TizenAdapter {
 
     /**
      * Detect if running on Tizen platform
+     * Uses centralized platformInfo single source of truth when available,
+     * falling back safely in isolated VM sandboxes.
      * @private
      */
     _detectPlatform() {
-        // Check for Tizen global object
-        if (typeof tizen !== 'undefined') {
-            this._isTizen = true;
+        if (typeof platformInfo !== 'undefined') {
+            this._isTizen = platformInfo.isTizen;
+            this._tizenVersion = platformInfo.tizenVersion;
+        } else {
+            this._isTizen = typeof tizen !== 'undefined';
+            this._tizenVersion = null;
+        }
 
-            // Try to get Tizen version
+        if (this._isTizen) {
+            // Try to get Tizen app info for diagnostic telemetry
             try {
-                const appInfo = tizen.application.getCurrentApplication().appInfo;
-                log.info(`Running on Tizen (App: ${appInfo.id} v${appInfo.version})`);
+                const appInfo = typeof tizen !== 'undefined' ? tizen.application.getCurrentApplication().appInfo : null;
+                if (appInfo) {
+                    log.info(
+                        `Running on Tizen (App: ${appInfo.id} v${appInfo.version}, OS v${this._tizenVersion || 'unknown'})`
+                    );
+                } else {
+                    log.info(`Running on Tizen OS v${this._tizenVersion || 'unknown'}`);
+                }
             } catch (e) {
-                log.info('Running on Tizen (app info unavailable)');
+                log.info(`Running on Tizen OS v${this._tizenVersion || 'unknown'}`);
             }
         } else {
-            this._isTizen = false;
             log.info('Not running on Samsung Tizen platform');
         }
     }

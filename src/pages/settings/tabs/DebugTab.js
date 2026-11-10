@@ -9,6 +9,13 @@
  */
 
 import { debugOverlay } from '../../../ui/DebugOverlay.js';
+import {
+    isPerformanceOverlayEnabled,
+    togglePerformanceOverlay,
+    isPerformanceCollectorEnabled,
+    togglePerformanceCollector,
+    uploadPerformanceReport
+} from '../../../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { storage } from '../../../utils/StorageService.js';
 import { logger } from '../../../utils/Logger.js';
 import { eventBus } from '../../../core/EventBus.js';
@@ -53,6 +60,10 @@ export class DebugTab {
         const overlayEnabled = debugOverlay.isOverlayEnabled;
         const moviLogsEnabled = storage.getItem('debug_movi_logs') === 'true';
         const exoLogsEnabled = storage.getItem('debug_exoplayer_logs') === 'true';
+        const perfOverlayEnabled = isPerformanceOverlayEnabled();
+        const perfCollectorEnabled = isPerformanceCollectorEnabled();
+        const perfMode = storage.getItem('debug_perf_mode') || 'full';
+        const perfPosition = storage.getItem('debug_perf_position') || 'top-right';
 
         return `
             <div class="settings-tab-content">
@@ -129,6 +140,62 @@ export class DebugTab {
                         <span class="setting-description" data-i18n="OverlayPositionDescription">${i18n.t('OverlayPositionDescription')}</span>
                     </div>
                     <div class="setting-control">${this._renderDropdown('debug-position-select', [{ value: 'top-left', label: i18n.t('TopLeft') }, { value: 'top-right', label: i18n.t('TopRight') }, { value: 'bottom-left', label: i18n.t('BottomLeft') }, { value: 'bottom-right', label: i18n.t('BottomRight') }], debugOverlay.Position || 'bottom-right')}</div>
+                </div>
+
+                <!-- Performance Diagnostics Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceDiagnostics">${i18n.t('PerformanceDiagnostics') || 'Performance Diagnostics'}</h3>
+
+                <!-- Performance Diagnostics HUD Master Switch -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowPerformanceOverlay">${i18n.t('ShowPerformanceOverlay') || 'Performance Diagnostics HUD'}</span>
+                        <span class="setting-description" data-i18n="ShowPerformanceOverlayDescription">${i18n.t('ShowPerformanceOverlayDescription') || 'Display on-screen real-time frame rate, frame time graph, Core Web Vitals (LCP, FCP, CLS), and memory metrics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${perfOverlayEnabled ? 'active' : ''}" id="toggle-debug-perf-overlay" tabindex="0"></button></div>
+                </div>
+
+                <!-- Performance HUD Display Mode (Full Panel vs Compact Pill) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PerformanceOverlayMode">${i18n.t('PerformanceOverlayMode') || 'HUD Display Mode'}</span>
+                        <span class="setting-description" data-i18n="PerformanceOverlayModeDescription">${i18n.t('PerformanceOverlayModeDescription') || 'Choose between an expanded telemetry panel with performance graphs or an unobtrusive compact status pill.'}</span>
+                    </div>
+                    <div class="setting-control">${this._renderDropdown('debug-perf-mode-select', [
+                        { value: 'full', label: i18n.t('ModeFull') || 'Full Telemetry Panel' },
+                        { value: 'compact', label: i18n.t('ModeCompact') || 'Compact Status Pill' }
+                    ], perfMode)}</div>
+                </div>
+
+                <!-- Performance HUD Screen Position Anchor -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PerformanceOverlayPosition">${i18n.t('PerformanceOverlayPosition') || 'HUD Screen Position'}</span>
+                        <span class="setting-description" data-i18n="PerformanceOverlayPositionDescription">${i18n.t('PerformanceOverlayPositionDescription') || 'Default screen anchor for the performance diagnostic HUD.'}</span>
+                    </div>
+                    <div class="setting-control">${this._renderDropdown('debug-perf-position-select', [
+                        { value: 'top-right', label: i18n.t('TopRight') || 'Top Right' },
+                        { value: 'top-left', label: i18n.t('TopLeft') || 'Top Left' },
+                        { value: 'bottom-right', label: i18n.t('BottomRight') || 'Bottom Right' },
+                        { value: 'bottom-left', label: i18n.t('BottomLeft') || 'Bottom Left' }
+                    ], perfPosition)}</div>
+                </div>
+
+                <!-- Performance Profiler & Telemetry Collector Master Switch -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnablePerformanceCollector">${i18n.t('EnablePerformanceCollector') || 'Performance Profiling Collector'}</span>
+                        <span class="setting-description" data-i18n="EnablePerformanceCollectorDescription">${i18n.t('EnablePerformanceCollectorDescription') || 'Background collector capturing main-thread long tasks (>50ms), framerate pacing histograms, memory peaks, and route transition delays for server diagnostics.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="toggle-switch ${perfCollectorEnabled ? 'active' : ''}" id="toggle-debug-perf-collector" tabindex="0"></button></div>
+                </div>
+
+                <!-- Client Performance Audit Report Upload Button -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UploadPerformanceReport">${i18n.t('UploadPerformanceReport') || 'Upload Performance Report'}</span>
+                        <span class="setting-description" data-i18n="UploadPerformanceReportDescription">${i18n.t('UploadPerformanceReportDescription') || 'Generates an in-depth diagnostic audit report and uploads it directly to the Jellyfin server logs.'}</span>
+                    </div>
+                    <div class="setting-control"><button class="btn btn-option" id="btn-upload-perf-report" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="UploadReport">${i18n.t('UploadReport') || 'Upload Report'}</button></div>
                 </div>
 
                 <!-- Storage Management Section -->
@@ -244,6 +311,53 @@ export class DebugTab {
             toggleOverlay.classList.toggle('active');
             debugOverlay.setOverlayEnabled(newState);
             storage.setItem('debug_overlay_enabled', newState);
+        });
+
+        /*
+         * Performance Diagnostic HUD master toggle.
+         * Dynamically imports and activates the overlay on demand.
+         */
+        addListener('#toggle-debug-perf-overlay', 'click', async () => {
+            const togglePerf = root.querySelector('#toggle-debug-perf-overlay');
+            if (!togglePerf) return;
+            const newState = !togglePerf.classList.contains('active');
+            togglePerf.classList.toggle('active');
+            await togglePerformanceOverlay(newState);
+        });
+
+        /*
+         * Performance Profiling Collector master toggle.
+         * Starts background telemetry observation only when enabled.
+         */
+        addListener('#toggle-debug-perf-collector', 'click', async () => {
+            const toggle = root.querySelector('#toggle-debug-perf-collector');
+            if (!toggle) return;
+            const newState = !toggle.classList.contains('active');
+            toggle.classList.toggle('active');
+            await togglePerformanceCollector(newState);
+        });
+
+        /*
+         * Client performance report upload action button.
+         * Generates and uploads the diagnostic report document to Jellyfin /ClientLog/Document.
+         */
+        addListener('#btn-upload-perf-report', 'click', async () => {
+            const btn = root.querySelector('#btn-upload-perf-report');
+            if (!btn) return;
+            btn.disabled = true;
+            btn.textContent = i18n.t('Uploading') || 'Uploading...';
+            try {
+                await uploadPerformanceReport();
+                btn.textContent = i18n.t('Success') || 'Success';
+            } catch (error) {
+                log.error('Failed to upload performance report:', error);
+                btn.textContent = i18n.t('Failed') || 'Failed';
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = i18n.t('UploadReport') || 'Upload Report';
+                }, 2000);
+            }
         });
 
         // Engine logs: Movi WebAssembly demuxer

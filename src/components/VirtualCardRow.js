@@ -1,7 +1,6 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
-import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { mouseRowScroller } from '../ui/MouseRowScroller.js';

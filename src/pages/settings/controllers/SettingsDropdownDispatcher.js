@@ -120,6 +120,22 @@ export class SettingsDropdownDispatcher {
             if (settingConfig.key === 'debug_width') debugOverlay.setWidth(newValue);
             else if (settingConfig.key === 'debug_height') debugOverlay.setHeight(newValue);
             else if (settingConfig.key === 'debug_position') debugOverlay.setPosition(newValue);
+            else if (settingConfig.key === 'debug_perf_mode') {
+                /*
+                 * Forward layout mode change to performance overlay instance if loaded.
+                 * Dynamic import guarantees no overhead if overlay is dormant.
+                 */
+                import('../../../ui/diagnostics/PerformanceDiagnosticOverlay.js')
+                    .then(({ performanceOverlay }) => performanceOverlay.setMode(newValue))
+                    .catch(() => {});
+            } else if (settingConfig.key === 'debug_perf_position') {
+                /*
+                 * Forward viewport anchor update to active performance overlay.
+                 */
+                import('../../../ui/diagnostics/PerformanceDiagnosticOverlay.js')
+                    .then(({ performanceOverlay }) => performanceOverlay.setPosition(newValue))
+                    .catch(() => {});
+            }
         }
 
         log.debug(`Setting ${id} saved: ${newValue}`);

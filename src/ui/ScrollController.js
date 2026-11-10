@@ -24,6 +24,7 @@
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { imageCache } from '../utils/ImageCache.js';
 import {
     createSpring,
     springStep,
@@ -181,6 +182,10 @@ class ScrollController {
         // ====================================================================
         this._nativeScrollActive = false;
         this._nativeScrollTimeout = null;
+
+        // Resume timer for the CSS-composited horizontal track transition
+        // (the only animated path that has no RAF completion callback).
+        this._imageResumeTimer = null;
         // Track the current target coordinate of any active native smooth scroll.
         // Prevents re-invoking container.scrollTo({ behavior: 'smooth' }) with the
         // same target coordinate mid-scroll, which would retrigger the animation.
@@ -327,7 +332,7 @@ class ScrollController {
      * @private
      */
     _applyHorizontalScrollMode(mode) {
-        if (typeof document?.documentElement?.setAttribute === 'function') {
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
             document.documentElement.setAttribute('data-horizontal-scroll', mode);
         }
     }
@@ -356,7 +361,7 @@ class ScrollController {
      * @private
      */
     _applyScrollPhysics(physics) {
-        if (typeof document?.documentElement?.setAttribute === 'function') {
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
             document.documentElement.setAttribute('data-scroll-physics', physics);
         }
     }
@@ -437,8 +442,69 @@ class ScrollController {
             this._horizontalScrollAnimationId === null &&
             !this._nativeScrollActive
         ) {
+            // All motion has settled — let the image pre-warmer refill the
+            // HTTP cache after a short compositor-cool-down window.
+            this._resumeImagePrewarm();
             eventBus.emit('scroll:finished');
         }
+    }
+
+    /**
+     * Suspends ImageCache pre-warming while the viewport is in motion. Keeping
+     * image decodes off the main thread during D-pad scrolling is the single
+     * biggest win for smooth TV navigation on legacy panels.
+     * @private
+     */
+    _pauseImagePrewarm() {
+        // Cancel any pending CSS-track resume so a vertical RAF scroll that
+        // starts during the horizontal settle window fully owns the pause.
+        // Without this, a stale horizontal timer could call resume() again
+        // after the vertical animation already resumed, pushing the settle
+        // delay out by another full cooldown window.
+        if (this._imageResumeTimer) {
+            clearTimeout(this._imageResumeTimer);
+            this._imageResumeTimer = null;
+        }
+
+        if (imageCache && typeof imageCache.pause === 'function') {
+            imageCache.pause();
+        }
+    }
+
+    /**
+     * Resumes ImageCache pre-warming with the engine-appropriate settle delay.
+     * The delay is scheduled inside ImageCache.resume() itself.
+     * @private
+     */
+    _resumeImagePrewarm() {
+        if (imageCache && typeof imageCache.resume === 'function') {
+            imageCache.resume();
+        }
+    }
+
+    /**
+     * Schedules a pre-warm resume after a CSS-composited horizontal track
+     * transition. Unlike RAF-driven scrolls, CSS transitions expose no
+     * completion callback, so the configured duration acts as the settle cue.
+     * Skips the resume when another axis is still animating — that axis'
+     * _checkScrollFinished() owns the resume in that case.
+     *
+     * @param {number} [delayMs] - Transition duration plus settle margin
+     * @private
+     */
+    _scheduleImagePrewarmResume(delayMs) {
+        if (this._imageResumeTimer) {
+            clearTimeout(this._imageResumeTimer);
+            this._imageResumeTimer = null;
+        }
+
+        const wait =
+            typeof delayMs === 'number' && delayMs >= 0 ? delayMs : this.getHorizontalScrollDuration();
+
+        this._imageResumeTimer = setTimeout(() => {
+            this._imageResumeTimer = null;
+            if (!this.isAnimating) this._resumeImagePrewarm();
+        }, wait);
     }
 
     // ========================================================================
@@ -739,6 +805,9 @@ class ScrollController {
             this._checkScrollFinished();
             return;
         }
+
+        // Animation confirmed — halt pre-warming for the duration of motion.
+        this._pauseImagePrewarm();
 
         /* ====================================================================
          * 🍏 SCROLL PHYSICS ENGINES (OPT-IN)
@@ -2134,11 +2203,18 @@ class ScrollController {
                                 // on .row-items-track is disabled while physics
                                 // is active (data-scroll-physics on <html>).
                                 // =========================================================
+                                this._pauseImagePrewarm();
                                 this._springTrackHorizontal(track, finalScrollLeft, currentTransformX, isRtl);
                             } else if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
                                 const transformStr = isRtl
                                     ? `translate3d(${finalScrollLeft}px, 0, 0)`
                                     : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+
+                                // Hold pre-warming for the CSS transition, then
+                                // resume half a frame after the row settles.
+                                this._pauseImagePrewarm();
+                                this._scheduleImagePrewarmResume(this.getHorizontalScrollDuration() + 50);
+
                                 track.style.webkitTransform = transformStr;
                                 track.style.transform = transformStr;
                             }

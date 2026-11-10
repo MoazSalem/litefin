@@ -18,6 +18,7 @@
  */
 
 import { logger } from '../../utils/Logger.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { BaseProfile } from './BaseProfile.js';
 import * as WebProfile from './WebProfile.js';
@@ -57,13 +58,7 @@ function detectHardwareVideoCodecs() {
     // Differentiate Android TV boxes (which standardly support MPEG-2) from phones
     // and mobile devices that do not expose dedicated MPEG-2 or VC-1 decoders.
     // -------------------------------------------------------------------------
-    const isTv =
-        (typeof window !== 'undefined' && typeof window.LitefinAndroid?.isTv === 'function' && !!window.LitefinAndroid.isTv()) ||
-        (typeof window !== 'undefined' && typeof window.AndroidBridge?.isTv === 'function' && !!window.AndroidBridge.isTv()) ||
-        (typeof navigator !== 'undefined' &&
-            navigator.userAgent &&
-            /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(navigator.userAgent)) ||
-        false;
+    const isTv = platformInfo.isAndroidTv;
 
     // Return safe baseline ensuring modern codecs decode while legacy ones transcode
     return {
@@ -109,16 +104,14 @@ function detectDeviceModel() {
 }
 
 /**
- * Resolves the Android OS release version string from User Agent.
+ * Resolves the Android OS release version string.
+ * Delegates to the centralized platformInfo single source of truth.
+ *
+ * @returns {string} Android OS version string (e.g. '9', '14') or empty string
  */
 function detectAndroidVersion() {
-    if (typeof navigator !== 'undefined' && navigator.userAgent) {
-        const match = navigator.userAgent.match(/Android\s+([0-9.]+)/i);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    return '';
+    // Leverage unified platformInfo version parsing
+    return platformInfo.androidVersion || '';
 }
 
 /**
@@ -150,13 +143,8 @@ function detectHdrCapabilities() {
         log.warn('Failed to parse HDR capabilities from LitefinAndroid bridge:', e);
     }
 
-    const isTv =
-        (typeof window !== 'undefined' && typeof window.LitefinAndroid?.isTv === 'function' && !!window.LitefinAndroid.isTv()) ||
-        (typeof window !== 'undefined' && typeof window.AndroidBridge?.isTv === 'function' && !!window.AndroidBridge.isTv()) ||
-        (typeof navigator !== 'undefined' &&
-            navigator.userAgent &&
-            /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(navigator.userAgent)) ||
-        false;
+    // Distinguish TV devices for HDR profile resolution
+    const isTv = platformInfo.isAndroidTv;
 
     // Detect HDR display capabilities via media queries when bridge is unavailable
     const mediaQueryHdr =

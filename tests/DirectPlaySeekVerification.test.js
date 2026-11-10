@@ -228,3 +228,70 @@ test('TizenAVPlayer: rendered frames disarm the guard only near the target', (t)
     t.mock.timers.tick(5000);
     assert.equal(seekFailures().length, 0);
 });
+
+test('TizenAVPlayer: rapid chapter skipping does not trigger remux fallback on intermediate seek', (t) => {
+    // -------------------------------------------------------------------------
+    // Scenario: User skips chapters rapidly (e.g. Next Chapter -> Next Chapter).
+    // The first hardware seek is in flight when the second seek arrives.
+    // The second seek must be queued and executed after settlement without
+    // falsely firing resumeseekfailed or crashing AVPlay with concurrent calls.
+    // -------------------------------------------------------------------------
+    const { player, clocks, seekFailures } = createPlayer(t, { presentationSec: 10, decoderSec: 10 });
+    let seekCallbacks = [];
+
+    // Custom seekTo mock that records completion callbacks
+    player._avplay.seekTo = (ms, success, error) => {
+        seekCallbacks.push({ ms, success, error });
+    };
+
+    // First chapter skip: jump to 60s
+    player.seek(60 * TICKS_PER_SECOND);
+    assert.equal(player._seekInProgress, true, 'First seek is in flight');
+    assert.equal(seekCallbacks.length, 1);
+    assert.equal(seekCallbacks[0].ms, 60000);
+
+    // Second chapter skip immediately arrives: jump to 120s
+    player.seek(120 * TICKS_PER_SECOND);
+    assert.equal(player._queuedSeekPositionMs, 120000, 'Second seek is queued');
+    assert.equal(player.isSeeking, true, 'isSeeking remains true while queued');
+
+    // Complete the first seek in hardware
+    seekCallbacks[0].success(60000);
+    assert.equal(player._seekInProgress, false, 'First seek finished in hardware');
+
+    // 50ms async settlement delay elapses
+    t.mock.timers.tick(50);
+    assert.equal(player._queuedSeekTimerId, null, 'Queued seek timer fired');
+    assert.equal(seekCallbacks.length, 2, 'Second queued seek dispatched to hardware');
+    assert.equal(seekCallbacks[1].ms, 120000);
+
+    // Second seek completes and lands near target
+    player._currentTimeSec = 120.0;
+    clocks.decoderMs = 120000;
+    seekCallbacks[1].success(120000);
+
+    // Step timers past verification interval
+    t.mock.timers.tick(1500);
+    assert.equal(seekFailures().length, 0, 'No remux fallback emitted on rapid chapter skipping');
+});
+
+test('TizenAVPlayer: native seek error does not prematurely trigger resumeseekfailed before watchdog settling', (t) => {
+    // -------------------------------------------------------------------------
+    // Scenario: Native AVPlay hardware returns an error during a rapid seek.
+    // The player must NOT immediately fire resumeseekfailed; it must allow
+    // the authoritative verification watchdog to evaluate playhead arrival.
+    // -------------------------------------------------------------------------
+    const { player, seekFailures } = createPlayer(t, { presentationSec: 10, decoderSec: 10 });
+
+    player._avplay.seekTo = (ms, success, error) => {
+        // Simulate immediate demuxer busy rejection
+        error(new Error('Demuxer busy'));
+    };
+
+    // Seek to chapter at 90s
+    player.seek(90 * TICKS_PER_SECOND);
+
+    // Immediate check: resumeseekfailed must NOT have been emitted
+    assert.equal(seekFailures().length, 0, 'Immediate native seek error must not trigger resumeseekfailed');
+    assert.notEqual(player._directSeekVerifyTimeout, null, 'Watchdog remains armed to evaluate playhead position');
+});

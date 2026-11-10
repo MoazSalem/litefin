@@ -18,6 +18,7 @@ import { logger } from '../utils/Logger.js';
 import { touchHorizontalScroller } from './TouchHorizontalScroller.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('AndroidAdapter');
 
@@ -313,17 +314,21 @@ class AndroidAdapter {
 
     /**
      * Determines whether the current host device is an Android TV / Google TV.
-     * Evaluates native bridge isTv() method or user agent / touch capabilities fallback.
+     * Delegates to the centralized platformInfo single source of truth when available,
+     * falling back safely to native bridge/UA checks in isolated VM environments.
      * @returns {boolean} True if running on Android TV
      */
     get isAndroidTv() {
+        if (typeof platformInfo !== 'undefined') {
+            return platformInfo.isAndroidTv;
+        }
         try {
             if (typeof window !== 'undefined') {
                 if (typeof window.LitefinAndroid?.isTv === 'function') {
-                    return !!window.LitefinAndroid.isTv();
+                    return Boolean(window.LitefinAndroid.isTv());
                 }
                 if (typeof window.AndroidBridge?.isTv === 'function') {
-                    return !!window.AndroidBridge.isTv();
+                    return Boolean(window.AndroidBridge.isTv());
                 }
             }
             if (typeof navigator !== 'undefined' && navigator.userAgent) {
@@ -335,7 +340,7 @@ class AndroidAdapter {
                 const isNonMobileWithoutTouch =
                     !/Mobile/i.test(ua) &&
                     (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
-                return hasTvToken || isNonMobileWithoutTouch;
+                return Boolean(hasTvToken || isNonMobileWithoutTouch);
             }
         } catch (_) {}
         return false;

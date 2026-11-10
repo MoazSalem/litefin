@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { gamepadManager } from '../utils/GamepadManager.js';
 import { mouseRowScroller } from '../ui/MouseRowScroller.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 // Initialize dedicated logger for Desktop adapter events
 const log = logger.create('DesktopAdapter');
@@ -561,26 +562,28 @@ class DesktopAdapter {
      * ========================================================================
      * Device Information Discovery
      * ========================================================================
-     * Identifies the desktop host platform from user agent tokens.
+     * Identifies the desktop host platform using centralized platformInfo
+     * with graceful fallback for isolated test VM runners.
      * @private
      */
     _loadDeviceInfo() {
-        if (typeof navigator === 'undefined') {
-            this._deviceName = 'Litefin Desktop';
-            return;
-        }
-
-        const ua = navigator.userAgent;
-        if (/Win32|Win64|Windows/i.test(ua)) {
-            this._deviceName = 'Litefin Desktop (Windows)';
-        } else if (/Macintosh|Mac OS X/i.test(ua)) {
-            this._deviceName = 'Litefin Desktop (macOS)';
-        } else if (/Linux/i.test(ua)) {
-            this._deviceName = 'Litefin Desktop (Linux)';
+        const os = typeof platformInfo !== 'undefined' ? platformInfo.operatingSystem : null;
+        if (os && os !== 'Unknown') {
+            this._deviceName = `Litefin Desktop (${os})`;
+        } else if (typeof navigator !== 'undefined' && navigator.userAgent) {
+            const ua = navigator.userAgent;
+            if (/Win32|Win64|Windows/i.test(ua)) {
+                this._deviceName = 'Litefin Desktop (Windows)';
+            } else if (/Macintosh|Mac OS X/i.test(ua)) {
+                this._deviceName = 'Litefin Desktop (macOS)';
+            } else if (/Linux/i.test(ua)) {
+                this._deviceName = 'Litefin Desktop (Linux)';
+            } else {
+                this._deviceName = 'Litefin Desktop';
+            }
         } else {
             this._deviceName = 'Litefin Desktop';
         }
-
         log.info(`Detected desktop platform: ${this._deviceName}`);
     }
 

@@ -188,6 +188,10 @@ function loadPlayerModule() {
 // ============================================================================
 const PLAYER_PREWARM_IDLE_MS = 12000;
 const DETAILS_PREWARM_DELAY_MS = 600;
+// Primary views (Details, Library) are non-urgent: wait for a genuinely quiet
+// UI after splash dismissal. The router still loads them on demand if the user
+// navigates first, so an unbounded wait is safe.
+const PRIMARY_CHUNK_PREWARM_IDLE_MS = 4000;
 let playerPrewarmTimer = null;
 let detailsPrewarmTimer = null;
 
@@ -940,7 +944,12 @@ import MobileNav from '../components/MobileNav.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { idleGate } from '../utils/IdleGate.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
+import {
+    scheduleDeferredPerformanceOverlay,
+    scheduleDeferredPerformanceCollector
+} from '../ui/diagnostics/PerformanceDiagnosticLauncher.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
@@ -1046,6 +1055,15 @@ class App {
 
         debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
 
+        /*
+         * Performance Diagnostic HUD & Profiling Telemetry initialization.
+         * Only evaluates and downloads if explicitly enabled in user settings.
+         * Defers loading to idle callback so critical startup, DOM hydration,
+         * and initial LCP metrics remain completely unperturbed.
+         */
+        scheduleDeferredPerformanceOverlay();
+        scheduleDeferredPerformanceCollector();
+
         // Calculate early-boot telemetry
         // Measures time from HTML <head> parse and browser navigationStart
         const now = Date.now();
@@ -1088,6 +1106,11 @@ class App {
         // /home navigation window.
         layoutManager.ensureModernStyles();
         layoutManager.loadThemeStyles(layoutManager.getThemeMode());
+
+        // 3.4. Register global offline and network reachability listeners early
+        // so that connection drops during boot, optimistic restore, or active navigation
+        // are trapped and handled immediately without dropping critical events.
+        this._setupOfflineHandlers();
 
         // 3.5. Initialize translations + auth session in parallel
         // i18n and auth are completely independent — overlapping them saves a round-trip
@@ -1394,22 +1417,33 @@ class App {
             // ====================================================================
             // Staged Background Prewarming
             // ====================================================================
-            // 1. Prewarm primary view chunks (DetailsPage, LibraryPage)
-            //    500ms after splash dismissal so user navigation is instantaneous.
-            //    LiveTv is excluded: like search, settings and all the seerr/
-            //    discover routes it loads strictly on demand through its proxy.
-            setTimeout(() => {
-                log.info('Prewarming primary view chunks (Details, Library)...');
-                Promise.all([loadDetailsPageModule(), loadLibraryPageModule()])
-                    .then(() => log.info('Primary view chunks successfully prewarmed in background'))
-                    .catch((err) => log.warn('Primary view chunks prewarm warning:', err));
-            }, 500);
+            // 1. Prewarm primary view chunks (DetailsPage, LibraryPage) only
+            //    after the user has been idle for 4s. A fixed 500ms timer used
+            //    to fire while users were already scrolling the Home rows, and
+            //    the chunk parse/compile produced 1s+ D-pad stalls on legacy
+            //    Tizen panels. markActivity() anchors the window to splash
+            //    dismissal, so a key pressed during the splash does not count
+            //    as idle time after it.
+            //
+            //    No max wait: if the user keeps navigating, the router's own
+            //    dynamic import loads the chunk on demand anyway.
+            idleGate.markActivity();
+            idleGate.runWhenIdle(
+                () => {
+                    log.info('Prewarming primary view chunks (Details, Library)...');
+                    Promise.all([loadDetailsPageModule(), loadLibraryPageModule()])
+                        .then(() => log.info('Primary view chunks successfully prewarmed in background'))
+                        .catch((err) => log.warn('Primary view chunks prewarm warning:', err));
+                },
+                PRIMARY_CHUNK_PREWARM_IDLE_MS,
+                0
+            );
 
             // 2. Player chunk is intentionally NOT prewarmed here: it used to
             //    fire 1500ms after splash and steal CPU/RAM from HomePage's
             //    first render. See the LAZY PLAYER CHUNK PREWARMING section -
             //    it now triggers on /details entry or a long idle window.
-            if (router.getCurrentPath() !== '/offline') {
+            if (!router.getCurrentPath().startsWith('/offline')) {
                 // Idle prewarm would be pure waste while the offline recovery
                 // page is up (network dead, playback impossible), so only arm
                 // it on real post-login boots. Route changes re-arm it anyway.
@@ -1461,6 +1495,7 @@ class App {
         const fullScreenRoutes = ['/login', '/offline', '/profiles'];
         const isFullScreen =
             fullScreenRoutes.includes(path) ||
+            path.startsWith('/offline') ||
             path.startsWith('/player') ||
             path.startsWith('/slideshow') ||
             path.startsWith('/emulator');
@@ -1545,21 +1580,99 @@ class App {
     }
 
     /**
+     * ========================================================================
+     * GLOBAL OFFLINE AND NETWORK RECOVERY HANDLERS
+     * ========================================================================
+     * Traps all unreachability and network loss signals across the entire app:
+     * - API network errors / timeouts via 'api:offline'
+     * - Auth background session validation failures via 'auth:server-unreachable'
+     * - Native OS / browser hardware network drop events via 'window.offline'
+     * ========================================================================
+     * @private
+     */
+    _setupOfflineHandlers() {
+        // Prevent duplicate listener registration if init is re-invoked
+        if (this._offlineHandlersBound) return;
+        this._offlineHandlersBound = true;
+
+        // Catch low-level API connection failures dispatched by ApiClient
+        eventBus.on('api:offline', (data) => {
+            log.warn('Global handler trapped api:offline event:', data);
+            this._handleServerOffline('api:offline');
+        });
+
+        // Catch auth token background validation unreachability dispatched by AuthManager
+        eventBus.on('auth:server-unreachable', () => {
+            log.warn('Global handler trapped auth:server-unreachable event');
+            this._handleServerOffline('auth:server-unreachable');
+        });
+
+        // Catch native platform / hardware network interface disconnects
+        window.addEventListener('offline', () => {
+            log.warn('Global handler trapped window offline event');
+            this._handleServerOffline('window:offline');
+        });
+    }
+
+    /**
+     * Global offline dispatcher. When the Jellyfin server becomes unreachable,
+     * this captures the user's active page and navigates to the OfflinePage with
+     * the returnUrl preserved in query params and state so that once connectivity
+     * is restored, the user returns automatically to their exact previous location.
+     *
+     * @param {string} source - Source of the offline detection event
+     * @private
+     */
+    _handleServerOffline(source = 'global') {
+        const currentPath = router.getCurrentPath?.() || window.location.hash.slice(1) || '';
+
+        // If the offline page is already active, ignore redundant triggers
+        if (currentPath === '/offline' || currentPath.startsWith('/offline?') || currentPath.startsWith('/offline/')) {
+            return;
+        }
+
+        // When video playback is active in PlayerPage, allow player's dedicated
+        // in-stream auto-recovery HUD and pipeline retry loop to handle the drop
+        if (currentPath.startsWith('/player')) {
+            log.info(`[OfflineCheck] Server offline detected (${source}) during playback; delegating to PlayerPage auto-recovery`);
+            return;
+        }
+
+        // Determine destination return URL upon recovery.
+        // If the path is empty or root '/', resolve to the appropriate entry page.
+        let returnUrl = currentPath;
+        if (!returnUrl || returnUrl === '/') {
+            const sessionCount = state.get('user:sessionCount', 0);
+            const activeUser = auth.getCurrentUser();
+            const activeHasPin = activeUser ? pinManager.hasPin(activeUser.Id) : false;
+            const rememberLastUser = storage.getItem('pref:rememberLastActiveUser') === 'true';
+            const skipProfilesOnce = storage.getItem('litefin:skip_profiles_once') === 'true';
+
+            if (state.get('user:authenticated') && ((sessionCount > 1 && !rememberLastUser) || activeHasPin) && !skipProfilesOnce) {
+                returnUrl = '/profiles';
+            } else if (state.get('user:authenticated')) {
+                returnUrl = '/home';
+            } else {
+                returnUrl = '/login';
+            }
+        }
+
+        log.warn(`[OfflineCheck] Server offline detected via ${source}. Storing returnUrl: "${returnUrl}" and navigating to /offline`);
+
+        // Update server connectivity state flags
+        state.set('server:connected', false);
+        state.set('server:offline', true);
+        state.set('offline:returnPath', returnUrl);
+
+        // Replace route with /offline, encoding returnUrl into query param for persistence across reloads
+        router.navigate(`/offline?returnUrl=${encodeURIComponent(returnUrl)}`, { replace: true });
+    }
+
+    /**
      * Setup global event handlers
      * @private
      */
     _setupEventHandlers() {
-        // Optimistic session restore: if background token verification finds
-        // the server unreachable, route to the OfflinePage exactly like the
-        // old pre-route reachability check did. Registered here (before
-        // auth.init() resolves) so the event can never race the listener.
-        eventBus.on('auth:server-unreachable', () => {
-            if (window.location.hash.replace(/^#/, '') !== '/offline') {
-                log.info('Server unreachable after optimistic restore — routing to OfflinePage');
-                router.navigate('/offline', { replace: true });
-            }
-        });
-
         // Listen for OSD track menu bg opacity changes
         eventBus.on('pref:osdTrackMenuBgOpacity', (value) => {
             document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (value / 100).toFixed(2));
@@ -2259,7 +2372,8 @@ class App {
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
-                    router.navigate('/offline', { replace: true });
+                    const returnPath = state.get('offline:returnPath') || (sessionCount > 1 ? '/profiles' : '/home');
+                    router.navigate(`/offline?returnUrl=${encodeURIComponent(returnPath)}`, { replace: true });
                 } else if (
                     isAuthenticated &&
                     ((sessionCount > 1 && !rememberLastUser) || activeHasPin) &&

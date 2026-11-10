@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { gamepadManager } from '../utils/GamepadManager.js';
 import { mouseRowScroller } from '../ui/MouseRowScroller.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 // Initialize dedicated logger for Web adapter events
 const log = logger.create('WebAdapter');
@@ -503,28 +504,12 @@ class WebAdapter {
      * ========================================================================
      * Device Information Discovery
      * ========================================================================
-     * Identifies the web browser brand and platform from user agent tokens.
+     * Identifies the web browser brand using centralized platformInfo
+     * with graceful fallback for isolated test VM runners.
      * @private
      */
     _loadDeviceInfo() {
-        if (typeof navigator === 'undefined') {
-            this._deviceName = 'Litefin Web';
-            return;
-        }
-
-        const ua = navigator.userAgent;
-        let browserName = 'Browser';
-
-        if (/Edg\//i.test(ua)) {
-            browserName = 'Edge';
-        } else if (/Chrome\//i.test(ua)) {
-            browserName = 'Chrome';
-        } else if (/Firefox\//i.test(ua)) {
-            browserName = 'Firefox';
-        } else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) {
-            browserName = 'Safari';
-        }
-
+        const browserName = typeof platformInfo !== 'undefined' ? platformInfo.browserName : 'Browser';
         this._deviceName = `Litefin Web (${browserName})`;
         log.info(`Detected web platform: ${this._deviceName}`);
     }

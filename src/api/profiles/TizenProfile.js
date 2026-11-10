@@ -30,21 +30,15 @@ function _getModelName() {
     return _cachedModelName || 'Samsung TV';
 }
 
+/**
+ * Detects the numeric Samsung Tizen platform version (e.g. 4.0, 7.0, 9.0).
+ * Delegates to the centralized platformInfo single source of truth.
+ *
+ * @returns {number} Tizen version float (defaults to 4 on Tizen if version is unresolvable)
+ */
 export function detectTizenVersion() {
-    if (typeof tizen !== 'undefined' && tizen.systeminfo) {
-        try {
-            const platformVersion = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version');
-            if (platformVersion) {
-                const ver = parseFloat(platformVersion);
-                if (!isNaN(ver) && ver >= 2) {
-                    return ver;
-                }
-            }
-        } catch (e) {
-            // ignore
-        }
-    }
-    return 4; // Safe default
+    // Leverage unified platformInfo version detection (queries systeminfo with UA fallback)
+    return platformInfo.tizenVersion || 4;
 }
 
 export function getDeviceCapabilities() {
@@ -146,7 +140,7 @@ export function getDeviceCapabilities() {
     };
 
     // Only log capabilities at info level if running on an actual Tizen device
-    if (typeof tizen !== 'undefined' || platformInfo.isTizen) {
+    if (platformInfo.isTizen) {
         log.info('Tizen capabilities:', JSON.stringify(_cachedCapabilities, null, 2));
     } else {
         log.debug('Tizen capabilities (mock/fallback):', JSON.stringify(_cachedCapabilities, null, 2));

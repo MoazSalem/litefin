@@ -53,10 +53,12 @@ class TimeManager {
     /**
      * Resolves the native Samsung Tizen host object across global contexts.
      * Looks for window.tizen, globalThis.tizen, or direct global namespace.
+     * Uses centralized platformInfo.isTizen guard to avoid checking globals on non-Tizen platforms.
      * @private
      * @returns {Object|null}
      */
     _getTizenApi() {
+        if (!platformInfo.isTizen) return null;
         if (typeof window !== 'undefined' && window.tizen) return window.tizen;
         if (typeof globalThis !== 'undefined' && globalThis.tizen) return globalThis.tizen;
         if (typeof tizen !== 'undefined') return tizen;
@@ -94,8 +96,8 @@ class TimeManager {
         // --------------------------------------------------------------------
         // Query native platform indicators. Samsung Tizen runtime provides window.tizen
         // for direct hardware clock queries.
-        const tizenObj = this._getTizenApi();
-        this._isTizen = Boolean(tizenObj) || platformInfo.isTizen;
+        this._isTizen = platformInfo.isTizen;
+        const tizenObj = this._isTizen ? this._getTizenApi() : null;
 
         // For LG webOS, rely on centralized platformInfo detection.
         // We must never check window.webOS directly here because webostvjs imports
