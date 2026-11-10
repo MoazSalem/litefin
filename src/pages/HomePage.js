@@ -40,6 +40,7 @@ import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
+import { idleGate } from '../utils/IdleGate.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
@@ -240,7 +241,14 @@ class HomePage extends Page {
         this._homeSentinelObserver = null;
 
         /**
-         * setTimeout handle for the post-initial idle prefetch.
+         * idleGate task id for deferred row prefetching.
+         * Cleared on destroy to prevent execution on an unmounted page.
+         * @type {number|null}
+         */
+        this._homeIdlePrefetchTask = null;
+
+        /**
+         * Fallback timer handle for the post-initial idle prefetch.
          * Cleared on destroy to prevent callbacks on a dead page instance.
          * @type {number|null}
          */
@@ -345,6 +353,10 @@ class HomePage extends Page {
         if (this._homeSentinelObserver) {
             this._homeSentinelObserver.disconnect();
             this._homeSentinelObserver = null;
+        }
+        if (this._homeIdlePrefetchTask) {
+            idleGate.cancel(this._homeIdlePrefetchTask);
+            this._homeIdlePrefetchTask = null;
         }
         if (this._homeIdlePrefetchTimer) {
             clearTimeout(this._homeIdlePrefetchTimer);
@@ -1704,7 +1716,7 @@ class HomePage extends Page {
             // prefetcher to progressively mount them as the user scrolls down.
             if (this._deferredDescriptors.length > 0) {
                 this._setupHomeScrollObserver();
-                this._scheduleHomeIdlePrefetch(400);
+                this._scheduleHomeIdlePrefetch(2000);
             } else {
                 // All rows were rendered eagerly (short page or target near bottom)
                 this._prewarmScrollCache();
@@ -2146,30 +2158,25 @@ class HomePage extends Page {
         if (this._isDeferredLoading || !this._isMounted) return;
         if (this._nextDeferredDescIndex >= this._deferredDescriptors.length) return;
 
-        // If viewport is actively running a scroll animation and this isn't an explicit
-        // user navigation request (autoFocus), DEFER THE RENDER — but still start the
-        // network fetch for the next batch right now so the slow HTTP round-trip
-        // overlaps with the scroll animation instead of delaying the boundary
-        // keypress that follows it. Rendering stays paused to keep the compositor
-        // frame budget clean at 60fps.
-        if (!autoFocus && window.__scrollController && window.__scrollController.isAnimating) {
+        // If viewport is actively running a scroll animation or the user is navigating,
+        // and this isn't an explicit user navigation request (autoFocus), DEFER THE RENDER —
+        // but still start the network fetch for the next batch right now so the slow HTTP round-trip
+        // overlaps with the scroll animation instead of delaying the boundary keypress that follows it.
+        // Rendering stays paused to keep the compositor frame budget clean at 60fps.
+        const isScrollAnimating =
+            (scrollController && scrollController.isAnimating) ||
+            (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating);
+        const isUserActive = idleGate.isUserActive(1500);
+
+        if (!autoFocus && (isScrollAnimating || isUserActive)) {
             const peekStart = this._nextDeferredDescIndex;
             const peekEnd = Math.min(peekStart + DEFERRED_BATCH_SIZE_BACKGROUND, this._deferredDescriptors.length);
             const peekBatch = this._deferredDescriptors.slice(peekStart, peekEnd);
             for (const d of peekBatch) {
                 this._prefetchRow(d);
             }
-            const onScrollFinish = () => {
-                eventBus.off('scroll:finished', onScrollFinish);
-                if (
-                    this._isMounted &&
-                    !this._isDeferredLoading &&
-                    this._nextDeferredDescIndex < this._deferredDescriptors.length
-                ) {
-                    this._loadNextDeferredBatch(false);
-                }
-            };
-            eventBus.on('scroll:finished', onScrollFinish);
+            // Defer execution until the user is quiet and animations settle
+            this._scheduleHomeIdlePrefetch(1500);
             return;
         }
 
@@ -2255,7 +2262,7 @@ class HomePage extends Page {
         // If there are still rows left, schedule the next idle row prefetch
         // so deferred content loads progressively ahead of time in small 1-row chunks.
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
-            this._scheduleHomeIdlePrefetch(300);
+            this._scheduleHomeIdlePrefetch(1500);
         } else {
             // All deferred rows are loaded — run final cleanup
             this._prewarmScrollCache();
@@ -2302,20 +2309,36 @@ class HomePage extends Page {
 
     /**
      * Schedules a low-priority idle background prefetch.
-     * Silently loads deferred rows in small 1-row batches so content is ready
+     * Silently loads deferred rows in small batches so content is ready
      * before the user scrolls or navigates down to it.
      *
-     * @param {number} [delay=400] - Delay in ms before triggering prefetch
+     * Gated behind idleGate so DOM mounting and scroll-cache prewarming
+     * never collide with active user interactions, D-pad navigation, or animations.
+     *
+     * @param {number} [delay=1500] - Quiet threshold in ms before triggering prefetch
      * @private
      */
-    _scheduleHomeIdlePrefetch(delay = 400) {
-        if (this._homeIdlePrefetchTimer) clearTimeout(this._homeIdlePrefetchTimer);
-        this._homeIdlePrefetchTimer = setTimeout(() => {
-            if (this._isMounted && this._nextDeferredDescIndex < this._deferredDescriptors.length) {
-                log.debug('Home idle prefetch triggered');
-                this._loadNextDeferredBatch(false);
-            }
-        }, delay);
+    _scheduleHomeIdlePrefetch(delay = 1500) {
+        if (this._homeIdlePrefetchTask) {
+            idleGate.cancel(this._homeIdlePrefetchTask);
+            this._homeIdlePrefetchTask = null;
+        }
+        if (this._homeIdlePrefetchTimer) {
+            clearTimeout(this._homeIdlePrefetchTimer);
+            this._homeIdlePrefetchTimer = null;
+        }
+
+        this._homeIdlePrefetchTask = idleGate.runWhenIdle(
+            () => {
+                this._homeIdlePrefetchTask = null;
+                if (this._isMounted && this._nextDeferredDescIndex < this._deferredDescriptors.length) {
+                    log.debug('Home idle prefetch triggered');
+                    this._loadNextDeferredBatch(false);
+                }
+            },
+            delay,
+            0 // unbounded: wait for genuine idleness so D-pad scrolling is never disturbed
+        );
     }
 
     /**

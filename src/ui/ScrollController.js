@@ -332,7 +332,7 @@ class ScrollController {
      * @private
      */
     _applyHorizontalScrollMode(mode) {
-        if (typeof document?.documentElement?.setAttribute === 'function') {
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
             document.documentElement.setAttribute('data-horizontal-scroll', mode);
         }
     }
@@ -361,7 +361,7 @@ class ScrollController {
      * @private
      */
     _applyScrollPhysics(physics) {
-        if (typeof document?.documentElement?.setAttribute === 'function') {
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
             document.documentElement.setAttribute('data-scroll-physics', physics);
         }
     }
