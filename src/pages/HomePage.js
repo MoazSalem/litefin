@@ -3546,7 +3546,7 @@ class HomePage extends Page {
         } else {
             sizeType = 'poster';
         }
-        const { maxWidth, quality } = imageService.getParams(sizeType, descriptor.contextType);
+        const { maxWidth, maxHeight, quality } = imageService.getParams(sizeType, descriptor.contextType);
 
         // VirtualCardRow already eagerly initiates loads for the first visibleCount cards.
         // To avoid duplicate network requests and connection pool starvation on Tizen,
@@ -3564,20 +3564,35 @@ class HomePage extends Page {
             if (isLandscape) {
                 // Landscape priority: Thumb → Backdrop → SeriesThumb → Primary
                 if (item.ImageTags?.Thumb) {
-                    url = api.getImageUrl(itemId, 'Thumb', { maxWidth, quality, tag: item.ImageTags.Thumb });
+                    url = api.getImageUrl(itemId, 'Thumb', { maxWidth, maxHeight, quality, tag: item.ImageTags.Thumb });
                 } else if (item.BackdropImageTags?.length > 0) {
-                    url = api.getImageUrl(itemId, 'Backdrop', { maxWidth, quality });
+                    url = api.getImageUrl(itemId, 'Backdrop', { maxWidth, maxHeight, quality });
                 } else if (item.SeriesId && item.SeriesThumbImageTag) {
-                    url = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth, quality, tag: item.SeriesThumbImageTag });
+                    url = api.getImageUrl(item.SeriesId, 'Thumb', {
+                        maxWidth,
+                        maxHeight,
+                        quality,
+                        tag: item.SeriesThumbImageTag
+                    });
                 } else if (item.ImageTags?.Primary) {
-                    url = api.getImageUrl(itemId, 'Primary', { maxWidth, quality, tag: item.ImageTags.Primary });
+                    url = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth,
+                        maxHeight,
+                        quality,
+                        tag: item.ImageTags.Primary
+                    });
                 }
             } else {
                 // Portrait priority: Item Primary → Series Primary
                 if (item.ImageTags?.Primary) {
-                    url = api.getImageUrl(itemId, 'Primary', { maxWidth, quality, tag: item.ImageTags.Primary });
+                    url = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth,
+                        maxHeight,
+                        quality,
+                        tag: item.ImageTags.Primary
+                    });
                 } else if (item.SeriesId) {
-                    url = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth, quality });
+                    url = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth, maxHeight, quality });
                 }
             }
 
@@ -3722,7 +3737,7 @@ class HomePage extends Page {
                     }
 
                     if (items && items.length > 0) {
-                        const { maxWidth, quality } = imageService.getParams('card-backdrop');
+                        const { maxWidth, maxHeight, quality } = imageService.getParams('card-backdrop');
                         let resolvedUrl = null;
 
                         // Iterate candidates until we find a usable image URL
@@ -3732,18 +3747,21 @@ class HomePage extends Page {
                                 if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });
                                 } else if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
@@ -3753,18 +3771,21 @@ class HomePage extends Page {
                                 if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });
                                 } else if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
@@ -3774,18 +3795,21 @@ class HomePage extends Page {
                                 if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });
                                 } else if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
@@ -3799,12 +3823,14 @@ class HomePage extends Page {
                                 if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });
@@ -3814,18 +3840,21 @@ class HomePage extends Page {
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });
                                 } else if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
@@ -3888,18 +3917,21 @@ class HomePage extends Page {
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
                                 } else if (item.ImageTags?.Primary) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Primary
                                     });
                                 } else if (item.ImageTags?.Thumb) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
                                         maxWidth,
+                                        maxHeight,
                                         quality,
                                         tag: item.ImageTags.Thumb
                                     });

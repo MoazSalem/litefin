@@ -40,6 +40,17 @@ const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware 
 const LITEFIN_COMPANION_PLUGIN_ID = 'f5c68360ca474648b47c3da5f112aa8f';
 
 /**
+ * Natural aspect ratios (height / width) for Jellyfin image types.
+ * Used to derive a bounded `maxHeight` whenever a caller only supplies
+ * `maxWidth`, so the server never streams an unbounded source texture that
+ * the 1080p TV WebView would have to allocate and downscale on the main thread.
+ */
+const IMAGE_ASPECT_RATIOS = {
+    Primary: 1.5, // 2:3 poster; taller artwork is downscaled, squarer art is untouched
+    Thumb: 9 / 16 // 16:9
+};
+
+/**
  * Determine whether the host JavaScript environment provides native fetch cancellation.
  * Modern Chromium engines (66+) support AbortSignal directly on window.fetch.
  * Legacy TV platforms (Tizen 4.0 running Chromium 56, WebOS 4 running Chromium 53)
@@ -2458,7 +2469,15 @@ export class ApiClient {
 
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
-        if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        if (options.maxHeight) {
+            params.append('maxHeight', options.maxHeight);
+        } else if (options.maxWidth) {
+            // Derive a height bound from the image type when only a width is given
+            const aspectRatio = IMAGE_ASPECT_RATIOS[imageType];
+            if (aspectRatio) {
+                params.append('maxHeight', Math.round(options.maxWidth * aspectRatio));
+            }
+        }
 
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);

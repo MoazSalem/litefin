@@ -454,6 +454,19 @@ class CardRenderer {
                     getUrlOptions = { ...getUrlOptions, maxWidth: Math.round(cardWidth * scaleFactor) };
                 }
             }
+            /*
+             * Bound the decoded texture on both axes. Poster slots are 2:3 and
+             * landscape slots 16:9; deriving maxHeight from the final width
+             * (after the card override above) prevents the server from sending a
+             * taller source than the card can ever display.
+             */
+            if (!getUrlOptions.maxHeight && getUrlOptions.maxWidth) {
+                const aspectRatio = imageType === 'Primary' ? 1.5 : 9 / 16;
+                getUrlOptions = {
+                    ...getUrlOptions,
+                    maxHeight: Math.round(getUrlOptions.maxWidth * aspectRatio)
+                };
+            }
             return api.getImageUrl(id, imageType, getUrlOptions);
         };
 
