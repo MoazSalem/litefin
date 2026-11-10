@@ -2282,12 +2282,6 @@ class HomePage extends Page {
             }
         }
 
-        // Cache serialization and scroll-cache prewarming are heavy synchronous
-        // operations. They must never run on the D-pad keypress path that mounts
-        // a deferred row — defer both behind ONE deduplicated idle task so the
-        // user only pays for the DOM mount and focus transfer.
-        this._scheduleDeferredBatchCacheRefresh();
-
         this._isDeferredLoading = false;
         this._lastDeferredBatchAt = Date.now();
 
@@ -2298,8 +2292,10 @@ class HomePage extends Page {
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
             this._scheduleDeferredBatchFollowup();
         } else {
-            // All deferred rows are loaded — finalize readiness immediately.
-            // (Scroll prewarming is already queued in the idle cache task.)
+            // All deferred rows are loaded — queue cache serialization and scroll-cache
+            // prewarming ONCE here behind an idle task instead of running them after
+            // intermediate batches. Finalize readiness immediately.
+            this._scheduleDeferredBatchCacheRefresh();
             this.restoreScrollFocusWhenReady();
             this.markReady();
         }
