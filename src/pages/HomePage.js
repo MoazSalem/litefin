@@ -267,6 +267,13 @@ class HomePage extends Page {
         this._homeIdlePrefetchTimer = null;
 
         /**
+         * idleGate task id for the deferred-batch cache refresh (scroll prewarm
+         * + page cache serialization). Deduplicated: only one task is ever queued.
+         * @type {number|null}
+         */
+        this._deferredCacheTask = null;
+
+        /**
          * Timestamp of the last completed deferred batch render.
          * Used to enforce a minimum real-time gap between background batches.
          * @type {number}
@@ -380,6 +387,10 @@ class HomePage extends Page {
         if (this._homeIdlePrefetchTimer) {
             clearTimeout(this._homeIdlePrefetchTimer);
             this._homeIdlePrefetchTimer = null;
+        }
+        if (this._deferredCacheTask) {
+            idleGate.cancel(this._deferredCacheTask);
+            this._deferredCacheTask = null;
         }
 
         // Clean up modal trap popped listener
@@ -2271,10 +2282,11 @@ class HomePage extends Page {
             }
         }
 
-        // Persist newly rendered rows into the page cache
-        if (!this._wasPageCached) {
-            this._savePageCache();
-        }
+        // Cache serialization and scroll-cache prewarming are heavy synchronous
+        // operations. They must never run on the D-pad keypress path that mounts
+        // a deferred row — defer both behind ONE deduplicated idle task so the
+        // user only pays for the DOM mount and focus transfer.
+        this._scheduleDeferredBatchCacheRefresh();
 
         this._isDeferredLoading = false;
         this._lastDeferredBatchAt = Date.now();
@@ -2286,11 +2298,40 @@ class HomePage extends Page {
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
             this._scheduleDeferredBatchFollowup();
         } else {
-            // All deferred rows are loaded — run final cleanup
-            this._prewarmScrollCache();
+            // All deferred rows are loaded — finalize readiness immediately.
+            // (Scroll prewarming is already queued in the idle cache task.)
             this.restoreScrollFocusWhenReady();
             this.markReady();
         }
+    }
+
+    /**
+     * Queues a deduplicated idle task that prewarms the ScrollController offset
+     * cache and serializes the page cache for back-navigation.
+     *
+     * Both operations walk every rendered row and are far too expensive to run
+     * synchronously inside `_loadNextDeferredBatch()` while the user is holding
+     * Down at the bottom of the page.
+     *
+     * @private
+     */
+    _scheduleDeferredBatchCacheRefresh() {
+        if (this._deferredCacheTask) return; // one pending task covers all batches
+
+        this._deferredCacheTask = idleGate.runWhenIdle(
+            () => {
+                this._deferredCacheTask = null;
+                if (!this._isMounted) return;
+
+                this._prewarmScrollCache();
+
+                if (!this._wasPageCached) {
+                    this._savePageCache();
+                }
+            },
+            2000,
+            0 // unbounded: wait for a genuinely quiet UI
+        );
     }
 
     /**
@@ -2386,7 +2427,10 @@ class HomePage extends Page {
         const registerNext = () => {
             this._homeIdlePrefetchTimer = null;
             if (!this._isMounted) return;
-            this._scheduleHomeIdlePrefetch(1500);
+            // 600ms of quiet is enough for a 7-row Home screen to mount its
+            // remaining rows before the user reaches the bottom. The idle gate
+            // still defers rendering while scrollController.isAnimating is true.
+            this._scheduleHomeIdlePrefetch(600);
         };
 
         if (wait > 0) {
