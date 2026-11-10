@@ -129,5 +129,11 @@ export const availableLanguages = [
         value: 'ja',
         label: '日本語',
         completeness: 95.37
+    },
+        {
+        value: 'th',
+        label: 'ไทย',
+        completeness: 95.46
     }
+
 ];
