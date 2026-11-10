@@ -28,7 +28,7 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
-import { api, ServerUnreachableError, sendWakeOnLan } from './ApiClient.js';
+import { api, ServerUnreachableError, sendWakeOnLan, cancelWakeOnLan } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { desktopAdapter } from '../desktop/DesktopAdapter.js';
@@ -323,23 +323,16 @@ class AuthManager {
         // WAKE-ON-LAN (WOL) INVOCATION
         // =====================================================================
         // If Wake-on-LAN on startup is enabled and a server MAC address exists
-        // in settings, we broadcast the Magic Packet early to wake up the
-        // server, then take the BLOCKING validation path: the user explicitly
-        // asked the app to wait for a sleeping server to boot, so there is
-        // nothing useful to render optimistically.
+        // in settings, take the BLOCKING validation path. We DO NOT fire the
+        // Magic Packet prematurely at 0ms before checking if the server is
+        // already awake; if the initial probe fails or times out, WOL is
+        // broadcast immediately by _blockingRestoreSession.
         // =====================================================================
         const enableWol = storage.getItem('pref:enableWolOnStartup') === 'true';
         const wolMac = storage.getItem('pref:wolMacAddress');
 
         if (enableWol && wolMac) {
-            log.info(`Wake-on-LAN on startup is active. Sending Magic Packet to ${wolMac}...`);
-            // Fire packet asynchronously and don't block the startup pipeline.
-            // If the server was already running, the connection will succeed instantly.
-            // If it was asleep, our retry loop below will wait for it to boot.
-            sendWakeOnLan(wolMac).catch((err) => {
-                log.warn('Failed to send WOL magic packet:', err);
-            });
-
+            log.info(`Wake-on-LAN on startup is active. Verifying server reachability before WOL dispatch...`);
             return this._blockingRestoreSession(session, sessions, activeUserId);
         }
 
@@ -419,6 +412,9 @@ class AuthManager {
         const maxAttempts = extendedWait ? 25 : 6;
         const retryDelayMs = 3000;
 
+        // Track whether Wake-on-LAN packet has been dispatched during this restore attempt
+        let wolDispatched = false;
+
         // Active authenticated user object resolved from validation probe
         let user = null;
 
@@ -448,12 +444,26 @@ class AuthManager {
                         await serverInfoPromise;
                     } catch (_) {}
 
+                    // Server is confirmed online — cancel any active WOL retry loops immediately
+                    cancelWakeOnLan();
+
                     // Break out of the retry loop upon successful connection
                     break;
                 } catch (error) {
                     log.warn(`Token validation failed on attempt ${attempt}/${maxAttempts}:`, error);
 
                     const isUnreachable = this._isUnreachableError(error);
+
+                    // Only fire Wake-on-LAN when the server is verified unreachable/timed out
+                    const enableWol = storage.getItem('pref:enableWolOnStartup') === 'true';
+                    const wolMac = storage.getItem('pref:wolMacAddress');
+                    if (isUnreachable && enableWol && wolMac && !wolDispatched) {
+                        wolDispatched = true;
+                        log.info(`Initial server probe unreachable. Broadcasting Wake-on-LAN magic packet to ${wolMac}...`);
+                        sendWakeOnLan(wolMac, { urgent: true }).catch((err) => {
+                            log.warn('Failed to send WOL magic packet:', err);
+                        });
+                    }
 
                     // If this is the last allowed attempt, or the error is a definitive failure
                     // (like 401/403 Unauthorized which won't change on retry), propagate it.
@@ -673,18 +683,13 @@ class AuthManager {
         }
 
         // =====================================================================
-        // WAKE-ON-LAN (WOL) INVOCATION FOR CONNECT TO SERVER
+        // WAKE-ON-LAN (WOL) CONFIGURATION FOR CONNECT TO SERVER
         // =====================================================================
-        // Read Wake-on-LAN preference settings directly from global storage
+        // Read Wake-on-LAN preference settings directly from global storage.
+        // We do not dispatch WOL unconditionally before probing; if the first
+        // connection probe fails or times out, WOL is broadcast immediately.
         const enableWol = storage.getItem('pref:enableWolOnStartup') === 'true';
         const wolMac = storage.getItem('pref:wolMacAddress');
-
-        if (enableWol && wolMac) {
-            log.info(`Wake-on-LAN is enabled. Triggering Magic Packet for server connect to ${wolMac}...`);
-            sendWakeOnLan(wolMac).catch((err) => {
-                log.warn('Failed to send WOL magic packet during connectToServer:', err);
-            });
-        }
 
         // Read Extended Wait preference key to allow cold shutdown server boots (~90s total)
         const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
@@ -693,6 +698,7 @@ class AuthManager {
         const maxAttempts = enableWol && wolMac ? (extendedWait ? 25 : 6) : 1;
         const retryDelayMs = 3000;
         let lastError = null;
+        let wolDispatched = false;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -701,6 +707,9 @@ class AuthManager {
                 // Short timeout per probe so UI doesn't lock up on dead addresses
                 const currentTimeout = attempt === 1 ? 5000 : 3000;
                 const info = await api.getPublicInfo({ timeout: currentTimeout });
+
+                // Connection succeeded — immediately cancel any pending Wake-on-LAN retry cycles
+                cancelWakeOnLan();
 
                 // Persist the server URL
                 storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
@@ -729,6 +738,15 @@ class AuthManager {
             } catch (error) {
                 lastError = error;
                 log.warn(`Connection attempt ${attempt}/${maxAttempts} failed:`, error);
+
+                // If connection probe failed and WOL is enabled, broadcast Magic Packet now that we know server is asleep
+                if (attempt === 1 && enableWol && wolMac && !wolDispatched) {
+                    wolDispatched = true;
+                    log.info(`Initial connection probe failed; server may be asleep. Broadcasting Wake-on-LAN to ${wolMac}...`);
+                    sendWakeOnLan(wolMac, { urgent: true }).catch((wolErr) => {
+                        log.warn('Failed to send WOL magic packet during connectToServer:', wolErr);
+                    });
+                }
 
                 // Wait before next retry iteration if more attempts remain
                 if (attempt < maxAttempts) {

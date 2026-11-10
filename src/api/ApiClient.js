@@ -18,6 +18,7 @@ import { i18n } from '../utils/i18n.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
 // Centralized platform info utility
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { idleGate } from '../utils/IdleGate.js';
 
 const log = logger.create('ApiClient');
 
@@ -821,6 +822,12 @@ export class ApiClient {
                     }
                     this._etagCache.set(url, { etag, body });
                 }
+            }
+
+            // Immediately abort any background Wake-on-LAN retry loop when
+            // health checks or user profile requests confirm the server is awake
+            if (_activeWolAbortController && (endpoint.includes('/System/Info/Public') || endpoint.includes('/Users/'))) {
+                cancelWakeOnLan();
             }
 
             return body;
@@ -3808,6 +3815,33 @@ async function _discoverViaLunaService(onServerFound) {
 }
 
 /**
+ * ============================================================================
+ * Wake-on-LAN Controller & Dispatch
+ * ============================================================================
+ */
+
+/**
+ * Active AbortController governing in-flight Wake-on-LAN companion service requests.
+ * Allows instant cancellation of the 6-attempt retry loop as soon as the Jellyfin
+ * server responds successfully to any request.
+ * @type {AbortController|null}
+ */
+let _activeWolAbortController = null;
+
+/**
+ * Immediately cancels any in-flight Wake-on-LAN requests and background HTTP proxy retries.
+ * Called automatically when server health checks (/System/Info/Public) or user authentication
+ * calls succeed, preventing redundant localhost:8123 network attempts.
+ */
+export function cancelWakeOnLan() {
+    if (_activeWolAbortController) {
+        log.info('Server confirmed awake — cancelling pending Wake-on-LAN retry loop');
+        _activeWolAbortController.abort();
+        _activeWolAbortController = null;
+    }
+}
+
+/**
  * Send Wake-on-LAN Magic Packet via background service
  * ============================================================================
  * Initiates a request to the local Node.js companion service to broadcast
@@ -3816,15 +3850,28 @@ async function _discoverViaLunaService(onServerFound) {
  * proxy is active.
  * ============================================================================
  * @param {string} macAddress - Target server MAC address (e.g., '00:11:22:33:44:55')
+ * @param {Object} [options={}] - Execution options
+ * @param {boolean} [options.urgent=false] - When true (e.g. server probe failed/timed out),
+ *                                           pre-launches companion service immediately.
  * @returns {Promise<boolean>} True if the magic packet was successfully dispatched
  */
-export async function sendWakeOnLan(macAddress) {
+export async function sendWakeOnLan(macAddress, options = {}) {
     if (!macAddress) {
         log.warn('Wake-on-LAN requested, but no MAC address was provided');
         return false;
     }
 
-    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress}`);
+    // Determine whether this WOL dispatch is actively required due to a failed probe
+    const isUrgent = options.urgent === true || options._isWolTimeoutRetry === true;
+
+    // Reset or instantiate active AbortController for this WOL lifecycle
+    if (_activeWolAbortController) {
+        _activeWolAbortController.abort();
+    }
+    _activeWolAbortController = new AbortController();
+    const abortSignal = _activeWolAbortController.signal;
+
+    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress} (urgent: ${isUrgent})`);
 
     // 1. Tauri platform: native Rust UDP Magic Packet broadcast
     if (_isTauriRuntime()) {
@@ -3896,19 +3943,41 @@ export async function sendWakeOnLan(macAddress) {
     const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
 
     if (bgEnabled) {
-        // Pre-launch ytresolver background service on Tizen if needed
-        if (typeof tizen !== 'undefined') {
+        // Abort early if the server was already detected online
+        if (abortSignal.aborted) {
+            log.info('Wake-on-LAN cancelled prior to Tizen companion service dispatch');
+            return false;
+        }
+
+        // Helper function to launch the ytresolver companion service
+        const launchYtResolver = () => {
+            if (typeof tizen === 'undefined') return;
             try {
                 const appId = tizen.application.getCurrentApplication().appInfo.id;
                 const pkgId = appId.split('.')[0];
                 log.info(`Platform Tizen: Pre-launching ytresolver background service: ${pkgId}.ytresolver`);
                 tizen.application.launch(pkgId + '.ytresolver');
-
-                // Allow a brief 500ms delay for the service to bind port and start listening
-                await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (preLaunchErr) {
                 log.warn('Failed to pre-launch Tizen background service for WOL:', preLaunchErr);
             }
+        };
+
+        // Gate ytresolver companion service launch:
+        // When WOL is actively needed (probe failed/timed out), launch immediately.
+        // For general background pre-launches, defer behind idleGate so it does not
+        // contend with boot rendering or user navigation.
+        if (isUrgent) {
+            launchYtResolver();
+            // Allow a brief 500ms delay for the service to bind port and start listening
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+            idleGate.runWhenIdle(launchYtResolver, 5000, 0);
+        }
+
+        // Abort early if cancellation arrived during the startup delay
+        if (abortSignal.aborted) {
+            log.info('Wake-on-LAN cancelled prior to HTTP proxy request dispatch');
+            return false;
         }
 
         log.info('Dispatching WOL request to local HTTP proxy on port 8123');
@@ -3917,10 +3986,17 @@ export async function sendWakeOnLan(macAddress) {
         const httpRetryDelayMs = 600;
 
         for (let attempt = 1; attempt <= maxHttpRetries; attempt++) {
+            // Check abort signal before starting each attempt
+            if (abortSignal.aborted) {
+                log.info(`WOL HTTP retry loop aborted at attempt ${attempt}/${maxHttpRetries} (server already awake)`);
+                return false;
+            }
+
             try {
                 const res = await fetch(url, {
                     method: 'POST',
-                    timeout: 3000
+                    timeout: 3000,
+                    signal: abortSignal
                 });
                 const data = await res.json();
                 log.info(`Local HTTP WOL response received (attempt ${attempt}/${maxHttpRetries}):`, data);
@@ -3928,6 +4004,10 @@ export async function sendWakeOnLan(macAddress) {
                     return true;
                 }
             } catch (fetchErr) {
+                if (abortSignal.aborted) {
+                    log.info(`WOL HTTP retry loop aborted during attempt ${attempt}/${maxHttpRetries}`);
+                    return false;
+                }
                 log.warn(
                     `WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`,
                     fetchErr.message || fetchErr
@@ -3937,7 +4017,9 @@ export async function sendWakeOnLan(macAddress) {
                 }
             }
         }
-        log.error('All WOL request attempts to local HTTP proxy failed.');
+        if (!abortSignal.aborted) {
+            log.error('All WOL request attempts to local HTTP proxy failed.');
+        }
         return false;
     }
 

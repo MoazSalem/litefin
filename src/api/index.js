@@ -11,6 +11,7 @@ export {
     testServer,
     ServerUnreachableError,
     sendWakeOnLan,
+    cancelWakeOnLan,
     hasBackgroundDiscoveryService
 } from './ApiClient.js';
 export { auth } from './AuthManager.js';
