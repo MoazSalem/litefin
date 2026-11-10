@@ -153,7 +153,13 @@ class Router {
      * Evaluates whether the user can navigate back in the application.
      * Returns true when:
      * 1. Navigation history contains prior routes (_history.length > 1), or
-     * 2. The current active route is not root / home (e.g. direct deep-link).
+     * 2. The current active route is a genuine 2nd-level sub-page (e.g. direct deep-link).
+     *
+     * Important security & UX constraint:
+     * Root, authentication, and gateway routes ('/home', '/', '', '/login',
+     * '/profiles', '/offline') must NEVER fall back to '/home' when no prior
+     * navigation history exists. Falling back from '/profiles' would bypass
+     * user authentication and profile PIN gates on cold boot.
      *
      * @returns {boolean} True if back navigation can be initiated.
      */
@@ -163,9 +169,14 @@ class Router {
             return true;
         }
 
-        // Direct deep-link or browser refresh on a 2nd-level page: allow return to Home
+        // Direct deep-link or browser refresh on a 2nd-level sub-page: allow return to Home.
+        // Gateway and root entry points must never synthesize a back navigation to Home.
         const currentPath = this.getCurrentPath();
-        return currentPath !== '/home' && currentPath !== '/' && currentPath !== '';
+        const [basePath] = (currentPath || '').split('?');
+
+        // Root entry and gateway routes that cannot navigate back without history
+        const noFallbackRoutes = ['/home', '/', '', '/login', '/profiles', '/offline'];
+        return !noFallbackRoutes.includes(basePath);
     }
 
     /**
@@ -176,6 +187,10 @@ class Router {
      * to the previous page. If history is empty but the user is on a 2nd-level
      * page (such as after refreshing or launching via deep link), safely
      * falls back to the primary '/home' route.
+     *
+     * Note: Primary root and gateway routes ('/home', '/', '', '/login',
+     * '/profiles', '/offline') must never fall back to Home when no prior
+     * navigation history exists.
      *
      * @returns {boolean} True if back navigation was successfully triggered.
      */
@@ -205,9 +220,16 @@ class Router {
             return true;
         }
 
-        // Deep-link or refresh fallback: navigate cleanly to Home if on a sub-page
+        // Deep-link or refresh fallback: navigate cleanly to Home if on a 2nd-level sub-page.
+        // Primary root and gateway routes ('/home', '/', '', '/login', '/profiles', '/offline')
+        // must never fall back to Home when history stack is empty. This prevents bypassing
+        // profile switching or custom PIN locks on cold boot.
         const currentPath = this.getCurrentPath();
-        if (currentPath !== '/home' && currentPath !== '/' && currentPath !== '') {
+        const [basePath] = (currentPath || '').split('?');
+
+        // Verify that current route is not a gateway/root entry point
+        const noFallbackRoutes = ['/home', '/', '', '/login', '/profiles', '/offline'];
+        if (!noFallbackRoutes.includes(basePath)) {
             log.info(`No prior history entry available; falling back to /home from "${currentPath}"`);
             this.navigate('/home');
             return true;

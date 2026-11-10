@@ -467,24 +467,33 @@ class ProfilesPage extends Page {
     // ========================================================================
 
     onBack() {
-        // If the dialog is open, close it and absorb the back press
+        // If the confirmation dialog is currently visible, dismiss it first
         if (this._dialogVisible) {
             this._hideDialog();
             return true;
         }
 
         /*
-         * If no user is authenticated yet (app startup flow, no one selected),
-         * Back should exit the app — there's nowhere to go back to.
-         * If we got here from the Sidebar (user was already active), Back
-         * should go back to the previous page via normal router history.
+         * Check if an ancestor page exists in the router history stack.
+         * When ProfilesPage is the initial entry point of the app (e.g. cold boot
+         * where multiple users exist or the active profile is protected by a PIN),
+         * there is no prior page to return to. In that scenario, Back must request
+         * an application exit rather than falling back to /home.
+         *
+         * Note: We intentionally inspect `router.canGoBack()` rather than relying
+         * on `auth.isAuthenticated()`, because optimistic session restore preserves
+         * cached credentials at startup even when the profile picker is gated by a PIN.
+         * If we reached here from within the running app (e.g. Sidebar profile switch),
+         * router history is present and router.back() safely returns to the previous page.
          */
-        if (!auth.isAuthenticated()) {
+        if (!router.canGoBack()) {
+            log.info('ProfilesPage is the initial route with no prior history; requesting app exit');
             eventBus.emit('app:exitRequested');
             return true;
         }
 
-        return false; // Let the router handle history
+        // Previous navigation history entry exists; let Router handle backward transition
+        return false;
     }
 }
 
