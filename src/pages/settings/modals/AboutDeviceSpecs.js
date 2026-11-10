@@ -28,9 +28,9 @@ export function getDeviceSpecsData() {
         const ver = caps.androidVersion || platformInfo.androidVersion;
         platformStr = ver ? `Android ${ver}` : 'Android';
     } else if (platformInfo.isWebOS) {
-        platformStr = i18n.t('WebOSValue', [caps.webosVersion]);
+        platformStr = i18n.t('WebOSValue', [caps.webosVersion || platformInfo.webosVersion]);
     } else if (platformInfo.isTizen) {
-        platformStr = i18n.t('TizenValue', [caps.tizenVersion]);
+        platformStr = i18n.t('TizenValue', [caps.tizenVersion || platformInfo.tizenVersion]);
     } else if (platformInfo.isDesktop) {
         platformStr = `Desktop (${platformInfo.operatingSystem || 'Native'})`;
     }

@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../../utils/Logger.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { BaseProfile } from './BaseProfile.js';
 import { webosAdapter } from '../../webos/WebOSAdapter.js';
@@ -135,37 +136,15 @@ function probeDts(video) {
     return confirmed ? true : null;
 }
 
-function getWebOSVersion() {
-    const userAgent = navigator.userAgent.toLowerCase();
-    const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
-    if (!match) {
-        // Ancient WebOS 1.x/2.x platforms use pure WebKit without Chrome in UserAgent.
-        // Fall back to parsing the AppleWebKit version number:
-        //   AppleWebKit/538.2 -> WebOS 2.x
-        //   AppleWebKit/537.41 -> WebOS 1.x
-        const webkitMatch = /applewebkit\/([0-9.]+)/.exec(userAgent);
-        if (webkitMatch) {
-            const webkitVersion = parseFloat(webkitMatch[1]);
-            if (webkitVersion >= 538) return 2;
-            if (webkitVersion >= 537) return 1;
-        }
-        return 1; // Minimum safe fallback instead of 0
-    }
-
-    const versionMajor = parseInt(match[1].split('.')[0], 10);
-
-    if (versionMajor >= 120) return 25; // Estimate for WebOS 25
-    if (versionMajor >= 108) return 24;
-    if (versionMajor >= 94) return 23;
-    if (versionMajor >= 87) return 22;
-    if (versionMajor >= 79) return 6;
-    if (versionMajor >= 68) return 5;
-    if (versionMajor >= 53) return 4;
-    if (versionMajor >= 38) return 3;
-    if (versionMajor >= 34) return 2;
-    if (versionMajor >= 26) return 1;
-
-    return 1; // Fallback for very old versions
+/**
+ * Resolves the LG webOS major release version.
+ * Delegates to the centralized platformInfo single source of truth.
+ *
+ * @returns {number} webOS major version float (defaulting to 1 if unknown)
+ */
+export function getWebOSVersion() {
+    // Leverage unified platformInfo webOS version detection
+    return platformInfo.webosVersion || 1;
 }
 
 // Max audio channels — default to 6 for surround support on TV hardware

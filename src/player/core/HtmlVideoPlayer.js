@@ -470,7 +470,7 @@ export class HtmlVideoPlayer {
 
         // Prefer HLS.js on most platforms for better control
         // But use native on Tizen where HLS.js might face strict CORS/CSP issues with Blob URLs
-        const isTizen = /Tizen/.test(navigator.userAgent);
+        const isTizen = platformInfo.isTizen;
         
         if (isTizen && hasNativeHls) {
             log.info('Preferring native HLS playback (Tizen detected)');
@@ -2211,10 +2211,9 @@ export class HtmlVideoPlayer {
         if (userAgent.includes('firefox')) return false;
         
         // Tizen logic: Requires 5.5+, but reportedly broken on Tizen 8
-        const tizenMatch = userAgent.match(/tizen (\d+\.\d+)/);
-        if (tizenMatch) {
-            const version = parseFloat(tizenMatch[1]);
-            if (version < 5.5 || version >= 8) return false;
+        if (platformInfo.isTizen) {
+            const version = platformInfo.tizenVersion;
+            if (version !== null && (version < 5.5 || version >= 8)) return false;
         }
         
         return true;
