@@ -83,6 +83,164 @@ const getFocusableCountInRow = (row) => {
 };
 
 class SpatialNavigator {
+    constructor() {
+        /**
+         * Cached candidate geometry relative to section containers.
+         * Maps container HTMLElement -> WeakMap<HTMLElement, { relLeft, relTop, width, height }>
+         * @type {WeakMap<HTMLElement, WeakMap<HTMLElement, Object>>}
+         * @private
+         */
+        this._cache = new WeakMap();
+    }
+
+    /**
+     * Clears cached layout metrics for a specific container or all containers.
+     * @param {HTMLElement} [container=null] Section container element to clear
+     */
+    clearCache(container = null) {
+        if (container) {
+            this._cache.delete(container);
+        } else {
+            this._cache = new WeakMap();
+        }
+    }
+
+    /**
+     * Computes or retrieves cached layout coordinates for the active/origin element.
+     * When relative metrics are present in the container cache, uses container geometry
+     * plus relative offsets to compute client bounding rect without triggering a layout reflow.
+     * @private
+     */
+    _getCurrentRect(current, container) {
+        // Fall back directly to native measurement if no valid container was passed
+        if (!container || typeof container.getBoundingClientRect !== 'function') {
+            return current.getBoundingClientRect();
+        }
+
+        // Check if layout metrics relative to container were previously cached
+        const containerMap = this._cache.get(container);
+        if (containerMap && containerMap.has(current)) {
+            const metrics = containerMap.get(current);
+
+            // Read container geometry once and offset by its current scroll position
+            const cRect = container.getBoundingClientRect();
+            const scrollLeft = container.scrollLeft || 0;
+            const scrollTop = container.scrollTop || 0;
+
+            // Derive actual client coordinates via invariant container-relative offsets
+            const left = cRect.left + metrics.relLeft - scrollLeft;
+            const top = cRect.top + metrics.relTop - scrollTop;
+
+            return {
+                left,
+                top,
+                right: left + metrics.width,
+                bottom: top + metrics.height,
+                width: metrics.width,
+                height: metrics.height
+            };
+        }
+
+        // Measure directly on cache miss and record relative position
+        const r = current.getBoundingClientRect();
+        if (containerMap) {
+            const cRect = container.getBoundingClientRect();
+            const scrollLeft = container.scrollLeft || 0;
+            const scrollTop = container.scrollTop || 0;
+
+            // Cache position relative to container's scroll canvas
+            containerMap.set(current, {
+                relLeft: r.left - cRect.left + scrollLeft,
+                relTop: r.top - cRect.top + scrollTop,
+                width: r.width,
+                height: r.height
+            });
+        }
+        return r;
+    }
+
+    /**
+     * Gathers and converts candidate element positions using container-relative caching.
+     * On initial entry into a section, records offsets relative to container; subsequent
+     * D-pad steps perform pure offset calculations, eliminating dozens of getBoundingClientRect reflows.
+     * @private
+     */
+    _getCandidateData(candidates, current, container) {
+        // Fall back to synchronous getBoundingClientRect reads if container is unavailable
+        if (!container || typeof container.getBoundingClientRect !== 'function') {
+            const candidateData = [];
+            for (let i = 0; i < candidates.length; i++) {
+                const el = candidates[i];
+                if (el === current) continue;
+
+                // Synchronously read candidate bounds
+                const r = el.getBoundingClientRect();
+                candidateData.push({
+                    el,
+                    rect: r,
+                    cx: r.left + r.width / 2,
+                    cy: r.top + r.height / 2
+                });
+            }
+            return candidateData;
+        }
+
+        // Locate or initialize the relative metrics cache for this container
+        let containerMap = this._cache.get(container);
+        if (!containerMap) {
+            containerMap = new WeakMap();
+            this._cache.set(container, containerMap);
+        }
+
+        // Measure container bounding rect once per navigation step
+        const cRect = container.getBoundingClientRect();
+        const scrollLeft = container.scrollLeft || 0;
+        const scrollTop = container.scrollTop || 0;
+
+        const candidateData = [];
+        for (let i = 0; i < candidates.length; i++) {
+            const el = candidates[i];
+            if (el === current) continue;
+
+            // Retrieve cached relative metrics or calculate them on first touch
+            let metrics = containerMap.get(el);
+            if (!metrics) {
+                const r = el.getBoundingClientRect();
+
+                // Compute relative offsets invariant to subsequent container scrolling
+                metrics = {
+                    relLeft: r.left - cRect.left + scrollLeft,
+                    relTop: r.top - cRect.top + scrollTop,
+                    width: r.width,
+                    height: r.height
+                };
+                containerMap.set(el, metrics);
+            }
+
+            // Project relative coordinates to active viewport coordinates
+            const left = cRect.left + metrics.relLeft - scrollLeft;
+            const top = cRect.top + metrics.relTop - scrollTop;
+            const rect = {
+                left,
+                top,
+                right: left + metrics.width,
+                bottom: top + metrics.height,
+                width: metrics.width,
+                height: metrics.height
+            };
+
+            // Calculate center points for directional distance calculations
+            candidateData.push({
+                el,
+                rect,
+                cx: left + metrics.width / 2,
+                cy: top + metrics.height / 2
+            });
+        }
+
+        return candidateData;
+    }
+
     // ========================================================================
     // Public API
     // ========================================================================
@@ -102,33 +260,22 @@ class SpatialNavigator {
      * @param {HTMLElement} current - Currently focused element
      * @param {HTMLElement[]} candidates - All focusable elements in the section
      * @param {'up'|'down'|'left'|'right'} direction - Navigation direction
+     * @param {HTMLElement} [container=null] - Optional parent section container for relative rect caching
      * @returns {HTMLElement|null} Best candidate, or null if none found
      */
-    findNext(current, candidates, direction) {
-        // ====================================================================
-        // TIZEN OPTIMIZATION: Batch all DOM reads BEFORE the scoring loop.
-        // getBoundingClientRect() forces synchronous layout calculation.
-        // Calling it inside a loop causes "layout thrashing" — on TV hardware
-        // this means 100ms+ stutters per keypress. Reading everything upfront
-        // into plain objects lets the scoring loop run on pure cached data.
-        // ====================================================================
-        const rect1 = current.getBoundingClientRect();
+    findNext(current, candidates, direction, container = null) {
+        // Compute reference coordinates for currently focused element
+        const rect1 = this._getCurrentRect(current, container);
         const center1x = rect1.left + rect1.width / 2;
         const center1y = rect1.top + rect1.height / 2;
 
-        // Batch-read: one getBoundingClientRect() per candidate, all at once
-        const candidateData = [];
-        for (let i = 0; i < candidates.length; i++) {
-            const el = candidates[i];
-            if (el === current) continue;
-            const r = el.getBoundingClientRect();
-            candidateData.push({
-                el,
-                rect: r,
-                cx: r.left + r.width / 2,
-                cy: r.top + r.height / 2
-            });
-        }
+        // Batch-resolve candidate coordinates using cached container metrics where available
+        const candidateData = this._getCandidateData(candidates, current, container);
+
+        // Pre-compute focusable count for the current row once outside the candidate loop
+        const row1 = current.closest ? current.closest('.setting-item') : null;
+        const count1 = row1 ? getFocusableCountInRow(row1) : 0;
+        const rowCountMap = new Map();
 
         // ====================================================================
         // Scoring loop — pure math on pre-read data, zero DOM access
@@ -196,28 +343,20 @@ class SpatialNavigator {
                 // Horizontal overlap (shared X range)
 
                 // ------------------------------------------------------------
-                // 💎 Premium Settings Navigation Optimization
+                // Settings Navigation Optimization
                 // ------------------------------------------------------------
-                // If both the current element and the candidate element belong to
-                // settings items (.setting-item) and they reside in different rows,
-                // we evaluate their respective focusable counts.
-                //
-                // If at least one of these settings rows contains exactly one (or zero)
-                // focusable controls (e.g., a row containing only a single wide slider
-                // or a narrow toggle switch), they do not represent a grid/column structure
-                // that requires alignment preservation.
-                //
-                // In this case, we treat them as perfectly aligned horizontally (overlap = 9999)
-                // to prevent narrow, right-aligned controls from being skipped when navigating
-                // vertically (up/down).
+                // If both current and candidate elements belong to settings items
+                // in different rows, check if either row has <= 1 focusable item.
+                // Row counts are cached in rowCountMap to avoid repeated querySelectorAll calls.
                 // ------------------------------------------------------------
-                const row1 = current.closest('.setting-item');
-                const row2 = el.closest('.setting-item');
+                const row2 = el.closest ? el.closest('.setting-item') : null;
 
                 if (row1 && row2 && row1 !== row2) {
-                    const count1 = getFocusableCountInRow(row1);
-                    const count2 = getFocusableCountInRow(row2);
-
+                    let count2 = rowCountMap.get(row2);
+                    if (count2 === undefined) {
+                        count2 = getFocusableCountInRow(row2);
+                        rowCountMap.set(row2, count2);
+                    }
                     if (count1 <= 1 || count2 <= 1) {
                         overlap = 9999; // Force a perfect alignment score
                     }
@@ -261,27 +400,19 @@ class SpatialNavigator {
      *
      * @param {HTMLElement} target - Origin element to measure from
      * @param {HTMLElement[]} candidates - All focusable elements in the section
+     * @param {HTMLElement} [container=null] - Optional parent section container for relative rect caching
      * @returns {HTMLElement|null} Closest candidate, or null if none
      */
-    findClosest(target, candidates) {
+    findClosest(target, candidates, container = null) {
         if (!target || !candidates.length) return null;
 
-        // TIZEN OPTIMIZATION: Batch all DOM reads before the scoring loop
-        // to avoid layout thrashing (see findNext for full explanation)
-        const rect1 = target.getBoundingClientRect();
+        // Compute reference coordinates for target element
+        const rect1 = this._getCurrentRect(target, container);
         const center1x = rect1.left + rect1.width / 2;
         const center1y = rect1.top + rect1.height / 2;
 
-        // Batch-read all candidate positions upfront
-        const candidateData = [];
-        for (let i = 0; i < candidates.length; i++) {
-            const r = candidates[i].getBoundingClientRect();
-            candidateData.push({
-                el: candidates[i],
-                cx: r.left + r.width / 2,
-                cy: r.top + r.height / 2
-            });
-        }
+        // Batch-resolve candidate coordinates using cached container metrics where available
+        const candidateData = this._getCandidateData(candidates, target, container);
 
         // Pure math loop — zero DOM access
         let best = null;

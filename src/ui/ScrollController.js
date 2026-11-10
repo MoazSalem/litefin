@@ -351,7 +351,15 @@ class ScrollController {
      * @private
      */
     _applyHorizontalScrollMode(mode) {
+        // Guard against redundant root DOM attribute mutations, as modifying
+        // attributes on <html> invalidates styles across every node in the document.
         if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
+            if (
+                typeof document.documentElement.getAttribute === 'function' &&
+                document.documentElement.getAttribute('data-horizontal-scroll') === mode
+            ) {
+                return;
+            }
             document.documentElement.setAttribute('data-horizontal-scroll', mode);
         }
     }
@@ -380,7 +388,15 @@ class ScrollController {
      * @private
      */
     _applyScrollPhysics(physics) {
+        // Only write to <html> when the attribute value actually changes
+        // to avoid global style invalidation across the entire DOM tree.
         if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
+            if (
+                typeof document.documentElement.getAttribute === 'function' &&
+                document.documentElement.getAttribute('data-scroll-physics') === physics
+            ) {
+                return;
+            }
             document.documentElement.setAttribute('data-scroll-physics', physics);
         }
     }

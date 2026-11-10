@@ -160,18 +160,16 @@ class FocusManager {
 
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
-            // NOTE: Page.setLoading(false) only removes the 'loading' class from the
-            // page root — it never removes the '.page-loading' overlay div itself, so
-            // that element stays in the DOM (just CSS-hidden via display:none) for the
-            // rest of the page's lifetime. Checking for its mere presence therefore
-            // treats the page as "loading" forever after the first spinner, silently
-            // dropping every subsequent focusin (e.g. DetailsPage's resumeBtn.focus()),
-            // so we must also verify it's actually visible before treating it as active.
+            // NOTE: Page.setLoading(false) removes the 'loading' class from the
+            // page root — '.page-loading' remains in the DOM (CSS-hidden).
+            // Checking display via getComputedStyle() forces a synchronous style
+            // recalculation across the entire DOM tree on every keypress, so we check
+            // active loading status exclusively via fast class/ancestor presence.
             const pageLoadingEl = document.querySelector('.page-loading');
             const isPageLoading =
                 document.body.classList.contains('app-splash-active') ||
-                document.querySelector('.page.loading') ||
-                (pageLoadingEl && getComputedStyle(pageLoadingEl).display !== 'none');
+                document.querySelector('.page.loading') !== null ||
+                (pageLoadingEl && pageLoadingEl.closest('.page.loading') !== null);
 
             if (isPageLoading) {
                 const sectionName = this.getSectionForElement(e.target);
@@ -344,11 +342,10 @@ class FocusManager {
                 const max = parseFloat(el.max) || 100;
                 let value = parseFloat(el.value) || 0;
 
-                // Detect if the slider is rendered in RTL mode
-                let isRTL = document.documentElement.dir === 'rtl';
-                if (window.getComputedStyle) {
-                    isRTL = window.getComputedStyle(el).direction === 'rtl';
-                }
+                // Detect if the slider is rendered in RTL mode without layout reflows
+                const isRTL =
+                    el.dir === 'rtl' ||
+                    (typeof document !== 'undefined' && document.documentElement?.dir === 'rtl');
 
                 // In RTL, min is on the right and max is on the left visually.
                 // Pressing Left should increase value (move towards max).
@@ -438,8 +435,13 @@ class FocusManager {
         // PERFORMANCE: Remove the data-fm-section tag we set in register()
         // so the container is clean and doesn't confuse future closest() calls.
         const config = this._sections.get(name);
-        if (config && config.container && config.container.dataset) {
-            delete config.container.dataset.fmSection;
+        if (config && config.container) {
+            if (config.container.dataset) {
+                delete config.container.dataset.fmSection;
+            }
+            if (typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache(config.container);
+            }
         }
 
         this._sections.delete(name);
@@ -620,8 +622,15 @@ class FocusManager {
     invalidateCache(sectionName) {
         if (sectionName) {
             this._focusablesCache.delete(sectionName);
+            const cfg = this._sections.get(sectionName);
+            if (cfg && cfg.container && typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache(cfg.container);
+            }
         } else {
             this._focusablesCache.clear();
+            if (typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache();
+            }
         }
     }
 
@@ -779,8 +788,8 @@ class FocusManager {
                 }
             }
         } else {
-            // 'grid' or default fallback — delegate to SpatialNavigator
-            nextElement = this._spatial.findNext(this._focusedElement, focusables, direction);
+            // 'grid' or default fallback — delegate to SpatialNavigator with section container
+            nextElement = this._spatial.findNext(this._focusedElement, focusables, direction, config.container);
         }
 
         // 2. If we found a target, move to it
@@ -1003,7 +1012,11 @@ class FocusManager {
                 oldSettingItem.classList.remove('focused-row');
             }
 
-            this._focusedElement.blur(); // Clear native :focus styling on Tizen
+            // Only invoke blur() when native focus actually sits on this element
+            // to avoid triggering spurious blur/focusout style reconciliations.
+            if (typeof document !== 'undefined' && document.activeElement === this._focusedElement) {
+                this._focusedElement.blur();
+            }
         }
 
         // NOW set focus (after scroll is done)
@@ -1165,7 +1178,7 @@ class FocusManager {
         // If we came from another element (e.g. Button below grid), pick closest grid item
         // Note: Handled above via onEnter hook for virtual rows
         if (fromElement && document.contains(fromElement) && typeof config.onEnter !== 'function') {
-            target = this._spatial.findClosest(fromElement, focusables);
+            target = this._spatial.findClosest(fromElement, focusables, config.container);
         }
 
         // 3. Memory (Fallback)
