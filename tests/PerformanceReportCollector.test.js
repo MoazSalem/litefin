@@ -138,6 +138,96 @@ test('PerformanceReportCollector: Long tasks capturing and duration tracking', (
     collector.stop();
 });
 
+test('PerformanceReportCollector: Longtask observer uses the type dictionary and captures route context', () => {
+    const observeCalls = [];
+    let observerCallback = null;
+
+    class FakePerformanceObserver {
+        static supportedEntryTypes = ['longtask'];
+
+        constructor(cb) {
+            observerCallback = cb;
+        }
+
+        observe(options) {
+            // Mimic Chromium: the legacy `entryType` key must be rejected
+            if (!options.type && !options.entryTypes) {
+                throw new TypeError('An observe() call must include either entryTypes or type arguments.');
+            }
+            observeCalls.push(options);
+        }
+
+        disconnect() {}
+    }
+
+    const originalObserver = globalThis.PerformanceObserver;
+    globalThis.PerformanceObserver = FakePerformanceObserver;
+
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    assert.deepEqual(
+        observeCalls[0],
+        { type: 'longtask', buffered: true },
+        'Longtask observer must observe with { type, buffered }'
+    );
+    assert.equal(typeof observerCallback, 'function', 'Longtask entries must feed the collector');
+
+    observerCallback({
+        getEntries: () => [
+            {
+                startTime: collector._startTime + 500,
+                duration: 90,
+                attribution: [{ containerType: 'window', containerName: 'HomePage', containerSrc: 'HomePage.js' }]
+            }
+        ]
+    });
+
+    assert.equal(collector._longTasks.length, 1, 'Long task must be recorded');
+    assert.equal(collector._longTasks[0].durationMs, 90, 'Duration preserved');
+    assert.equal(collector._longTasks[0].route, '/home', 'Active route attached to the long task');
+    assert.equal(collector._longTasks[0].containerName, 'HomePage', 'Attribution preserved');
+
+    const report = collector.buildReport();
+    assert.ok(report.text.includes('Route: /home'), 'Report renders route context');
+
+    collector.stop();
+    globalThis.PerformanceObserver = originalObserver;
+});
+
+test('PerformanceReportCollector: Longtask observer falls back to entryTypes on legacy engines', () => {
+    const observeCalls = [];
+
+    class LegacyPerformanceObserver {
+        static supportedEntryTypes = ['longtask'];
+
+        observe(options) {
+            // Reject the modern dictionary form, accept the legacy entryTypes form
+            if (options.type) {
+                throw new TypeError('type is not supported');
+            }
+            observeCalls.push(options);
+        }
+
+        disconnect() {}
+    }
+
+    const originalObserver = globalThis.PerformanceObserver;
+    globalThis.PerformanceObserver = LegacyPerformanceObserver;
+
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    assert.deepEqual(
+        observeCalls[0],
+        { entryTypes: ['longtask'] },
+        'Legacy engines must fall back to the entryTypes form'
+    );
+
+    collector.stop();
+    globalThis.PerformanceObserver = originalObserver;
+});
+
 test('PerformanceReportCollector: Frame timing, distribution buckets, and jank event logging', () => {
     const collector = new PerformanceReportCollector();
     collector.start();

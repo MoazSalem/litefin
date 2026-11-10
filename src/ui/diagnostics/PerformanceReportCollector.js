@@ -240,14 +240,28 @@ export class PerformanceReportCollector {
         const supported = PerformanceObserver.supportedEntryTypes || [];
 
         // 1. Long Tasks Observer (> 50ms main-thread blockage)
-        if (supported.includes('longtask')) {
+        if (supported.indexOf('longtask') !== -1) {
             try {
                 const longTaskObserver = new PerformanceObserver((entryList) => {
-                    for (const entry of entryList.getEntries()) {
-                        this._recordLongTask(entry);
+                    const entries = entryList.getEntries();
+                    for (let i = 0; i < entries.length; i++) {
+                        this._recordLongTask(entries[i]);
                     }
                 });
-                longTaskObserver.observe({ entryType: 'longtask' });
+                /*
+                 * Chromium requires the `type` dictionary member when observing a
+                 * single entry type. The legacy `entryType` key (used previously)
+                 * throws "An observe() call must include either entryTypes or type
+                 * arguments", which silently disabled long-task telemetry entirely.
+                 * `buffered: true` also drains entries recorded before the collector
+                 * was lazily loaded. Older engines that only implement the
+                 * entryTypes form are covered by the fallback below.
+                 */
+                try {
+                    longTaskObserver.observe({ type: 'longtask', buffered: true });
+                } catch (typeErr) {
+                    longTaskObserver.observe({ entryTypes: ['longtask'] });
+                }
                 this._observers.push(longTaskObserver);
             } catch (err) {
                 log.debug('Longtask observer initialization skipped:', err);
@@ -360,10 +374,19 @@ export class PerformanceReportCollector {
             containerSrc = attr.containerSrc || '';
         }
 
+        // Snapshot the active route so freezes can be attributed to a page
+        const route =
+            router && typeof router.getCurrentPath === 'function'
+                ? router.getCurrentPath()
+                : typeof window !== 'undefined' && window.location
+                  ? window.location.hash || '/'
+                  : '/';
+
         const relativeTimeMs = Math.round(entry.startTime - this._startTime);
         const taskRecord = {
             timeOffsetMs: relativeTimeMs,
             durationMs: duration,
+            route,
             containerType,
             containerName,
             containerSrc
@@ -804,7 +827,10 @@ export class PerformanceReportCollector {
             lines.push('Captured Long Tasks Log:');
             l.entries.slice(-15).forEach((task, idx) => {
                 const sec = (task.timeOffsetMs / 1000).toFixed(1);
-                lines.push(`  ${idx + 1}. [+${sec}s] ${task.durationMs}ms freeze | Container: ${task.containerType} ${task.containerName || ''}`);
+                const src = task.containerSrc ? ` (${task.containerSrc})` : '';
+                lines.push(
+                    `  ${idx + 1}. [+${sec}s] ${task.durationMs}ms freeze | Route: ${task.route || '/'} | Container: ${task.containerType} ${task.containerName || ''}${src}`
+                );
             });
             lines.push('');
         }
