@@ -117,8 +117,14 @@ class SpatialNavigator {
             return current.getBoundingClientRect();
         }
 
+        // Cross-section origin elements (e.g. sidebar -> content via findClosest) do not
+        // scroll with container.scrollTop, so never cache or project them relative to container.
+        if (typeof container.contains === 'function' && !container.contains(current)) {
+            return current.getBoundingClientRect();
+        }
+
         // Check if layout metrics relative to container were previously cached
-        const containerMap = this._cache.get(container);
+        let containerMap = this._cache.get(container);
         if (containerMap && containerMap.has(current)) {
             const metrics = containerMap.get(current);
 
@@ -141,21 +147,26 @@ class SpatialNavigator {
             };
         }
 
+        // Initialize the container map on first entry so initial origin elements
+        // are cached right away instead of missing on the second D-pad step.
+        if (!containerMap) {
+            containerMap = new WeakMap();
+            this._cache.set(container, containerMap);
+        }
+
         // Measure directly on cache miss and record relative position
         const r = current.getBoundingClientRect();
-        if (containerMap) {
-            const cRect = container.getBoundingClientRect();
-            const scrollLeft = container.scrollLeft || 0;
-            const scrollTop = container.scrollTop || 0;
+        const cRect = container.getBoundingClientRect();
+        const scrollLeft = container.scrollLeft || 0;
+        const scrollTop = container.scrollTop || 0;
 
-            // Cache position relative to container's scroll canvas
-            containerMap.set(current, {
-                relLeft: r.left - cRect.left + scrollLeft,
-                relTop: r.top - cRect.top + scrollTop,
-                width: r.width,
-                height: r.height
-            });
-        }
+        // Cache position relative to container's scroll canvas
+        containerMap.set(current, {
+            relLeft: r.left - cRect.left + scrollLeft,
+            relTop: r.top - cRect.top + scrollTop,
+            width: r.width,
+            height: r.height
+        });
         return r;
     }
 
