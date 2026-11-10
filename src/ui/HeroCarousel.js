@@ -21,6 +21,7 @@ import { escapeHtml } from '../utils/Utils.js';
 import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratingsFormatter.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
 import { pluginManager } from '../plugins/PluginManager.js';
+import { idleGate } from '../utils/IdleGate.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -41,6 +42,16 @@ class HeroCarousel {
         this._intersectionObserver = null;
         this._preloadTimeoutId = null;
         this._preloadIdleId = null;
+
+        // ---------------------------------------------------------------------
+        // Idle preload bookkeeping
+        // ---------------------------------------------------------------------
+        // Slide backdrops/logos are preloaded well ahead of a transition so
+        // goTo() only has to toggle CSS classes. Idle preloads are deduplicated
+        // per slide and never decode BlurHash before the transition.
+        // ---------------------------------------------------------------------
+        this._idlePreloadTask = null;
+        this._preloadedSlides = Object.create(null);
 
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
@@ -642,20 +653,28 @@ class HeroCarousel {
             const url = (match && match[1]) || heroBackdrop.dataset.backdrop;
             if (!url) return;
 
-            // Decode blurhash at low resolution asynchronously
-            import('../utils/BlurHashDecoder.js')
-                .then(({ default: BlurHashDecoder }) => {
-                    const pixels = BlurHashDecoder.decode(hash, 64, 36);
-                    if (pixels && canvas) {
-                        canvas.width = 64;
-                        canvas.height = 36;
-                        const ctx = canvas.getContext('2d');
-                        const imageData = ctx.createImageData(64, 36);
-                        imageData.data.set(pixels);
-                        ctx.putImageData(imageData, 0, 0);
-                    }
-                })
-                .catch((err) => log.error('Failed to decode hero blurhash', err));
+            // Decode blurhash at low resolution asynchronously, from an idle task.
+            // Home boot also mounts many rows; decoding every hero canvas inline
+            // would compete with the first D-pad navigation frame.
+            idleGate.runWhenIdle(
+                () => {
+                    import('../utils/BlurHashDecoder.js')
+                        .then(({ default: BlurHashDecoder }) => {
+                            const pixels = BlurHashDecoder.decode(hash, 64, 36);
+                            if (pixels && canvas && canvas.isConnected) {
+                                canvas.width = 64;
+                                canvas.height = 36;
+                                const ctx = canvas.getContext('2d');
+                                const imageData = ctx.createImageData(64, 36);
+                                imageData.data.set(pixels);
+                                ctx.putImageData(imageData, 0, 0);
+                            }
+                        })
+                        .catch((err) => log.error('Failed to decode hero blurhash', err));
+                },
+                1200,
+                0
+            );
 
             // Track image load to cleanly fade out the blurhash canvas placeholder
             const img = new Image();
@@ -734,34 +753,19 @@ class HeroCarousel {
             this._intersectionObserver.observe(this._container);
         }
 
-        // If custom reverse proxy headers are configured, trigger slide 0 preload to fetch authenticated blob
-        if (customHeaders?.hasCustomHeaders?.()) {
-            this._preloadSlide(0);
-        }
+        // Slide 0 is guaranteed to be the visible slide, so its backdrop starts
+        // loading immediately (mount path — no transition is in flight here).
+        // This also triggers the authenticated blob fetch when custom reverse
+        // proxy headers are configured (handled inside _preloadSlide).
+        this._preloadSlide(0);
 
         // ---------------------------------------------------------------------
-        // Deferred Single-Slide Preload Window
+        // Deferred Sliding Preload Window
         // ---------------------------------------------------------------------
-        // Rather than eager-loading all 5-10 slides at mount time, we only preload
-        // the immediate next slide (index 1) after an idle interval. Subsequent
-        // slides are preloaded progressively during transitions.
+        // Preload only the slides around the active index so 4K backdrops never
+        // accumulate in VRAM. The window slides forward after every transition.
         // ---------------------------------------------------------------------
-        if (this._items.length > 1) {
-            if ('requestIdleCallback' in window) {
-                this._preloadIdleId = window.requestIdleCallback(
-                    () => {
-                        this._preloadSlide(1);
-                        this._preloadIdleId = null;
-                    },
-                    { timeout: 2500 }
-                );
-            } else {
-                this._preloadTimeoutId = setTimeout(() => {
-                    this._preloadSlide(1);
-                    this._preloadTimeoutId = null;
-                }, 1200);
-            }
-        }
+        this._scheduleIdlePreload(350);
     }
 
     /**
@@ -787,6 +791,10 @@ class HeroCarousel {
         if (this._preloadTimeoutId) {
             clearTimeout(this._preloadTimeoutId);
             this._preloadTimeoutId = null;
+        }
+        if (this._idlePreloadTask) {
+            idleGate.cancel(this._idlePreloadTask);
+            this._idlePreloadTask = null;
         }
         if (this._preloadIdleId && 'cancelIdleCallback' in window) {
             window.cancelIdleCallback(this._preloadIdleId);
@@ -944,17 +952,11 @@ class HeroCarousel {
         const item = items[index];
         if (!item) return;
 
-        // ────────────────────────────────────────────────────────────────────
-        // Pre-decode Ambient BlurHash Fill Canvas for Preloaded Slide
-        // ────────────────────────────────────────────────────────────────────
-        // Prepares the background ambient gradient before the slide transitions into view.
-        // Exclusive to the Immersive (Performance) carousel style (disabled by default).
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill =
-            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
-        if (isBlurhashFill) {
-            this._decodeBlurhashFill(item);
-        }
+        // Deduplicate: a slide is only preloaded once. The idle sweep calls this
+        // for every slide, and adjacent preloads used to re-create Image objects
+        // every time because background-image is only applied asynchronously.
+        if (this._preloadedSlides[index]) return;
+        this._preloadedSlides[index] = true;
 
         // Preload backdrop image
         const backdrop = item.querySelector('.hero-backdrop');
@@ -969,23 +971,32 @@ class HeroCarousel {
             const applyBackdrop = (effectiveUrl) => {
                 const img = new Image();
 
-                // When image finishes downloading and decoding, attach to background-image
-                img.onload = () => {
-                    if (backdrop.dataset.backdrop === url) {
-                        // Prefer resolved img.src to ensure fallback Blob URLs are utilized
-                        const finalUrl = img.src || effectiveUrl;
-                        backdrop.style.backgroundImage = `url('${finalUrl}')`;
+                // Applies the decoded bitmap to the slide's background layer.
+                // Using img.decode() guarantees the pixels are ready before the
+                // slide becomes visible, so the transition never paints a blank
+                // backdrop or blocks on a synchronous decode.
+                let applied = false;
+                const commitBackdrop = () => {
+                    if (applied) return;
+                    applied = true;
+                    if (backdrop.dataset.backdrop !== url) return;
 
-                        // Fade out blurhash canvas once the high-res graphic settles
-                        const canvas = item.querySelector('.hero-blurhash-canvas');
-                        if (canvas) {
-                            canvas.style.opacity = '0';
-                            setTimeout(() => {
-                                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                            }, 500);
-                        }
+                    // Prefer resolved img.src to ensure fallback Blob URLs are utilized
+                    const finalUrl = img.src || effectiveUrl;
+                    backdrop.style.backgroundImage = `url('${finalUrl}')`;
+
+                    // Fade out blurhash canvas once the high-res graphic settles
+                    const canvas = item.querySelector('.hero-blurhash-canvas');
+                    if (canvas) {
+                        canvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                        }, 500);
                     }
                 };
+
+                // When image finishes downloading, attach to background-image
+                img.onload = commitBackdrop;
 
                 // Handle backdrop loading failure with authenticated JS fetch fallback
                 img.onerror = () => {
@@ -1003,6 +1014,12 @@ class HeroCarousel {
 
                 // Trigger network load
                 img.src = effectiveUrl;
+
+                // Decode off the critical transition path. decode() resolves once
+                // the bitmap is fully decoded and safe to paint.
+                if (typeof img.decode === 'function') {
+                    img.decode().then(commitBackdrop).catch(() => {});
+                }
             };
 
             // Resolve via customHeaders if reverse proxy credentials are required
@@ -1087,6 +1104,46 @@ class HeroCarousel {
     }
 
     /**
+     * Schedules an idle preload sweep for the slides surrounding the active
+     * index (previous, current, next, next+1).
+     *
+     * This is the ONLY place backdrops are preloaded. goTo() never touches the
+     * network or decodes images, so a slide change is a pure class toggle.
+     *
+     * @param {number} [delay=300] - Quiet window required before the sweep runs
+     * @private
+     */
+    _scheduleIdlePreload(delay = 300) {
+        // Deduplicate: one pending sweep is enough, it covers the whole window.
+        if (this._idlePreloadTask) return;
+        if (!this._container || this._items.length === 0) return;
+
+        this._idlePreloadTask = idleGate.runWhenIdle(() => {
+            this._idlePreloadTask = null;
+            if (!this._container) return;
+
+            const count = this._items.length;
+            const start = Math.max(0, this._currentIndex - 1);
+            const end = Math.min(count - 1, this._currentIndex + 2);
+
+            for (let i = start; i <= end; i++) {
+                this._preloadSlide(i);
+            }
+
+            // Ambient BlurHash fills are decoded here, outside any transition.
+            const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
+            const isBlurhashFill =
+                carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+            if (isBlurhashFill) {
+                const slides = this._container.querySelectorAll('.hero-item');
+                for (let i = start; i <= end && i < slides.length; i++) {
+                    this._decodeBlurhashFill(slides[i]);
+                }
+            }
+        }, delay, 0);
+    }
+
+    /**
      * Go to the next item
      */
     next() {
@@ -1118,15 +1175,14 @@ class HeroCarousel {
         const prevItem = items[this._currentIndex];
         const nextItem = items[index];
 
-        // Hide all non-adjacent slides immediately to free GPU memory
-        items.forEach((item, i) => {
-            if (i !== this._currentIndex && i !== index) {
-                item.style.visibility = 'hidden';
+        // Hide all non-adjacent slides immediately to free GPU memory.
+        // Guarded writes: already-hidden slides are skipped so a keypress never
+        // invalidates style for slides that are off-screen anyway.
+        for (let i = 0; i < items.length; i++) {
+            if (i !== this._currentIndex && i !== index && items[i].style.visibility !== 'hidden') {
+                items[i].style.visibility = 'hidden';
             }
-        });
-
-        // Preload the target slide's images
-        this._preloadSlide(index);
+        }
 
         // Make the new slide visible and promote GPU layers before transition
         nextItem.style.visibility = 'visible';
@@ -1136,7 +1192,9 @@ class HeroCarousel {
         const nextBackdrop = nextItem.querySelector('.hero-backdrop');
         if (nextBackdrop) nextBackdrop.style.willChange = 'transform';
 
-        // Update classes
+        // Update classes — this is the entire transition cost. Backdrops and
+        // logos were preloaded during idle, and no image or BlurHash work is
+        // started here, so the keypress frame stays free of decode work.
         prevItem.classList.remove('active');
         dots[this._currentIndex].classList.remove('active');
 
@@ -1164,11 +1222,9 @@ class HeroCarousel {
             this._hideTimeoutId = null;
         }, 1050); // Just after the 1000ms opacity transition
 
-        // Preload adjacent slides for instant navigation
-        const nextAdjacent = (this._currentIndex + 1) % this._items.length;
-        const prevAdjacent = (this._currentIndex - 1 + this._items.length) % this._items.length;
-        if (nextAdjacent !== index) this._preloadSlide(nextAdjacent);
-        if (prevAdjacent !== index) this._preloadSlide(prevAdjacent);
+        // Extend the preload window in the background. idleGate guarantees this
+        // runs after the transition settles, never inside the keypress frame.
+        this._scheduleIdlePreload(250);
 
         // Restart timer on navigation. This will also restart the progress
         // animation if it is enabled.
@@ -1286,6 +1342,26 @@ class HeroCarousel {
 
         const hash = canvas.dataset.blurhash;
         if (!hash) return;
+
+        // Never decode during an active crossfade or scroll transition. Requeue
+        // the work on the idle gate instead of burning the transition frame.
+        if (
+            this._hideTimeoutId ||
+            (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating)
+        ) {
+            if (!canvas.dataset.decodeDeferred) {
+                canvas.dataset.decodeDeferred = '1';
+                idleGate.runWhenIdle(
+                    () => {
+                        if (canvas.dataset) delete canvas.dataset.decodeDeferred;
+                        this._decodeBlurhashFill(itemElement);
+                    },
+                    600,
+                    0
+                );
+            }
+            return;
+        }
 
         // Mark decoding initiated to avoid redundant decode passes
         canvas.dataset.decoded = 'true';
