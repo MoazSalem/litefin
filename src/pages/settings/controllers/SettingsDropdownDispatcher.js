@@ -41,17 +41,24 @@ export class SettingsDropdownDispatcher {
     }
 
     /**
-     * Binds click listeners to all dropdown selector buttons in the settings view.
+     * Attaches click handlers to all settings dropdown buttons inside the page
+     * or a dynamically mounted deferred container.
      * Restricts query to elements with data-id to avoid intercepting action buttons.
+     * @param {HTMLElement|null} [root=null] Optional container scope for incremental mounting
      */
-    bindDropdownEvents() {
-        const selectButtons = this.page.$$('.select-btn');
+    bindDropdownEvents(root = null) {
+        // Limit selector query to the newly mounted container when progressively mounting chunks
+        const selectButtons = root ? Array.from(root.querySelectorAll('.select-btn')) : this.page.$$('.select-btn');
         if (!selectButtons || !selectButtons.length) return;
 
-        // Iterate through all rendered dropdown elements
+        // Attach click listener to each dropdown button idempotently so incremental mounts never double-bind
         selectButtons.forEach((btn) => {
-            const id = btn.dataset.id;
+            if (btn.dataset?.dropdownBound === 'true') return;
+            const id = btn.dataset?.id;
             if (!id) return;
+
+            // Mark button as wired before registering listener
+            btn.dataset.dropdownBound = 'true';
 
             btn.addEventListener('click', async () => {
                 let options = [];

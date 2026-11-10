@@ -59,6 +59,7 @@ import {
 } from './helpers/SettingsFontOptions.js';
 import { languageManager } from '../../utils/LanguageManager.js';
 import { SettingsResetController } from './controllers/SettingsResetController.js';
+import { idleGate } from '../../utils/IdleGate.js';
 
 const log = logger.create('SettingsPage');
 
@@ -99,6 +100,12 @@ class SettingsPage extends Page {
         // and grows the tracked-section list.
         this._focusLayoutSignature = null;
 
+        // Track lifecycle and background font-fetch task handles for clean teardown
+        this._destroyed = false;
+        this._fallbackFontsTask = null;
+        this._fallbackFontsTimer = null;
+        this._loaderStyleUnsub = null;
+
         // Encapsulated tab controllers (Phase 1 modularization)
         this.aboutTab = typeof AboutTab !== 'undefined' ? new AboutTab(this) : null;
         this.librariesTab = typeof LibrariesTab !== 'undefined' ? new LibrariesTab(this) : null;
@@ -127,8 +134,10 @@ class SettingsPage extends Page {
     }
 
     async onInit() {
-        // Populate the font buttons independently of the culture request.
-        this._loadFallbackFontOptions();
+        // Schedule server fallback font discovery outside the initial mount frame.
+        // Running it inline fires XHR + DOM option updates during route paint;
+        // font pickers also refresh on-demand via resolveAsyncDropdownOptions on click.
+        this._scheduleFallbackFontOptionsLoad();
 
         // Query or load cached cultures via helper
         if (typeof loadCultureOptions !== 'undefined') {
@@ -157,6 +166,49 @@ class SettingsPage extends Page {
         }
 
         this.markReady();
+    }
+
+    /**
+     * Defers background fallback font discovery until post-navigation idle time.
+     * Prevents font API fetch and `.select-btn` JSON updates from executing
+     * inside the synchronous `/settings` mount frame.
+     * @private
+     */
+    _scheduleFallbackFontOptionsLoad() {
+        // Ensure no duplicate idle task or timer stays armed from an earlier init pass
+        this._clearFallbackFontSchedule();
+
+        // Guard async execution against torn-down page instances
+        const runLoad = () => {
+            this._fallbackFontsTask = null;
+            this._fallbackFontsTimer = null;
+            if (this._destroyed) return;
+            this._loadFallbackFontOptions();
+        };
+
+        // Route through IdleGate in browser runtime so input/animation stays uncontested
+        if (typeof idleGate !== 'undefined' && typeof idleGate.runWhenIdle === 'function') {
+            this._fallbackFontsTask = idleGate.runWhenIdle(runLoad, 500, 150);
+            return;
+        }
+
+        // Macrotask fallback when imports are stripped (e.g., isolated VM unit tests)
+        this._fallbackFontsTimer = setTimeout(runLoad, 150);
+    }
+
+    /**
+     * Cancels any queued background fallback font task or timer.
+     * @private
+     */
+    _clearFallbackFontSchedule() {
+        if (this._fallbackFontsTask && typeof idleGate !== 'undefined' && typeof idleGate.cancel === 'function') {
+            idleGate.cancel(this._fallbackFontsTask);
+            this._fallbackFontsTask = null;
+        }
+        if (this._fallbackFontsTimer !== null) {
+            clearTimeout(this._fallbackFontsTimer);
+            this._fallbackFontsTimer = null;
+        }
     }
 
     /**
@@ -708,6 +760,63 @@ class SettingsPage extends Page {
             });
         }
 
+        // Bind deferred Appearance controls immediately if already in DOM (e.g., synchronous callers);
+        // incrementally mounted chunks call _bindAppearanceDeferredControls(chunkEl) as they appear.
+        this._bindAppearanceDeferredControls();
+
+        // Playback, navigation, OSD, and profile toggles are mounted via this.playerTab.mount()
+
+        // Keep loading style button label in sync via a single idempotent subscription
+        // (avoids leaking duplicate listeners when switching between settings tabs)
+        if (!this._loaderStyleUnsub && typeof eventBus !== 'undefined' && typeof eventBus.on === 'function') {
+            this._loaderStyleUnsub = eventBus.on('loaderStyle:changed', ({ style }) => {
+                const triggerLabel = this.$('#loader-style-btn-label');
+                if (triggerLabel) {
+                    const styleNames = {
+                        dots: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+                        ring: i18n.t('LoaderStyleRing') || 'Rotating Ring',
+                        'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+                        orbit: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+                        satellite: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+                        'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+                        'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+                        'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+                        'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+                        'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+                        'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+                        'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
+                    };
+                    triggerLabel.textContent = styleNames[style] || style;
+                }
+            });
+        }
+
+        // Initialize Custom Dropdowns
+        this._bindDropdownEvents();
+
+        // Initialize Sliders
+        this._bindSliderEvents();
+
+        // Plugins tab listeners are mounted via activeController above
+        if (this.pluginsTab && this.activeTab === 'plugins') {
+            this.pluginsTab.mount(this.element);
+        }
+    }
+
+    /**
+     * Binds interactive Appearance controls that live in below-the-fold deferred sections
+     * (WOL MAC input, Theme Color picker button, and Loader Style picker button).
+     * Idempotent so progressive chunk mounts and synchronous paths never attach duplicate listeners.
+     *
+     * @param {HTMLElement|null} [scope=null] Optional deferred chunk root to narrow selector queries
+     */
+    _bindAppearanceDeferredControls(scope = null) {
+        // Prefer scanning only the newly appended chunk element to avoid full-page DOM walks
+        const find =
+            scope && typeof scope.querySelector === 'function'
+                ? (selector) => scope.querySelector(selector)
+                : (selector) => this.$(selector);
+
         // =====================================================================
         // WOL SERVER MAC ADDRESS TEXT INPUT
         // =====================================================================
@@ -715,8 +824,11 @@ class SettingsPage extends Page {
         // server MAC address. Automatically formats raw hex digits into standard
         // colon-delimited MAC address format (00:11:22:33:44:55) for TV remote ease.
         // =====================================================================
-        const wolMacInput = this.$('#input-wol-mac-address');
-        if (wolMacInput) {
+        const wolMacInput = find('#input-wol-mac-address');
+        if (wolMacInput && wolMacInput.dataset.wolBound !== 'true') {
+            wolMacInput.dataset.wolBound = 'true';
+
+            // Normalizes raw hex characters into standard uppercase XX:XX:... pairs
             const formatMac = (val) => {
                 const hexOnly = val
                     .replace(/[^0-9a-fA-F]/g, '')
@@ -726,11 +838,12 @@ class SettingsPage extends Page {
                 return pairs ? pairs.join(':') : hexOnly;
             };
 
+            // Persists normalized MAC address into storage on edit or focus loss
             const saveWolMac = (forceFormat = false) => {
                 let currentVal = wolMacInput.value.trim();
                 const hexOnly = currentVal.replace(/[^0-9a-fA-F]/g, '');
 
-                // Format automatically if full 12 hex digits are entered or on blur/change
+                // Format automatically once 12 hex digits are entered or input blurs/commits
                 if (forceFormat || hexOnly.length === 12) {
                     const formatted = formatMac(currentVal);
                     if (formatted) {
@@ -749,57 +862,22 @@ class SettingsPage extends Page {
             wolMacInput.addEventListener('blur', () => saveWolMac(true));
         }
 
-        // Playback, navigation, OSD, and profile toggles are mounted via this.playerTab.mount()
-
-        // Theme Color Picker Dialog Trigger
-        const btnThemeColorPicker = this.$('#btn-theme-color-picker');
-        if (btnThemeColorPicker) {
+        // Theme Color Picker Dialog Trigger (lives inside deferred ColorTheme chunk)
+        const btnThemeColorPicker = find('#btn-theme-color-picker');
+        if (btnThemeColorPicker && btnThemeColorPicker.dataset.pickerBound !== 'true') {
+            btnThemeColorPicker.dataset.pickerBound = 'true';
             btnThemeColorPicker.addEventListener('click', () => {
                 this._openThemeColorModal();
             });
         }
 
-        // Loading Indicator Style Picker Dialog Trigger
-        const btnLoaderStylePicker = this.$('#btn-loader-style-picker');
-        if (btnLoaderStylePicker) {
+        // Loading Indicator Style Picker Dialog Trigger (lives inside deferred ColorTheme chunk)
+        const btnLoaderStylePicker = find('#btn-loader-style-picker');
+        if (btnLoaderStylePicker && btnLoaderStylePicker.dataset.pickerBound !== 'true') {
+            btnLoaderStylePicker.dataset.pickerBound = 'true';
             btnLoaderStylePicker.addEventListener('click', () => {
                 this._openLoaderStyleModal();
             });
-        }
-
-        // Fallback audio languages modal trigger is mounted via this.playerTab.mount()
-
-        // Keep loading style button label in sync
-        eventBus.on('loaderStyle:changed', ({ style }) => {
-            const triggerLabel = this.$('#loader-style-btn-label');
-            if (triggerLabel) {
-                const styleNames = {
-                    dots: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
-                    ring: i18n.t('LoaderStyleRing') || 'Rotating Ring',
-                    'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
-                    orbit: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
-                    satellite: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
-                    'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
-                    'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
-                    'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
-                    'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
-                    'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
-                    'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
-                    'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
-                };
-                triggerLabel.textContent = styleNames[style] || style;
-            }
-        });
-
-        // Initialize Custom Dropdowns
-        this._bindDropdownEvents();
-
-        // Initialize Sliders
-        this._bindSliderEvents();
-
-        // Plugins tab listeners are mounted via activeController above
-        if (this.pluginsTab && this.activeTab === 'plugins') {
-            this.pluginsTab.mount(this.element);
         }
     }
 
@@ -1583,6 +1661,16 @@ class SettingsPage extends Page {
     }
 
     onBeforeDestroy() {
+        // Flag teardown first so any queued idle/async callbacks exit cleanly
+        this._destroyed = true;
+        this._clearFallbackFontSchedule();
+
+        // Remove single EventBus subscription for loader style label sync
+        if (typeof this._loaderStyleUnsub === 'function') {
+            this._loaderStyleUnsub();
+            this._loaderStyleUnsub = null;
+        }
+
         // Detach viewport resize observer to avoid memory leaks
         if (this._onResize) {
             window.removeEventListener('resize', this._onResize);

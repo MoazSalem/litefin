@@ -39,6 +39,8 @@ export class AppearanceTab {
     constructor(page) {
         this.page = page;
         this._listeners = [];
+        this._deferredTimer = null;
+        this._deferredRaf = null;
     }
 
     /**
@@ -106,54 +108,26 @@ export class AppearanceTab {
     }
 
     /**
-     * Compiles the complete serialized HTML markup for the Appearance / Display tab.
-     * @returns {string} Serialized HTML template
+     * Compiles the primary above-the-fold markup for the Appearance / Display tab.
+     * Remaining sections (Time, Screensaver, ColorTheme, PlayerOsd, Extra, WakeOnLan)
+     * are incrementally mounted across post-paint frames inside
+     * `#appearance-deferred-sections` so entering `/settings` stays well under 50ms.
+     *
+     * @returns {string} Serialized HTML template for immediate display
      */
     render() {
-        // Resolve display languages and favorite language state
+        // Resolve UI language choices and current favorite-language filter summary
         const uiLanguages = this.page ? this.page.uiLanguages : [];
         const favLabel = languageManager.hasFavorites()
             ? i18n.t('LanguagesSelected', [languageManager.getFavorites().length])
             : i18n.t('AllLanguages') || 'All Languages';
 
-        // Resolve current theme color swatch and label
-        const currentColorHex = (layoutManager.getThemeColor() || '#00a4dc').toLowerCase();
-        const colors = getThemeColors();
-        const activeColor = colors.find((c) => c.hex.toLowerCase() === currentColorHex) || {
-            name: 'Jellyfin Blue',
-            hex: currentColorHex
-        };
-
-        // Resolve current loader style name
-        const currentLoader = layoutManager.getLoaderStyle() || 'dots';
-        const loaderNames = {
-            dots: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
-            ring: i18n.t('LoaderStyleRing') || 'Rotating Ring',
-            'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
-            orbit: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
-            satellite: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
-            'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
-            'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
-            'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
-            'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
-            'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
-            'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
-            'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
-        };
-        const activeLoaderName = loaderNames[currentLoader] || 'Pulsing Dots';
-
-        // Resolve icon variant options based on active icon set capabilities
+        // Resolve icon style variants supported by the active icon pack
         const supports = getSupportedStyles();
         let iconVariantOptions = [{ value: 'dynamic', label: 'Dynamic (Outlined/Filled)' }, { value: 'outlined', label: 'Always Outlined' }, { value: 'filled', label: 'Always Filled' }];
         if (supports === 'filled') iconVariantOptions = [{ value: 'filled', label: 'Always Filled' }];
         else if (supports === 'outlined') iconVariantOptions = [{ value: 'outlined', label: 'Always Outlined' }];
         const activeIconVariant = supports === 'both' ? storage.getItem('pref:iconVariant') || 'dynamic' : supports;
-
-        // Current theme mode and screensaver type states
-        const themeMode = layoutManager.getThemeMode();
-        const ssType = storage.getItem('pref:screensaverType') || 'backdrop';
-        const isWebOS = platformInfo.isWebOS || webosAdapter.isWebOS;
-        const wolActive = storage.getItem('pref:enableWolOnStartup') === 'true' || storage.getItem('pref:enableWolOnTimeout') === 'true' || storage.getItem('pref:enableWolOnServerScan') === 'true' || storage.getItem('pref:enableWolExtendedWait') === 'true';
 
         return `
             <div class="settings-tab-content">
@@ -216,6 +190,24 @@ export class AppearanceTab {
                 ${this._item(i18n.t('ImageQuality'), i18n.t('ImageQualityDescription'), this._drop('image-quality-select', [{ value: 'low', label: i18n.t('Low') }, { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' }, { value: 'medium', label: i18n.t('Medium') }, { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' }, { value: 'high', label: i18n.t('High') }, { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' }, { value: 'ultra', label: i18n.t('Ultra') }, { value: 'original', label: i18n.t('Original') }], imageService.getPreset() || 'medium'))}
                 ${this._item(i18n.t('DetailsImageQuality') || 'Details Image Quality', i18n.t('DetailsImageQualityDescription') || 'Set the image quality specifically for the item details page.', this._drop('details-image-quality-select', [{ value: 'default', label: i18n.t('Default') || 'Default' }, { value: 'low', label: i18n.t('Low') || 'Low' }, { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' }, { value: 'medium', label: i18n.t('Medium') || 'Medium' }, { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' }, { value: 'high', label: i18n.t('High') || 'High' }, { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' }, { value: 'ultra', label: i18n.t('Ultra') }, { value: 'original', label: i18n.t('Original') }], imageService.getDetailsPreset() || 'very-high'))}
 
+                <div id="appearance-deferred-sections"></div>
+            </div>
+        `;
+    }
+
+    /**
+     * Compiles Time and Screensaver sections as the first below-the-fold chunk.
+     * Kept separate because the timezone selector carries ~40 serialized options.
+     *
+     * @returns {string} Serialized HTML markup for Time and Screensaver sections
+     * @private
+     */
+    _renderTimeAndScreensaverSections() {
+        // Resolve current screensaver mode and webOS platform gate
+        const ssType = storage.getItem('pref:screensaverType') || 'backdrop';
+        const isWebOS = platformInfo.isWebOS || webosAdapter.isWebOS;
+
+        return `
                 <h3 class="setting-section-title" data-i18n="Time">${i18n.t('Time') || 'Time'}</h3>
                 ${this._item(i18n.t('LabelTimeFormat') || 'Time Format', i18n.t('TimeFormatDescription') || 'Choose how the clock and playback end times are displayed.', this._drop('time-format-select', [{ value: '12h', label: i18n.t('TimeFormat12h') || '12-hour' }, { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' }, { value: 'none', label: i18n.t('TimeFormatNone') || 'Hidden' }], PlayerSettings.get('timeFormat') || '12h'))}
                 ${this._item(i18n.t('LabelTimeSource') || 'Time Source', i18n.t('TimeSourceDescription') || 'Choose where the clock gets the current time (Browser, Device OS, or Jellyfin Server).', this._drop('time-source-select', [{ value: 'browser', label: i18n.t('TimeSourceBrowser') || 'Browser' }, { value: 'os', label: i18n.t('TimeSourceOS') || 'Device OS' }, { value: 'server', label: i18n.t('TimeSourceServer') || 'Jellyfin Server' }], PlayerSettings.get('timeSource') || 'browser'))}
@@ -229,7 +221,44 @@ export class AppearanceTab {
                 ${this._item(i18n.t('BackdropUseLogo') || 'Use Logo for Title', i18n.t('BackdropUseLogoDescription') || 'Show the title logo instead of plain text when one is available', this._toggle('toggle-backdrop-use-logo', 'pref:backdropUseLogo', true), { id: 'screensaver-use-logo-item', cls: ssType !== 'backdrop' ? 'hidden' : '' })}
                 ${this._item(i18n.t('BackdropIncludeMusic') || 'Include music library', i18n.t('BackdropIncludeMusicDescription') || 'Show backdrops from music artists in the screensaver', this._toggle('toggle-backdrop-include-music', 'pref:backdropIncludeMusic', false), { id: 'screensaver-include-music-item', cls: ssType !== 'backdrop' ? 'hidden' : '' })}
                 ${isWebOS ? this._item(i18n.t('PreventScreensaverOnPlayback') || 'Prevent screensaver during playback', i18n.t('PreventScreensaverOnPlaybackDescription') || 'Keep display awake and suppress system screensaver while video is actively playing', `<button class="toggle-switch ${storage.getItem('pref:suppressScreensaverOnPlayback') === 'true' ? 'active' : ''}" id="toggle-suppress-screensaver-playback" tabindex="0"></button>`, { id: 'screensaver-playback-suppression-item' }) : ''}
+        `;
+    }
 
+    /**
+     * Compiles the Color & Theme section as a dedicated deferred chunk.
+     *
+     * @returns {string} Serialized HTML markup for the Color & Theme section
+     * @private
+     */
+    _renderThemeSection() {
+        // Resolve current theme color swatch and display name
+        const currentColorHex = (layoutManager.getThemeColor() || '#00a4dc').toLowerCase();
+        const colors = getThemeColors();
+        const activeColor = colors.find((c) => c.hex.toLowerCase() === currentColorHex) || {
+            name: 'Jellyfin Blue',
+            hex: currentColorHex
+        };
+
+        // Resolve localized name for the active loading spinner style
+        const currentLoader = layoutManager.getLoaderStyle() || 'dots';
+        const loaderNames = {
+            dots: i18n.t('LoaderStyleDots') || 'Pulsing Dots',
+            ring: i18n.t('LoaderStyleRing') || 'Rotating Ring',
+            'dual-ring': i18n.t('LoaderStyleDualRing') || 'Dual Ring',
+            orbit: i18n.t('LoaderStyleOrbit') || 'Orbital Bead',
+            satellite: i18n.t('LoaderStyleSatellite') || 'Satellite Ring',
+            'triple-ring': i18n.t('LoaderStyleTripleRing') || 'Triple Gyro',
+            'dotted-ring': i18n.t('LoaderStyleDottedRing') || 'Dotted Eclipse',
+            'eclipse-sweep': i18n.t('LoaderStyleEclipseSweep') || 'Crescent Sweep',
+            'sonar-ring': i18n.t('LoaderStyleSonarRing') || 'Sonar Aperture',
+            'push-pulse': i18n.t('LoaderStylePushPulse') || 'Push Pulse',
+            'horizontal-dots': i18n.t('LoaderStyleHorizontalDots') || 'Fading Trio',
+            'pulsing-grid': i18n.t('LoaderStylePulsingGrid') || 'Morphing Grid'
+        };
+        const activeLoaderName = loaderNames[currentLoader] || 'Pulsing Dots';
+        const themeMode = layoutManager.getThemeMode();
+
+        return `
                 <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
                 ${this._item(i18n.t('ThemeMode') || 'Theme Mode', i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.', this._drop('theme-mode-select', [{ value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' }, { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' }, { value: 'ember', label: i18n.t('ThemeEmber') || 'Ember' }, { value: 'sunset', label: i18n.t('ThemeSunset') || 'Sunset' }, { value: 'nocturne', label: i18n.t('ThemeNocturne') || 'Nocturne' }, { value: 'abyss', label: i18n.t('ThemeAbyss') || 'Abyss' }, { value: 'cyberpunk', label: i18n.t('ThemeCyberpunk') || 'Cyberpunk' }, { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' }, { value: 'tinted-light', label: i18n.t('ThemeTintedLight') || 'Light Tinted' }, { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' }, { value: 'frost', label: i18n.t('ThemeFrost') || 'Frost' }, { value: 'paper', label: i18n.t('ThemePaper') || 'Paper' }, { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }], themeMode))}
                 ${this._item(i18n.t('ThemeColor') || 'Theme Color', i18n.t('ThemeColorDescription') || 'Choose your primary accent color.', `<button class="setting-action-btn theme-color-select-btn" id="btn-theme-color-picker" tabindex="0" data-focusable="true" title="${activeColor.name}"><span class="theme-color-swatch-badge" style="background-color: ${activeColor.hex};"></span><span class="btn-label" id="theme-color-btn-label">${escapeHtml(activeColor.name)}</span></button>`)}
@@ -241,7 +270,17 @@ export class AppearanceTab {
                 ${this._item(i18n.t('FocusBorderStyle') || 'Focus Border Style', i18n.t('FocusBorderStyleDescription') || 'Customize the border color style when buttons are focused.', this._drop('focus-border-style-select', [{ value: 'hidden', label: i18n.t('FocusBorderHidden') || 'Hidden' }, { value: 'follow-theme', label: i18n.t('FocusBorderFollowTheme') || 'Follow Theme' }, { value: 'inverted', label: i18n.t('FocusBorderInverted') || 'Inverted' }, { value: 'white', label: i18n.t('FocusBorderWhite') || 'White' }, { value: 'black', label: i18n.t('FocusBorderBlack') || 'Black' }], layoutManager.getFocusBorderStyle()))}
                 ${this._item(i18n.t('HoverBorderStyle') || 'Hover Border Style', i18n.t('HoverBorderStyleDescription') || 'Customize the border color style when buttons are hovered.', this._drop('hover-border-style-select', [{ value: 'white', label: i18n.t('HoverBorderWhite') || 'White' }, { value: 'follow-theme', label: i18n.t('HoverBorderFollowTheme') || 'Follow Theme' }, { value: 'inverted', label: i18n.t('HoverBorderInverted') || 'Inverted' }, { value: 'black', label: i18n.t('HoverBorderBlack') || 'Black' }, { value: 'hidden', label: i18n.t('HoverBorderHidden') || 'Hidden' }], layoutManager.getHoverBorderStyle()))}
                 ${this._item(i18n.t('RoundedCorners'), i18n.t('RoundedCornersDescription'), `<button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" id="toggle-rounded-corners" tabindex="0"></button>`)}
+        `;
+    }
 
+    /**
+     * Compiles the Player OSD section as a dedicated deferred chunk.
+     *
+     * @returns {string} Serialized HTML markup for Player OSD settings
+     * @private
+     */
+    _renderOsdSection() {
+        return `
                 <h3 class="setting-section-title" data-i18n="PlayerOsd">${i18n.t('PlayerOsd') || 'Player Osd'}</h3>
                 ${this._item(i18n.t('OsdHdrDarkerWhite') || 'OSD HDR Darker White', i18n.t('OsdHdrDarkerWhiteDescription') || 'Override white OSD elements with softer grey inside HDR content.', this._playerToggle('osd-hdr-darker-white-toggle', 'osdHdrDarkerWhite', true))}
                 ${this._item(i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD', i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface.', this._playerToggle('toggle-osd-show-logo', 'osdShowLogo', false))}
@@ -259,7 +298,24 @@ export class AppearanceTab {
 
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="LabelNextUpDialogStyle">${i18n.t('LabelNextUpDialogStyle') || 'Up Next Style'}</span><span class="setting-description" data-i18n="NextUpDialogStyleDescription">${i18n.t('NextUpDialogStyleDescription') || 'Choose the layout style of the next episode dialog.'}</span></div><div class="setting-control">${this._drop('next-up-dialog-style-select', [{ value: 'normal', label: i18n.t('OptionStyleNormal') || 'Normal' }, { value: 'no_image', label: i18n.t('OptionStyleNoImage') || 'No Image' }, { value: 'compact', label: i18n.t('OptionStyleCompact') || 'Compact' }, { value: 'button', label: i18n.t('OptionStyleButton') || 'Button' }], PlayerSettings.get('nextUpDialogStyle') || 'normal')}</div></div>
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="LabelNextUpDialogScale">${i18n.t('LabelNextUpDialogScale') || 'Up Next Scale'}</span><span class="setting-description" data-i18n="NextUpDialogScaleDescription">${i18n.t('NextUpDialogScaleDescription') || 'Adjust overall scaling factor of the next episode dialog.'}</span></div><div class="setting-control">${this._drop('next-up-dialog-scale-select', [{ value: 0.5, label: i18n.t('ExtraSmall') || 'Extra Small' }, { value: 0.75, label: i18n.t('Small') || 'Small' }, { value: 1.0, label: i18n.t('Medium') || 'Medium' }, { value: 1.25, label: i18n.t('Large') || 'Large' }, { value: 1.5, label: i18n.t('ExtraLarge') || 'Extra Large' }], PlayerSettings.get('nextUpDialogScale') || 1.0)}</div></div>
+        `;
+    }
 
+    /**
+     * Compiles Extra audio/theme song and Wake-on-LAN sections as the tail chunk.
+     *
+     * @returns {string} Serialized HTML markup for Extra and Wake-on-LAN sections
+     * @private
+     */
+    _renderExtraAndWolSections() {
+        // Reveal MAC input row when any Wake-on-LAN trigger option is active
+        const wolActive =
+            storage.getItem('pref:enableWolOnStartup') === 'true' ||
+            storage.getItem('pref:enableWolOnTimeout') === 'true' ||
+            storage.getItem('pref:enableWolOnServerScan') === 'true' ||
+            storage.getItem('pref:enableWolExtendedWait') === 'true';
+
+        return `
                 <h3 class="setting-section-title" data-i18n="Extra">${i18n.t('Extra')}</h3>
                 ${this._item(i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs', i18n.t('PlayThemeSongsDescription') || 'Play theme songs in the background when viewing details pages.', this._toggle('toggle-play-theme-songs', 'pref:playThemeSongs', false))}
                 ${this._item(i18n.t('LabelPlayThemeSongsOnce') || 'Play Theme Songs Once', i18n.t('PlayThemeSongsOnceDescription') || 'Play background theme songs only once instead of looping continuously.', this._toggle('toggle-play-theme-songs-once', 'pref:playThemeSongsOnce', true), { id: 'theme-song-once-item', style: storage.getItem('pref:playThemeSongs') === 'true' ? '' : 'display: none;' })}
@@ -283,12 +339,30 @@ export class AppearanceTab {
                                style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 1rem; width: 250px; text-align: center;"/>
                     </div>
                 </div>
-            </div>
         `;
     }
 
     /**
-     * Binds DOM event listeners for the Appearance tab controls.
+     * Compiles all below-the-fold sections combined (Time, Screensaver, Theme, OSD, Extra, WakeOnLan).
+     * Useful when callers want the complete deferred template in one pass.
+     *
+     * @returns {string} Combined serialized HTML markup for deferred sections
+     * @private
+     */
+    _renderDeferredSections() {
+        return (
+            this._renderTimeAndScreensaverSections() +
+            this._renderThemeSection() +
+            this._renderOsdSection() +
+            this._renderExtraAndWolSections()
+        );
+    }
+
+    /**
+     * Binds DOM event listeners for the visible controls immediately and progressively
+     * appends below-the-fold sections across separate animation frames so `/settings`
+     * mount never triggers a multi-hundred-millisecond main-thread freeze.
+     *
      * @param {HTMLElement} root The settings content container
      */
     mount(root) {
@@ -297,8 +371,87 @@ export class AppearanceTab {
         this.destroy();
         log.debug('Mounting AppearanceTab event listeners');
 
+        // Bind primary above-the-fold toggle switches immediately
+        this._bindListeners(container, container);
+
+        // Progressively populate below-the-fold sections in bounded chunks across frames
+        const deferredWrapper = container.querySelector('#appearance-deferred-sections');
+        if (deferredWrapper && !deferredWrapper.hasChildNodes()) {
+            const chunkRenderers = [
+                () => this._renderTimeAndScreensaverSections(),
+                () => this._renderThemeSection(),
+                () => this._renderOsdSection(),
+                () => this._renderExtraAndWolSections()
+            ];
+            let chunkIndex = 0;
+
+            // Schedule helper waiting one painted frame before mutating the DOM
+            const scheduleNextChunk = (callback) => {
+                if (typeof requestAnimationFrame === 'function') {
+                    this._deferredRaf = requestAnimationFrame(() => {
+                        this._deferredRaf = null;
+                        this._deferredTimer = setTimeout(callback, 0);
+                    });
+                } else {
+                    this._deferredTimer = setTimeout(callback, 0);
+                }
+            };
+
+            // Mounts a single cohesive chunk and queues the next chunk if remaining
+            const mountNextChunk = () => {
+                this._deferredTimer = null;
+                this._deferredRaf = null;
+                if (!deferredWrapper.isConnected || chunkIndex >= chunkRenderers.length) return;
+
+                // Create an isolated chunk container so innerHTML and selector scans touch only new nodes
+                const chunkEl = document.createElement('div');
+                chunkEl.className = 'appearance-deferred-chunk';
+                chunkEl.innerHTML = chunkRenderers[chunkIndex]();
+                chunkIndex++;
+                deferredWrapper.appendChild(chunkEl);
+
+                // Wire toggles, pickers, dropdowns, and sliders strictly within this new chunk
+                this._bindListeners(chunkEl, container);
+                if (this.page) {
+                    if (typeof this.page._bindAppearanceDeferredControls === 'function') {
+                        this.page._bindAppearanceDeferredControls(chunkEl);
+                    }
+                    if (
+                        this.page.dropdownDispatcher &&
+                        typeof this.page.dropdownDispatcher.bindDropdownEvents === 'function'
+                    ) {
+                        this.page.dropdownDispatcher.bindDropdownEvents(chunkEl);
+                    }
+                    if (
+                        this.page.sliderComponent &&
+                        typeof this.page.sliderComponent.bindEvents === 'function'
+                    ) {
+                        this.page.sliderComponent.bindEvents(chunkEl);
+                    }
+                }
+
+                // Clear cached focusables (O(1) map invalidation, no reflow) so D-pad reaches new rows
+                focusManager.invalidateCache('settings-content');
+
+                // Enqueue the next chunk on a fresh frame if more sections remain
+                if (chunkIndex < chunkRenderers.length) {
+                    scheduleNextChunk(mountNextChunk);
+                }
+            };
+
+            scheduleNextChunk(mountNextChunk);
+        }
+    }
+
+    /**
+     * Wires click handlers for toggles and layout switches inside the given scope container.
+     * @param {HTMLElement} scope Container to search for buttons
+     * @param {HTMLElement} rootContainer Full tab container for dependent row queries
+     * @private
+     */
+    _bindListeners(scope, rootContainer) {
         // Wire generic data-storage toggle switches
-        const storageToggles = container.querySelectorAll('.toggle-switch[data-storage]');
+        const storageToggles = scope.querySelectorAll('.toggle-switch[data-storage]');
         storageToggles.forEach((btn) => {
             this._listen(btn, 'click', () => {
                 const storageKey = btn.dataset.storage;
@@ -316,12 +469,12 @@ export class AppearanceTab {
                     const wolActive = ['Startup', 'Timeout', 'ServerScan', 'ExtendedWait'].some(
                         (k) => storage.getItem(`pref:enableWolOn${k}`) === 'true' || storage.getItem('pref:enableWolExtendedWait') === 'true'
                     );
-                    const macContainer = container.querySelector('#wol-mac-container');
+                    const macContainer = rootContainer.querySelector('#wol-mac-container');
                     if (macContainer) macContainer.style.display = wolActive ? '' : 'none';
                     focusManager.invalidateCache('settings-content');
                 } else if (storageKey === 'pref:playThemeSongs') {
-                    const songOnce = container.querySelector('#theme-song-once-item');
-                    const songVol = container.querySelector('#theme-song-volume-item');
+                    const songOnce = rootContainer.querySelector('#theme-song-once-item');
+                    const songVol = rootContainer.querySelector('#theme-song-volume-item');
                     if (songOnce) songOnce.style.display = nextVal ? '' : 'none';
                     if (songVol) songVol.style.display = nextVal ? '' : 'none';
                     focusManager.invalidateCache('settings-content');
@@ -330,7 +483,7 @@ export class AppearanceTab {
         });
 
         // Wire generic data-setting toggle switches (PlayerSettings)
-        const playerToggles = container.querySelectorAll('.toggle-switch[data-setting]');
+        const playerToggles = scope.querySelectorAll('.toggle-switch[data-setting]');
         playerToggles.forEach((btn) => {
             this._listen(btn, 'click', () => {
                 const settingKey = btn.dataset.setting;
@@ -341,7 +494,7 @@ export class AppearanceTab {
                 log.info(`Appearance player setting changed: ${settingKey} = ${nextVal}`);
 
                 if (settingKey === 'osdShowLogo') {
-                    const logoContainer = container.querySelector('#osd-logo-size-container');
+                    const logoContainer = rootContainer.querySelector('#osd-logo-size-container');
                     if (logoContainer) logoContainer.style.display = nextVal ? '' : 'none';
                     focusManager.invalidateCache('settings-content');
                 }
@@ -355,7 +508,7 @@ export class AppearanceTab {
             ['#toggle-hide-unfocused-borders', () => layoutManager.getHideUnfocusedBorders(), (v) => layoutManager.setHideUnfocusedBorders(v)],
             ['#toggle-rounded-corners', () => layoutManager.getRoundedCorners(), (v) => layoutManager.setRoundedCorners(v)]
         ].forEach(([sel, getter, setter]) => {
-            const btn = container.querySelector(sel);
+            const btn = scope.querySelector(sel);
             if (btn) {
                 this._listen(btn, 'click', () => {
                     const next = !getter();
@@ -381,9 +534,18 @@ export class AppearanceTab {
     }
 
     /**
-     * Cleans up all attached event listeners to prevent memory leaks.
+     * Cleans up all attached event listeners and pending deferred timers to prevent memory leaks.
      */
     destroy() {
+        if (this._deferredTimer !== null) {
+            clearTimeout(this._deferredTimer);
+            this._deferredTimer = null;
+        }
+        if (this._deferredRaf !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._deferredRaf);
+            this._deferredRaf = null;
+        }
+
         for (const { element, event, handler } of this._listeners) {
             try {
                 element.removeEventListener(event, handler);

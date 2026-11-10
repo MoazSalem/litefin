@@ -95,14 +95,22 @@ export class SettingsSlider {
     }
 
     /**
-     * Binds real-time input event listeners and initializes visual progress on sliders.
+     * Binds real-time input event listeners and initializes visual progress on sliders
+     * across the page or inside an asynchronously mounted container.
+     * @param {HTMLElement|null} [root=null] Optional container scope
      */
-    bindEvents() {
-        const sliders = this.page.$$('.setting-slider');
+    bindEvents(root = null) {
+        // Scope selector lookup when an asynchronous section chunk mounts after initial paint
+        const sliders = root ? Array.from(root.querySelectorAll('.setting-slider')) : this.page.$$('.setting-slider');
         if (!sliders || !sliders.length) return;
 
-        // Attach input listener to each active range slider
+        // Attach input listener to each active range slider idempotently across incremental mounts
         sliders.forEach((slider) => {
+            if (slider.dataset?.sliderBound === 'true') return;
+            if (slider.dataset) {
+                slider.dataset.sliderBound = 'true';
+            }
+
             slider.addEventListener('input', (e) => {
                 const id = slider.id;
                 const value = e.target.value;
