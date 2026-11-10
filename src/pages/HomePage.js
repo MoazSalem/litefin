@@ -123,6 +123,18 @@ const DEFERRED_BATCH_SIZE = 1;
 const DEFERRED_BATCH_SIZE_BACKGROUND = 2;
 
 /**
+ * Minimum real-time gap (ms) between two deferred batch renders.
+ *
+ * idleGate only compares `Date.now()` against the last user-activity timestamp.
+ * Right after a batch renders that timestamp is already older than the 1500ms
+ * idle threshold, so registering the next idle task immediately mounted the
+ * following batch ~240ms later — back-to-back DOM work that starved the first
+ * D-pad press. Wait for this much wall-clock time before registering the next
+ * idle task.
+ */
+const DEFERRED_BATCH_MIN_SPACING_MS = 800;
+
+/**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.
  * Landscape: 400px, Portrait: 240px, gap: 24px.
  * Kept here for reference; VirtualCardRow reads these from its own constructor options.
@@ -253,6 +265,13 @@ class HomePage extends Page {
          * @type {number|null}
          */
         this._homeIdlePrefetchTimer = null;
+
+        /**
+         * Timestamp of the last completed deferred batch render.
+         * Used to enforce a minimum real-time gap between background batches.
+         * @type {number}
+         */
+        this._lastDeferredBatchAt = 0;
 
         /**
          * Callback stored by _tryInitializeFocus() when a target row renders.
@@ -2258,11 +2277,14 @@ class HomePage extends Page {
         }
 
         this._isDeferredLoading = false;
+        this._lastDeferredBatchAt = Date.now();
 
         // If there are still rows left, schedule the next idle row prefetch
         // so deferred content loads progressively ahead of time in small 1-row chunks.
+        // The follow-up helper enforces a minimum wall-clock gap so consecutive
+        // batches never mount back-to-back in the same second.
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
-            this._scheduleHomeIdlePrefetch(1500);
+            this._scheduleDeferredBatchFollowup();
         } else {
             // All deferred rows are loaded — run final cleanup
             this._prewarmScrollCache();
@@ -2339,6 +2361,41 @@ class HomePage extends Page {
             delay,
             0 // unbounded: wait for genuine idleness so D-pad scrolling is never disturbed
         );
+    }
+
+    /**
+     * Schedules the next deferred batch after a minimum real-time gap.
+     *
+     * Unlike user-activity idleness, this gap is measured from the moment the
+     * previous batch FINISHED rendering. Without it, `idleGate.runWhenIdle` sees
+     * an already-expired idle window and fires the next batch immediately,
+     * producing consecutive DOM mounts within the same second and stealing the
+     * frame budget from the first D-pad press.
+     *
+     * @private
+     */
+    _scheduleDeferredBatchFollowup() {
+        if (this._homeIdlePrefetchTimer) {
+            clearTimeout(this._homeIdlePrefetchTimer);
+            this._homeIdlePrefetchTimer = null;
+        }
+
+        const elapsed = Date.now() - (this._lastDeferredBatchAt || 0);
+        const wait = DEFERRED_BATCH_MIN_SPACING_MS - elapsed;
+
+        const registerNext = () => {
+            this._homeIdlePrefetchTimer = null;
+            if (!this._isMounted) return;
+            this._scheduleHomeIdlePrefetch(1500);
+        };
+
+        if (wait > 0) {
+            // Hold the idle task back until the previous batch has fully settled
+            log.debug(`Deferring next home batch by ${Math.round(wait)}ms`);
+            this._homeIdlePrefetchTimer = setTimeout(registerNext, wait);
+        } else {
+            registerNext();
+        }
     }
 
     /**

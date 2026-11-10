@@ -90,3 +90,40 @@ test('HomePage: Deferred batch prefetch is gated behind idleGate', () => {
         'destroy must cancel any pending _homeIdlePrefetchTask'
     );
 });
+
+test('HomePage: consecutive deferred batches are spaced by a real-time gap', () => {
+    const homePath = path.resolve('src/pages/HomePage.js');
+    const source = fs.readFileSync(homePath, 'utf8');
+
+    assert.ok(
+        source.includes('const DEFERRED_BATCH_MIN_SPACING_MS = 800;'),
+        'A minimum 800ms spacing constant must exist'
+    );
+
+    // The follow-up scheduler must wait via setTimeout BEFORE registering the
+    // next idleGate task, instead of registering it immediately.
+    const followupIdx = source.indexOf('_scheduleDeferredBatchFollowup() {');
+    assert.ok(followupIdx !== -1, '_scheduleDeferredBatchFollowup definition must exist');
+
+    const followupBody = source.slice(followupIdx, followupIdx + 1600);
+    assert.ok(
+        followupBody.includes('setTimeout(registerNext, wait)'),
+        'Follow-up must wait via setTimeout before registering the next idle task'
+    );
+    assert.ok(
+        followupBody.includes('_scheduleHomeIdlePrefetch(1500)'),
+        'Follow-up must register the next idle prefetch only after the gap'
+    );
+
+    // A finished batch must record its completion time and use the follow-up
+    const loadIdx = source.indexOf('async _loadNextDeferredBatch(');
+    const loadBody = source.slice(loadIdx, source.indexOf('_setupHomeScrollObserver() {'));
+    assert.ok(
+        loadBody.includes('this._lastDeferredBatchAt = Date.now()'),
+        'Completed batches must record their finish timestamp'
+    );
+    assert.ok(
+        loadBody.includes('this._scheduleDeferredBatchFollowup()'),
+        'Completed batches must schedule the next batch with the spacing helper'
+    );
+});
