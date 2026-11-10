@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
+import SpatialNavigator from '../src/ui/SpatialNavigator.js';
 
 /**
  * ============================================================================
@@ -324,5 +326,615 @@ test('Page: registerFocusSection tracks each section only once', () => {
     assert.ok(
         registerBody.includes('this._focusSections.indexOf(name) === -1'),
         'Repeated registrations must not grow the teardown list'
+    );
+});
+
+// ============================================================================
+// Cluster 5 — Shared D-pad style invalidations & layout caching
+// ============================================================================
+
+/**
+ * Builds a minimal mock element inside a container whose screen-space
+ * `getBoundingClientRect()` reacts live to `container.scrollTop` while
+ * incrementing counters so tests can verify layout reads are cached.
+ *
+ * @param {Object} opts Mock geometry and row ownership options
+ * @returns {Object} Mock focusable DOM node
+ */
+function createSpatialMockButton({ contentX, contentY, width = 180, height = 48, container, row = null, onRectRead }) {
+    return {
+        row,
+        // Returns screen-space bounds adjusted for container origin and current scroll offsets
+        getBoundingClientRect() {
+            if (typeof onRectRead === 'function') onRectRead();
+            const cRect = container.getBoundingClientRect(true);
+            const top = cRect.top + contentY - (container.scrollTop || 0);
+            const left = cRect.left + contentX - (container.scrollLeft || 0);
+            return {
+                left,
+                top,
+                right: left + width,
+                bottom: top + height,
+                width,
+                height
+            };
+        },
+        // Supports .setting-item row lookup for vertical settings alignment heuristics
+        closest(selector) {
+            if (selector === '.setting-item') return row;
+            return null;
+        }
+    };
+}
+
+test('SpatialNavigator: caches container-relative bounds across D-pad moves and scroll offsets', () => {
+    const nav = new SpatialNavigator();
+    let containerRectReads = 0;
+    let elementRectReads = 0;
+
+    // Simulate a scrollable section container whose viewport stays fixed at (100, 50)
+    const container = {
+        scrollLeft: 0,
+        scrollTop: 0,
+        getBoundingClientRect(internal = false) {
+            // Do not double-count internal helper calls from createSpatialMockButton
+            if (!internal) containerRectReads++;
+            return { left: 100, top: 50, right: 1100, bottom: 850, width: 1000, height: 800 };
+        }
+    };
+
+    const countElementRead = () => {
+        elementRectReads++;
+    };
+
+    // Vertically stacked buttons inside the scrollable container
+    const btn1 = createSpatialMockButton({ contentX: 40, contentY: 40, container, onRectRead: countElementRead });
+    const btn2 = createSpatialMockButton({ contentX: 40, contentY: 140, container, onRectRead: countElementRead });
+    const btn3 = createSpatialMockButton({ contentX: 40, contentY: 240, container, onRectRead: countElementRead });
+    const candidates = [btn1, btn2, btn3];
+
+    // Step 1: First navigation warms the container-relative cache for all candidates
+    const firstNext = nav.findNext(btn1, candidates, 'down', container);
+    assert.equal(firstNext, btn2, 'Initial Down move should advance from btn1 to btn2');
+    assert.ok(elementRectReads > 0, 'Initial uncached step must measure elements once');
+
+    // Reset read counters and simulate smooth vertical container scrolling
+    elementRectReads = 0;
+    containerRectReads = 0;
+    container.scrollTop = 100;
+
+    // Step 2: Subsequent navigation after scroll must derive bounds purely from container rect
+    const secondNext = nav.findNext(btn2, candidates, 'down', container);
+    assert.equal(secondNext, btn3, 'Cached Down move after scrollTop change must advance to btn3');
+    assert.equal(elementRectReads, 0, 'Subsequent D-pad steps must trigger zero per-element layout reads');
+    assert.ok(
+        containerRectReads <= 2,
+        `Expected at most 2 container rect reads per step, got ${containerRectReads}`
+    );
+
+    // Step 3: findClosest must also hit the populated container cache without measuring candidates
+    elementRectReads = 0;
+    const closest = nav.findClosest(btn1, [btn2, btn3], container);
+    assert.equal(closest, btn2, 'findClosest should resolve nearest candidate using cached offsets');
+    assert.equal(elementRectReads, 0, 'findClosest must incur zero element reflows when cache is warm');
+
+    // Step 3b: Cross-section origin outside container must measure directly (not scroll with container)
+    const originContainer = {
+        scrollLeft: 0,
+        scrollTop: 0,
+        contains(el) {
+            return el === btn1 || el === btn2 || el === btn3;
+        },
+        getBoundingClientRect(internal = false) {
+            if (!internal) containerRectReads++;
+            return container.getBoundingClientRect(true);
+        }
+    };
+    const sidebarBtn = {
+        getBoundingClientRect() {
+            elementRectReads++;
+            return { left: 10, top: 190, right: 90, bottom: 230, width: 80, height: 40 };
+        }
+    };
+    // Warm originContainer cache at scrollTop=0, then scroll container to y=100 (btn3 moves to screen y=190!)
+    nav.findNext(btn1, candidates, 'down', originContainer);
+    originContainer.scrollTop = 100;
+    elementRectReads = 0;
+    const crossClosest = nav.findClosest(sidebarBtn, candidates, originContainer);
+    assert.equal(
+        crossClosest,
+        btn3,
+        'Cross-section findClosest must measure external origin live while using scrolled container cache'
+    );
+    assert.equal(elementRectReads, 1, 'Only external origin outside container should be measured directly');
+
+    // Step 4: Clearing container cache forces fresh layout reads on the next move
+    nav.clearCache(container);
+    elementRectReads = 0;
+    const backUp = nav.findNext(btn2, candidates, 'up', container);
+    assert.equal(backUp, btn1, 'Up move after cache invalidation must still resolve btn1');
+    assert.ok(elementRectReads > 0, 'clearCache(container) must force fresh element measurements');
+});
+
+test('SpatialNavigator: memoizes setting-item row focusable counts per findNext pass', () => {
+    const nav = new SpatialNavigator();
+    const container = {
+        scrollLeft: 0,
+        scrollTop: 0,
+        getBoundingClientRect() {
+            return { left: 0, top: 0, right: 1200, bottom: 900, width: 1200, height: 900 };
+        }
+    };
+
+    // Track how many times row.querySelectorAll is invoked for row1 and row2
+    let row1Queries = 0;
+    let row2Queries = 0;
+
+    // Row 1 holds 2 focusables (>1), forcing row2 counts to be evaluated for alignment
+    const row1Focusable = { disabled: false, style: {}, classList: { contains: () => false }, hasAttribute: () => false };
+    const row1 = {
+        querySelectorAll() {
+            row1Queries++;
+            return [row1Focusable, row1Focusable];
+        }
+    };
+
+    // Row 2 holds 3 candidate buttons sharing the same row container
+    const row2Focusable = { disabled: false, style: {}, classList: { contains: () => false }, hasAttribute: () => false };
+    const row2 = {
+        querySelectorAll() {
+            row2Queries++;
+            return [row2Focusable, row2Focusable, row2Focusable];
+        }
+    };
+
+    const current = createSpatialMockButton({ contentX: 20, contentY: 20, width: 100, container, row: row1 });
+    const row1Sibling = createSpatialMockButton({ contentX: 160, contentY: 20, width: 100, container, row: row1 });
+    const r2a = createSpatialMockButton({ contentX: 20, contentY: 140, width: 100, container, row: row2 });
+    const r2b = createSpatialMockButton({ contentX: 160, contentY: 140, width: 100, container, row: row2 });
+    const r2c = createSpatialMockButton({ contentX: 300, contentY: 140, width: 100, container, row: row2 });
+
+    // Down navigation evaluates all three row2 candidates in a single pass
+    const target = nav.findNext(current, [current, row1Sibling, r2a, r2b, r2c], 'down', container);
+    assert.equal(target, r2a, 'Aligned first item in row2 should be selected');
+    assert.equal(row1Queries, 1, 'Current row focusable count must be hoisted once outside loop');
+    assert.equal(row2Queries, 1, 'Shared candidate row count must be memoized across all 3 candidates');
+});
+
+test('ScrollController: skips redundant <html> attribute writes across D-pad keypresses', () => {
+    const source = read('src/ui/ScrollController.js');
+
+    // Verify horizontal scroll mode checks current attribute value before mutating <html>
+    const horizBody = sliceBetween(source, '_applyHorizontalScrollMode(mode) {', 'getScrollPhysics() {');
+    assert.ok(
+        horizBody.includes("document.documentElement.getAttribute('data-horizontal-scroll') === mode"),
+        '_applyHorizontalScrollMode must short-circuit when data-horizontal-scroll already matches'
+    );
+
+    // Verify scroll physics mode checks current attribute value before mutating <html>
+    const physicsBody = sliceBetween(source, '_applyScrollPhysics(physics) {', '_recordFrameDelta(deltaMs) {');
+    assert.ok(
+        physicsBody.includes("document.documentElement.getAttribute('data-scroll-physics') === physics"),
+        '_applyScrollPhysics must short-circuit when data-scroll-physics already matches'
+    );
+});
+
+test('FocusManager: eliminates getComputedStyle reflows, guards blur(), and forwards container cache', () => {
+    const source = read('src/ui/FocusManager.js');
+
+    // 1. Global focusin handler must check loading status via fast class/ancestor presence
+    const initBody = sliceBetween(source, '_init() {', '_handleFocusChange(');
+    const focusinHandlerStart = initBody.indexOf("document.addEventListener('focusin'");
+    assert.ok(focusinHandlerStart !== -1, 'Global focusin listener must exist');
+    const focusinHandlerCodeOnly = initBody
+        .slice(focusinHandlerStart, focusinHandlerStart + 900)
+        .replace(/\/\/.*$/gm, '');
+    assert.ok(
+        !focusinHandlerCodeOnly.includes('getComputedStyle'),
+        'Global focusin handler must not call getComputedStyle() on keypress focus changes'
+    );
+    assert.ok(
+        focusinHandlerCodeOnly.includes("pageLoadingEl.closest('.page.loading') !== null"),
+        'Global focusin handler must check ancestor .page.loading presence without layout read'
+    );
+
+    // 2. Range slider RTL check must read dir attributes instead of window.getComputedStyle
+    const sliderBody = sliceBetween(source, '_handleKey(direction) {', 'register(name, container, options = {}) {');
+    assert.ok(
+        !sliderBody.includes('getComputedStyle'),
+        'Range slider RTL detection must not force style recalc via getComputedStyle'
+    );
+    assert.ok(
+        sliderBody.includes("el.dir === 'rtl'"),
+        'Range slider RTL detection must inspect fast el.dir / documentElement.dir attributes'
+    );
+
+    // 3. focusElement must only blur() when native activeElement sits on the old control
+    const focusBody = sliceBetween(source, 'focusElement(element, options = {}) {', '_scheduleMemoryUpdate() {');
+    assert.ok(
+        focusBody.includes('document.activeElement === this._focusedElement'),
+        'focusElement must guard blur() behind an activeElement equality check'
+    );
+
+    // 4. Spatial navigation and cache invalidation must pass section container and guard clearCache
+    const moveBody = sliceBetween(source, '_move(direction) {', '_leaveSection(direction) {');
+    assert.ok(
+        moveBody.includes('this._spatial.findNext(this._focusedElement, focusables, direction, config.container)'),
+        '_move() must pass config.container into SpatialNavigator.findNext'
+    );
+
+    const restoreBody = sliceBetween(source, '_restoreFocus(sectionName, fromElement = null, options = {}) {', '_activate() {');
+    assert.ok(
+        restoreBody.includes('this._spatial.findClosest(fromElement, focusables, config.container)'),
+        '_restoreFocus() must pass config.container into SpatialNavigator.findClosest'
+    );
+
+    const unregisterBody = sliceBetween(source, 'unregister(name) {', 'clearFocus(force = false) {');
+    assert.ok(
+        unregisterBody.includes("typeof this._spatial?.clearCache === 'function'"),
+        'unregister() must safely clear cached geometry for the removed container'
+    );
+
+    const invalidateBody = sliceBetween(source, 'invalidateCache(sectionName) {', 'clearMemory(sectionName) {');
+    assert.ok(
+        invalidateBody.includes('this._spatial.clearCache(cfg.container)') &&
+            invalidateBody.includes('this._spatial.clearCache()'),
+        'invalidateCache() must forward section container invalidation to SpatialNavigator'
+    );
+});
+
+// ============================================================================
+// Cluster 6 — Bootstrap vs SmartHubManager ytresolver collision
+// ============================================================================
+
+test('SmartHubManager & Bootstrap: delegates ytresolver launch when SmartHub owns lifecycle', () => {
+    const smartHubSource = read('src/tizen/SmartHubManager.js');
+    const bootstrapSource = read('src/index.js');
+
+    // SmartHubManager must expose read-only getters used by bootstrap to detect active ownership
+    assert.ok(smartHubSource.includes('get isReady()'), 'SmartHubManager must expose isReady getter');
+    assert.ok(smartHubSource.includes('get isSupported()'), 'SmartHubManager must expose isSupported getter');
+    assert.ok(
+        smartHubSource.includes('get ownsServiceLifecycle()'),
+        'SmartHubManager must expose ownsServiceLifecycle getter'
+    );
+
+    // Bootstrap must import smartHubManager and defer ytresolver launching when SmartHub is active
+    assert.ok(
+        bootstrapSource.includes("import { smartHubManager } from './tizen/SmartHubManager.js';"),
+        'src/index.js must import smartHubManager'
+    );
+
+    const gateIdx = bootstrapSource.indexOf('idleGate.runWhenIdle(');
+    assert.ok(gateIdx !== -1, 'Bootstrap idleGate block must exist');
+    const gateBody = bootstrapSource.slice(gateIdx, gateIdx + 3500);
+
+    const delegateMarker = 'if (smartHubManager && (smartHubManager.isReady || smartHubManager.isSupported))';
+    const delegateIdx = gateBody.indexOf(delegateMarker);
+    const launchIdx = gateBody.indexOf('tizen.application.launch(');
+
+    assert.ok(delegateIdx !== -1, 'Bootstrap must check smartHubManager readiness before launching ytresolver');
+    assert.ok(launchIdx !== -1, 'Fallback tizen.application.launch must remain for Tizen < 4.0');
+    assert.ok(
+        delegateIdx < launchIdx,
+        'SmartHubManager delegation guard must execute strictly before tizen.application.launch'
+    );
+    const delegateGuardBody = sliceBetween(gateBody, delegateMarker, '}');
+    assert.ok(
+        delegateGuardBody.includes('return;'),
+        'SmartHubManager guard must return early to skip independent service launch'
+    );
+});
+
+// ============================================================================
+// Cluster 7 — HomePage final-batch cache serialization
+// ============================================================================
+
+test('HomePage: schedules _scheduleDeferredBatchCacheRefresh once on final batch only', () => {
+    const source = read('src/pages/HomePage.js');
+    const loadBody = sliceBetween(source, 'async _loadNextDeferredBatch(', '_scheduleDeferredBatchCacheRefresh() {');
+
+    const branchMarker = 'if (this._nextDeferredDescIndex < this._deferredDescriptors.length)';
+    const branchIdx = loadBody.indexOf(branchMarker);
+    assert.ok(branchIdx !== -1, 'Deferred batch cursor branch must exist inside _loadNextDeferredBatch');
+
+    // No intermediate batch may queue _scheduleDeferredBatchCacheRefresh before checking remaining rows
+    const beforeBranch = loadBody.slice(0, branchIdx);
+    assert.ok(
+        !beforeBranch.includes('this._scheduleDeferredBatchCacheRefresh()'),
+        'Intermediate deferred batches must not queue cache serialization or scroll prewarming'
+    );
+
+    // Final branch (when no more deferred descriptors remain) queues cache refresh once
+    const afterBranch = loadBody.slice(branchIdx);
+    const elseIdx = afterBranch.indexOf('} else {');
+    assert.ok(elseIdx !== -1, 'Final completion else-branch must exist');
+    const finalBranch = afterBranch.slice(elseIdx);
+
+    assert.ok(
+        finalBranch.includes('this._scheduleDeferredBatchCacheRefresh();'),
+        'Final batch completion must queue _scheduleDeferredBatchCacheRefresh() once'
+    );
+    assert.ok(
+        finalBranch.includes('this.restoreScrollFocusWhenReady();') && finalBranch.includes('this.markReady();'),
+        'Final batch completion must preserve focus restoration and markReady()'
+    );
+});
+
+// ============================================================================
+// Cluster 8 — Settings progressive Appearance mount & deferred font query
+// ============================================================================
+
+/**
+ * Instantiates SettingsPage in an isolated VM sandbox with instrumented mocks
+ * for IdleGate, EventBus, FontLoader, and local storage so we can exercise
+ * background font scheduling, subscription deduplication, and chunked bindings.
+ */
+function createSettingsPerfHarness() {
+    const source = read('src/pages/settings/SettingsPage.js')
+        .replace(/import\s+[\s\S]*?;/g, '')
+        .replace('export default SettingsPage;', 'SettingsPage;');
+
+    const saved = new Map();
+    const idleTasks = [];
+    const cancelledTasks = [];
+    const loaderStyleHandlers = [];
+    let loaderUnsubCalls = 0;
+    let fontFetchCalls = 0;
+    let openedThemeModal = 0;
+    let openedLoaderModal = 0;
+    let flushCalls = 0;
+
+    // Provide minimal DOM and module globals matching SettingsFallbackFonts harness
+    const context = vm.createContext({
+        Page: class {
+            markReady() {
+                this._readyMarked = true;
+            }
+        },
+        platformInfo: { isAndroid: false, isTizen: false, isWebOS: false, isDesktop: false, isWeb: true },
+        webosAdapter: { isWebOS: false, updateScreensaverSuppressionPreference() {} },
+        availableLanguages: [],
+        logger: { create: () => ({ warn() {}, debug() {}, info() {}, error() {} }) },
+        i18n: { t: (key) => key, ensureBiDi: (val) => val },
+        FontLoader: {
+            getFallbackFonts: async () => {
+                fontFetchCalls++;
+                return [];
+            }
+        },
+        loadCultureOptions: async () => [],
+        storage: {
+            getItem: (key) => saved.get(key) ?? null,
+            setItem: (key, val) => saved.set(key, String(val)),
+            flush: () => {
+                flushCalls++;
+            }
+        },
+        layoutManager: {
+            getMediaRowsLayout: () => 'modern'
+        },
+        PlayerSettings: {
+            get: () => undefined,
+            set() {}
+        },
+        document: { getElementById: () => null },
+        window: { removeEventListener() {} },
+        focusManager: { invalidateCache() {} },
+        // Capture EventBus subscriptions and provide trackable unsubscribe callbacks
+        eventBus: {
+            on(eventName, handler) {
+                if (eventName === 'loaderStyle:changed') {
+                    loaderStyleHandlers.push(handler);
+                }
+                return () => {
+                    loaderUnsubCalls++;
+                };
+            },
+            emit() {}
+        },
+        // Capture IdleGate registrations without executing callbacks prematurely
+        idleGate: {
+            runWhenIdle(fn, delay, maxWait) {
+                const token = { id: idleTasks.length + 1, fn, delay, maxWait };
+                idleTasks.push(token);
+                return token;
+            },
+            cancel(token) {
+                cancelledTasks.push(token);
+            }
+        },
+        setTimeout,
+        clearTimeout
+    });
+
+    const SettingsPageClass = vm.runInContext(source, context);
+    const createInstance = () => {
+        const page = new SettingsPageClass();
+        page.$ = () => null;
+        page.$$ = () => [];
+        page.appearanceTab = { mount() {}, destroy() {} };
+        page.dropdownDispatcher = { bindDropdownEvents() {} };
+        page.sliderComponent = { bindEvents() {} };
+        page._openThemeColorModal = () => {
+            openedThemeModal++;
+        };
+        page._openLoaderStyleModal = () => {
+            openedLoaderModal++;
+        };
+        return page;
+    };
+
+    return {
+        createInstance,
+        saved,
+        idleTasks,
+        cancelledTasks,
+        loaderStyleHandlers,
+        getLoaderUnsubCalls: () => loaderUnsubCalls,
+        getFontFetchCalls: () => fontFetchCalls,
+        getOpenedThemeModal: () => openedThemeModal,
+        getOpenedLoaderModal: () => openedLoaderModal,
+        getFlushCalls: () => flushCalls
+    };
+}
+
+test('SettingsPage: defers fallback fonts to IdleGate, cancels on destroy, and deduplicates listener', async () => {
+    const harness = createSettingsPerfHarness();
+
+    // 1. Page teardown before idle fires must cancel task and block font XHR
+    const destroyedEarlyPage = harness.createInstance();
+    await destroyedEarlyPage.onInit();
+    assert.equal(destroyedEarlyPage._readyMarked, true, 'onInit must markReady without blocking on fonts');
+    assert.equal(harness.getFontFetchCalls(), 0, 'onInit must not fetch fallback fonts synchronously');
+    assert.equal(harness.idleTasks.length, 1, 'onInit must schedule one IdleGate font discovery task');
+    assert.equal(harness.idleTasks[0].delay, 500);
+    assert.equal(harness.idleTasks[0].maxWait, 150);
+
+    destroyedEarlyPage.onBeforeDestroy();
+    assert.equal(destroyedEarlyPage._destroyed, true, 'onBeforeDestroy must flag _destroyed');
+    assert.equal(harness.cancelledTasks.length, 1, 'onBeforeDestroy must cancel queued font task');
+    harness.idleTasks[0].fn();
+    assert.equal(harness.getFontFetchCalls(), 0, 'Torn-down page callback must ignore late idle firing');
+
+    // 2. Active page executes deferred font query cleanly once IdleGate fires
+    const activePage = harness.createInstance();
+    await activePage.onInit();
+    assert.equal(harness.idleTasks.length, 2);
+    harness.idleTasks[1].fn();
+    assert.equal(harness.getFontFetchCalls(), 1, 'Idle callback must trigger fallback font discovery');
+
+    // 3. Switching tabs / re-running _bindContentEvents must attach loaderStyle listener once
+    activePage._bindContentEvents();
+    activePage._bindContentEvents();
+    assert.equal(
+        harness.loaderStyleHandlers.length,
+        1,
+        'loaderStyle:changed EventBus listener must be registered at most once'
+    );
+
+    activePage.onBeforeDestroy();
+    assert.equal(harness.getLoaderUnsubCalls(), 1, 'onBeforeDestroy must unsubscribe loaderStyle listener');
+
+    // 4. Scoped _bindAppearanceDeferredControls wires WOL input & pickers idempotently
+    const handlers = {};
+    const wolInput = {
+        value: 'aabbccddeeff',
+        dataset: {},
+        addEventListener(ev, fn) {
+            handlers[`wol:${ev}`] = (handlers[`wol:${ev}`] || 0) + 1;
+            handlers[`wolFn:${ev}`] = fn;
+        }
+    };
+    const themeBtn = {
+        dataset: {},
+        addEventListener(ev, fn) {
+            handlers[`theme:${ev}`] = (handlers[`theme:${ev}`] || 0) + 1;
+            handlers[`themeFn:${ev}`] = fn;
+        }
+    };
+    const loaderBtn = {
+        dataset: {},
+        addEventListener(ev, fn) {
+            handlers[`loader:${ev}`] = (handlers[`loader:${ev}`] || 0) + 1;
+            handlers[`loaderFn:${ev}`] = fn;
+        }
+    };
+    const chunkScope = {
+        querySelector(sel) {
+            if (sel === '#input-wol-mac-address') return wolInput;
+            if (sel === '#btn-theme-color-picker') return themeBtn;
+            if (sel === '#btn-loader-style-picker') return loaderBtn;
+            return null;
+        }
+    };
+
+    // Call twice on the same mounted chunk and verify listeners bind only once
+    activePage._bindAppearanceDeferredControls(chunkScope);
+    activePage._bindAppearanceDeferredControls(chunkScope);
+    assert.equal(handlers['wol:input'], 1, 'WOL input listener must not bind twice');
+    assert.equal(handlers['theme:click'], 1, 'Theme color button listener must not bind twice');
+    assert.equal(handlers['loader:click'], 1, 'Loader style button listener must not bind twice');
+
+    // Triggering handlers must format the 12-hex MAC and invoke modal triggers
+    handlers['wolFn:change']();
+    assert.equal(wolInput.value, 'AA:BB:CC:DD:EE:FF');
+    assert.equal(harness.saved.get('pref:wolMacAddress'), 'AA:BB:CC:DD:EE:FF');
+    assert.equal(harness.getFlushCalls(), 1);
+    handlers['themeFn:click']();
+    handlers['loaderFn:click']();
+    assert.equal(harness.getOpenedThemeModal(), 1);
+    assert.equal(harness.getOpenedLoaderModal(), 1);
+});
+
+test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred sections in scoped chunks', () => {
+    const appearanceSource = read('src/pages/settings/tabs/AppearanceTab.js');
+
+    // Initial synchronous render() holds only primary sections + deferred placeholder container
+    const renderBody = sliceBetween(appearanceSource, 'render() {', '_renderTimeAndScreensaverSections() {');
+    assert.ok(
+        renderBody.includes('<div id="appearance-deferred-sections"></div>'),
+        'AppearanceTab.render() must leave below-the-fold placeholder container'
+    );
+    assert.ok(
+        !renderBody.includes('input-wol-mac-address') && !renderBody.includes('btn-theme-color-picker'),
+        'AppearanceTab.render() must exclude deferred sections from initial innerHTML parse'
+    );
+
+    // All four progressive chunk renderers + combined helper must be present
+    for (const methodName of [
+        '_renderTimeAndScreensaverSections()',
+        '_renderThemeSection()',
+        '_renderOsdSection()',
+        '_renderExtraAndWolSections()',
+        '_renderDeferredSections()'
+    ]) {
+        assert.ok(appearanceSource.includes(methodName), `AppearanceTab must define ${methodName}`);
+    }
+
+    // mount() appends .appearance-deferred-chunk across frames, binds scoped controls, invalidates focus
+    const mountBody = sliceBetween(appearanceSource, 'mount(root) {', '_bindListeners(scope, rootContainer) {');
+    assert.ok(mountBody.includes('appearance-deferred-chunk'), 'mount() must isolate chunks inside wrapper nodes');
+    assert.ok(
+        mountBody.includes('this.page._bindAppearanceDeferredControls(chunkEl)') &&
+            mountBody.includes('this.page.dropdownDispatcher.bindDropdownEvents(chunkEl)') &&
+            mountBody.includes('this.page.sliderComponent.bindEvents(chunkEl)'),
+        'Each mounted chunk must scope-bind deferred pickers, dropdowns, and sliders'
+    );
+    assert.ok(
+        mountBody.includes("focusManager.invalidateCache('settings-content')"),
+        'Each mounted chunk must invalidate settings-content focus cache'
+    );
+
+    const destroyBody = sliceBetween(appearanceSource, 'destroy() {', 'export default AppearanceTab;');
+    assert.ok(
+        destroyBody.includes('clearTimeout(this._deferredTimer)') &&
+            destroyBody.includes('cancelAnimationFrame(this._deferredRaf)'),
+        'AppearanceTab.destroy() must cancel any pending deferred timer or rAF'
+    );
+
+    // DropdownDispatcher & SettingsSlider must accept optional chunk scope and guard against double-binding
+    const dropdownSource = read('src/pages/settings/controllers/SettingsDropdownDispatcher.js');
+    const dropdownBody = sliceBetween(dropdownSource, 'bindDropdownEvents(root = null) {', '_applySettingValue(');
+    assert.ok(
+        dropdownBody.includes("root ? Array.from(root.querySelectorAll('.select-btn'))"),
+        'DropdownDispatcher.bindDropdownEvents must restrict queries to chunk root when provided'
+    );
+    assert.ok(
+        dropdownBody.includes("btn.dataset?.dropdownBound === 'true'") &&
+            dropdownBody.includes("btn.dataset.dropdownBound = 'true'"),
+        'DropdownDispatcher must guard against double-binding across progressive mounts'
+    );
+
+    const sliderSource = read('src/pages/settings/components/SettingsSlider.js');
+    const sliderBody = sliceBetween(sliderSource, 'bindEvents(root = null) {', '_updateVisualFill(slider, value) {');
+    assert.ok(
+        sliderBody.includes("root ? Array.from(root.querySelectorAll('.setting-slider'))"),
+        'SettingsSlider.bindEvents must restrict queries to chunk root when provided'
+    );
+    assert.ok(
+        sliderBody.includes("slider.dataset?.sliderBound === 'true'") &&
+            sliderBody.includes("slider.dataset.sliderBound = 'true'"),
+        'SettingsSlider must guard against double-binding across progressive mounts'
     );
 });
