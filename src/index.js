@@ -13,6 +13,7 @@ import { PlayerSettings } from './utils/PlayerSettings.js';
 // Centralized platform identification
 import { platformInfo } from './utils/PlatformInfo.js';
 import { idleGate } from './utils/IdleGate.js';
+import { smartHubManager } from './tizen/SmartHubManager.js';
 
 const log = logger.create('Bootstrap');
 
@@ -63,6 +64,15 @@ async function bootstrap() {
                 const isSvcEnabled = PlayerSettings.get('enableBackgroundService');
                 if (isSvcEnabled !== false) {
                     if (typeof tizen !== 'undefined') {
+                        // On Tizen 4.0+, SmartHubManager owns the ytresolver background service lifecycle:
+                        // it dispatches preview payloads via launchAppControl and relaunches via _relaunchService()
+                        // after ACK completion. Launching independently here collides with in-flight commits
+                        // and causes a 15-second ACK timeout followed by a mid-scroll relaunch freeze.
+                        if (smartHubManager && (smartHubManager.isReady || smartHubManager.isSupported)) {
+                            log.info('Tizen background service launch delegated to SmartHubManager');
+                            return;
+                        }
+
                         try {
                             const appId = tizen.application.getCurrentApplication().appInfo.id;
                             const pkgId = appId.split('.')[0];

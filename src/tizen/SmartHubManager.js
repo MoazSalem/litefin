@@ -150,6 +150,31 @@ class SmartHubManager {
     // ========================================================================
 
     /**
+     * Indicates whether Smart Hub Preview is supported and initialized on this device (Tizen 4.0+).
+     * When true, SmartHubManager owns the lifecycle of the ytresolver background service.
+     * @returns {boolean}
+     */
+    get isReady() {
+        return this._ready;
+    }
+
+    /**
+     * Alias for isReady, indicating Tizen 4.0+ preview support.
+     * @returns {boolean}
+     */
+    get isSupported() {
+        return this._ready;
+    }
+
+    /**
+     * Whether SmartHubManager manages the ytresolver background service lifecycle.
+     * @returns {boolean}
+     */
+    get ownsServiceLifecycle() {
+        return this._ready;
+    }
+
+    /**
      * Initialise the manager. Call once from App.init() after platformInfo.init()
      * and auth.init() have already run.
      *
