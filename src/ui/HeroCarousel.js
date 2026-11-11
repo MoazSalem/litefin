@@ -66,6 +66,10 @@ class HeroCarousel {
         // BEFORE goTo() flips .active. Without this, that rasterization lands in
         // the 0-250ms window after goTo() — the HeroCarousel long-task cluster.
         this._warmRafId = null;
+        this._warmTimerId = null;
+        this._warmQueue = [];
+        this._activeWarmItem = null;
+        this._warmedSlides = Object.create(null);
         this._postDecodeWarmRafId = null;
         this._postScrollAutoStartTimerId = null;
 
@@ -953,15 +957,8 @@ class HeroCarousel {
             clearTimeout(this._stackPreloadTimerId);
             this._stackPreloadTimerId = null;
         }
-        // Cancel the idle layer pre-rasterization frames
-        if (this._warmRafId) {
-            cancelAnimationFrame(this._warmRafId);
-            this._warmRafId = null;
-        }
-        if (this._postDecodeWarmRafId) {
-            cancelAnimationFrame(this._postDecodeWarmRafId);
-            this._postDecodeWarmRafId = null;
-        }
+        // Cancel pending or active staggered neighbor pre-rasterization
+        this._cancelWarmQueue();
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
             this._postScrollAutoStartTimerId = null;
@@ -1459,15 +1456,62 @@ class HeroCarousel {
     }
 
     /**
-     * Schedules neighbor layer pre-rasterization right after an adjacent slide's
-     * images finish asynchronous decode (helpful when boot preloads land after
-     * the initial 800ms idle sweep has already fired).
+     * Cancels all pending or active neighbor slide pre-rasterization timers
+     * and strips any transient `.hero-item--prewarm` class immediately.
      *
-     * @param {number} decodedIndex - Slide index whose assets just finished decoding
+     * @private
+     */
+    _cancelWarmQueue() {
+        if (this._warmTimerId) {
+            clearTimeout(this._warmTimerId);
+            this._warmTimerId = null;
+        }
+        if (this._warmRafId) {
+            cancelAnimationFrame(this._warmRafId);
+            this._warmRafId = null;
+        }
+        if (this._postDecodeWarmRafId) {
+            cancelAnimationFrame(this._postDecodeWarmRafId);
+            this._postDecodeWarmRafId = null;
+        }
+        if (this._activeWarmItem && this._activeWarmItem.classList) {
+            this._activeWarmItem.classList.remove('hero-item--prewarm');
+        }
+        this._activeWarmItem = null;
+        this._warmQueue = [];
+    }
+
+    /**
+     * Checks whether a slide index is currently eligible for pre-rasterization.
+     *
+     * @param {number} index
+     * @returns {boolean}
+     * @private
+     */
+    _canWarmSlideIndex(index) {
+        const items = this._slideItems;
+        if (!items || index < 0 || index >= items.length || index === this._currentIndex) {
+            return false;
+        }
+        if (this._warmedSlides[index] || this._decodedAssets[index] !== true) {
+            return false;
+        }
+        const item = items[index];
+        if (!item || !item.classList || item.classList.contains('active') || item.classList.contains('hero-item--prewarm')) {
+            return false;
+        }
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
+        return Boolean(backdrop && backdrop.style && backdrop.style.backgroundImage);
+    }
+
+    /**
+     * Queues adjacent slide warming once a decoded neighbor finishes landing.
+     *
+     * @param {number} decodedIndex
      * @private
      */
     _scheduleWarmAfterDecode(decodedIndex) {
-        if (!this._container || this._hideTimeoutId || this._warmRafId || this._postDecodeWarmRafId) return;
+        if (!this._container || this._hideTimeoutId || !this._isVisible) return;
         const count = this._slideItems ? this._slideItems.length : 0;
         if (count < 2) return;
 
@@ -1475,7 +1519,16 @@ class HeroCarousel {
         const prevIdx = (this._currentIndex - 1 + count) % count;
         if (decodedIndex !== nextIdx && decodedIndex !== prevIdx) return;
 
-        if (typeof requestAnimationFrame !== 'function') return;
+        // If another slide is already warming or sleeping between staggered ticks,
+        // queue this newly decoded neighbor so it runs 150ms after the current one.
+        if (this._warmRafId || this._warmTimerId) {
+            if (!this._warmedSlides[decodedIndex] && this._warmQueue.indexOf(decodedIndex) === -1) {
+                this._warmQueue.push(decodedIndex);
+            }
+            return;
+        }
+
+        if (this._postDecodeWarmRafId || typeof requestAnimationFrame !== 'function') return;
         this._postDecodeWarmRafId = requestAnimationFrame(() => {
             this._postDecodeWarmRafId = null;
             this._warmAdjacentSlides();
@@ -1483,20 +1536,75 @@ class HeroCarousel {
     }
 
     /**
-     * Pre-rasterizes decoded, non-active slides during a quiet window.
+     * Pops and pre-rasterizes strictly ONE queued slide on a quiet frame, then
+     * paces any remaining neighbors by 150ms so each 1280px backdrop mask gets
+     * an isolated compositor budget instead of freezing a single frame.
+     *
+     * @private
+     */
+    _drainNextWarmSlide() {
+        if (!this._container || this._hideTimeoutId || this._warmRafId || !this._isVisible) return;
+        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
+            return;
+        }
+
+        const items = this._slideItems;
+        if (!items || items.length < 2) return;
+
+        while (this._warmQueue.length > 0) {
+            const index = this._warmQueue.shift();
+            if (!this._canWarmSlideIndex(index)) {
+                continue;
+            }
+
+            const item = items[index];
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlides');
+
+            this._activeWarmItem = item;
+            item.classList.add('hero-item--prewarm');
+
+            // Two frames: frame 1 commits the opacity bump, frame 2 lets the
+            // compositor upload and rasterize this single masked backdrop layer
+            // before dropping the helper class and pacing the next slide by 150ms.
+            this._warmRafId = requestAnimationFrame(() => {
+                this._warmRafId = requestAnimationFrame(() => {
+                    this._warmRafId = null;
+                    item.classList.remove('hero-item--prewarm');
+                    if (this._activeWarmItem === item) {
+                        this._activeWarmItem = null;
+                    }
+                    this._warmedSlides[index] = true;
+
+                    if (
+                        this._warmQueue.length > 0 &&
+                        this._container &&
+                        !this._hideTimeoutId &&
+                        this._isVisible
+                    ) {
+                        this._warmTimerId = setTimeout(() => {
+                            this._warmTimerId = null;
+                            this._drainNextWarmSlide();
+                        }, 150);
+                    }
+                });
+            });
+            return;
+        }
+    }
+
+    /**
+     * Enqueues decoded, non-active neighbor slides during a quiet window and
+     * drains them one slide per 150ms quiet tick.
      *
      * WHY: flipping `.hero-item.active` makes the browser rasterize a masked
-     * 1280px-wide backdrop layer for the first time. That paint is main-thread
-     * work and reliably lands 0-250ms AFTER goTo() returns, so telemetry
-     * attributes it to `HeroCarousel.goTo`. Briefly parking a decoded slide at
-     * opacity 0.02 with transitions disabled across two frames forces the same
-     * rasterization while the user is idle; the crossfade then only composites
-     * already-rasterized tiles.
+     * 1280px-wide backdrop layer for the first time. Warming every neighbor on
+     * a single frame creates a long compositor block; spacing one slide per
+     * 150ms tick keeps the main thread responsive while preparing upcoming transitions.
      *
      * @private
      */
     _warmAdjacentSlides() {
-        if (!this._container || this._warmRafId) return;
+        if (!this._container || this._warmRafId || this._warmTimerId || !this._isVisible) return;
         if (this._hideTimeoutId) return;
         if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
             return;
@@ -1516,43 +1624,16 @@ class HeroCarousel {
             }
         }
 
-        const warmed = [];
         for (let i = 0; i < candidates.length; i++) {
             const index = ((candidates[i] % count) + count) % count;
-            if (index === current) continue;
-
-            const item = items[index];
-            if (!item || !item.classList) continue;
-            if (warmed.indexOf(item) !== -1) continue;
-            // Only slides whose backdrop bitmap has actually landed can be rasterized.
-            if (this._decodedAssets[index] !== true) continue;
-            if (item.classList.contains('active') || item.classList.contains('hero-item--prewarm')) continue;
-
-            const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
-            if (!backdrop || !backdrop.style || !backdrop.style.backgroundImage) continue;
-
-            warmed.push(item);
+            if (!this._canWarmSlideIndex(index)) continue;
+            if (this._warmQueue.indexOf(index) === -1) {
+                this._warmQueue.push(index);
+            }
         }
 
-        if (warmed.length === 0) return;
-
-        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlides');
-
-        for (let i = 0; i < warmed.length; i++) {
-            warmed[i].classList.add('hero-item--prewarm');
-        }
-
-        // Two frames: frame 1 commits the opacity change, frame 2 guarantees the
-        // compositor raster pass for the newly paint-eligible layer has run
-        // before the class is dropped again.
-        this._warmRafId = requestAnimationFrame(() => {
-            this._warmRafId = requestAnimationFrame(() => {
-                this._warmRafId = null;
-                for (let i = 0; i < warmed.length; i++) {
-                    warmed[i].classList.remove('hero-item--prewarm');
-                }
-            });
-        });
+        if (this._warmQueue.length === 0) return;
+        this._drainNextWarmSlide();
     }
 
     /**
@@ -1585,6 +1666,10 @@ class HeroCarousel {
 
         if (!items[index] || !dots[index]) return;
 
+        // Abort any in-flight or queued neighbor pre-rasterization for the previous
+        // slide so navigation transitions stay uncontested on the compositor thread.
+        this._cancelWarmQueue();
+
         const prevIndex = this._currentIndex;
         const prevItem = items[prevIndex];
         const nextItem = items[index];
@@ -1612,6 +1697,15 @@ class HeroCarousel {
         this._hideTimeoutId = setTimeout(() => {
             this._hideTimeoutId = null;
             if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:crossfadeSettled');
+
+            // Stagger pre-rasterization of newly adjacent slides once the crossfade
+            // settles (150ms quiet spacing, 1 slide per tick).
+            if (this._container && this._isVisible && !this._warmTimerId && !this._warmRafId) {
+                this._warmTimerId = setTimeout(() => {
+                    this._warmTimerId = null;
+                    this._warmAdjacentSlides();
+                }, 150);
+            }
         }, 1050);
 
         // Extend any sliding-window preload (>5 slides) / BlurHash fill past crossfade.
