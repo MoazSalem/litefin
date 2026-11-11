@@ -111,6 +111,13 @@ const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
 const EAGER_ROW_COUNT = 3;
 
 /**
+ * Maximum total rows to mount eagerly when additional contiguous rows already have
+ * pre-fetched or cached items in memory (e.g. /Litefin/Items/Latest rows), preventing
+ * post-splash scroll hitches while keeping huge multi-library instances bounded.
+ */
+const EAGER_PREFETCH_CAP = 7;
+
+/**
  * Number of deferred rows to fetch per lazy-load batch.
  *
  * DEFERRED_BATCH_SIZE (1) applies to explicit user requests (D-pad boundary
@@ -1655,15 +1662,11 @@ class HomePage extends Page {
             const targetIndex = targetRowId ? descriptors.findIndex((d) => d.id === targetRowId) : -1;
 
             // Determine how many rows to mount eagerly at page startup.
-            // EAGER_ROW_COUNT covers the top visible viewport (e.g. 3 rows).
-            // If restoring focus to a row beyond the initial count, we extend the eager
-            // slice up to and including that target row so its DOM position and focus
-            // target are fully prepared before the splash overlay is dismissed.
-            let eagerCount = Math.min(EAGER_ROW_COUNT, descriptors.length);
-            if (targetIndex !== -1 && targetIndex >= eagerCount) {
-                // Ensure target row is included in the eagerly mounted batch
-                eagerCount = targetIndex + 1;
-            }
+            // Always mounts EAGER_ROW_COUNT (3) plus any focus restoration target, and
+            // contiguously includes pre-fetched / in-memory core rows (up to
+            // EAGER_PREFETCH_CAP = 7) before hiding the splash screen so pre-fetched
+            // rows never trigger late DOM insertions mid-scroll.
+            const eagerCount = this._resolveEagerRowCount(descriptors, targetIndex);
 
             // Slice out the eager descriptors and queue the remaining for deferred loading.
             // Filter out any descriptor the registry already rendered (e.g. rows
@@ -4243,10 +4246,57 @@ class HomePage extends Page {
         for (const desc of descriptors) {
             const cachedItems = rowCache[desc.id];
             if (cachedItems) {
+                // Mark as already resolved in memory so Step 5 mounts cached rows eagerly.
+                desc._hasCachedData = true;
                 desc.fetchFn = () => Promise.resolve(cachedItems);
                 if (rowTitles && rowTitles[desc.id]) desc.title = rowTitles[desc.id];
             }
         }
+    }
+
+    /**
+     * Returns true when a row descriptor's data is already resolved in memory
+     * (page cache restore, batch /Litefin/Items/Latest pre-fetch, in-memory library list,
+     * or boot-prefetched Continue Watching / Next Up) so mounting it before splash
+     * dismissal avoids late mid-scroll DOM insertion without extra network stalls.
+     *
+     * @param {RowDescriptor} descriptor - Row descriptor to inspect
+     * @returns {boolean}
+     * @private
+     */
+    _isDescriptorEagerReady(descriptor) {
+        if (!descriptor) return false;
+        if (descriptor._hasCachedData || Array.isArray(descriptor._preFetchedItems)) {
+            return true;
+        }
+        return descriptor.id === 'my-media' || descriptor.id === 'resume' || descriptor.id === 'next-up';
+    }
+
+    /**
+     * Computes how many leading descriptors to mount eagerly before hiding splash.
+     * Covers EAGER_ROW_COUNT (3), expands contiguously across pre-fetched/in-memory
+     * core rows up to EAGER_PREFETCH_CAP (7) — stopping immediately before any
+     * un-fetched slow row so custom DOM layout ordering is preserved — and honors
+     * any saved focus restoration target beyond the initial batch.
+     *
+     * @param {RowDescriptor[]} descriptors - Ordered list of home row descriptors
+     * @param {number} targetIndex - Index of focus restoration target, or -1
+     * @returns {number} Number of leading descriptors to mount eagerly
+     * @private
+     */
+    _resolveEagerRowCount(descriptors, targetIndex) {
+        let eagerCount = Math.min(EAGER_ROW_COUNT, descriptors.length);
+        const prefetchCap = Math.min(EAGER_PREFETCH_CAP, descriptors.length);
+
+        while (eagerCount < prefetchCap && this._isDescriptorEagerReady(descriptors[eagerCount])) {
+            eagerCount++;
+        }
+
+        if (targetIndex !== -1 && targetIndex >= eagerCount) {
+            eagerCount = targetIndex + 1;
+        }
+
+        return eagerCount;
     }
 
     /**
