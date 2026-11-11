@@ -1695,6 +1695,16 @@ class HomePage extends Page {
             await Promise.all(eagerPromises);
             if (!this._isMounted) return;
 
+            // Let Chromium finish fetching and off-thread decoding the initially
+            // mounted cards across all eager rows (including rows below 1080px)
+            // behind the splash screen for a tight bounded window so the user's
+            // very first downward scroll hits pre-decoded GPU textures.
+            const rowsContainer = this.$('#home-rows');
+            if (rowsContainer && typeof lazyLoader.waitForContainerDecode === 'function') {
+                await lazyLoader.waitForContainerDecode(rowsContainer, 650);
+                if (!this._isMounted) return;
+            }
+
             // Dismiss the loading spinner now that critical content is rendered.
             // If there's a focus target, _hideSplash() in Step 7 handles it after
             // focus restoration — so we only dismiss here when there's no target.

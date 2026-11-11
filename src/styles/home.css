@@ -172,6 +172,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
 .media-row {
     /* Balanced margin prevents preceding row subtitle peek-through */
     margin-bottom: 28px;
+    /* Isolate row layout, style, and paint work so scrolling or late image
+       decode commits in one row never trigger page-wide style invalidation */
+    contain: layout style paint;
     /* GPU layer for the row itself — enables composited scrolling of the parent */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
