@@ -177,16 +177,6 @@ globalThis.document = {
 const { default: HeroCarousel } = await import('../src/ui/HeroCarousel.js');
 
 /**
- * Helper to flush queued requestAnimationFrame callbacks.
- */
-function flushRafs() {
-    while (scheduledRafs.length > 0) {
-        const next = scheduledRafs.shift();
-        next.cb(16);
-    }
-}
-
-/**
  * Builds a 4-slide mock container wired with slide items, dots, backdrops, logos, and containers.
  */
 function buildCarouselFixture(slideCount = 4) {
@@ -202,7 +192,6 @@ function buildCarouselFixture(slideCount = 4) {
     for (let i = 0; i < slideCount; i++) {
         const isFirst = i === 0;
         const slide = createMockNode(isFirst ? ['hero-item', 'active'] : ['hero-item']);
-        slide.style.visibility = isFirst ? 'visible' : 'hidden';
 
         const backdrop = createMockNode(['hero-backdrop'], { backdrop: `http://test/backdrop-${i}.jpg` });
         if (isFirst) backdrop.style.backgroundImage = "url('http://test/backdrop-0.jpg')";
@@ -235,7 +224,7 @@ function buildCarouselFixture(slideCount = 4) {
     return { container, slides, dots, backdrops, logos, logoContainers };
 }
 
-test('CSS: inactive slides isolate layout and block pointer hit-testing', () => {
+test('CSS: stacked slides isolate layout, block pointer hit-testing, and keep will-change static outside .active', () => {
     const css = readFileSync(resolve(__dirname, '../src/styles/hero-carousel.css'), 'utf8');
     const heroItemRuleMatch = css.match(/^\.hero-item\s*\{([^}]+)\}/m);
     assert.ok(heroItemRuleMatch, 'hero-item rule should exist in hero-carousel.css');
@@ -243,6 +232,7 @@ test('CSS: inactive slides isolate layout and block pointer hit-testing', () => 
     const heroItemBody = heroItemRuleMatch[1];
     assert.ok(heroItemBody.includes('pointer-events: none;'), '.hero-item must disable pointer events when inactive');
     assert.ok(heroItemBody.includes('contain: layout style;'), '.hero-item must isolate layout and style recalcs');
+    assert.ok(heroItemBody.includes('will-change: opacity;'), '.hero-item must keep opacity promoted statically');
 
     const activeRuleMatch = css.match(/^\.hero-item\.active\s*\{([^}]+)\}/m);
     assert.ok(activeRuleMatch, 'hero-item.active rule should exist in hero-carousel.css');
@@ -250,9 +240,27 @@ test('CSS: inactive slides isolate layout and block pointer hit-testing', () => 
         activeRuleMatch[1].includes('pointer-events: auto;'),
         '.hero-item.active must re-enable pointer events on the active slide'
     );
+    assert.ok(
+        !activeRuleMatch[1].includes('will-change'),
+        '.hero-item.active must not toggle will-change dynamically on transition'
+    );
+
+    const activeContentMatch = css.match(/^\.hero-item\.active\s+\.hero-content\s*\{([^}]+)\}/m);
+    assert.ok(activeContentMatch, '.hero-item.active .hero-content rule should exist');
+    assert.ok(
+        !activeContentMatch[1].includes('will-change'),
+        '.hero-item.active .hero-content must not toggle will-change dynamically'
+    );
+
+    const activeZoomMatch = css.match(/^\.hero-carousel-container\.with-zoom\s+\.hero-item\.active\s+\.hero-backdrop\s*\{([^}]+)\}/m);
+    assert.ok(activeZoomMatch, '.hero-carousel-container.with-zoom .hero-item.active .hero-backdrop rule should exist');
+    assert.ok(
+        !activeZoomMatch[1].includes('will-change'),
+        '.hero-carousel-container.with-zoom .hero-item.active .hero-backdrop must not toggle will-change dynamically'
+    );
 });
 
-test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms adjacent slide, and keeps goTo() free of DOM queries or willChange churn', async () => {
+test('HeroCarousel: renders stacked slides without visibility:hidden, pre-decodes off-thread, and keeps goTo() a pure class toggle', async () => {
     createdImages.length = 0;
     scheduledRafs.length = 0;
     storageMap.clear();
@@ -261,6 +269,12 @@ test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms ad
 
     const items = [0, 1, 2, 3].map((i) => ({ Id: `item-${i}`, Name: `Item ${i}` }));
     const carousel = new HeroCarousel({ items });
+    carousel._loadCachedPrefs();
+
+    // Verify markup emits no inline visibility:hidden attribute on inactive stacked slides
+    const inactiveHtml = carousel._renderItem(items[1], 1);
+    assert.ok(!inactiveHtml.includes('visibility:hidden'), 'Stacked slides must not render visibility:hidden inline');
+
     const { container, slides, dots, backdrops, logos, logoContainers } = buildCarouselFixture(4);
 
     // Track storage reads triggered after initialization completes
@@ -273,14 +287,14 @@ test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms ad
 
     try {
         carousel.init(container);
-        assert.equal(slides[1].style.visibility, 'hidden', 'Adjacent slide starts hidden prior to idle decode');
+        assert.ok(carousel._stackPreloadTimerId !== null, 'init() must schedule staggered stack preloading');
 
         // Reset counters after init so we observe transition & preload behavior cleanly
         queryAllCount = 0;
         queryOneCount = 0;
         storageReads = 0;
 
-        // Preload neighbor slide 1 cleanly during idle
+        // Preload stacked slide 1 off-thread
         carousel._preloadSlide(1);
 
         // Backdrop Image.decode() should have been invoked off-thread
@@ -288,27 +302,19 @@ test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms ad
         const backdropLoader = createdImages[createdImages.length - 1];
         assert.equal(backdropLoader.decodeCalls, 1, '_preloadSlide must call img.decode() on backdrop');
 
-        // Deferred logo must also use logo.decode() prior to compositing
+        // Deferred logo must also use logo.decode() off the transition path
         assert.equal(logos[1].getDecodeCount(), 1, '_preloadSlide must call decode() on deferred hero logo');
 
         // Resolve async decode microtasks
         await Promise.resolve();
         await Promise.resolve();
 
-        // Backdrop background-image and logo container height should now be committed
+        // Backdrop background-image, decodedAssets flag, and logo container height should now be committed
         assert.equal(backdrops[1].style.backgroundImage, "url('http://test/backdrop-1.jpg')");
         assert.equal(logoContainers[1].style.height, '100px');
+        assert.equal(carousel._decodedAssets[1], true, 'Slide 1 assets should be marked decoded');
 
-        // Layer warm should be queued onto a clean rAF (not synchronously flipping visibility)
-        assert.equal(slides[1].style.visibility, 'hidden', 'Layer warming defers visibility mutation to idle rAF');
-        flushRafs();
-        assert.equal(
-            slides[1].style.visibility,
-            'visible',
-            'Adjacent slide 1 should be idle-warmed (visibility: visible while opacity: 0) before goTo()'
-        );
-
-        // Now execute goTo(1) and assert zero DOM queries, zero storage reads, zero inline willChange churn
+        // Now execute goTo(1) and assert zero DOM queries, zero storage reads, zero visibility/willChange churn
         const queryAllBefore = queryAllCount;
         const queryOneBefore = queryOneCount;
         const storageReadsBefore = storageReads;
@@ -321,10 +327,12 @@ test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms ad
         assert.equal(slides[0].classList.contains('active'), false);
         assert.equal(slides[1].classList.contains('active'), true);
         assert.equal(dots[1].classList.contains('active'), true);
+        assert.equal(slides[0].style.visibility, undefined, 'goTo() must not mutate prev slide visibility');
+        assert.equal(slides[1].style.visibility, undefined, 'goTo() must not mutate active slide visibility');
+        assert.equal(slides[2].style.visibility, undefined, 'goTo() must not mutate stacked slide 2 visibility');
+        assert.equal(slides[3].style.visibility, undefined, 'goTo() must not mutate stacked slide 3 visibility');
         assert.equal(slides[1].style.willChange, undefined, 'goTo() must not set inline willChange on slide');
         assert.equal(backdrops[1].style.willChange, undefined, 'goTo() must not set inline willChange on backdrop');
-        assert.equal(slides[2].style.visibility, 'hidden', 'Non-transition slide 2 remains hidden');
-        assert.equal(slides[3].style.visibility, 'hidden', 'Non-transition slide 3 remains hidden');
     } finally {
         mockStorage.getItem = origGetItem;
         carousel.destroy();

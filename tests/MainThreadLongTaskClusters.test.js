@@ -60,8 +60,8 @@ test('HeroCarousel: goTo() is a pure class toggle (no preload / BlurHash work)',
         'goTo() must defer the next preload sweep to idle'
     );
     assert.ok(
-        goToBody.includes('items[i].style.visibility !=='),
-        'goTo() must guard visibility writes for already-hidden slides'
+        !goToBody.includes('style.visibility') && !goToBody.includes('willChange'),
+        'goTo() must strictly toggle classes without visibility or willChange style mutations'
     );
 });
 

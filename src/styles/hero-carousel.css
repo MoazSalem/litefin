@@ -118,14 +118,15 @@
      * Outer container retains overflow: hidden, keeping boundaries clean on GPU.
      */
     overflow: visible;
+    /* Keep opacity layer promoted across all stacked slides so toggling .active never triggers layerize. */
     transform: translateZ(0);
+    will-change: opacity;
 }
 
 .hero-item.active {
     opacity: 1;
     z-index: 2;
     pointer-events: auto;
-    will-change: opacity;
 }
 
 /* ============================================================================
@@ -252,23 +253,28 @@
                 opacity 800ms ease;
     -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
                         opacity 800ms ease;
+    /* Promote content stack statically rather than on .active toggle to prevent GPU layer churn. */
+    will-change: transform, opacity;
 }
 
 .hero-item.active .hero-content {
     opacity: 1;
     transform: translateY(0);
     -webkit-transform: translateY(0);
-    will-change: transform, opacity;
 }
 
 /* ============================================================================
    Ken Burns effect — only when explicitly enabled via .with-zoom
    ============================================================================ */
 
+/* Pre-promote zoomable backdrops statically so adding .active never creates layers mid-fade. */
+.hero-carousel-container.with-zoom .hero-backdrop {
+    will-change: transform;
+}
+
 .hero-carousel-container.with-zoom .hero-item.active .hero-backdrop {
     -webkit-animation: hero-ken-burns 12000ms linear forwards;
     animation: hero-ken-burns 12000ms linear forwards;
-    will-change: transform;
 }
 
 .hero-carousel-container:not(.with-zoom) .hero-backdrop {

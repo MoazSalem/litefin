@@ -48,19 +48,17 @@ class HeroCarousel {
         this._preloadIdleId = null;
 
         // ---------------------------------------------------------------------
-        // Idle preload & layer-warming bookkeeping
+        // Idle preload & stacked layer bookkeeping
         // ---------------------------------------------------------------------
-        // Slide backdrops/logos are preloaded well ahead of a transition so
-        // goTo() only has to toggle CSS classes. Idle preloads are deduplicated
-        // per slide and never decode BlurHash before the transition.
-        // Adjacent slide layers are warmed (visibility: visible at opacity: 0)
-        // in an idle frame after image decode so D-pad transitions never stall
-        // on synchronous mask rasterization or GPU texture uploads.
+        // Stacked slides sit in the DOM at opacity: 0 with static GPU promotion
+        // and no visibility:hidden churn, so goTo() strictly toggles .active
+        // classes without triggering layerization or alpha-mask rasterization.
+        // Backdrops/logos preload & decode asynchronously upfront for the stack.
         // ---------------------------------------------------------------------
         this._idlePreloadTask = null;
         this._preloadedSlides = Object.create(null);
         this._decodedAssets = Object.create(null);
-        this._warmHandles = [];
+        this._stackPreloadTimerId = null;
 
         // Cached DOM node references populated in init() and cleared in destroy()
         // so navigation never re-queries the carousel DOM tree on keypress frames.
@@ -269,7 +267,7 @@ class HeroCarousel {
         const backdropStyle = isActive && initialBackdrop ? ` style="background-image: url('${initialBackdrop}')"` : '';
 
         return `
-            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
+            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
                 ${
                     isBlurhashFill && blurHash
                         ? `
@@ -823,16 +821,52 @@ class HeroCarousel {
         this._preloadSlide(0);
 
         // Pre-warm upcoming slides (up to the first 5 total slides) through
-        // ImageCache's scroll-aware queue so early slide changes hit warm cache.
+        // ImageCache's scroll-aware queue and gently decode stacked slides
+        // ahead of user input so initial slide changes hit decoded layers.
         this._prewarmHeroImages();
+        this._scheduleStackPreload(1);
 
         // ---------------------------------------------------------------------
-        // Deferred Sliding Preload Window
-        // ---------------------------------------------------------------------
-        // Preload only the slides around the active index so 4K backdrops never
-        // accumulate in VRAM. The window slides forward after every transition.
+        // Deferred Sliding Preload Window (for >5 slide configurations)
         // ---------------------------------------------------------------------
         this._scheduleIdlePreload(800);
+    }
+
+    /**
+     * Staggers off-thread backdrop + logo decoding for stacked slides (indices
+     * 1..4) one slide per short quiet interval so stacked slides are already
+     * decoded and height-adjusted before the user transitions to them.
+     *
+     * @param {number} index - Slide index to schedule next
+     * @private
+     */
+    _scheduleStackPreload(index) {
+        if (!this._container) return;
+        const maxStack = Math.min(5, this._slideItems ? this._slideItems.length : 0);
+        if (index >= maxStack) return;
+
+        if (this._stackPreloadTimerId) {
+            clearTimeout(this._stackPreloadTimerId);
+            this._stackPreloadTimerId = null;
+        }
+
+        // Wait one short frame window so init() paints cleanly before background
+        // stacked slides kick off async decode and logo height measurement.
+        this._stackPreloadTimerId = setTimeout(() => {
+            this._stackPreloadTimerId = null;
+            if (!this._container) return;
+
+            // Pause staggered preloading while actively scrolling or fading a slide
+            const isScrolling =
+                typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+            if (isScrolling || this._hideTimeoutId) {
+                this._stackPreloadTimerId = setTimeout(() => this._scheduleStackPreload(index), 150);
+                return;
+            }
+
+            this._preloadSlide(index);
+            this._scheduleStackPreload(index + 1);
+        }, 60);
     }
 
     /**
@@ -907,17 +941,10 @@ class HeroCarousel {
             window.cancelIdleCallback(this._preloadIdleId);
             this._preloadIdleId = null;
         }
-        // Cancel any deferred idle slide-layer warming frames/timers
-        if (this._warmHandles && this._warmHandles.length > 0) {
-            for (let i = 0; i < this._warmHandles.length; i++) {
-                const handle = this._warmHandles[i];
-                if (handle.type === 'raf' && typeof cancelAnimationFrame === 'function') {
-                    cancelAnimationFrame(handle.id);
-                } else if (handle.type === 'timeout') {
-                    clearTimeout(handle.id);
-                }
-            }
-            this._warmHandles = [];
+        // Cancel any staggered stacked-slide preload timer
+        if (this._stackPreloadTimerId) {
+            clearTimeout(this._stackPreloadTimerId);
+            this._stackPreloadTimerId = null;
         }
         if (this._intersectionObserver) {
             this._intersectionObserver.disconnect();
@@ -1078,84 +1105,6 @@ class HeroCarousel {
     }
 
     /**
-     * Returns true when `index` is the active slide or its immediate previous/next neighbor.
-     * Keeps composited layers bounded to at most 3 slides regardless of carousel size.
-     *
-     * @param {number} index - Slide index to test
-     * @returns {boolean}
-     * @private
-     */
-    _isAdjacentSlide(index) {
-        const count = this._items ? this._items.length : 0;
-        if (count <= 1) return index === 0;
-        if (index === this._currentIndex) return true;
-
-        const nextIdx = (this._currentIndex + 1) % count;
-        const prevIdx = (this._currentIndex - 1 + count) % count;
-        return index === nextIdx || index === prevIdx;
-    }
-
-    /**
-     * Promotes a decoded, preloaded neighbor slide from visibility:hidden to
-     * visibility:visible (still opacity:0 and pointer-events:none) during an
-     * idle frame. Performing layer creation and mask setup off the transition path
-     * ensures D-pad goTo() only flips CSS opacity classes.
-     *
-     * @param {number} index - Slide index to composite-warm
-     * @private
-     */
-    _scheduleSlideWarm(index) {
-        if (!this._container || !this._decodedAssets[index] || !this._isAdjacentSlide(index)) return;
-        // Defer layer warming while an active crossfade or scroll animation is running
-        if (this._hideTimeoutId) return;
-        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
-            return;
-        }
-
-        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
-        const slide = items[index];
-        if (!slide || slide.style.visibility === 'visible') return;
-
-        const entry = { type: typeof requestAnimationFrame === 'function' ? 'raf' : 'timeout', id: null };
-        const runWarm = () => {
-            const pos = this._warmHandles ? this._warmHandles.indexOf(entry) : -1;
-            if (pos !== -1) this._warmHandles.splice(pos, 1);
-
-            if (!this._container || this._hideTimeoutId || !this._isAdjacentSlide(index)) return;
-            if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
-                return;
-            }
-            if (slide.style.visibility !== 'visible') {
-                if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlide');
-                slide.style.visibility = 'visible';
-            }
-        };
-
-        if (entry.type === 'raf') {
-            entry.id = requestAnimationFrame(runWarm);
-        } else {
-            entry.id = setTimeout(runWarm, 16);
-        }
-        this._warmHandles.push(entry);
-    }
-
-    /**
-     * Warms immediately adjacent neighbor slides when transitioning settles.
-     * @private
-     */
-    _warmAdjacentSlides() {
-        const count = this._items ? this._items.length : 0;
-        if (count <= 1) return;
-
-        const nextIdx = (this._currentIndex + 1) % count;
-        const prevIdx = (this._currentIndex - 1 + count) % count;
-        this._scheduleSlideWarm(nextIdx);
-        if (prevIdx !== nextIdx) {
-            this._scheduleSlideWarm(prevIdx);
-        }
-    }
-
-    /**
      * Preload images for a specific slide by index
      * Loads backdrop and logo images so they're ready for display
      * @private
@@ -1171,14 +1120,13 @@ class HeroCarousel {
         if (this._preloadedSlides[index]) return;
         this._preloadedSlides[index] = true;
 
-        // Track remaining async assets (backdrop and optional logo) so we only
-        // composite-warm the slide layer once all textures are decoded.
+        // Track remaining async assets (backdrop and optional logo) so we can
+        // record once both textures have decoded off the main transition path.
         let pendingAssets = 0;
         const markAssetReady = () => {
             pendingAssets--;
             if (pendingAssets <= 0) {
                 this._decodedAssets[index] = true;
-                this._scheduleSlideWarm(index);
             }
         };
 
@@ -1365,21 +1313,18 @@ class HeroCarousel {
             }
         }
 
-        // Slide had no deferred backdrop/logo left to load — mark immediately warmable
+        // Slide had no deferred backdrop/logo left to load — mark immediately decoded
         if (pendingAssets === 0) {
             this._decodedAssets[index] = true;
-            this._scheduleSlideWarm(index);
         }
     }
 
     /**
-     * Schedules an idle preload sweep for the slides surrounding the active
-     * index (previous, current, next, next+1).
+     * Schedules an idle preload sweep for slides around the active index.
+     * Supports configurations beyond the initial 5 stacked preloads while
+     * keeping goTo() strictly a class toggle.
      *
-     * This is the ONLY place backdrops are preloaded. goTo() never touches the
-     * network or decodes images, so a slide change is a pure class toggle.
-     *
-     * @param {number} [delay=300] - Quiet window required before the sweep runs
+     * @param {number} [delay=800] - Quiet window required before the sweep runs
      * @private
      */
     _scheduleIdlePreload(delay = 800) {
@@ -1414,9 +1359,6 @@ class HeroCarousel {
                     this._preloadSlide(0);
                 }
             }
-
-            // Warm any already-decoded adjacent slide layers while idle
-            this._warmAdjacentSlides();
 
             // Ambient BlurHash fills are decoded here, outside any transition.
             const isBlurhashFill =
@@ -1467,25 +1409,9 @@ class HeroCarousel {
         const prevItem = items[prevIndex];
         const nextItem = items[index];
 
-        // Hide all non-transition slides immediately to free GPU memory.
-        // Guarded writes: already-hidden slides are skipped so a keypress never
-        // invalidates style for slides that are off-screen anyway.
-        for (let i = 0; i < items.length; i++) {
-            if (i !== this._currentIndex && i !== index && items[i].style.visibility !== 'hidden') {
-                items[i].style.visibility = 'hidden';
-            }
-        }
-
-        // Guarded visibility write: idle-warmed neighbor slides are already
-        // visibility:visible (at opacity:0) so this mutates style only on a
-        // cold fast-skip before idle warming completes.
-        if (nextItem.style.visibility !== 'visible') {
-            nextItem.style.visibility = 'visible';
-        }
-
-        // Update active classes — compositor layer promotion (.hero-item.active,
-        // .hero-content, .hero-backdrop) stays declarative in CSS without inline
-        // willChange churn that tears down GPU surfaces between presses.
+        // Pure class toggle: slides stay pre-stacked at opacity:0 with static
+        // CSS compositor promotion, so switching active classes triggers zero
+        // visibility flips, mask re-rasterization, or GPU layer rebuilds.
         prevItem.classList.remove('active');
         dots[prevIndex].classList.remove('active');
 
@@ -1494,22 +1420,13 @@ class HeroCarousel {
         nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
-        // After the 1000ms CSS crossfade settles, prune slides outside the
-        // immediate [prev, current, next] window and idle-warm the new neighbors.
+        // Track active 1000ms crossfade window so idle BlurHash / preload sweeps wait.
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
             this._hideTimeoutId = null;
-            if (!this._container) return;
-
-            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.settleTransition');
-            if (!this._isAdjacentSlide(prevIndex) && prevItem.style.visibility !== 'hidden') {
-                prevItem.style.visibility = 'hidden';
-            }
-            this._warmAdjacentSlides();
         }, 1050);
 
-        // Extend the preload & layer-warming window only after the 1000ms crossfade
-        // settles so backdrop swaps and logo sizing never contend mid-transition.
+        // Extend any sliding-window preload (>5 slides) / BlurHash fill past crossfade.
         this._scheduleIdlePreload(1200);
 
         // Restart timer on slide switch without stripping/re-adding .active on the
