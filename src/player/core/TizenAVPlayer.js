@@ -12,6 +12,7 @@ import { logger } from '../../utils/Logger.js';
 import { detectTizenVersion, getDeviceCapabilities } from '../../api/profiles/TizenProfile.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { customHeaders } from '../../utils/CustomHeaders.js';
+import { tizenAdapter } from '../../tizen/TizenAdapter.js';
 
 const log = logger.create('TizenAVPlayer');
 
@@ -574,6 +575,13 @@ export class TizenAVPlayer {
         }
 
         log.info('Starting playback');
+
+        // Abort any in-flight boot compositor warmup cycle so native AVPlay state
+        // cleanly returns to NONE before real playback calls avplay.open().
+        if (tizenAdapter && typeof tizenAdapter.abortWarmup === 'function' && tizenAdapter.abortWarmup()) {
+            log.info('Aborted active Tizen compositor warmup before opening playback');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
 
         try {
             // Track if we were actually active to know if a cleanup sleep is needed

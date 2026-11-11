@@ -73,6 +73,11 @@ class TizenAdapter {
         this._isTizen = false;
         this._tizenVersion = null;
         this._deviceInfo = null;
+        this._compositorWarmed = false;
+        this._compositorWarmupProbe = null;
+        this._warmupActive = false;
+        this._warmupTimerId = null;
+        this._warmupGen = 0;
 
         // Detect Tizen environment
         this._detectPlatform();
@@ -158,6 +163,90 @@ class TizenAdapter {
      *
      * @returns {boolean} True when Tizen warmup executed or had already run
      */
+    /**
+     * Resolves the local packaged URL for assets/warmup.mp4 without being
+     * corrupted by hash-router fragments or file:// origin quirks on Tizen.
+     * Mirrors i18n._getUrl() directory resolution.
+     *
+     * @returns {string} Resolved URL pointing to assets/warmup.mp4
+     * @private
+     */
+    _resolveWarmupVideoUrl() {
+        let base = '';
+        if (typeof window !== 'undefined' && window.location) {
+            const href = window.location.href || '';
+            const protocol = window.location.protocol || '';
+
+            if (protocol === 'file:') {
+                // Strip hash/query before slicing directory so deep links don't corrupt path
+                const pathOnly = href.split('#')[0].split('?')[0];
+                base = pathOnly.substring(0, pathOnly.lastIndexOf('/') + 1);
+            } else if (window.location.origin && window.location.pathname) {
+                const pageUrl = window.location.origin + window.location.pathname;
+                base = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
+            }
+        }
+        return base + 'assets/warmup.mp4';
+    }
+
+    /**
+     * Returns true while a boot-time AVPlay hardware warmup cycle is in flight.
+     * @returns {boolean}
+     */
+    isWarmupActive() {
+        return !!this._warmupActive;
+    }
+
+    /**
+     * Aborts any in-flight boot AVPlay warmup immediately and releases native
+     * AVPlay resources so real media playback can call avplay.open() cleanly.
+     *
+     * @returns {boolean} true if an active warmup cycle was cancelled
+     */
+    abortWarmup() {
+        if (this._warmupTimerId) {
+            clearTimeout(this._warmupTimerId);
+            this._warmupTimerId = null;
+        }
+        if (!this._warmupActive) {
+            return false;
+        }
+        // Advance generation token so late async prepareAsync callbacks cannot touch a
+        // subsequent real video session opened after abortWarmup() returns.
+        this._warmupGen += 1;
+        this._warmupActive = false;
+
+        // Release native AVPlay state cleanly before returning control to TizenAVPlayer
+        const avplay =
+            typeof window !== 'undefined' ? (window.webapis && window.webapis.avplay) || (window.tizen && window.tizen.avplay) : null;
+        if (avplay) {
+            try {
+                if (typeof avplay.setListener === 'function') {
+                    avplay.setListener(null);
+                }
+            } catch (_) {
+                // Ignore listener cleanup errors during abort
+            }
+            try {
+                if (typeof avplay.stop === 'function') {
+                    avplay.stop();
+                }
+            } catch (_) {
+                // Ignore stop errors if still preparing
+            }
+            try {
+                if (typeof avplay.close === 'function') {
+                    avplay.close();
+                }
+            } catch (_) {
+                // Ignore close errors if already NONE
+            }
+        }
+
+        log.info('AVPlay hardware warmup aborted for real playback');
+        return true;
+    }
+
     warmupCompositor() {
         // Hard isolation guard — never touch hardware plane primitives off Tizen
         if (!this._isTizen) {
@@ -167,52 +256,6 @@ class TizenAdapter {
             return true;
         }
         this._compositorWarmed = true;
-
-        // Read-only AVPlay state probe — avoids avplay.open('about:blank') which
-        // fails or stalls native pipelines with a fake URL. Holding the persistent
-        // plugin <object> below plus real micro-media decode handles hardware warmup.
-        try {
-            const avplay = typeof window !== 'undefined' ? window.webapis?.avplay || window.tizen?.avplay : null;
-            if (avplay && typeof avplay.getState === 'function') {
-                avplay.getState();
-            }
-        } catch (_) {
-            // Hardware plugin unavailable in simulator or older TV firmwares before open()
-        }
-
-        // Real 1-frame 16x16 baseline H.264 MP4 (~1.4KB) used once per cold boot to
-        // spin up Chromium's hardware video decoder and high-FPS compositor path
-        // without opening a network socket or spawning native AVPlay errors.
-        const MICRO_VIDEO_DATA_URI =
-            'data:video/mp4;base64,' +
-            'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMPbW9vdgAAAGxtdmhkAAAAAAAA' +
-            'AAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAA' +
-            'AAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRr' +
-            'aGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAA' +
-            'AAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAA' +
-            'AAEAAAPoAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAA' +
-            'AAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYA' +
-            'AAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAA' +
-            'AQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAA' +
-            'AAAAAAEAAABIAAAASAAAAAAAAAABFUxhdmM2Mi4zMC4xMDAgbGlieDI2NAAAAAAAAAAAAAAA' +
-            'GP//AAAALmF2Y0MBQsAe/+EAFmdCwB7ZHsBEAAADAAQAAAMACDxYuSABAAVoy4PLIAAAABBw' +
-            'YXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABPAAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAABA' +
-            'AAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAJ4AAAAAQAAABRz' +
-            'dGNvAAAAAAAAAAEAAAM/AAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRp' +
-            'cmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4x' +
-            'My4xMDIAAAAIZnJlZQAAAoBtZGF0AAACYgYF//9e3EXpvebZSLeWLNgg2SPu73gyNjQgLSBj' +
-            'b3JlIDE2NSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjUg' +
-            'LSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0w' +
-            'IHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcg' +
-            'cHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFf' +
-            'bWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tp' +
-            'cD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEg' +
-            'c2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9j' +
-            'b21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50' +
-            'PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2th' +
-            'aGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFw' +
-            'bWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAAOZYiEBX///w9F' +
-            'AAFC34A=';
 
         // Wake the browser audio HAL / WebAudio thread silently so first playback
         // or mixer transitions do not stall the UI compositor later.
@@ -249,106 +292,148 @@ class TizenAdapter {
             // AudioContext blocked or unavailable in headless/stub environments
         }
 
-        if (typeof document === 'undefined' || !document.body) {
-            return true;
+        if (typeof document !== 'undefined' && document.body) {
+            // Helper for off-view 1x1 hidden layer styling without layout impact
+            const applyWarmupStyle = (el) => {
+                el.setAttribute('aria-hidden', 'true');
+                el.style.position = 'fixed';
+                el.style.top = '0px';
+                el.style.left = '0px';
+                el.style.width = '1px';
+                el.style.height = '1px';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+                el.style.zIndex = '-1';
+            };
+
+            try {
+                // Keep a persistent 1x1 AVPlayer object mounted in the body so Tizen
+                // retains its native video-plane compositor mode across navigation.
+                const existingProbe =
+                    typeof document.getElementById === 'function'
+                        ? document.getElementById('litefin-avplay-warmup')
+                        : null;
+                if (!existingProbe) {
+                    const probe = document.createElement('object');
+                    probe.id = 'litefin-avplay-warmup';
+                    probe.type = 'application/avplayer';
+                    applyWarmupStyle(probe);
+                    document.body.appendChild(probe);
+                    this._compositorWarmupProbe = probe;
+                } else {
+                    this._compositorWarmupProbe = existingProbe;
+                }
+            } catch (err) {
+                log.debug('TizenAdapter: Failed to mount AVPlayer warmup <object>', err);
+            }
         }
 
-        // Helper for off-view 1x1 hidden layer styling without layout impact
-        const applyWarmupStyle = (el) => {
-            el.setAttribute('aria-hidden', 'true');
-            el.style.position = 'fixed';
-            el.style.top = '0px';
-            el.style.left = '0px';
-            el.style.width = '1px';
-            el.style.height = '1px';
-            el.style.opacity = '0';
-            el.style.pointerEvents = 'none';
-            el.style.zIndex = '-1';
-        };
-
+        // Execute a real native C++ AVPlayManager open -> setDisplayRect -> prepareAsync -> play
+        // -> stop -> close cycle against the local 1-frame 64x64 black warmup.mp4 asset so WAM
+        // promotes the WebView to its 60Hz hardware multimedia compositor plane on cold boot.
         try {
-            // Keep a persistent 1x1 AVPlayer object mounted in the body so Tizen
-            // retains its native video-plane compositor mode across navigation
-            // instead of dropping back to software/throttled composition.
-            const existingProbe =
-                typeof document.getElementById === 'function'
-                    ? document.getElementById('litefin-avplay-warmup')
-                    : null;
-            if (!existingProbe) {
-                const probe = document.createElement('object');
-                probe.id = 'litefin-avplay-warmup';
-                probe.type = 'application/avplayer';
-                applyWarmupStyle(probe);
-                document.body.appendChild(probe);
-                this._compositorWarmupProbe = probe;
-            } else {
-                this._compositorWarmupProbe = existingProbe;
+            const avplay =
+                typeof window !== 'undefined' ? (window.webapis && window.webapis.avplay) || (window.tizen && window.tizen.avplay) : null;
+            const hasFullPipeline =
+                avplay &&
+                typeof avplay.open === 'function' &&
+                typeof avplay.setDisplayRect === 'function' &&
+                typeof avplay.prepareAsync === 'function' &&
+                typeof avplay.play === 'function' &&
+                typeof avplay.stop === 'function' &&
+                typeof avplay.close === 'function';
+
+            if (!hasFullPipeline) {
+                if (avplay && typeof avplay.getState === 'function') {
+                    avplay.getState();
+                }
+                log.debug('TizenAdapter: AVPlay prepareAsync unavailable — basic warmup executed');
+                return true;
             }
 
-            // Decode a genuine 1-frame muted inline MP4 inside a hidden 1x1 <video>,
-            // pause right after the play promise settles, and detach so decoder
-            // slots remain completely free for real media playback.
-            const existingVideo =
-                typeof document.getElementById === 'function'
-                    ? document.getElementById('litefin-video-warmup')
-                    : null;
-            if (!existingVideo) {
-                const video = document.createElement('video');
-                video.id = 'litefin-video-warmup';
-                video.muted = true;
-                video.playsInline = true;
-                video.preload = 'auto';
-                if (typeof video.setAttribute === 'function') {
-                    video.setAttribute('muted', '');
-                    video.setAttribute('playsinline', '');
+            // Never clobber an active real playback session if somehow open already
+            let currentState = 'NONE';
+            try {
+                if (typeof avplay.getState === 'function') {
+                    currentState = avplay.getState();
                 }
-                applyWarmupStyle(video);
-                video.src = MICRO_VIDEO_DATA_URI;
-                document.body.appendChild(video);
+            } catch (_) {
+                currentState = 'NONE';
+            }
+            if (currentState === 'PLAYING' || currentState === 'PAUSED' || currentState === 'READY') {
+                log.debug(`TizenAdapter: Skipping AVPlay warmup because state is already ${currentState}`);
+                return true;
+            }
 
-                let videoCleaned = false;
-                let fallbackTimerId = null;
-                const cleanupVideo = () => {
-                    if (videoCleaned) return;
-                    videoCleaned = true;
-                    if (fallbackTimerId) {
-                        clearTimeout(fallbackTimerId);
-                        fallbackTimerId = null;
-                    }
-                    try {
-                        if (typeof video.pause === 'function') {
-                            video.pause();
-                        }
-                    } catch (_) {
-                        // Safe ignore during teardown
-                    }
-                    if (video.parentNode) {
-                        video.parentNode.removeChild(video);
-                    }
-                };
+            const warmupUrl = this._resolveWarmupVideoUrl();
+            const warmupGen = ++this._warmupGen;
+            this._warmupActive = true;
+            let cycleClosed = false;
 
-                // Guarantee bounded teardown even if the media pipeline never resolves
-                fallbackTimerId = setTimeout(cleanupVideo, 400);
+            const finishWarmup = (reason) => {
+                // Ignore stale callbacks once abortWarmup() has superseded this warmup run
+                if (cycleClosed || this._warmupGen !== warmupGen) return;
+                cycleClosed = true;
+                if (this._warmupTimerId) {
+                    clearTimeout(this._warmupTimerId);
+                    this._warmupTimerId = null;
+                }
+                this._warmupActive = false;
 
+                // Teardown native decoder session cleanly to free the single hardware slot
                 try {
-                    const playResult = typeof video.play === 'function' ? video.play() : null;
-                    if (playResult && typeof playResult.then === 'function') {
-                        playResult.then(cleanupVideo, cleanupVideo);
-                    } else if (typeof requestAnimationFrame === 'function') {
-                        // Legacy Chromium/WebKit engines return undefined from video.play()
-                        requestAnimationFrame(() => {
-                            requestAnimationFrame(cleanupVideo);
-                        });
-                    } else {
-                        cleanupVideo();
+                    if (typeof avplay.setListener === 'function') {
+                        avplay.setListener(null);
                     }
                 } catch (_) {
-                    cleanupVideo();
+                    // Safe ignore on firmwares without active listener
                 }
-            }
+                try {
+                    avplay.stop();
+                } catch (_) {
+                    // Safe ignore if prepare failed before entering READY/PLAYING
+                }
+                try {
+                    avplay.close();
+                } catch (_) {
+                    // Safe ignore if already NONE
+                }
+                log.info(`AVPlay hardware warmup closed (${reason})`);
+            };
 
-            log.debug('TizenAdapter: Micro-video + AudioContext compositor warmup executed');
+            const onPrepared = () => {
+                if (!this._warmupActive || this._warmupGen !== warmupGen) {
+                    finishWarmup('aborted before prepareAsync resolved');
+                    return;
+                }
+                try {
+                    avplay.play();
+                    log.info('AVPlay hardware warmup prepareAsync + play started');
+                    // Allow a brief 50ms hardware frame pass before stopping and freeing the decoder
+                    this._warmupTimerId = setTimeout(() => {
+                        this._warmupTimerId = null;
+                        finishWarmup('completed 50ms play cycle');
+                    }, 50);
+                } catch (playErr) {
+                    finishWarmup(`play error: ${playErr && playErr.message ? playErr.message : String(playErr || 'unknown')}`);
+                }
+            };
+
+            const onPrepareError = (prepErr) => {
+                if (this._warmupGen !== warmupGen) return;
+                finishWarmup(`prepareAsync error: ${prepErr && prepErr.message ? prepErr.message : String(prepErr || 'unknown')}`);
+            };
+
+            try {
+                log.info(`Starting AVPlay hardware warmup (${warmupUrl})`);
+                avplay.open(warmupUrl);
+                avplay.setDisplayRect(0, 0, 1, 1);
+                avplay.prepareAsync(onPrepared, onPrepareError);
+            } catch (openErr) {
+                finishWarmup(`open/prepareAsync threw: ${openErr && openErr.message ? openErr.message : String(openErr || 'unknown')}`);
+            }
         } catch (err) {
+            this._warmupActive = false;
             log.debug('TizenAdapter: Compositor warmup skipped cleanly', err);
         }
 
