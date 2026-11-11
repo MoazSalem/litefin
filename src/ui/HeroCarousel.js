@@ -1420,10 +1420,16 @@ class HeroCarousel {
         nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
+        // Timestamp the synchronous portion only: everything after this point is
+        // timer/rAF work, so a long task attributed to a later mark is deferred
+        // paint/compositor cost — not class-toggle cost.
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:classes');
+
         // Track active 1000ms crossfade window so idle BlurHash / preload sweeps wait.
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
             this._hideTimeoutId = null;
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:crossfadeSettled');
         }, 1050);
 
         // Extend any sliding-window preload (>5 slides) / BlurHash fill past crossfade.
@@ -1432,6 +1438,8 @@ class HeroCarousel {
         // Restart timer on slide switch without stripping/re-adding .active on the
         // brand-new dot 40ms later, preventing a duplicate indicator width transition.
         this._startAutoScroll({ resetIndicator: false });
+
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:deferredScheduled');
     }
 
     /**
