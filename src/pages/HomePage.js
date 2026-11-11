@@ -1747,7 +1747,7 @@ class HomePage extends Page {
             // prefetcher to progressively mount them as the user scrolls down.
             if (this._deferredDescriptors.length > 0) {
                 this._setupHomeScrollObserver();
-                this._scheduleHomeIdlePrefetch(2000);
+                this._scheduleHomeIdlePrefetch(2500);
             } else {
                 // All rows were rendered eagerly (short page or target near bottom)
                 this._prewarmScrollCache();
@@ -2197,7 +2197,7 @@ class HomePage extends Page {
         const isScrollAnimating =
             (scrollController && scrollController.isAnimating) ||
             (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating);
-        const isUserActive = idleGate.isUserActive(1500);
+        const isUserActive = idleGate.isUserActive(2000);
 
         if (!autoFocus && (isScrollAnimating || isUserActive)) {
             const peekStart = this._nextDeferredDescIndex;
@@ -2206,8 +2206,8 @@ class HomePage extends Page {
             for (const d of peekBatch) {
                 this._prefetchRow(d);
             }
-            // Defer execution until the user is quiet and animations settle
-            this._scheduleHomeIdlePrefetch(1500);
+            // Defer execution until the user has been quiet for at least 2.5s
+            this._scheduleHomeIdlePrefetch(2500);
             return;
         }
 
@@ -2376,10 +2376,10 @@ class HomePage extends Page {
      * Gated behind idleGate so DOM mounting and scroll-cache prewarming
      * never collide with active user interactions, D-pad navigation, or animations.
      *
-     * @param {number} [delay=1500] - Quiet threshold in ms before triggering prefetch
+     * @param {number} [delay=2500] - Quiet threshold in ms before triggering prefetch
      * @private
      */
-    _scheduleHomeIdlePrefetch(delay = 1500) {
+    _scheduleHomeIdlePrefetch(delay = 2500) {
         if (this._homeIdlePrefetchTask) {
             idleGate.cancel(this._homeIdlePrefetchTask);
             this._homeIdlePrefetchTask = null;
@@ -2425,10 +2425,9 @@ class HomePage extends Page {
         const registerNext = () => {
             this._homeIdlePrefetchTimer = null;
             if (!this._isMounted) return;
-            // 600ms of quiet is enough for a 7-row Home screen to mount its
-            // remaining rows before the user reaches the bottom. The idle gate
-            // still defers rendering while scrollController.isAnimating is true.
-            this._scheduleHomeIdlePrefetch(600);
+            // Require a full 2500ms quiet window before mounting the next batch so
+            // hero carousel browsing and relaxed 1-second D-pad pauses stay hitch-free.
+            this._scheduleHomeIdlePrefetch(2500);
         };
 
         if (wait > 0) {

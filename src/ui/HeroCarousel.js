@@ -22,6 +22,7 @@ import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratings
 import { customHeaders } from '../utils/CustomHeaders.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { idleGate } from '../utils/IdleGate.js';
+import { imageCache } from '../utils/ImageCache.js';
 import { markPerfOperation } from '../utils/PerfMarker.js';
 
 const log = logger.create('HeroCarousel');
@@ -37,6 +38,8 @@ class HeroCarousel {
         const savedInterval = storage.getItem('pref:heroCarouselInterval');
         this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
         this._hideTimeoutId = null;
+        this._indicatorTimeoutId = null;
+        this._indicatorRafId = null;
 
         // Viewport visibility and progressive preloading state tracking
         this._isVisible = true;
@@ -819,13 +822,57 @@ class HeroCarousel {
         // proxy headers are configured (handled inside _preloadSlide).
         this._preloadSlide(0);
 
+        // Pre-warm upcoming slides (up to the first 5 total slides) through
+        // ImageCache's scroll-aware queue so early slide changes hit warm cache.
+        this._prewarmHeroImages();
+
         // ---------------------------------------------------------------------
         // Deferred Sliding Preload Window
         // ---------------------------------------------------------------------
         // Preload only the slides around the active index so 4K backdrops never
         // accumulate in VRAM. The window slides forward after every transition.
         // ---------------------------------------------------------------------
-        this._scheduleIdlePreload(350);
+        this._scheduleIdlePreload(800);
+    }
+
+    /**
+     * Queues up to the first 5 slides' backdrop and logo URLs into ImageCache
+     * so bitmap fetching/decoding spreads gently over idle ticks instead of
+     * stalling the first D-pad slide transitions.
+     *
+     * @private
+     */
+    _prewarmHeroImages() {
+        if (!imageCache || typeof imageCache.preload !== 'function') return;
+
+        const maxSlides = Math.min(5, this._slideItems ? this._slideItems.length : 0);
+        if (maxSlides <= 1) return;
+
+        // Deduplicate URLs across slides 1..4 (slide 0 already loads eagerly above).
+        const urls = [];
+        const seen = Object.create(null);
+        const pushUrl = (url) => {
+            if (!url || seen[url]) return;
+            seen[url] = true;
+            urls.push(url);
+        };
+
+        for (let i = 1; i < maxSlides; i++) {
+            const backdrop = this._slideBackdrops ? this._slideBackdrops[i] : null;
+            if (backdrop && backdrop.dataset && backdrop.dataset.backdrop) {
+                pushUrl(backdrop.dataset.backdrop);
+            }
+
+            const logo = this._slideLogos ? this._slideLogos[i] : null;
+            if (logo) {
+                const logoUrl = (logo.dataset && logo.dataset.src) || logo.getAttribute('src');
+                pushUrl(logoUrl);
+            }
+        }
+
+        if (urls.length > 0) {
+            imageCache.preload(urls);
+        }
     }
 
     /**
@@ -933,25 +980,29 @@ class HeroCarousel {
 
     /**
      * Start the auto-scroll timer
+     * @param {Object} [options={}]
+     * @param {boolean} [options.resetIndicator=true] - Whether to reset an already-active indicator dot
      * @private
      */
-    _startAutoScroll() {
+    _startAutoScroll(options = {}) {
         this._stopAutoScroll();
         if (this._items.length <= 1) return;
 
         // Bypassed if carousel is currently suspended off-screen
         if (this._isVisible === false) return;
 
-        // Reset the visual progress bar to stay in sync with the JS timer
-        // ONLY if animations are enabled AND we are using the 'progress' indicator style.
-        // Static indicators ('lines', 'dots') do not require any animation frames or resets.
+        // Reset the visual progress bar to stay in sync with the JS timer ONLY
+        // when restarting on an already-active dot (e.g. re-focusing carousel).
+        // When goTo() just activated a brand-new dot, avoid stripping/re-adding
+        // .active 40ms later since that triggers a duplicate width transition.
         const indicatorStyle =
             this._indicatorStyle !== null ? this._indicatorStyle : storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
         const isAnimationEnabled =
             this._isAnimationEnabled !== null
                 ? this._isAnimationEnabled
                 : storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
-        if (indicatorStyle === 'progress' && isAnimationEnabled) {
+        const shouldResetIndicator = options.resetIndicator !== false;
+        if (indicatorStyle === 'progress' && isAnimationEnabled && shouldResetIndicator) {
             this._resetIndicatorAnimation();
         }
 
@@ -1191,6 +1242,11 @@ class HeroCarousel {
                     }
                 };
 
+                // Decode off the UI thread whenever supported before starting network fetch
+                if ('decoding' in img) {
+                    img.decoding = 'async';
+                }
+
                 // Trigger network load
                 img.src = effectiveUrl;
 
@@ -1258,6 +1314,9 @@ class HeroCarousel {
              * and adjusts container height once dimensions are ready.
              */
             const applyLogo = (effectiveUrl) => {
+                if ('decoding' in logo) {
+                    logo.decoding = 'async';
+                }
                 logo.onload = finalizeLogo;
                 logo.src = effectiveUrl;
                 if (typeof logo.decode === 'function') {
@@ -1320,7 +1379,7 @@ class HeroCarousel {
      * @param {number} [delay=300] - Quiet window required before the sweep runs
      * @private
      */
-    _scheduleIdlePreload(delay = 300) {
+    _scheduleIdlePreload(delay = 800) {
         // Deduplicate: one pending sweep is enough, it covers the whole window.
         if (this._idlePreloadTask) return;
         if (!this._container || this._items.length === 0) return;
@@ -1328,6 +1387,12 @@ class HeroCarousel {
         this._idlePreloadTask = idleGate.runWhenIdle(() => {
             this._idlePreloadTask = null;
             if (!this._container) return;
+
+            // Keep preloading & height adjustments off the active 1000ms CSS crossfade.
+            if (this._hideTimeoutId) {
+                this._scheduleIdlePreload(350);
+                return;
+            }
 
             const count = this._items.length;
             const start = Math.max(0, this._currentIndex - 1);
@@ -1438,12 +1503,13 @@ class HeroCarousel {
             this._warmAdjacentSlides();
         }, 1050);
 
-        // Extend the preload & layer-warming window in the background outside
-        // the active transition frame.
-        this._scheduleIdlePreload(450);
+        // Extend the preload & layer-warming window only after the 1000ms crossfade
+        // settles so backdrop swaps and logo sizing never contend mid-transition.
+        this._scheduleIdlePreload(1200);
 
-        // Restart timer on navigation without re-querying storage or dots.
-        this._startAutoScroll();
+        // Restart timer on slide switch without stripping/re-adding .active on the
+        // brand-new dot 40ms later, preventing a duplicate indicator width transition.
+        this._startAutoScroll({ resetIndicator: false });
     }
 
     /**

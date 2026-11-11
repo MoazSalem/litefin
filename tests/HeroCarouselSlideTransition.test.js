@@ -330,3 +330,45 @@ test('HeroCarousel: preloads and decodes logo+backdrop off-thread, idle-warms ad
         carousel.destroy();
     }
 });
+
+test('HeroCarousel: prewarms up to 5 slides via ImageCache and keeps progress dot active smoothly across goTo()', async () => {
+    const { imageCache } = await import('../src/utils/ImageCache.js');
+    const preloadedBatches = [];
+    const origPreload = imageCache.preload;
+    imageCache.preload = (urls) => {
+        preloadedBatches.push(urls);
+    };
+
+    storageMap.clear();
+    storageMap.set('pref:heroCarouselIndicatorStyle', 'progress');
+    storageMap.set('pref:heroCarouselIndicatorAnimation', 'true');
+    storageMap.set('pref:heroCarouselStyle', 'immersive-performance');
+
+    const items = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ Id: `item-${i}`, Name: `Item ${i}` }));
+    const carousel = new HeroCarousel({ items });
+    const { container, dots } = buildCarouselFixture(7);
+
+    try {
+        carousel.init(container);
+
+        assert.equal(preloadedBatches.length, 1, 'init() must call imageCache.preload once');
+        const batch = preloadedBatches[0];
+        // Slides 1..4 (up to slide 5 total) = 4 backdrops + 4 logos = 8 unique URLs; slides 5..6 excluded
+        assert.ok(batch.includes('http://test/backdrop-1.jpg'));
+        assert.ok(batch.includes('http://test/backdrop-4.jpg'));
+        assert.ok(!batch.includes('http://test/backdrop-5.jpg'), 'Must cap prewarm at first 5 slides');
+        assert.ok(batch.includes('http://test/logo-4.png'));
+        assert.ok(!batch.includes('http://test/logo-5.png'), 'Must cap logo prewarm at first 5 slides');
+
+        carousel.goTo(1);
+        assert.equal(dots[1].classList.contains('active'), true, 'goTo() must keep new dot active without stripping');
+        assert.equal(
+            carousel._indicatorTimeoutId,
+            null,
+            'goTo() must NOT arm the 40ms dot reset timer on a newly activated slide'
+        );
+    } finally {
+        imageCache.preload = origPreload;
+        carousel.destroy();
+    }
+});

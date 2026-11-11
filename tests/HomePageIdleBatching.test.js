@@ -111,8 +111,8 @@ test('HomePage: consecutive deferred batches are spaced by a real-time gap', () 
         'Follow-up must wait via setTimeout before registering the next idle task'
     );
     assert.ok(
-        followupBody.includes('_scheduleHomeIdlePrefetch(600)'),
-        'Follow-up must register the next idle prefetch only after the gap'
+        followupBody.includes('_scheduleHomeIdlePrefetch(2500)'),
+        'Follow-up must register the next idle prefetch with a 2500ms quiet window'
     );
 
     // A finished batch must record its completion time and use the follow-up

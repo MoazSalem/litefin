@@ -87,7 +87,7 @@ test('HeroCarousel: slide preloads are deduplicated and idle-scheduled', () => {
         'Backdrop commit must use img.decode() before painting'
     );
 
-    const sweepBody = sliceBetween(source, '_scheduleIdlePreload(delay = 300) {', 'next() {');
+    const sweepBody = sliceBetween(source, '_scheduleIdlePreload(delay = 800) {', 'next() {');
     assert.ok(sweepBody.includes('idleGate.runWhenIdle('), 'Preload sweep must run through idleGate');
     assert.ok(
         sweepBody.includes('this._currentIndex - 1') && sweepBody.includes('this._currentIndex + 2'),
@@ -267,7 +267,7 @@ test('HomePage: deferred batch cache work runs in one deduplicated idle task', (
     );
 });
 
-test('HomePage: deferred batch follow-up uses a 600ms idle threshold', () => {
+test('HomePage: deferred batch follow-up uses a 2500ms idle threshold', () => {
     const source = read('src/pages/HomePage.js');
     const followupBody = sliceBetween(
         source,
@@ -276,8 +276,8 @@ test('HomePage: deferred batch follow-up uses a 600ms idle threshold', () => {
     );
 
     assert.ok(
-        followupBody.includes('_scheduleHomeIdlePrefetch(600)'),
-        'Follow-up prefetch must require 600ms of quiet'
+        followupBody.includes('_scheduleHomeIdlePrefetch(2500)'),
+        'Follow-up prefetch must require 2500ms of quiet'
     );
     assert.ok(
         followupBody.includes('scrollController.isAnimating') ||
