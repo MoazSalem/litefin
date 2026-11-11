@@ -41,6 +41,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { idleGate } from '../utils/IdleGate.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
@@ -2211,6 +2212,7 @@ class HomePage extends Page {
         }
 
         this._isDeferredLoading = true;
+        if (typeof markPerfOperation === 'function') markPerfOperation('HomePage._loadNextDeferredBatch');
 
         // Slice out the next batch from the deferred descriptor queue.
         // Explicit user triggers (autoFocus) consume a small batch so the cursor

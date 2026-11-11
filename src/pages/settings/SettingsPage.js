@@ -21,6 +21,7 @@ import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import FontLoader from '../../utils/FontLoader.js';
 import { getFallbackFontId, getFallbackFontName } from '../../utils/FallbackFonts.js';
 import { storage } from '../../utils/StorageService.js';
+import { markPerfOperation } from '../../utils/PerfMarker.js';
 import { logger } from '../../utils/Logger.js';
 import { i18n } from '../../utils/i18n.js';
 import { availableLanguages } from '../../locales/languages.js';
@@ -134,6 +135,7 @@ class SettingsPage extends Page {
     }
 
     async onInit() {
+        if (typeof markPerfOperation === 'function') markPerfOperation('SettingsPage.onInit');
         // Schedule server fallback font discovery outside the initial mount frame.
         // Running it inline fires XHR + DOM option updates during route paint;
         // font pickers also refresh on-demand via resolveAsyncDropdownOptions on click.
@@ -356,6 +358,7 @@ class SettingsPage extends Page {
     }
 
     render() {
+        if (typeof markPerfOperation === 'function') markPerfOperation('SettingsPage.render');
         const tabs = this._getTabs();
 
         return `

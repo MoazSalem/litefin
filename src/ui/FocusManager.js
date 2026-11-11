@@ -12,6 +12,7 @@ import { logger } from '../utils/Logger.js';
 import { spatialNavigator } from './SpatialNavigator.js';
 import { scrollController } from './ScrollController.js';
 import { storage } from '../utils/StorageService.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 
 const log = logger.create('FocusManager');
 
@@ -829,6 +830,7 @@ class FocusManager {
      * @param {string} direction
      */
     _leaveSection(direction) {
+        if (typeof markPerfOperation === 'function') markPerfOperation('FocusManager._leaveSection');
         const config = this._sections.get(this._activeSection);
         if (!config) return;
 
@@ -947,6 +949,8 @@ class FocusManager {
     focusElement(element, options = {}) {
         // Abort if element is invalid or no longer connected to the active DOM tree
         if (!element || !document.contains(element)) return;
+
+        if (typeof markPerfOperation === 'function') markPerfOperation('FocusManager.focusElement');
 
         // ====================================================================
         // MODAL FOCUS TRAP ENFORCEMENT

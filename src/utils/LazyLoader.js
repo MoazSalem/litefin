@@ -13,6 +13,7 @@ import BlurHashDecoder from './BlurHashDecoder.js';
 import { storage } from './StorageService.js';
 import { escapeHtml } from './Utils.js';
 import { customHeaders } from './CustomHeaders.js';
+import { markPerfOperation } from './PerfMarker.js';
 
 const log = logger.create('LazyLoader');
 
@@ -201,18 +202,33 @@ class LazyLoader {
         if ('IntersectionObserver' in window) {
             this.observer = new IntersectionObserver(
                 (entries, observer) => {
+                    let markedIntersect = false;
                     entries.forEach((entry) => {
-                        const target = entry.target;
-                        if (!entry.isIntersecting) return;
+                        if (entry.isIntersecting) {
+                            const target = entry.target;
+                            if (!target || target.isConnected === false) return;
 
-                        // Defer image/row loading while a scroll animation is in flight so
-                        // img.src assignments and class mutations never stall scroll frames.
-                        if (this._isScrolling()) {
-                            this._enqueuePendingElement(target);
-                            return;
+                            // Defer image/row loading while a scroll animation is in flight so
+                            // img.src assignments and class mutations never stall scroll frames.
+                            if (this._isScrolling()) {
+                                this._enqueuePendingElement(target);
+                                return;
+                            }
+
+                            if (!markedIntersect) {
+                                markedIntersect = true;
+                                if (typeof markPerfOperation === 'function') {
+                                    markPerfOperation('LazyLoader.intersect');
+                                }
+                            }
+
+                            this._dequeuePendingElement(target);
+                            if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-lazy-row')) {
+                                this._loadRow(target);
+                            } else {
+                                this._loadImage(target);
+                            }
                         }
-
-                        this._loadIntersectingTarget(target);
                     });
                 },
                 {
@@ -300,6 +316,20 @@ class LazyLoader {
     }
 
     /**
+     * Removes a single target from the pending scroll queue if already present.
+     *
+     * @param {HTMLElement} target - Element to dequeue
+     * @private
+     */
+    _dequeuePendingElement(target) {
+        for (let i = this._pendingElements.length - 1; i >= 0; i--) {
+            if (this._pendingElements[i] === target) {
+                this._pendingElements.splice(i, 1);
+            }
+        }
+    }
+
+    /**
      * Trigger loading for a single intersecting row or image element and remove
      * it from any pending queue entry so it cannot load twice.
      *
@@ -310,11 +340,7 @@ class LazyLoader {
         if (!target || target.isConnected === false) return;
 
         // Drop from the deferred queue if it loaded through an eager path
-        for (let i = this._pendingElements.length - 1; i >= 0; i--) {
-            if (this._pendingElements[i] === target) {
-                this._pendingElements.splice(i, 1);
-            }
-        }
+        this._dequeuePendingElement(target);
 
         if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-lazy-row')) {
             this._loadRow(target);
@@ -369,6 +395,7 @@ class LazyLoader {
                 return;
             }
 
+            if (typeof markPerfOperation === 'function') markPerfOperation('LazyLoader.flushPending');
             let processedCount = 0;
             while (this._pendingElements.length > 0 && processedCount < this._maxPendingPerFrame) {
                 const target = this._pendingElements.shift();

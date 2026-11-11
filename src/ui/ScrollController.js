@@ -25,6 +25,7 @@ import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { imageCache } from '../utils/ImageCache.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 import {
     createSpring,
     springStep,
@@ -703,6 +704,7 @@ class ScrollController {
      * @param {'vertical'|'horizontal'} [direction='vertical'] - Scroll axis
      */
     smoothScrollTo(container, targetScroll, duration = null, direction = 'vertical') {
+        if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.smoothScrollTo');
         const isVertical = direction === 'vertical';
         const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';

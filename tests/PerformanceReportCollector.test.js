@@ -73,6 +73,7 @@ globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 
 // Dynamic module imports
 const { storage } = await import('../src/utils/StorageService.js');
+const { markPerfOperation } = await import('../src/utils/PerfMarker.js');
 const { PerformanceReportCollector } = await import('../src/ui/diagnostics/PerformanceReportCollector.js');
 const {
     isPerformanceCollectorEnabled,
@@ -384,5 +385,89 @@ test('Localization: en-us.json and en-gb.json contain performance collector keys
     for (const key of requiredKeys) {
         assert.ok(enUs[key], `en-us.json must define key: ${key}`);
         assert.ok(enGb[key], `en-gb.json must define key: ${key}`);
+    }
+});
+
+test('PerformanceReportCollector: Separates pre-start long tasks from active blocking metrics', () => {
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    // Buffered cold-boot entry occurring before collector._startTime
+    collector._recordLongTask({
+        startTime: collector._startTime - 500,
+        duration: 420,
+        attribution: [{ containerType: 'window', containerName: 'boot' }]
+    });
+
+    // Normal post-start long task
+    collector._recordLongTask({
+        startTime: collector._startTime + 250,
+        duration: 85,
+        attribution: [{ containerType: 'window', containerName: 'runtime' }]
+    });
+
+    const report = collector.buildReport();
+
+    assert.equal(report.json.longTasks.totalDetected, 1, 'Only post-start tasks count in longTasks.totalDetected');
+    assert.equal(report.json.longTasks.totalBlockingTimeMs, 85, 'Pre-start freezes must not inflate totalBlockingTimeMs');
+    assert.equal(report.json.longTasks.longestTaskMs, 85, 'Pre-start freezes must not inflate longestTaskMs');
+    assert.equal(report.json.preStartLongTasks.totalDetected, 1, 'Pre-start freeze preserved in preStartLongTasks');
+    assert.ok(report.text.includes('Pre-Start Tasks (Excluded):  1'), 'ASCII summary notes excluded pre-start count');
+
+    collector.stop();
+});
+
+test('PerformanceReportCollector: markOperation ring buffer & time-window attribution via PerfMarker bridge', () => {
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    // Push 6 operations through the PerfMarker bridge to verify 5-entry cap
+    const baseNow = collector._startTime + 1000;
+    const origPerfNow = globalThis.performance?.now;
+    let fakeNow = baseNow;
+
+    if (!globalThis.performance) {
+        globalThis.performance = { now: () => fakeNow };
+    } else {
+        globalThis.performance.now = () => fakeNow;
+    }
+
+    try {
+        for (let i = 1; i <= 6; i++) {
+            fakeNow = baseNow + i * 100; // 1100, 1200, ..., 1600
+            markPerfOperation(`Op.${i}`);
+        }
+
+        assert.equal(collector._recentOperations.length, 5, 'Operation ring buffer capped at 5 entries');
+        assert.equal(collector._recentOperations[0].name, 'Op.2', 'Oldest entry evicted from 5-slot ring buffer');
+
+        // Task within [op.timestamp - duration, op.timestamp + 20] -> op inside [startTime - 20, startTime + duration]
+        collector._recordLongTask({
+            startTime: baseNow + 615, // window [1595, 1695] matches Op.6 (1600)
+            duration: 80,
+            attribution: []
+        });
+
+        // Out-of-window task -> no operation attribution
+        collector._recordLongTask({
+            startTime: baseNow + 2000,
+            duration: 60,
+            attribution: []
+        });
+
+        const report = collector.buildReport();
+        assert.equal(report.json.longTasks.entries[0].operation, 'Op.6');
+        assert.equal(report.json.longTasks.entries[1].operation, '');
+        assert.ok(report.text.includes('| Op: Op.6 |'), 'ASCII long task line must display matched Op label');
+        assert.ok(!report.text.includes('| Op:  |'), 'ASCII long task line must omit empty Op label');
+
+        // Stop collector and confirm PerfMarker bridge unbinds cleanly
+        collector.stop();
+        markPerfOperation('Op.AfterStop');
+        assert.equal(collector._recentOperations.length, 5, 'Stopped collector ignores PerfMarker broadcasts');
+    } finally {
+        if (origPerfNow) {
+            globalThis.performance.now = origPerfNow;
+        }
     }
 });

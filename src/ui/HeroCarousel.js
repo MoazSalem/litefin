@@ -22,6 +22,7 @@ import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratings
 import { customHeaders } from '../utils/CustomHeaders.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { idleGate } from '../utils/IdleGate.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -1385,6 +1386,7 @@ class HeroCarousel {
     goTo(index) {
         if (index === this._currentIndex || !this._container) return;
 
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo');
         log.debug(`Navigating to hero item ${index}`);
 
         const items = this._slideItems || this._container.querySelectorAll('.hero-item');

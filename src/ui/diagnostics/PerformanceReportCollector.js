@@ -16,6 +16,7 @@ import { storage } from '../../utils/StorageService.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { eventBus } from '../../core/EventBus.js';
 import { router } from '../../core/Router.js';
+import { setPerfOperationHandler } from '../../utils/PerfMarker.js';
 import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('PerfCollector');
@@ -86,11 +87,20 @@ export class PerformanceReportCollector {
         this._jankEvents = [];
         this._maxJankEvents = 30;
 
-        // Main thread long tasks (> 50ms)
+        // Main thread long tasks (> 50ms) recorded after collector start()
         this._longTasks = [];
         this._maxLongTasks = 50;
         this._totalLongTaskTimeMs = 0;
         this._maxLongTaskMs = 0;
+
+        // Buffered long tasks whose startTime precedes this._startTime (cold boot eval)
+        this._preStartLongTasks = [];
+        this._maxPreStartLongTasks = 30;
+
+        // Bounded ring buffer of recent JS operations (last 5 entries) used to
+        // attribute captured long tasks back to the originating UI interaction.
+        this._recentOperations = [];
+        this._maxRecentOperations = 5;
 
         // Web Vitals metrics
         this._vitals = {
@@ -152,9 +162,14 @@ export class PerformanceReportCollector {
         this._frameIntervals = [];
         this._jankEvents = [];
         this._longTasks = [];
+        this._preStartLongTasks = [];
+        this._recentOperations = [];
         this._totalLongTaskTimeMs = 0;
         this._maxLongTaskMs = 0;
         this._routeNavigations = [];
+
+        // Bind lightweight operation marker bridge for task attribution
+        setPerfOperationHandler((name) => this.markOperation(name));
 
         this._distribution = {
             under16ms: 0,
@@ -209,7 +224,30 @@ export class PerformanceReportCollector {
         }
         this._unsubscribers = [];
 
+        // Unbind operation marker bridge so normal runtime pays zero overhead
+        setPerfOperationHandler(null);
+
         log.info('Performance telemetry collector suspended.');
+    }
+
+    /**
+     * Records a recent UI/navigation operation timestamp into a bounded 5-entry
+     * ring buffer on the same high-resolution performance timeline used by Long Tasks.
+     *
+     * @param {string} name - Operation label (e.g. 'HeroCarousel.goTo')
+     */
+    markOperation(name) {
+        if (!this._active || !name) return;
+
+        const timestamp =
+            typeof performance !== 'undefined' && typeof performance.now === 'function'
+                ? performance.now()
+                : Date.now();
+
+        this._recentOperations.push({ name, timestamp });
+        if (this._recentOperations.length > this._maxRecentOperations) {
+            this._recentOperations.shift();
+        }
     }
 
     /**
@@ -350,17 +388,36 @@ export class PerformanceReportCollector {
     }
 
     /**
-     * Stores main-thread long task entries with attribution context.
+     * Resolves the most recent marked UI operation overlapping `[entry.startTime - 20, entry.startTime + entry.duration]`.
+     *
+     * @param {Object} entry - LongTask performance entry
+     * @returns {string} Matched operation name or empty string
+     * @private
+     */
+    _resolveOperationForEntry(entry) {
+        if (!this._recentOperations || this._recentOperations.length === 0) return '';
+
+        const windowStart = entry.startTime - 20;
+        const windowEnd = entry.startTime + (entry.duration || 0);
+
+        for (let i = this._recentOperations.length - 1; i >= 0; i--) {
+            const op = this._recentOperations[i];
+            if (op.timestamp >= windowStart && op.timestamp <= windowEnd) {
+                return op.name;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Stores main-thread long task entries with attribution context, correlating
+     * recent JS operations and partitioning buffered pre-start entries.
      * @private
      * @param {PerformanceEntry} entry Long task entry
      */
     _recordLongTask(entry) {
         const duration = Math.round(entry.duration);
-        this._totalLongTaskTimeMs += duration;
-
-        if (duration > this._maxLongTaskMs) {
-            this._maxLongTaskMs = duration;
-        }
 
         // Extract script attribution if available
         let containerType = 'window';
@@ -383,14 +440,32 @@ export class PerformanceReportCollector {
                   : '/';
 
         const relativeTimeMs = Math.round(entry.startTime - this._startTime);
+        const operation = this._resolveOperationForEntry(entry);
+
         const taskRecord = {
             timeOffsetMs: relativeTimeMs,
             durationMs: duration,
             route,
+            operation,
             containerType,
             containerName,
             containerSrc
         };
+
+        // Partition buffered entries predating collector activation so cold boot
+        // script evaluation does not skew active session blocking metrics.
+        if (relativeTimeMs < 0) {
+            this._preStartLongTasks.push(taskRecord);
+            if (this._preStartLongTasks.length > this._maxPreStartLongTasks) {
+                this._preStartLongTasks.shift();
+            }
+            return;
+        }
+
+        this._totalLongTaskTimeMs += duration;
+        if (duration > this._maxLongTaskMs) {
+            this._maxLongTaskMs = duration;
+        }
 
         this._longTasks.push(taskRecord);
 
@@ -716,6 +791,10 @@ export class PerformanceReportCollector {
                 longestTaskMs: this._maxLongTaskMs,
                 entries: this._longTasks
             },
+            preStartLongTasks: {
+                totalDetected: this._preStartLongTasks.length,
+                entries: this._preStartLongTasks
+            },
             webVitals: this._vitals,
             memoryAndDom: {
                 initialHeapMb: bytesToMb(this._initialHeapBytes),
@@ -819,17 +898,19 @@ export class PerformanceReportCollector {
             `Total Long Tasks Detected:   ${l.totalDetected}`,
             `Total Blocking Duration:     ${l.totalBlockingTimeMs} ms`,
             `Longest Main-Thread Freeze:  ${l.longestTaskMs} ms`,
+            `Pre-Start Tasks (Excluded):  ${data.preStartLongTasks ? data.preStartLongTasks.totalDetected : 0}`,
             ''
         ];
 
-        // Format recent long tasks
+        // Format recent long tasks with route, operation attribution, and container
         if (l.entries.length > 0) {
             lines.push('Captured Long Tasks Log:');
             l.entries.slice(-15).forEach((task, idx) => {
                 const sec = (task.timeOffsetMs / 1000).toFixed(1);
                 const src = task.containerSrc ? ` (${task.containerSrc})` : '';
+                const op = task.operation ? ` | Op: ${task.operation}` : '';
                 lines.push(
-                    `  ${idx + 1}. [+${sec}s] ${task.durationMs}ms freeze | Route: ${task.route || '/'} | Container: ${task.containerType} ${task.containerName || ''}${src}`
+                    `  ${idx + 1}. [+${sec}s] ${task.durationMs}ms freeze | Route: ${task.route || '/'}${op} | Container: ${task.containerType} ${task.containerName || ''}${src}`
                 );
             });
             lines.push('');
