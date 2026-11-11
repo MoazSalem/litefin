@@ -968,10 +968,38 @@ body.player-active #sidebar-container {
     display: block;
 }
 
-/* Hide the internal spinner if the global one is still up, 
-   but keep the layout active to block clicks */
+/* Hide the internal spinner if the global one is still up,
+   but keep the layout active to block clicks. Also pause keyframe ticks on
+   hidden page-level loaders so invisible spinners do not wake compositor passes
+   while the startup overlay covers the viewport. */
 body.app-splash-active .page-loading .loading-spinner {
     opacity: 0;
+}
+
+body.app-splash-active .page-loading .loading-spinner,
+body.app-splash-active .page-loading .loading-spinner::before,
+body.app-splash-active .page-loading .loading-spinner::after,
+body.app-splash-active .page-loading * {
+    -webkit-animation-play-state: paused !important;
+    animation-play-state: paused !important;
+    will-change: auto !important;
+}
+
+/*
+ * Reinforce splash spinner teardown across all dynamically selected loader
+ * themes once splash fade-out starts (high ID specificity beats loader rules).
+ */
+#app-splash.splash-content.fade-out .loading-spinner {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+#app-splash.splash-content.fade-out *,
+#app-splash.splash-content.fade-out *::before,
+#app-splash.splash-content.fade-out *::after {
+    -webkit-animation: none !important;
+    animation: none !important;
+    will-change: auto !important;
 }
 
 /* 

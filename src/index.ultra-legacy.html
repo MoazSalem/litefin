@@ -282,6 +282,23 @@
             pointer-events: none;
         }
 
+        /*
+         * Halt infinite splash spinner keyframes immediately once dismissal starts
+         * so compositor tile and transform layers tear down cleanly before navigation.
+         */
+        #app-splash.splash-content.fade-out .loading-spinner {
+            opacity: 0 !important;
+            transition: none !important;
+        }
+
+        #app-splash.splash-content.fade-out *,
+        #app-splash.splash-content.fade-out *::before,
+        #app-splash.splash-content.fade-out *::after {
+            animation: none !important;
+            -webkit-animation: none !important;
+            will-change: auto !important;
+        }
+
         .page-loading {
             position: absolute;
             top: 0;

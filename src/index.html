@@ -385,6 +385,28 @@
             pointer-events: none;
         }
 
+        /*
+         * ====================================================================
+         * SPLASH SPINNER COMPOSITOR TEARDOWN
+         * ====================================================================
+         * Shut down infinite GPU rotation and scaling animations the instant
+         * splash dismissal begins so the fading overlay releases spinner tile
+         * and animation layers before first home-screen interaction.
+         * ====================================================================
+         */
+        #app-splash.splash-content.fade-out .loading-spinner {
+            opacity: 0 !important;
+            transition: none !important;
+        }
+
+        #app-splash.splash-content.fade-out *,
+        #app-splash.splash-content.fade-out *::before,
+        #app-splash.splash-content.fade-out *::after {
+            animation: none !important;
+            -webkit-animation: none !important;
+            will-change: auto !important;
+        }
+
         .page-loading {
             position: absolute;
             top: 0;

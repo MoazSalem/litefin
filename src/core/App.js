@@ -1376,10 +1376,40 @@ class App {
             const splash = document.getElementById('app-splash');
             if (splash) {
                 log.info('Hiding initial splash screen');
-                splash.classList.add('fade-out');
-                setTimeout(() => {
+
+                // Idempotent teardown handler: releases explicit compositor hints
+                // (willChange/transform) before detaching #app-splash so no stale
+                // fixed-layer state lingers after initial boot completes.
+                let removed = false;
+                let fallbackTimerId = null;
+
+                const onTransitionEnd = (e) => {
+                    if (e && e.target === splash && e.propertyName === 'opacity') {
+                        cleanupSplash();
+                    }
+                };
+
+                const cleanupSplash = () => {
+                    if (removed) return;
+                    removed = true;
+                    if (fallbackTimerId) {
+                        clearTimeout(fallbackTimerId);
+                        fallbackTimerId = null;
+                    }
+                    if (typeof splash.removeEventListener === 'function') {
+                        splash.removeEventListener('transitionend', onTransitionEnd);
+                    }
+                    // Strip inline promotion properties ahead of DOM removal
+                    splash.style.willChange = 'auto';
+                    splash.style.transform = 'none';
                     if (splash.parentNode) splash.parentNode.removeChild(splash);
-                }, 400); // Matches CSS transition duration
+                };
+
+                if (typeof splash.addEventListener === 'function') {
+                    splash.addEventListener('transitionend', onTransitionEnd);
+                }
+                splash.classList.add('fade-out');
+                fallbackTimerId = setTimeout(cleanupSplash, 420); // Safety bound beyond 400ms opacity transition
             }
 
             // Trigger auto-update check (respects user settings inside)
