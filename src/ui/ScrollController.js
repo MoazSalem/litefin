@@ -1024,7 +1024,8 @@ class ScrollController {
         // to use an S-curve easing profile rather than pure deceleration
         const isLargeScroll = isVertical && Math.abs(targetScroll - currentScroll) > 320;
 
-        // Create new animation state
+        // Create new animation state (lastWritten suppresses sub-0.5px tail
+        // micro-writes and prevents double writes on settlement frame K)
         this[stateKey] = {
             container,
             track,
@@ -1032,7 +1033,8 @@ class ScrollController {
             target: targetScroll,
             startTime: null, // Initialized in first RAF frame
             duration: durationToUse,
-            isLargeScroll
+            isLargeScroll,
+            lastWritten: null
         };
 
         // Standard easeOutQuad: fast start, smooth deceleration (t * (2 - t))
@@ -1067,58 +1069,66 @@ class ScrollController {
             const elapsed = time - state.startTime;
             const progress = Math.min(elapsed / state.duration, 1);
 
-            // For large vertical transitions (e.g. hero carousel ↔ first row), use the gentle
-            // smoothstep curve to keep initial velocity safe for TV compositing. For standard
-            // row-to-row navigation, use blended easeOutQuad for maximum responsiveness.
-            const eased = state.isLargeScroll
-                ? easeSmoothStep(progress)
-                : progress < EASE_BLEND
-                  ? easeOutQuad(progress)
-                  : blendAt + blendRemaining * easeOutQuad((progress - EASE_BLEND) / blendDuration);
-
-            // Interpolate between start and target
-            const distance = state.target - state.startScroll;
-            const newScroll = state.startScroll + distance * eased;
-
-            // Apply scroll position
-            if (isVertical) {
-                if (scrollMode === 'gpu') {
-                    // PERFORMANCE: transform writes only — no layout reads, no
-                    // scrollTop writes, no class/attribute mutations. The
-                    // container was clamped to scrollTop 0 once at animation
-                    // start (see smoothScrollTo), so a per-frame read here would
-                    // only force a synchronous layout of the whole page.
-                    writeTrackTransform(state.track, newScroll);
-                } else {
-                    // Write vertical scroll position directly to container.
-                    // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
-                    // metrics here! Setting scrollTop dirties the layout tree. Reading
-                    // scrollLeft immediately afterwards forces a full synchronous reflow
-                    // on every 16ms animation frame, reducing complex pages like HomePage
-                    // (with 1500+ DOM nodes) down to a laggy 3 FPS.
-                    state.container.scrollTop = newScroll;
-                }
-            } else {
-                state.container.scrollLeft = newScroll;
-            }
-
             if (progress < 1) {
+                // For large vertical transitions (e.g. hero carousel ↔ first row), use the gentle
+                // smoothstep curve to keep initial velocity safe for TV compositing. For standard
+                // row-to-row navigation, use blended easeOutQuad for maximum responsiveness.
+                const eased = state.isLargeScroll
+                    ? easeSmoothStep(progress)
+                    : progress < EASE_BLEND
+                      ? easeOutQuad(progress)
+                      : blendAt + blendRemaining * easeOutQuad((progress - EASE_BLEND) / blendDuration);
+
+                // Interpolate between start and target
+                const distance = state.target - state.startScroll;
+                const newScroll = state.startScroll + distance * eased;
+
+                // Suppress sub-0.5px tail micro-deltas that add compositor churn
+                // without shifting rendered pixels on screen.
+                if (state.lastWritten === null || Math.abs(newScroll - state.lastWritten) >= 0.5) {
+                    state.lastWritten = newScroll;
+                    if (isVertical) {
+                        if (scrollMode === 'gpu') {
+                            // PERFORMANCE: transform writes only — no layout reads, no
+                            // scrollTop writes, no class/attribute mutations. The
+                            // container was clamped to scrollTop 0 once at animation
+                            // start (see smoothScrollTo), so a per-frame read here would
+                            // only force a synchronous layout of the whole page.
+                            writeTrackTransform(state.track, newScroll);
+                        } else {
+                            // Write vertical scroll position directly to container.
+                            // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
+                            // metrics here! Setting scrollTop dirties the layout tree. Reading
+                            // scrollLeft immediately afterwards forces a full synchronous reflow
+                            // on every 16ms animation frame, reducing complex pages like HomePage
+                            // (with 1500+ DOM nodes) down to a laggy 3 FPS.
+                            state.container.scrollTop = newScroll;
+                        }
+                    } else {
+                        state.container.scrollLeft = newScroll;
+                    }
+                }
+
                 // Continue animation loop on the next frame
                 this[animIdKey] = requestAnimationFrame(animate);
             } else {
-                // Snap to exact target and clean up animation state
-                if (isVertical) {
-                    if (scrollMode === 'gpu') {
-                        // Write-only completion: the one-shot clamp at animation
-                        // start already parked the container at scrollTop 0.
-                        writeTrackTransform(state.track, state.target);
+                // Frame K settlement: write exact target once (no preceding
+                // intermediate write on the final frame) before cleanup.
+                if (state.lastWritten !== state.target) {
+                    state.lastWritten = state.target;
+                    if (isVertical) {
+                        if (scrollMode === 'gpu') {
+                            // Write-only completion: the one-shot clamp at animation
+                            // start already parked the container at scrollTop 0.
+                            writeTrackTransform(state.track, state.target);
+                        } else {
+                            state.container.scrollTop = state.target;
+                        }
+                        // Horizontal drift is cleared at smoothScrollTo entry before scrollTop dirties layout;
+                        // reading scrollLeft right after scrollTop would trigger a full-tree reflow inside finish.
                     } else {
-                        state.container.scrollTop = state.target;
+                        state.container.scrollLeft = state.target;
                     }
-                    // Horizontal drift is cleared at smoothScrollTo entry before scrollTop dirties layout;
-                    // reading scrollLeft right after scrollTop would trigger a full-tree reflow inside finish.
-                } else {
-                    state.container.scrollLeft = state.target;
                 }
                 this[animIdKey] = null;
                 this[stateKey] = null;

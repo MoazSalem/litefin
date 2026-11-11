@@ -968,16 +968,20 @@ class Sidebar extends Component {
         };
         document.addEventListener('mousedown', this._onDocClickOutside, true);
 
-        // Sync indicator during scrolling
+        // Sync indicator during scrolling (passive so native touch/wheel scrolls never block)
         const contentContainer = this.el.querySelector('.sidebar-content');
         if (contentContainer) {
-            contentContainer.addEventListener('scroll', () => {
-                const focused = this.el.querySelector('.sidebar-item.focused');
-                // Only sync if the focused element is actually INSIDE the scrolling container
-                if (focused && contentContainer.contains(focused)) {
-                    this._updateIndicator(focused, { instant: true });
-                }
-            });
+            contentContainer.addEventListener(
+                'scroll',
+                () => {
+                    const focused = this.el.querySelector('.sidebar-item.focused');
+                    // Only sync if the focused element is actually INSIDE the scrolling container
+                    if (focused && contentContainer.contains(focused)) {
+                        this._updateIndicator(focused, { instant: true });
+                    }
+                },
+                { passive: true }
+            );
         }
     }
 
