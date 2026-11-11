@@ -101,6 +101,10 @@ class LazyLoader {
         this._pendingFlushRafId = null;
         this._maxPendingPerFrame = 2;
 
+        // Coalesced visibility updates for .skeleton-shimmer cards whose view
+        // intersections changed mid-scroll or inside the post-scroll settle window.
+        this._pendingShimmerStates = new Map();
+
         this._init();
     }
 
@@ -168,6 +172,11 @@ class LazyLoader {
 
         // Listen for ScrollController finishing its transitions
         eventBus.on('scroll:finished', () => {
+            // Treat scroll finish as the start of the quiet cooldown window so
+            // Chromium's post-rAF IntersectionObserver turn immediately following
+            // Frame K queues intersecting targets instead of synchronously loading rows.
+            this._lastInteractionAt = Date.now();
+
             // Defer BlurHash + marquee reflow past the 800ms quiet window so
             // post-scroll measurements never fire during ScrollController.finish
             // or between quick consecutive D-pad steps.
@@ -282,9 +291,10 @@ class LazyLoader {
                             const target = entry.target;
                             if (!target || target.isConnected === false) return;
 
-                            // Defer image/row loading while a scroll animation is in flight so
-                            // img.src assignments and class mutations never stall scroll frames.
-                            if (this._isScrolling()) {
+                            // Defer image/row loading while scrolling or within the active
+                            // interaction cooldown window so post-rAF observer deliveries
+                            // never stall final scroll frames with img.src / class mutations.
+                            if (!this._canRunDeferredWork()) {
                                 this._enqueuePendingElement(target);
                                 return;
                             }
@@ -334,7 +344,14 @@ class LazyLoader {
             // ================================================================
             this._shimmerObserver = new IntersectionObserver(
                 (entries) => {
+                    const canApplyNow = this._canRunDeferredWork();
                     entries.forEach((entry) => {
+                        if (!canApplyNow) {
+                            // Defer shimmer layer wakeups/pauses until scrolling and keypress
+                            // cooldown settle so finish frames never re-promote 30 shimmers at once.
+                            this._pendingShimmerStates.set(entry.target, entry.isIntersecting);
+                            return;
+                        }
                         // Use classList directly — no touching other properties
                         if (entry.isIntersecting) {
                             // Back in view: resume shimmer animation
@@ -344,6 +361,9 @@ class LazyLoader {
                             entry.target.classList.add('shimmer-hidden');
                         }
                     });
+                    if (!canApplyNow && this._pendingShimmerStates.size > 0 && !this._postScrollSettleTimerId && !this._isScrolling()) {
+                        this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS);
+                    }
                 },
                 {
                     // Strict viewport — only truly visible elements animate.
@@ -542,9 +562,29 @@ class LazyLoader {
                 this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS, onMarqueeFlush);
                 return;
             }
+            this._flushPendingShimmerStates();
             this._processBlurHashQueue();
             this._scheduleMarqueeFlushRaf(onMarqueeFlush);
         }, delayMs);
+    }
+
+    /**
+     * Apply coalesced `.shimmer-hidden` visibility updates queued while scrolling
+     * or navigating so compositor layer wakeups happen cleanly during quiet time.
+     *
+     * @private
+     */
+    _flushPendingShimmerStates() {
+        if (!this._pendingShimmerStates || this._pendingShimmerStates.size === 0) return;
+        this._pendingShimmerStates.forEach((isIntersecting, target) => {
+            if (!target || target.isConnected === false || !target.classList) return;
+            if (isIntersecting) {
+                target.classList.remove('shimmer-hidden');
+            } else {
+                target.classList.add('shimmer-hidden');
+            }
+        });
+        this._pendingShimmerStates.clear();
     }
 
     /**
@@ -1292,6 +1332,15 @@ class LazyLoader {
                     this._pendingFlushRafId = null;
                 }
             }
+        }
+
+        // Prune queued shimmer visibility entries targeting torn-down containers
+        if (this._pendingShimmerStates && this._pendingShimmerStates.size > 0) {
+            this._pendingShimmerStates.forEach((_, el) => {
+                if (!el || el === container || (typeof container.contains === 'function' && container.contains(el))) {
+                    this._pendingShimmerStates.delete(el);
+                }
+            });
         }
 
         // Unobserve all images tracked by the main observer
