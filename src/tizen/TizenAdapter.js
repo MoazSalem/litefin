@@ -168,66 +168,131 @@ class TizenAdapter {
         }
         this._compositorWarmed = true;
 
-        // Read-only AVPlay state probe (never opens/stops/closes active sessions)
+        // Exercise Tizen's native C++ AVPlayManager hardware initialization path
+        // once at startup. Reading getState() alone stays in JS; invoking
+        // open() + setDisplayRect() enters C++ AVPlayManager setup and then
+        // closing returns the singleton cleanly to IDLE/NONE before playback.
         try {
             const avplay = typeof window !== 'undefined' ? window.webapis?.avplay || window.tizen?.avplay : null;
-            if (avplay && typeof avplay.getState === 'function') {
-                avplay.getState();
+            if (avplay) {
+                let state = 'NONE';
+                try {
+                    if (typeof avplay.getState === 'function') {
+                        state = avplay.getState() || 'NONE';
+                    }
+                } catch (_) {
+                    // Older TV firmwares throw before open() has ever been called
+                    state = 'NONE';
+                }
+
+                // Never disrupt an active or prepared playback session
+                if (state === 'NONE' || !state) {
+                    try {
+                        if (typeof avplay.open === 'function') {
+                            avplay.open('about:blank');
+                        }
+                        if (typeof avplay.setDisplayRect === 'function') {
+                            avplay.setDisplayRect(0, 0, 1, 1);
+                        }
+                    } finally {
+                        try {
+                            if (typeof avplay.close === 'function') {
+                                avplay.close();
+                            }
+                        } catch (_) {
+                            // Ignore cleanup errors on dummy warmup handles
+                        }
+                    }
+                }
             }
         } catch (_) {
-            // Safe to ignore firmware revisions where getState throws before open()
+            // Hardware plugin unavailable in simulator or stripped firmware
         }
 
         if (typeof document === 'undefined' || !document.body) {
             return true;
         }
 
+        // Helper for off-view 1x1 hidden layer styling without layout impact
+        const applyWarmupStyle = (el) => {
+            el.setAttribute('aria-hidden', 'true');
+            el.style.position = 'fixed';
+            el.style.top = '0px';
+            el.style.left = '0px';
+            el.style.width = '1px';
+            el.style.height = '1px';
+            el.style.opacity = '0';
+            el.style.pointerEvents = 'none';
+            el.style.zIndex = '-1';
+        };
+
         try {
-            // Mount a 1x1 non-interactive AVPlayer object strictly off-view behind
-            // splash for two frames so the compositor registers its hardware layer,
-            // then tear it down completely so no dormant player instance lingers.
-            const probe = document.createElement('object');
-            probe.type = 'application/avplayer';
-            probe.setAttribute('aria-hidden', 'true');
-            probe.style.position = 'fixed';
-            probe.style.top = '0px';
-            probe.style.left = '0px';
-            probe.style.width = '1px';
-            probe.style.height = '1px';
-            probe.style.opacity = '0';
-            probe.style.pointerEvents = 'none';
-            probe.style.zIndex = '-1';
-
-            document.body.appendChild(probe);
-            this._compositorWarmupProbe = probe;
-
-            let cleaned = false;
-            let fallbackTimerId = null;
-
-            const cleanupProbe = () => {
-                if (cleaned) return;
-                cleaned = true;
-                if (fallbackTimerId) {
-                    clearTimeout(fallbackTimerId);
-                    fallbackTimerId = null;
-                }
-                if (probe.parentNode) {
-                    probe.parentNode.removeChild(probe);
-                }
-                if (this._compositorWarmupProbe === probe) {
-                    this._compositorWarmupProbe = null;
-                }
-            };
-
-            // Wait two animation frames so the compositor commits the probe layer
-            // cleanly before detaching it from the DOM tree.
-            if (typeof requestAnimationFrame === 'function') {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(cleanupProbe);
-                });
+            // Keep a persistent 1x1 AVPlayer object mounted in the body so Tizen
+            // retains its native video-plane compositor mode across navigation
+            // instead of dropping back to software/throttled composition.
+            const existingProbe =
+                typeof document.getElementById === 'function'
+                    ? document.getElementById('litefin-avplay-warmup')
+                    : null;
+            if (!existingProbe) {
+                const probe = document.createElement('object');
+                probe.id = 'litefin-avplay-warmup';
+                probe.type = 'application/avplayer';
+                applyWarmupStyle(probe);
+                document.body.appendChild(probe);
+                this._compositorWarmupProbe = probe;
+            } else {
+                this._compositorWarmupProbe = existingProbe;
             }
-            fallbackTimerId = setTimeout(cleanupProbe, 150);
-            log.debug('TizenAdapter: Compositor hardware overlay warmup scheduled');
+
+            // Transient hidden <video> load nudge: wakes Chromium's media
+            // thread and high-rate compositor clock profile, then detaches
+            // cleanly after two commits so decoder slots remain completely free.
+            const existingVideo =
+                typeof document.getElementById === 'function'
+                    ? document.getElementById('litefin-video-warmup')
+                    : null;
+            if (!existingVideo) {
+                const video = document.createElement('video');
+                video.id = 'litefin-video-warmup';
+                video.muted = true;
+                video.playsInline = true;
+                video.preload = 'auto';
+                applyWarmupStyle(video);
+                document.body.appendChild(video);
+
+                try {
+                    if (typeof video.load === 'function') {
+                        video.load();
+                    }
+                } catch (_) {
+                    // Safe to ignore when browser skips empty media load
+                }
+
+                let videoCleaned = false;
+                let fallbackTimerId = null;
+                const cleanupVideo = () => {
+                    if (videoCleaned) return;
+                    videoCleaned = true;
+                    if (fallbackTimerId) {
+                        clearTimeout(fallbackTimerId);
+                        fallbackTimerId = null;
+                    }
+                    if (video.parentNode) {
+                        video.parentNode.removeChild(video);
+                    }
+                };
+
+                // Detach after two compositor frames (with timer fallback)
+                if (typeof requestAnimationFrame === 'function') {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(cleanupVideo);
+                    });
+                }
+                fallbackTimerId = setTimeout(cleanupVideo, 150);
+            }
+
+            log.debug('TizenAdapter: Hardware AVPlay + media compositor warmup executed');
         } catch (err) {
             log.debug('TizenAdapter: Compositor warmup skipped cleanly', err);
         }
