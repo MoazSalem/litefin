@@ -99,6 +99,37 @@ const DEFAULT_SCROLL_OFFSET_BOTTOM = 18;
 // vertical transitions always trigger a smooth scroll.
 const SCROLL_ALIGN_THRESHOLD = 5;
 
+/**
+ * Single CSS transform property backed by this engine.
+ *
+ * Writing BOTH `transform` and `webkitTransform` from an animation loop mutates
+ * the same CSS property twice per frame (~60 extra style invalidations/sec on
+ * the hot GPU path). Feature-detect once at module load and write only one.
+ */
+const TRANSFORM_PROPERTY = (() => {
+    try {
+        if (typeof document !== 'undefined' && document.documentElement && document.documentElement.style) {
+            if ('transform' in document.documentElement.style) return 'transform';
+            if ('webkitTransform' in document.documentElement.style) return 'webkitTransform';
+        }
+    } catch (_) {
+        // Fall through to the standards property
+    }
+    return 'transform';
+})();
+
+/**
+ * Positions a GPU compositor track at a vertical offset using exactly one
+ * style write. Purely a write — never reads layout.
+ *
+ * @param {HTMLElement|null} track - GPU compositor track (.vertical-scroll-track)
+ * @param {number} offset - Vertical offset in px
+ */
+function writeTrackTransform(track, offset) {
+    if (!track) return;
+    track.style[TRANSFORM_PROPERTY] = `translate3d(0px, -${offset}px, 0px)`;
+}
+
 // Buffer (px) around viewport edges for horizontal row visibility detection.
 // Used when scrolling a parent row into view before centering a card.
 const HORIZONTAL_ROW_VISIBILITY_BUFFER = 80;
@@ -868,6 +899,21 @@ class ScrollController {
         this._pauseImagePrewarm();
 
         /* ====================================================================
+         * ONE-SHOT GPU CLAMP (ZERO LAYOUT READS PER FRAME)
+         * ====================================================================
+         * In GPU mode the compositor track owns vertical motion, so the scroll
+         * container must rest at scrollTop 0. Reading `container.scrollTop`
+         * inside the RAF loop forces a synchronous layout on every ~16ms frame
+         * (the transform writes above already dirty the style tree) — that read
+         * is the 56-62ms `ScrollController._step` spike. Clamp exactly once
+         * here, while the tree is already dirty from the keypress path, so both
+         * the easing and spring loops can write transforms only.
+         * ==================================================================== */
+        if (isVertical && scrollMode === 'gpu' && container.scrollTop !== 0) {
+            container.scrollTop = 0;
+        }
+
+        /* ====================================================================
          * 🍏 SCROLL PHYSICS ENGINES (OPT-IN)
          * ====================================================================
          * When pref:scrollPhysics is set, the hop is delegated to the
@@ -1019,20 +1065,12 @@ class ScrollController {
             // Apply scroll position
             if (isVertical) {
                 if (scrollMode === 'gpu') {
-                    // Update GPU transform coordinates using pre-cached track element
-                    const currentTrack = state.track;
-                    if (currentTrack) {
-                        currentTrack.style.transform = `translate3d(0px, -${newScroll}px, 0px)`;
-                        currentTrack.style.webkitTransform = `translate3d(0px, -${newScroll}px, 0px)`;
-                    }
-                    // PERFORMANCE: Writing scrollTop dirties the layout tree even when the
-                    // value is unchanged, forcing reflow work on every ~16ms frame while GPU
-                    // transforms are actively scrolling the track. Only write when the
-                    // container has actually drifted from 0. The guarded read is cheap here
-                    // since transform writes alone never dirty the layout tree.
-                    if (container.scrollTop !== 0) {
-                        container.scrollTop = 0;
-                    }
+                    // PERFORMANCE: transform writes only — no layout reads, no
+                    // scrollTop writes, no class/attribute mutations. The
+                    // container was clamped to scrollTop 0 once at animation
+                    // start (see smoothScrollTo), so a per-frame read here would
+                    // only force a synchronous layout of the whole page.
+                    writeTrackTransform(state.track, newScroll);
                 } else {
                     // Write vertical scroll position directly to container.
                     // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
@@ -1053,16 +1091,9 @@ class ScrollController {
                 // Snap to exact target and clean up animation state
                 if (isVertical) {
                     if (scrollMode === 'gpu') {
-                        const currentTrack = state.track;
-                        if (currentTrack) {
-                            currentTrack.style.transform = `translate3d(0px, -${state.target}px, 0px)`;
-                            currentTrack.style.webkitTransform = `translate3d(0px, -${state.target}px, 0px)`;
-                        }
-                        // PERFORMANCE: Guard the final clamp as well, so animating into a
-                        // container already resting at 0 never dirties a clean layout tree.
-                        if (container.scrollTop !== 0) {
-                            container.scrollTop = 0;
-                        }
+                        // Write-only completion: the one-shot clamp at animation
+                        // start already parked the container at scrollTop 0.
+                        writeTrackTransform(state.track, state.target);
                     } else {
                         state.container.scrollTop = state.target;
                     }
@@ -1157,6 +1188,17 @@ class ScrollController {
         }
 
         // ----------------------------------------------------------------
+        // ONE-SHOT GPU CLAMP (mirrors smoothScrollTo)
+        // ----------------------------------------------------------------
+        // The per-frame writer below must never read scrollTop: on the GPU
+        // track the transform owns the pixels, and a scrollTop read after a
+        // style write forces a full synchronous layout every frame.
+        // ----------------------------------------------------------------
+        if (isVertical && scrollMode === 'gpu' && container.scrollTop !== 0) {
+            container.scrollTop = 0;
+        }
+
+        // ----------------------------------------------------------------
         // Axis write strategy — mirrors the easing engine exactly:
         //   vertical gpu    → translate3d on .vertical-scroll-track
         //   vertical native → container.scrollTop
@@ -1166,34 +1208,31 @@ class ScrollController {
         let finalize;
 
         if (isVertical) {
+            // Sub-pixel suppression: the integrator emits absolute positions, so
+            // rewriting a transform that moved <0.5px produces no visible change
+            // while still dirtying the style tree every frame.
+            let lastWritten = null;
+
             write = (value) => {
                 if (scrollMode === 'gpu') {
+                    // Write-only GPU path: the container is clamped to scrollTop 0
+                    // once before the loop starts (see smoothScrollTo), so reading
+                    // scrollTop here would force a synchronous layout per frame.
+                    if (lastWritten !== null && Math.abs(value - lastWritten) < 0.5) return;
+                    lastWritten = value;
                     const currentTrack = this[stateKey] && this[stateKey].track;
-                    if (currentTrack) {
-                        currentTrack.style.transform = `translate3d(0px, -${value}px, 0px)`;
-                        currentTrack.style.webkitTransform = `translate3d(0px, -${value}px, 0px)`;
-                    }
-                    // PERFORMANCE: only write scrollTop when it has drifted
-                    // (identical rule to the easing engine's GPU branch).
-                    if (container.scrollTop !== 0) {
-                        container.scrollTop = 0;
-                    }
+                    writeTrackTransform(currentTrack, value);
                 } else {
                     // CRITICAL PERFORMANCE RULE: no layout reads while writing
                     // (see the easing engine's scrollTop branch).
+                    if (lastWritten !== null && Math.abs(value - lastWritten) < 0.5) return;
+                    lastWritten = value;
                     container.scrollTop = value;
                 }
             };
             finalize = (value) => {
                 if (scrollMode === 'gpu') {
-                    const currentTrack = track;
-                    if (currentTrack) {
-                        currentTrack.style.transform = `translate3d(0px, -${value}px, 0px)`;
-                        currentTrack.style.webkitTransform = `translate3d(0px, -${value}px, 0px)`;
-                    }
-                    if (container.scrollTop !== 0) {
-                        container.scrollTop = 0;
-                    }
+                    writeTrackTransform(track, value);
                 } else {
                     container.scrollTop = value;
                 }

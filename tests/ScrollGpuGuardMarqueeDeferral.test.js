@@ -7,10 +7,10 @@ import { readFileSync } from 'node:fs';
  * ScrollController GPU scrollTop Guard & LazyLoader Marquee Deferral Tests
  * ============================================================================
  * Verifies that:
- * 1. The GPU scroll animation loop never writes `container.scrollTop = 0`
- *    unconditionally — the write must be guarded so a clean layout tree is
- *    not dirtied on every ~16ms compositor frame during 3d-transform scrolling.
- * 2. The animation completion branch applies the same guard.
+ * 1. The GPU scroll engines clamp `container.scrollTop` to 0 exactly ONCE at
+ *    animation start; the per-frame RAF loops perform zero layout reads.
+ * 2. Animation frames write a single transform property (feature-detected)
+ *    instead of mutating both the `transform` and `webkitTransform` aliases.
  * 3. LazyLoader defers the marquee overflow measurement (scrollWidth /
  *    clientWidth reads force synchronous reflow) while a scroll transition is
  *    in flight, stashing the focused card in _pendingMarqueeTarget.
@@ -21,56 +21,74 @@ import { readFileSync } from 'node:fs';
  * ============================================================================
  */
 
-test('ScrollController: GPU animation loop guards container.scrollTop writes', () => {
+test('ScrollController: GPU animation loop performs zero layout reads (single clamp at start)', () => {
     const source = readFileSync(new URL('../src/ui/ScrollController.js', import.meta.url), 'utf8');
 
-    // 1. The guarded write pattern must exist (per-frame branch + completion branch)
-    const guardedCount = (source.match(/if \(container\.scrollTop !== 0\) \{\s*container\.scrollTop = 0;/g) || [])
-        .length;
+    // 1. Each engine entry performs exactly one guarded scrollTop clamp, BEFORE
+    //    the RAF loop starts. After that the container is guaranteed parked at 0.
+    const clampPattern = /if \(isVertical && scrollMode === 'gpu' && container\.scrollTop !== 0\) \{/g;
+    const clampCount = (source.match(clampPattern) || []).length;
     assert.strictEqual(
-        guardedCount >= 2,
-        true,
-        `container.scrollTop = 0 must be guarded by an offset check in at least 2 places (found ${guardedCount})`
+        clampCount,
+        2,
+        `Easing and spring engines must each clamp GPU scrollTop exactly once at entry (found ${clampCount})`
     );
 
-    // 2. Inside the RAF animate loop, the GPU branch must NOT contain a bare
-    //    unconditional scrollTop write. Extract the animate loop body.
+    // 2. The easing RAF loop's GPU branches must contain no layout read at all.
     const animateMatch = source.match(
-        /const animate = \(time\) => \{([\s\S]*?)\n {8}this\[animIdKey\] = requestAnimationFrame\(animate\);/
+        /const animate = \(time\) => \{([\s\S]*?)\n {8}this\[animIdKey\] = requestAnimationFrame\(animate\);/m
     );
     assert.ok(animateMatch, 'GPU scroll animate loop must exist');
     const animateBody = animateMatch[1];
 
-    // Every scrollTop = 0 write inside the loop must be preceded by the guard check
-    const bareWritePattern = /(^|\n)[ \t]*container\.scrollTop = 0;/;
-    const bareWrite = animateBody.match(
-        new RegExp(
-            `${bareWritePattern.source.replace('container\\.scrollTop = 0;', '')}(?<!!== 0\\) \\{\\n[\\s\\S]{0,600})container\\.scrollTop = 0;`
-        )
+    const stripComments = (code) => code.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const gpuBranches = [...animateBody.matchAll(/if \(scrollMode === 'gpu'\) \{([\s\S]*?)\n\s*\} else \{/g)].map(
+        (m) => stripComments(m[1])
     );
-    // Simple, robust structural check instead: the guard check must appear
-    // before EVERY scrollTop = 0 occurrence in the loop body.
-    const writePositions = [...animateBody.matchAll(/container\.scrollTop = 0;/g)].map((m) => m.index);
-    assert.strictEqual(
-        writePositions.length > 0,
-        true,
-        'GPU branch of the animate loop must still clamp the container to 0'
-    );
-    const guardPositions = [...animateBody.matchAll(/container\.scrollTop !== 0/g)].map((m) => m.index);
-    for (const pos of writePositions) {
-        const guarding = guardPositions.some((g) => g < pos && pos - g < 300);
+    assert.strictEqual(gpuBranches.length >= 2, true, 'Easing loop must have per-frame and completion GPU branches');
+    for (const branch of gpuBranches) {
         assert.strictEqual(
-            guarding,
-            true,
-            'Every container.scrollTop = 0 write in the animate loop must be preceded by an !== 0 guard'
+            /scrollTop|scrollHeight|getBoundingClientRect|offsetTop/.test(branch),
+            false,
+            'The per-frame easing GPU branch must perform zero layout reads'
+        );
+        assert.ok(
+            branch.includes('writeTrackTransform('),
+            'GPU branch must position the track with a single transform write'
         );
     }
+    assert.ok(
+        animateBody.includes('writeTrackTransform(state.track, newScroll)'),
+        'GPU branch must position the track with the new scroll offset'
+    );
+    assert.ok(
+        animateBody.includes('writeTrackTransform(state.track, state.target)'),
+        'GPU completion branch must snap the track to the exact target'
+    );
 
-    // 3. Performance rationale comment must document why the guard exists
+    // 3. The spring per-frame writer must not read scrollTop on the GPU branch.
+    const springStart = source.indexOf('_springScrollTo({');
+    const springEnd = source.indexOf('_springTrackHorizontal(', springStart);
+    assert.ok(springStart !== -1 && springEnd > springStart, 'Spring engine must exist');
+    const springBody = source.slice(springStart, springEnd);
+    const writeMatch = springBody.match(/write = \(value\) => \{([\s\S]*?)\n {12}\};/);
+    assert.ok(writeMatch, 'Spring per-frame writer must exist');
+    const gpuWriteBody = stripComments(writeMatch[1].slice(0, writeMatch[1].indexOf('} else {')));
     assert.strictEqual(
-        source.includes('Writing scrollTop dirties the layout tree even when the'),
+        /scrollTop/.test(gpuWriteBody),
+        false,
+        'Spring GPU writer must not read scrollTop (single clamp happens before the loop)'
+    );
+    assert.ok(
+        gpuWriteBody.includes('writeTrackTransform('),
+        'Spring GPU writer must use the single-property transform helper'
+    );
+
+    // 4. The one-shot clamp must carry the layout-read rationale.
+    assert.strictEqual(
+        source.includes('ONE-SHOT GPU CLAMP'),
         true,
-        'The guarded write must carry the PERFORMANCE rationale comment'
+        'The clamp must document why the per-frame read was removed'
     );
 });
 
