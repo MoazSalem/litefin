@@ -32,10 +32,10 @@ class LazyLoader {
         this._shimmerObserver = null;
 
         /* ----------------------------------------------------------------
-         * SCROLL ACTIVITY STATE & BLURHASH THROTTLING
-         * Track scroll state exclusively for heavy mathematical operations
-         * such as BlurHash DCT decoding. Network and image fetches proceed
-         * unimpeded through IntersectionObserver rootMargin ahead of time.
+         * SCROLL ACTIVITY STATE, LAZY QUEUE & BLURHASH THROTTLING
+         * Track scroll state for both BlurHash DCT decoding and intersection
+         * image/row loading so D-pad scroll animations stay free of img.src
+         * churn and synchronous style/decode spikes mid-flight.
          * ---------------------------------------------------------------- */
         this._scrollTimeout = null;
 
@@ -52,6 +52,15 @@ class LazyLoader {
         this._blurHashProcessing = false;
         this._maxBlurhashPerFrame = 2;
 
+        // ── Scroll-paused intersection queue ────────────────────────────────
+        // Elements crossing the viewport rootMargin while a scroll animation
+        // is active wait here until scroll settles, then drain in small rAF
+        // batches (4-6 elements per frame).
+        this._pendingElements = [];
+        this._pendingFlushTimerId = null;
+        this._pendingFlushRafId = null;
+        this._maxPendingPerFrame = 5;
+
         this._init();
     }
 
@@ -60,16 +69,27 @@ class LazyLoader {
         window.addEventListener(
             'scroll',
             () => {
+                // Cancel any pending flush if scrolling resumes
+                if (this._pendingFlushTimerId) {
+                    clearTimeout(this._pendingFlushTimerId);
+                    this._pendingFlushTimerId = null;
+                }
+                if (this._pendingFlushRafId) {
+                    cancelAnimationFrame(this._pendingFlushRafId);
+                    this._pendingFlushRafId = null;
+                }
+
                 if (this._scrollTimeout) {
                     clearTimeout(this._scrollTimeout);
                 }
                 // Debounce check: scrolling is considered stopped after 150ms of silence
                 this._scrollTimeout = setTimeout(() => {
                     this._scrollTimeout = null;
-                    // Resume deferred BlurHash decoding once viewport scrolling settles
+                    // Resume deferred work once viewport scrolling settles
                     if (!this._isScrolling()) {
                         this._processBlurHashQueue();
                         this._flushPendingMarquee();
+                        this._flushPendingElements();
                     }
                 }, 150);
             },
@@ -87,6 +107,10 @@ class LazyLoader {
                     this._flushPendingMarquee();
                 }
             }, 50);
+
+            // Schedule queued intersection elements 100ms after scroll settles so
+            // consecutive D-pad key presses never race with image decode bursts.
+            this._schedulePendingElementsFlush(100);
         });
 
         // Legacy TV Focus-Driven Lazy Load
@@ -179,26 +203,16 @@ class LazyLoader {
                 (entries, observer) => {
                     entries.forEach((entry) => {
                         const target = entry.target;
+                        if (!entry.isIntersecting) return;
 
-                        // ====================================================
-                        // IMMEDIATE INTERSECTION LOADING
-                        // ====================================================
-                        // Load immediately as soon as cards touch the rootMargin
-                        // (~0.35 screens ahead, approx 1 row). Pre-fetching images just ahead
-                        // of the viewport ensures adjacent cards are ready without saturating
-                        // the browser's HTTP connection pool with distant off-screen decodes.
-                        // ====================================================
-                        if (entry.isIntersecting) {
-                            if (target.hasAttribute('data-lazy-row')) {
-                                this._loadRow(target);
-                            } else {
-                                // Load this specific intersecting image directly.
-                                // Do NOT cascade _batchPreloadImages here: directional batch preloading
-                                // is managed exclusively by active focus navigation (focus:changed) to avoid
-                                // exponential duplicate preload storms during rapid scrolling.
-                                this._loadImage(target);
-                            }
+                        // Defer image/row loading while a scroll animation is in flight so
+                        // img.src assignments and class mutations never stall scroll frames.
+                        if (this._isScrolling()) {
+                            this._enqueuePendingElement(target);
+                            return;
                         }
+
+                        this._loadIntersectingTarget(target);
                     });
                 },
                 {
@@ -263,6 +277,123 @@ class LazyLoader {
             return true;
         }
         return this._scrollTimeout !== null;
+    }
+
+    /**
+     * Queue an intersecting element to load once active scroll motion settles.
+     * Deduplicates linearly (queue depth during a single scroll is tiny).
+     *
+     * @param {HTMLElement} target - Row container or lazy image element
+     * @private
+     */
+    _enqueuePendingElement(target) {
+        if (!target) return;
+
+        // Avoid pushing duplicate entries if the observer fires multiple times mid-scroll
+        for (let i = 0; i < this._pendingElements.length; i++) {
+            if (this._pendingElements[i] === target) {
+                return;
+            }
+        }
+
+        this._pendingElements.push(target);
+    }
+
+    /**
+     * Trigger loading for a single intersecting row or image element and remove
+     * it from any pending queue entry so it cannot load twice.
+     *
+     * @param {HTMLElement} target - Intersecting element
+     * @private
+     */
+    _loadIntersectingTarget(target) {
+        if (!target || target.isConnected === false) return;
+
+        // Drop from the deferred queue if it loaded through an eager path
+        for (let i = this._pendingElements.length - 1; i >= 0; i--) {
+            if (this._pendingElements[i] === target) {
+                this._pendingElements.splice(i, 1);
+            }
+        }
+
+        if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-lazy-row')) {
+            this._loadRow(target);
+        } else {
+            this._loadImage(target);
+        }
+    }
+
+    /**
+     * Debounce and schedule flushing of elements queued during scroll.
+     *
+     * @param {number} [delayMs=100] - Settle delay after scroll:finished
+     * @private
+     */
+    _schedulePendingElementsFlush(delayMs = 100) {
+        if (this._pendingFlushTimerId) {
+            clearTimeout(this._pendingFlushTimerId);
+            this._pendingFlushTimerId = null;
+        }
+
+        if (this._pendingElements.length === 0) return;
+
+        this._pendingFlushTimerId = setTimeout(() => {
+            this._pendingFlushTimerId = null;
+            if (!this._isScrolling()) {
+                this._flushPendingElements();
+            }
+        }, delayMs);
+    }
+
+    /**
+     * Drain elements queued while scrolling in small requestAnimationFrame slices
+     * so resuming post-scroll image loads stays inside the 16ms frame budget.
+     *
+     * @private
+     */
+    _flushPendingElements() {
+        if (this._isScrolling()) return;
+        if (this._pendingFlushRafId) return;
+        if (this._pendingElements.length === 0) return;
+
+        const scheduleRaf =
+            typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+                ? window.requestAnimationFrame
+                : (cb) => setTimeout(cb, 16);
+
+        const drainSlice = () => {
+            this._pendingFlushRafId = null;
+
+            // Pause immediately if user started another scroll mid-flush
+            if (this._isScrolling() || this._pendingElements.length === 0) {
+                return;
+            }
+
+            let processedCount = 0;
+            while (this._pendingElements.length > 0 && processedCount < this._maxPendingPerFrame) {
+                const target = this._pendingElements.shift();
+                if (!target || target.isConnected === false) {
+                    continue;
+                }
+
+                const isLazyRow = typeof target.hasAttribute === 'function' && target.hasAttribute('data-lazy-row');
+                this._loadIntersectingTarget(target);
+                processedCount++;
+
+                // A single lazy row fans out to multiple card images, so yield after
+                // loading one row to avoid bundling multiple rows in the same frame.
+                if (isLazyRow) {
+                    break;
+                }
+            }
+
+            // Continue draining remaining targets on subsequent animation frames
+            if (this._pendingElements.length > 0 && !this._isScrolling()) {
+                this._pendingFlushRafId = scheduleRaf(drainSlice);
+            }
+        };
+
+        this._pendingFlushRafId = scheduleRaf(drainSlice);
     }
 
     /**
@@ -883,6 +1014,24 @@ class LazyLoader {
         if (this._deferredPreloadFrameId) {
             cancelAnimationFrame(this._deferredPreloadFrameId);
             this._deferredPreloadFrameId = null;
+        }
+
+        // Prune queued elements belonging to the destroyed container so stale DOM
+        // references are not retained or loaded after page navigation.
+        if (this._pendingElements.length > 0) {
+            this._pendingElements = this._pendingElements.filter(
+                (el) => el && el !== container && (typeof container.contains !== 'function' || !container.contains(el))
+            );
+            if (this._pendingElements.length === 0) {
+                if (this._pendingFlushTimerId) {
+                    clearTimeout(this._pendingFlushTimerId);
+                    this._pendingFlushTimerId = null;
+                }
+                if (this._pendingFlushRafId) {
+                    cancelAnimationFrame(this._pendingFlushRafId);
+                    this._pendingFlushRafId = null;
+                }
+            }
         }
 
         // Unobserve all images tracked by the main observer
