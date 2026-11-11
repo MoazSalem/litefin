@@ -505,6 +505,10 @@ class ScrollController {
         if (imageCache && typeof imageCache.pause === 'function') {
             imageCache.pause();
         }
+
+        // Broadcast scroll start so post-scroll lazy queues cancel any pending settle
+        // flush timer immediately when the next keypress starts scrolling.
+        eventBus.emit('scroll:started');
     }
 
     /**

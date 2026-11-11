@@ -90,6 +90,7 @@ function createMockImage(srcUrl) {
     const classes = new Set();
     return {
         isConnected: true,
+        decoding: 'auto',
         dataset: { src: srcUrl },
         crossOrigin: null,
         src: '',
@@ -162,30 +163,49 @@ test('LazyLoader queues intersecting elements while scrolling and flushes them i
     globalThis.window.__scrollController.isAnimating = false;
     eventBus.emit('scroll:finished');
 
-    // Rapid second key tap within settle window should not double-flush
-    await new Promise((resolve) => setTimeout(resolve, 130));
+    // Within the 220ms post-scroll debounce, nothing may flush yet
+    await new Promise((resolve) => setTimeout(resolve, 140));
+    assert.equal(scheduledRafs.length, 0, 'RAF slice must NOT schedule inside 220ms settle debounce');
 
-    // Frame 1 should have scheduled cleanly and loaded at most 5 elements
+    // Simulate another keypress starting a scroll mid-debounce: must cancel the pending flush
+    globalThis.window.__scrollController.isAnimating = true;
+    eventBus.emit('scroll:started');
+    await new Promise((resolve) => setTimeout(resolve, 140));
+    assert.equal(scheduledRafs.length, 0, 'scroll:started must cancel pending 220ms flush timer');
+
+    // Finish the second scroll and let the full 220ms debounce elapse cleanly
+    globalThis.window.__scrollController.isAnimating = false;
+    eventBus.emit('scroll:finished');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Frame slice must await rAF turn before mutating DOM
     const loadedAfterSettle = images.filter((img) => img.src !== '').length;
     assert.equal(loadedAfterSettle, 0, 'RAF slice awaits animation frame turn before mutating DOM');
 
     runOneRafTurn();
     assert.equal(
         images.filter((img) => img.src !== '').length,
-        5,
-        'First animation frame slice should load exactly 5 queued images'
+        2,
+        'First animation frame slice should load at most 2 queued images'
     );
+    assert.equal(images[0].decoding, 'async', 'LazyLoader must set img.decoding = async before loading');
+    assert.equal(images[1].decoding, 'async', 'LazyLoader must set img.decoding = async on slice 1 items');
     assert.equal(
         images.filter((img) => img.src === '').length,
-        3,
-        'Remaining 3 images should wait for the next animation frame'
+        6,
+        'Remaining 6 images should wait for subsequent animation frames'
     );
 
+    // Drain remaining slices (2 per frame)
+    runOneRafTurn();
+    assert.equal(images.filter((img) => img.src !== '').length, 4);
+    runOneRafTurn();
+    assert.equal(images.filter((img) => img.src !== '').length, 6);
     runOneRafTurn();
     assert.equal(
         images.filter((img) => img.src !== '').length,
         8,
-        'Second animation frame slice should finish draining the remaining 3 images'
+        'Fourth animation frame slice should finish draining all 8 images'
     );
     assert.equal(lazyLoader._pendingElements.length, 0, 'Pending queue must be empty after flush');
 });

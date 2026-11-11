@@ -56,11 +56,11 @@ class LazyLoader {
         // ── Scroll-paused intersection queue ────────────────────────────────
         // Elements crossing the viewport rootMargin while a scroll animation
         // is active wait here until scroll settles, then drain in small rAF
-        // batches (4-6 elements per frame).
+        // batches (2 elements per frame).
         this._pendingElements = [];
         this._pendingFlushTimerId = null;
         this._pendingFlushRafId = null;
-        this._maxPendingPerFrame = 5;
+        this._maxPendingPerFrame = 2;
 
         this._init();
     }
@@ -71,14 +71,7 @@ class LazyLoader {
             'scroll',
             () => {
                 // Cancel any pending flush if scrolling resumes
-                if (this._pendingFlushTimerId) {
-                    clearTimeout(this._pendingFlushTimerId);
-                    this._pendingFlushTimerId = null;
-                }
-                if (this._pendingFlushRafId) {
-                    cancelAnimationFrame(this._pendingFlushRafId);
-                    this._pendingFlushRafId = null;
-                }
+                this._cancelPendingElementsFlush();
 
                 if (this._scrollTimeout) {
                     clearTimeout(this._scrollTimeout);
@@ -90,12 +83,18 @@ class LazyLoader {
                     if (!this._isScrolling()) {
                         this._processBlurHashQueue();
                         this._flushPendingMarquee();
-                        this._flushPendingElements();
+                        this._schedulePendingElementsFlush(220);
                     }
                 }, 150);
             },
             true
         );
+
+        // Cancel any pending post-scroll flush immediately when a new scroll
+        // animation begins so consecutive D-pad presses never hit image decode stalls.
+        eventBus.on('scroll:started', () => {
+            this._cancelPendingElementsFlush();
+        });
 
         // Listen for ScrollController finishing its transitions
         eventBus.on('scroll:finished', () => {
@@ -109,9 +108,9 @@ class LazyLoader {
                 }
             }, 50);
 
-            // Schedule queued intersection elements 100ms after scroll settles so
-            // consecutive D-pad key presses never race with image decode bursts.
-            this._schedulePendingElementsFlush(100);
+            // Schedule queued intersection elements 220ms after scroll settles so
+            // rapid multi-row D-pad taps (~500ms spacing) cancel before flushing.
+            this._schedulePendingElementsFlush(220);
         });
 
         // Legacy TV Focus-Driven Lazy Load
@@ -350,12 +349,29 @@ class LazyLoader {
     }
 
     /**
-     * Debounce and schedule flushing of elements queued during scroll.
+     * Cancel any pending post-scroll flush timer and active rAF slice cleanly
+     * when a new scroll transition begins or a page tears down.
      *
-     * @param {number} [delayMs=100] - Settle delay after scroll:finished
      * @private
      */
-    _schedulePendingElementsFlush(delayMs = 100) {
+    _cancelPendingElementsFlush() {
+        if (this._pendingFlushTimerId) {
+            clearTimeout(this._pendingFlushTimerId);
+            this._pendingFlushTimerId = null;
+        }
+        if (this._pendingFlushRafId) {
+            cancelAnimationFrame(this._pendingFlushRafId);
+            this._pendingFlushRafId = null;
+        }
+    }
+
+    /**
+     * Debounce and schedule flushing of elements queued during scroll.
+     *
+     * @param {number} [delayMs=220] - Settle delay after scroll:finished
+     * @private
+     */
+    _schedulePendingElementsFlush(delayMs = 220) {
         if (this._pendingFlushTimerId) {
             clearTimeout(this._pendingFlushTimerId);
             this._pendingFlushTimerId = null;
@@ -571,6 +587,11 @@ class LazyLoader {
      * @private
      */
     _assignImageSource(img, targetSrc) {
+        // Hint off-thread image decode before assigning src so compositor frames stay smooth
+        if (img && 'decoding' in img) {
+            img.decoding = 'async';
+        }
+
         // Fast path: if no custom headers configured, assign src directly with standard anonymous crossOrigin
         if (!customHeaders?.hasCustomHeaders?.()) {
             img.crossOrigin = 'anonymous';
