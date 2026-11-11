@@ -282,6 +282,13 @@ class HomePage extends Page {
         this._deferredCacheTask = null;
 
         /**
+         * idleGate task ids for per-row post-mount ImageCache pre-warming.
+         * Cancelled on destroy so unmounted navigation clears queued tasks.
+         * @type {number[]}
+         */
+        this._rowPrewarmTasks = [];
+
+        /**
          * Timestamp of the last completed deferred batch render.
          * Used to enforce a minimum real-time gap between background batches.
          * @type {number}
@@ -399,6 +406,12 @@ class HomePage extends Page {
         if (this._deferredCacheTask) {
             idleGate.cancel(this._deferredCacheTask);
             this._deferredCacheTask = null;
+        }
+        if (this._rowPrewarmTasks && this._rowPrewarmTasks.length > 0) {
+            for (let i = 0; i < this._rowPrewarmTasks.length; i++) {
+                idleGate.cancel(this._rowPrewarmTasks[i]);
+            }
+            this._rowPrewarmTasks = [];
         }
 
         // Clean up modal trap popped listener
@@ -2044,16 +2057,19 @@ class HomePage extends Page {
             // Find the placeholder and replace it with a live row
             this._renderRow(descriptor, items);
 
-            // Speculative image pre-warming is deferred to an idle period or timer
-            // so critical DOM construction and visible image decodes get full bandwidth.
-            if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => {
-                    if (this._isMounted) this._preWarmImagesForRow(descriptor, items);
-                });
-            } else {
-                setTimeout(() => {
-                    if (this._isMounted) this._preWarmImagesForRow(descriptor, items);
-                }, 200);
+            // Gate speculative image pre-warming behind idleGate so row card decoding
+            // and ScrollController animations on /home never compete with background bursts.
+            const prewarmTask = idleGate.runWhenIdle(
+                () => {
+                    if (this._isMounted) {
+                        this._preWarmImagesForRow(descriptor, items);
+                    }
+                },
+                4000,
+                0
+            );
+            if (prewarmTask && this._rowPrewarmTasks) {
+                this._rowPrewarmTasks.push(prewarmTask);
             }
             this._checkFocusRestoration(descriptor.id, true);
             return true;

@@ -286,6 +286,30 @@ test('HomePage: deferred batch follow-up uses a 2500ms idle threshold', () => {
     );
 });
 
+test('HomePage: row image pre-warming is gated behind idleGate and cancelled on destroy', () => {
+    const source = read('src/pages/HomePage.js');
+    const rowRenderBody = sliceBetween(source, 'async _loadAndRenderRow(', '} catch (error) {');
+
+    assert.ok(
+        !rowRenderBody.includes('requestIdleCallback('),
+        '_loadAndRenderRow must not use raw requestIdleCallback for image pre-warming'
+    );
+    assert.ok(
+        rowRenderBody.includes('idleGate.runWhenIdle(') && rowRenderBody.includes('4000'),
+        '_loadAndRenderRow must gate _preWarmImagesForRow behind idleGate.runWhenIdle(..., 4000, 0)'
+    );
+    assert.ok(
+        rowRenderBody.includes('this._rowPrewarmTasks.push(prewarmTask)'),
+        'Per-row prewarm task handles must be tracked for teardown'
+    );
+
+    const destroyBody = sliceBetween(source, 'onDestroyed() {', '_scheduleDeferredBatchCacheRefresh');
+    assert.ok(
+        destroyBody.includes('this._rowPrewarmTasks') && destroyBody.includes('idleGate.cancel(this._rowPrewarmTasks[i])'),
+        'onDestroyed() must cancel every pending row prewarm idle task'
+    );
+});
+
 // ============================================================================
 // Cluster 4 — Settings route & culture list
 // ============================================================================
