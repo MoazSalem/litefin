@@ -101,7 +101,9 @@ class LazyLoader {
                     // Resume deferred work once viewport scrolling settles
                     if (!this._isScrolling()) {
                         this._processBlurHashQueue();
-                        this._scheduleMarqueeFlushRaf();
+                        this._scheduleMarqueeFlushRaf(() => {
+                            this._flushPendingMarquee();
+                        });
                         this._schedulePendingElementsFlush(220);
                     }
                 }, 150);
@@ -125,7 +127,9 @@ class LazyLoader {
             // Defer BlurHash + marquee reflow past the 220ms rapid-scroll debounce
             // so post-scroll measurements never fire during ScrollController.finish
             // or between quick consecutive D-pad steps.
-            this._schedulePostScrollSettleWork(220);
+            this._schedulePostScrollSettleWork(220, () => {
+                this._flushPendingMarquee();
+            });
 
             // Schedule queued intersection elements 220ms after scroll settles so
             // rapid multi-row D-pad taps (~500ms spacing) cancel before flushing.
@@ -420,9 +424,10 @@ class LazyLoader {
      * once scrolling is idle so scrollWidth/clientWidth reads never share a frame
      * with ScrollController transitions.
      *
+     * @param {Function|null} [onFlush=null] - Flush callback invoking _flushPendingMarquee
      * @private
      */
-    _scheduleMarqueeFlushRaf() {
+    _scheduleMarqueeFlushRaf(onFlush = null) {
         if (!this._pendingMarqueeTarget) return;
         if (this._postScrollSettleRafId) return;
 
@@ -434,7 +439,11 @@ class LazyLoader {
             this._postScrollSettleRafId = null;
             this._postScrollSettleRafUsesTimeout = false;
             if (!this._isScrolling()) {
-                this._flushPendingMarquee();
+                if (typeof onFlush === 'function') {
+                    onFlush();
+                } else {
+                    this._flushPendingMarquee();
+                }
             }
         });
     }
@@ -444,16 +453,17 @@ class LazyLoader {
      * cancellable settle window so rapid D-pad taps never pay layout/decode costs.
      *
      * @param {number} [delayMs=220] - Quiet window after scroll:finished
+     * @param {Function|null} [onMarqueeFlush=null] - Flush callback for deferred marquee
      * @private
      */
-    _schedulePostScrollSettleWork(delayMs = 220) {
+    _schedulePostScrollSettleWork(delayMs = 220, onMarqueeFlush = null) {
         this._cancelPostScrollSettleWork();
 
         this._postScrollSettleTimerId = setTimeout(() => {
             this._postScrollSettleTimerId = null;
             if (!this._isScrolling()) {
                 this._processBlurHashQueue();
-                this._scheduleMarqueeFlushRaf();
+                this._scheduleMarqueeFlushRaf(onMarqueeFlush);
             }
         }, delayMs);
     }

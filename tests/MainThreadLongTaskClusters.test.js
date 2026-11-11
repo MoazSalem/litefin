@@ -984,7 +984,7 @@ test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish win
 
     // scroll:finished must use the cancellable 220ms settle scheduler rather than an uncancelled 50ms timer.
     assert.ok(
-        initBody.includes('this._schedulePostScrollSettleWork(220);'),
+        initBody.includes('this._schedulePostScrollSettleWork(220,'),
         'scroll:finished must delegate BlurHash/marquee work to cancellable 220ms settle scheduler'
     );
     assert.ok(
