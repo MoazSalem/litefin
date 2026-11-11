@@ -44,18 +44,61 @@ class HeroCarousel {
         this._preloadIdleId = null;
 
         // ---------------------------------------------------------------------
-        // Idle preload bookkeeping
+        // Idle preload & layer-warming bookkeeping
         // ---------------------------------------------------------------------
         // Slide backdrops/logos are preloaded well ahead of a transition so
         // goTo() only has to toggle CSS classes. Idle preloads are deduplicated
         // per slide and never decode BlurHash before the transition.
+        // Adjacent slide layers are warmed (visibility: visible at opacity: 0)
+        // in an idle frame after image decode so D-pad transitions never stall
+        // on synchronous mask rasterization or GPU texture uploads.
         // ---------------------------------------------------------------------
         this._idlePreloadTask = null;
         this._preloadedSlides = Object.create(null);
+        this._decodedAssets = Object.create(null);
+        this._warmHandles = [];
+
+        // Cached DOM node references populated in init() and cleared in destroy()
+        // so navigation never re-queries the carousel DOM tree on keypress frames.
+        this._slideItems = null;
+        this._dotItems = null;
+        this._slideBackdrops = null;
+        this._slideLogos = null;
+        this._slideLogoContainers = null;
+
+        // Cached storage preferences populated on first render/init to avoid
+        // synchronous localStorage reads inside hot transition paths.
+        this._carouselStyle = null;
+        this._indicatorStyle = null;
+        this._isCompact = null;
+        this._isZoomEnabled = null;
+        this._isAnimationEnabled = null;
+        this._isBlurhashFill = null;
 
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
         this._handleBlur = this._handleBlur.bind(this);
+    }
+
+    /**
+     * Reads and caches static hero carousel storage preferences once per
+     * carousel instance so slide transitions avoid synchronous storage reads.
+     *
+     * @private
+     */
+    _loadCachedPrefs() {
+        if (this._carouselStyle !== null) return;
+
+        // Default carousel style is 'immersive-performance' for GPU compositing
+        this._carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
+        this._indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        this._isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+        this._isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
+        this._isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        // BlurHash ambient color fill is exclusive to Immersive (Performance) mode and disabled by default
+        this._isBlurhashFill =
+            this._carouselStyle === 'immersive-performance' &&
+            storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
     }
 
     /**
@@ -64,11 +107,10 @@ class HeroCarousel {
     render() {
         if (!this._items || this._items.length === 0) return '';
 
-        // Default carousel style is set to 'immersive-performance' for high-performance rendering.
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-
-        // Read the chosen indicator presentation style ('dots', 'lines', or 'progress')
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        // Populate cached storage preferences once prior to rendering slides
+        this._loadCachedPrefs();
+        const carouselStyle = this._carouselStyle;
+        const indicatorStyle = this._indicatorStyle;
 
         // Render slides and indicator elements
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
@@ -79,13 +121,11 @@ class HeroCarousel {
             )
             .join('');
 
-        // Query layout configuration flags from persistent storage
-        const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
-        const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
-        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
-        // BlurHash ambient color fill is exclusive to Immersive (Performance) mode and disabled by default
-        const isBlurhashFill =
-            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        // Reuse cached layout configuration flags
+        const isCompact = this._isCompact;
+        const isZoomEnabled = this._isZoomEnabled;
+        const isAnimationEnabled = this._isAnimationEnabled;
+        const isBlurhashFill = this._isBlurhashFill;
         const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
         let navArrowsHtml = '';
@@ -178,7 +218,7 @@ class HeroCarousel {
 
         if (!useTextTitle && logoItemId && logoTag) {
             const logoParams = imageService.getParams('hero-logo');
-            const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+            const isCompact = this._isCompact !== null ? this._isCompact : storage.getItem('pref:heroCarouselCompact') !== 'false';
             const dpr = window.devicePixelRatio || 1;
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
                 fillWidth: Math.round(400 * dpr),
@@ -205,7 +245,9 @@ class HeroCarousel {
         const blurHash = this._resolveBlurHash(item);
         // Ambient BlurHash fill is exclusive to the Immersive (Performance) style and off by default
         const isBlurhashFill =
-            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+            this._isBlurhashFill !== null
+                ? this._isBlurhashFill
+                : carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
 
         // ---------------------------------------------------------------------
         // Lazy Backdrop & BlurHash Texture Allocation
@@ -374,6 +416,17 @@ class HeroCarousel {
     init(el) {
         this._container = el || document.getElementById('hero-carousel-container');
         if (!this._container) return;
+
+        // Populate cached storage prefs and static slide DOM node arrays once
+        // so navigation transitions run in O(1) without querying or parsing storage.
+        this._loadCachedPrefs();
+        this._slideItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-item'));
+        this._dotItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-dot'));
+        this._slideBackdrops = this._slideItems.map((slide) => slide.querySelector('.hero-backdrop'));
+        this._slideLogos = this._slideItems.map((slide) => slide.querySelector('.hero-logo'));
+        this._slideLogoContainers = this._slideLogos.map((img) =>
+            img && typeof img.closest === 'function' ? img.closest('.hero-logo-container') : null
+        );
 
         // Flag to prevent accidental detail navigation when completing a swipe gesture
         this._suppressItemClick = false;
@@ -611,29 +664,37 @@ class HeroCarousel {
         // - Tall/square logos get more height (up to 130px) to remain legible.
         // - Wide/short logos shrink in container height to eliminate vertical gaps.
         // =========================================================================
-        const logos = this._container.querySelectorAll('.hero-logo');
-        logos.forEach((img) => {
-            const adjustHeight = () => {
-                const container = img.closest('.hero-logo-container');
-                if (container) {
-                    const aspect = img.naturalWidth / img.naturalHeight || 1;
-                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
-                    const maxW = 400; // max-width of .hero-logo in CSS
-                    const maxHeight = isCompact ? 110 : 130;
-                    const minHeight = isCompact ? 50 : 60;
+        // Adjust only slides whose logo src is already eager (slide 0 on mount).
+        // Deferred logos (slides 1..N) size themselves inside _preloadSlide().
+        const isCompact = this._isCompact;
+        for (let idx = 0; idx < this._slideLogos.length; idx++) {
+            const img = this._slideLogos[idx];
+            if (!img) continue;
 
-                    const targetHeight = maxW / aspect;
-                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
-                    container.style.height = `${containerHeight}px`;
+            const logoContainer = this._slideLogoContainers[idx];
+            const adjustHeight = () => {
+                // Skip layout mutation until intrinsic dimensions are actually known
+                if (!logoContainer || !img.naturalWidth || !img.naturalHeight) return;
+
+                const aspect = img.naturalWidth / img.naturalHeight || 1;
+                const maxW = 400; // max-width of .hero-logo in CSS
+                const maxHeight = isCompact ? 110 : 130;
+                const minHeight = isCompact ? 50 : 60;
+
+                const targetHeight = maxW / aspect;
+                const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                const heightCss = `${containerHeight}px`;
+                if (logoContainer.style.height !== heightCss) {
+                    logoContainer.style.height = heightCss;
                 }
             };
 
-            if (img.complete) {
+            if (img.complete && img.naturalWidth > 0) {
                 adjustHeight();
-            } else {
+            } else if (img.getAttribute('src')) {
                 img.onload = adjustHeight;
             }
-        });
+        }
 
         // ────────────────────────────────────────────────────────────────────
         // BlurHash Background Placeholders for Hero Carousel items
@@ -698,11 +759,9 @@ class HeroCarousel {
         // ────────────────────────────────────────────────────────────────────
         // Exclusive to the Immersive (Performance) style and disabled by default.
         // Extracts ambient colors from BlurHash to fill any empty canvas area.
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill =
-            carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
-        if (isBlurhashFill) {
-            const activeSlide = this._container.querySelector('.hero-item.active');
+        // ────────────────────────────────────────────────────────────────────
+        if (this._isBlurhashFill) {
+            const activeSlide = this._slideItems[this._currentIndex] || this._container.querySelector('.hero-item.active');
             if (activeSlide) {
                 this._decodeBlurhashFill(activeSlide);
             }
@@ -800,6 +859,18 @@ class HeroCarousel {
             window.cancelIdleCallback(this._preloadIdleId);
             this._preloadIdleId = null;
         }
+        // Cancel any deferred idle slide-layer warming frames/timers
+        if (this._warmHandles && this._warmHandles.length > 0) {
+            for (let i = 0; i < this._warmHandles.length; i++) {
+                const handle = this._warmHandles[i];
+                if (handle.type === 'raf' && typeof cancelAnimationFrame === 'function') {
+                    cancelAnimationFrame(handle.id);
+                } else if (handle.type === 'timeout') {
+                    clearTimeout(handle.id);
+                }
+            }
+            this._warmHandles = [];
+        }
         if (this._intersectionObserver) {
             this._intersectionObserver.disconnect();
             this._intersectionObserver = null;
@@ -822,6 +893,13 @@ class HeroCarousel {
             this._container.removeEventListener('touchcancel', this._touchHandlers.onTouchCancel);
             this._touchHandlers = null;
         }
+        // Release cached DOM element references
+        this._slideItems = null;
+        this._dotItems = null;
+        this._slideBackdrops = null;
+        this._slideLogos = null;
+        this._slideLogoContainers = null;
+        this._container = null;
         focusManager.unregister('home-hero');
     }
 
@@ -866,8 +944,12 @@ class HeroCarousel {
         // Reset the visual progress bar to stay in sync with the JS timer
         // ONLY if animations are enabled AND we are using the 'progress' indicator style.
         // Static indicators ('lines', 'dots') do not require any animation frames or resets.
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
-        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        const indicatorStyle =
+            this._indicatorStyle !== null ? this._indicatorStyle : storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        const isAnimationEnabled =
+            this._isAnimationEnabled !== null
+                ? this._isAnimationEnabled
+                : storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
         if (indicatorStyle === 'progress' && isAnimationEnabled) {
             this._resetIndicatorAnimation();
         }
@@ -904,11 +986,12 @@ class HeroCarousel {
         if (!this._container) return;
 
         // Bypassed completely for static indicator styles (Lines and Dots)
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        const indicatorStyle =
+            this._indicatorStyle !== null ? this._indicatorStyle : storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
         if (indicatorStyle !== 'progress') return;
 
-        // Retrieve all dot indicators
-        const dots = this._container.querySelectorAll('.hero-dot');
+        // Retrieve cached dot indicators (fallback query only if called pre-init)
+        const dots = this._dotItems || this._container.querySelectorAll('.hero-dot');
         const currentDot = dots[this._currentIndex];
         if (!currentDot) return;
 
@@ -943,12 +1026,89 @@ class HeroCarousel {
     }
 
     /**
+     * Returns true when `index` is the active slide or its immediate previous/next neighbor.
+     * Keeps composited layers bounded to at most 3 slides regardless of carousel size.
+     *
+     * @param {number} index - Slide index to test
+     * @returns {boolean}
+     * @private
+     */
+    _isAdjacentSlide(index) {
+        const count = this._items ? this._items.length : 0;
+        if (count <= 1) return index === 0;
+        if (index === this._currentIndex) return true;
+
+        const nextIdx = (this._currentIndex + 1) % count;
+        const prevIdx = (this._currentIndex - 1 + count) % count;
+        return index === nextIdx || index === prevIdx;
+    }
+
+    /**
+     * Promotes a decoded, preloaded neighbor slide from visibility:hidden to
+     * visibility:visible (still opacity:0 and pointer-events:none) during an
+     * idle frame. Performing layer creation and mask setup off the transition path
+     * ensures D-pad goTo() only flips CSS opacity classes.
+     *
+     * @param {number} index - Slide index to composite-warm
+     * @private
+     */
+    _scheduleSlideWarm(index) {
+        if (!this._container || !this._decodedAssets[index] || !this._isAdjacentSlide(index)) return;
+        // Defer layer warming while an active crossfade or scroll animation is running
+        if (this._hideTimeoutId) return;
+        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
+            return;
+        }
+
+        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
+        const slide = items[index];
+        if (!slide || slide.style.visibility === 'visible') return;
+
+        const entry = { type: typeof requestAnimationFrame === 'function' ? 'raf' : 'timeout', id: null };
+        const runWarm = () => {
+            const pos = this._warmHandles ? this._warmHandles.indexOf(entry) : -1;
+            if (pos !== -1) this._warmHandles.splice(pos, 1);
+
+            if (!this._container || this._hideTimeoutId || !this._isAdjacentSlide(index)) return;
+            if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
+                return;
+            }
+            if (slide.style.visibility !== 'visible') {
+                slide.style.visibility = 'visible';
+            }
+        };
+
+        if (entry.type === 'raf') {
+            entry.id = requestAnimationFrame(runWarm);
+        } else {
+            entry.id = setTimeout(runWarm, 16);
+        }
+        this._warmHandles.push(entry);
+    }
+
+    /**
+     * Warms immediately adjacent neighbor slides when transitioning settles.
+     * @private
+     */
+    _warmAdjacentSlides() {
+        const count = this._items ? this._items.length : 0;
+        if (count <= 1) return;
+
+        const nextIdx = (this._currentIndex + 1) % count;
+        const prevIdx = (this._currentIndex - 1 + count) % count;
+        this._scheduleSlideWarm(nextIdx);
+        if (prevIdx !== nextIdx) {
+            this._scheduleSlideWarm(prevIdx);
+        }
+    }
+
+    /**
      * Preload images for a specific slide by index
      * Loads backdrop and logo images so they're ready for display
      * @private
      */
     _preloadSlide(index) {
-        const items = this._container.querySelectorAll('.hero-item');
+        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
         const item = items[index];
         if (!item) return;
 
@@ -958,9 +1118,21 @@ class HeroCarousel {
         if (this._preloadedSlides[index]) return;
         this._preloadedSlides[index] = true;
 
+        // Track remaining async assets (backdrop and optional logo) so we only
+        // composite-warm the slide layer once all textures are decoded.
+        let pendingAssets = 0;
+        const markAssetReady = () => {
+            pendingAssets--;
+            if (pendingAssets <= 0) {
+                this._decodedAssets[index] = true;
+                this._scheduleSlideWarm(index);
+            }
+        };
+
         // Preload backdrop image
-        const backdrop = item.querySelector('.hero-backdrop');
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : item.querySelector('.hero-backdrop');
         if (backdrop && backdrop.dataset.backdrop && !backdrop.style.backgroundImage) {
+            pendingAssets++;
             const url = backdrop.dataset.backdrop;
 
             /*
@@ -979,7 +1151,7 @@ class HeroCarousel {
                 const commitBackdrop = () => {
                     if (applied) return;
                     applied = true;
-                    if (backdrop.dataset.backdrop !== url) return;
+                    if (!this._container || backdrop.dataset.backdrop !== url) return;
 
                     // Prefer resolved img.src to ensure fallback Blob URLs are utilized
                     const finalUrl = img.src || effectiveUrl;
@@ -993,6 +1165,8 @@ class HeroCarousel {
                             if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
                         }, 500);
                     }
+
+                    markAssetReady();
                 };
 
                 // When image finishes downloading, attach to background-image
@@ -1006,9 +1180,13 @@ class HeroCarousel {
                             .then((blobUrl) => {
                                 if (blobUrl && blobUrl !== url) {
                                     img.src = blobUrl;
+                                } else {
+                                    markAssetReady();
                                 }
                             })
-                            .catch(() => {});
+                            .catch(markAssetReady);
+                    } else {
+                        markAssetReady();
                     }
                 };
 
@@ -1039,34 +1217,52 @@ class HeroCarousel {
         }
 
         // Load logo image if deferred
-        const logo = item.querySelector('.hero-logo');
+        const logo = this._slideLogos ? this._slideLogos[index] : item.querySelector('.hero-logo');
         if (logo && logo.dataset.src && !logo.src) {
+            pendingAssets++;
+            const container =
+                this._slideLogoContainers && this._slideLogoContainers[index]
+                    ? this._slideLogoContainers[index]
+                    : logo.closest('.hero-logo-container');
+
             // Recalculate natural aspect ratio container height once deferred logo loads
             const adjustLogoHeight = () => {
-                const container = logo.closest('.hero-logo-container');
-                if (container) {
+                if (container && logo.naturalWidth > 0 && logo.naturalHeight > 0) {
                     const aspect = logo.naturalWidth / logo.naturalHeight || 1;
-                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                    const isCompact =
+                        this._isCompact !== null ? this._isCompact : storage.getItem('pref:heroCarouselCompact') !== 'false';
                     const maxW = 400; // max-width of .hero-logo in CSS
                     const maxHeight = isCompact ? 110 : 130;
                     const minHeight = isCompact ? 50 : 60;
 
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
-                    container.style.height = `${containerHeight}px`;
+                    const heightCss = `${containerHeight}px`;
+                    if (container.style.height !== heightCss) {
+                        container.style.height = heightCss;
+                    }
                 }
             };
 
+            let logoDone = false;
+            const finalizeLogo = () => {
+                if (logoDone) return;
+                logoDone = true;
+                adjustLogoHeight();
+                markAssetReady();
+            };
+
             /*
-             * Applies the resolved logo source URL and adjusts container height.
-             * Binds onload handler if image is still decoding asynchronously.
+             * Applies the resolved logo source URL, decodes off-thread when available,
+             * and adjusts container height once dimensions are ready.
              */
             const applyLogo = (effectiveUrl) => {
+                logo.onload = finalizeLogo;
                 logo.src = effectiveUrl;
-                if (logo.complete) {
-                    adjustLogoHeight();
-                } else {
-                    logo.onload = adjustLogoHeight;
+                if (typeof logo.decode === 'function') {
+                    logo.decode().then(finalizeLogo).catch(() => {});
+                } else if (logo.complete) {
+                    finalizeLogo();
                 }
             };
 
@@ -1080,9 +1276,13 @@ class HeroCarousel {
                             if (blobUrl && blobUrl !== logo.dataset.src) {
                                 logo.removeAttribute('crossorigin');
                                 logo.src = blobUrl;
+                            } else {
+                                markAssetReady();
                             }
                         })
-                        .catch(() => {});
+                        .catch(markAssetReady);
+                } else {
+                    markAssetReady();
                 }
             };
 
@@ -1100,6 +1300,12 @@ class HeroCarousel {
             } else {
                 applyLogo(logo.dataset.src);
             }
+        }
+
+        // Slide had no deferred backdrop/logo left to load — mark immediately warmable
+        if (pendingAssets === 0) {
+            this._decodedAssets[index] = true;
+            this._scheduleSlideWarm(index);
         }
     }
 
@@ -1130,12 +1336,26 @@ class HeroCarousel {
                 this._preloadSlide(i);
             }
 
+            // Preload wrap-around neighbors when parked at boundary slides
+            if (count > 2) {
+                if (this._currentIndex === 0) {
+                    this._preloadSlide(count - 1);
+                } else if (this._currentIndex === count - 1) {
+                    this._preloadSlide(0);
+                }
+            }
+
+            // Warm any already-decoded adjacent slide layers while idle
+            this._warmAdjacentSlides();
+
             // Ambient BlurHash fills are decoded here, outside any transition.
-            const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
             const isBlurhashFill =
-                carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+                this._isBlurhashFill !== null
+                    ? this._isBlurhashFill
+                    : (storage.getItem('pref:heroCarouselStyle') || 'immersive-performance') === 'immersive-performance' &&
+                      storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
             if (isBlurhashFill) {
-                const slides = this._container.querySelectorAll('.hero-item');
+                const slides = this._slideItems || this._container.querySelectorAll('.hero-item');
                 for (let i = start; i <= end && i < slides.length; i++) {
                     this._decodeBlurhashFill(slides[i]);
                 }
@@ -1163,19 +1383,20 @@ class HeroCarousel {
      * Navigate to a specific item
      */
     goTo(index) {
-        if (index === this._currentIndex) return;
+        if (index === this._currentIndex || !this._container) return;
 
         log.debug(`Navigating to hero item ${index}`);
 
-        const items = this._container.querySelectorAll('.hero-item');
-        const dots = this._container.querySelectorAll('.hero-dot');
+        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
+        const dots = this._dotItems || this._container.querySelectorAll('.hero-dot');
 
         if (!items[index] || !dots[index]) return;
 
-        const prevItem = items[this._currentIndex];
+        const prevIndex = this._currentIndex;
+        const prevItem = items[prevIndex];
         const nextItem = items[index];
 
-        // Hide all non-adjacent slides immediately to free GPU memory.
+        // Hide all non-transition slides immediately to free GPU memory.
         // Guarded writes: already-hidden slides are skipped so a keypress never
         // invalidates style for slides that are off-screen anyway.
         for (let i = 0; i < items.length; i++) {
@@ -1184,50 +1405,42 @@ class HeroCarousel {
             }
         }
 
-        // Make the new slide visible and promote GPU layers before transition
-        nextItem.style.visibility = 'visible';
-        nextItem.style.willChange = 'opacity';
-        const nextContent = nextItem.querySelector('.hero-content');
-        if (nextContent) nextContent.style.willChange = 'transform, opacity';
-        const nextBackdrop = nextItem.querySelector('.hero-backdrop');
-        if (nextBackdrop) nextBackdrop.style.willChange = 'transform';
+        // Guarded visibility write: idle-warmed neighbor slides are already
+        // visibility:visible (at opacity:0) so this mutates style only on a
+        // cold fast-skip before idle warming completes.
+        if (nextItem.style.visibility !== 'visible') {
+            nextItem.style.visibility = 'visible';
+        }
 
-        // Update classes — this is the entire transition cost. Backdrops and
-        // logos were preloaded during idle, and no image or BlurHash work is
-        // started here, so the keypress frame stays free of decode work.
+        // Update active classes — compositor layer promotion (.hero-item.active,
+        // .hero-content, .hero-backdrop) stays declarative in CSS without inline
+        // willChange churn that tears down GPU surfaces between presses.
         prevItem.classList.remove('active');
-        dots[this._currentIndex].classList.remove('active');
+        dots[prevIndex].classList.remove('active');
 
         this._currentIndex = index;
 
         nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
-        // After the opacity transition completes, hide the previous slide
-        // and demote GPU compositing layers to release texture caches
+        // After the 1000ms CSS crossfade settles, prune slides outside the
+        // immediate [prev, current, next] window and idle-warm the new neighbors.
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
-            prevItem.style.visibility = 'hidden';
-            prevItem.style.willChange = 'auto';
-            const prevContent = prevItem.querySelector('.hero-content');
-            if (prevContent) prevContent.style.willChange = 'auto';
-            const prevBackdrop = prevItem.querySelector('.hero-backdrop');
-            if (prevBackdrop) prevBackdrop.style.willChange = 'auto';
-
-            // Clean up will-change on active item now that transition is settled
-            nextItem.style.willChange = 'auto';
-            if (nextContent) nextContent.style.willChange = 'auto';
-            if (nextBackdrop) nextBackdrop.style.willChange = 'auto';
-
             this._hideTimeoutId = null;
-        }, 1050); // Just after the 1000ms opacity transition
+            if (!this._container) return;
 
-        // Extend the preload window in the background. idleGate guarantees this
-        // runs after the transition settles, never inside the keypress frame.
-        this._scheduleIdlePreload(250);
+            if (!this._isAdjacentSlide(prevIndex) && prevItem.style.visibility !== 'hidden') {
+                prevItem.style.visibility = 'hidden';
+            }
+            this._warmAdjacentSlides();
+        }, 1050);
 
-        // Restart timer on navigation. This will also restart the progress
-        // animation if it is enabled.
+        // Extend the preload & layer-warming window in the background outside
+        // the active transition frame.
+        this._scheduleIdlePreload(450);
+
+        // Restart timer on navigation without re-querying storage or dots.
         this._startAutoScroll();
     }
 
