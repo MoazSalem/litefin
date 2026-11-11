@@ -61,8 +61,13 @@
     min-height: 500px;
     overflow: hidden;
     touch-action: pan-y;
-    /* Promote to its own GPU composite layer */
+    /* Pin compositor layer so Chromium preserves GPU backing across offscreen/onscreen scroll cycles */
+    will-change: transform;
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    contain: layout style paint;
 }
 
 .hero-carousel-container.compact .hero-carousel {
@@ -127,38 +132,7 @@
     opacity: 1;
     z-index: 2;
     pointer-events: auto;
-    /*
-     * Re-assert the crossfade timing here so the idle pre-warm class below can
-     * never suppress the fade on the slide that just became active.
-     */
     transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/*
- * ============================================================================
- * Idle pre-rasterization window
- * ============================================================================
- * Applied for two animation frames by HeroCarousel._warmAdjacentSlides() to a
- * decoded, non-active slide. opacity 0.02 (instead of 0) makes the layer
- * paint-eligible, so the masked 1280px backdrop is rasterized during idle time
- * rather than in the 0-250ms after goTo() flips .active. The transition is
- * disabled so adding/removing the class is a single style change, never a fade.
- * ============================================================================
- */
-.hero-item--prewarm {
-    opacity: 0.02;
-    transition: none;
-    -webkit-transition: none;
-}
-
-/* Ensure child typography/logos inside an idle pre-warmed slide rasterize at
- * full child opacity (0.02 * 1 = 0.02) without triggering the slide-in transition. */
-.hero-item--prewarm .hero-content {
-    opacity: 1;
-    transform: translateY(0);
-    -webkit-transform: translateY(0);
-    transition: none;
-    -webkit-transition: none;
 }
 
 /* ============================================================================
@@ -172,11 +146,33 @@
     width: 100%;
     height: 100%;
     z-index: -1;
+    overflow: hidden;
     background-size: cover;
     background-position: top;
     background-repeat: no-repeat;
     /* Isolate the backdrop's own GPU layer for the Ken Burns animation */
     transform: translateZ(0);
+}
+
+/* Live decoded <img> element swapped onto only the active (or crossfading) slide */
+.hero-backdrop-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+    pointer-events: none;
+}
+
+.hero-carousel-container.compact .hero-backdrop-img {
+    object-position: 50% 20%;
+}
+
+.hero-carousel-container.immersive .hero-backdrop-img {
+    object-position: center 15%;
 }
 
 /*
@@ -333,6 +329,8 @@
     margin-bottom: 24px;
     display: flex;
     align-items: flex-end;
+    /* Isolate logo layout & styling so swapping/decoding a logo never invalidates the slide backdrop */
+    contain: layout style;
 }
 
 .hero-logo {

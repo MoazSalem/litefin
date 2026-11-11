@@ -6,16 +6,16 @@ import test from 'node:test';
 
 /**
  * ============================================================================
- * HeroCarousel Slide Transition & Idle Layer-Warming Test Suite
+ * HeroCarousel Slide Transition & Off-DOM Bitmap Retention Test Suite
  * ============================================================================
  * Verifies:
- *   1. Preloading decodes BOTH backdrop and logo off the main thread.
- *   2. Adjacent neighbor slides are composite-warmed (visibility: visible while
- *      opacity: 0) via an idle animation frame outside transition frames.
+ *   1. Preloading decodes BOTH backdrop and logo off the main thread, retaining
+ *      decoded Images off-DOM until goTo() swaps the incoming slide in.
+ *   2. Background stacked preloads (slides 1..4) stagger every 100ms behind
+ *      idleGate with no duplicate ImageCache burst on init().
  *   3. goTo() reuses cached DOM node arrays & storage preferences, never sets
- *      inline style.willChange overrides, and only flips active classes.
- *   4. hero-carousel.css isolates slide layout and disables pointer events on
- *      inactive idle-warmed neighbor slides.
+ *      inline style.willChange overrides, and attaches pre-decoded <img> nodes.
+ *   4. Inactive slide backdrop <img> DOM nodes detach cleanly after crossfade.
  * ============================================================================
  */
 
@@ -110,8 +110,31 @@ function createMockNode(classNames = [], attrs = {}) {
         _src: '',
         onload: null,
         onerror: null,
+        parentNode: null,
+        children: [],
+        get firstChild() {
+            return node.children[0] || null;
+        },
         childrenBySelector: new Map(),
         childrenAllBySelector: new Map(),
+        appendChild: (child) => {
+            if (!node.children.includes(child)) node.children.push(child);
+            child.parentNode = node;
+            return child;
+        },
+        insertBefore: (child, ref) => {
+            const idx = ref ? node.children.indexOf(ref) : -1;
+            if (idx === -1) node.children.push(child);
+            else node.children.splice(idx, 0, child);
+            child.parentNode = node;
+            return child;
+        },
+        removeChild: (child) => {
+            const idx = node.children.indexOf(child);
+            if (idx !== -1) node.children.splice(idx, 1);
+            child.parentNode = null;
+            return child;
+        },
         classList: {
             add: (...names) => names.forEach((n) => classes.add(n)),
             remove: (...names) => names.forEach((n) => classes.delete(n)),
@@ -125,7 +148,14 @@ function createMockNode(classNames = [], attrs = {}) {
         closest: () => node._closestContainer || null,
         querySelector: (selector) => {
             queryOneCount++;
-            return node.childrenBySelector.get(selector) || null;
+            if (node.childrenBySelector.has(selector)) {
+                return node.childrenBySelector.get(selector);
+            }
+            if (selector.startsWith('.')) {
+                const cls = selector.slice(1);
+                return node.children.find((c) => c.className && c.className.split(/\s+/).includes(cls)) || null;
+            }
+            return null;
         },
         querySelectorAll: (selector) => {
             queryAllCount++;
@@ -194,7 +224,14 @@ function buildCarouselFixture(slideCount = 4) {
         const slide = createMockNode(isFirst ? ['hero-item', 'active'] : ['hero-item']);
 
         const backdrop = createMockNode(['hero-backdrop'], { backdrop: `http://test/backdrop-${i}.jpg` });
-        if (isFirst) backdrop.style.backgroundImage = "url('http://test/backdrop-0.jpg')";
+        if (isFirst) {
+            const firstImg = createMockNode(['hero-backdrop-img'], { src: 'http://test/backdrop-0.jpg' });
+            firstImg.className = 'hero-backdrop-img';
+            firstImg._src = 'http://test/backdrop-0.jpg';
+            firstImg.complete = true;
+            firstImg.naturalWidth = 1280;
+            backdrop.appendChild(firstImg);
+        }
 
         const logoContainer = createMockNode(['hero-logo-container']);
         const logo = createMockNode(['hero-logo'], isFirst ? {} : { src: `http://test/logo-${i}.png` });
@@ -309,10 +346,14 @@ test('HeroCarousel: renders stacked slides without visibility:hidden, pre-decode
         await Promise.resolve();
         await Promise.resolve();
 
-        // Backdrop background-image, decodedAssets flag, and logo container height should now be committed
-        assert.equal(backdrops[1].style.backgroundImage, "url('http://test/backdrop-1.jpg')");
+        // Decoded off-DOM Image and logo container height should now be retained
+        assert.equal(backdrops[1].children.length, 0, 'Inactive slide 1 backdrop <img> stays off-DOM until goTo()');
+        assert.ok(carousel._decodedBackdrops[1], 'Slide 1 decoded Image must be retained off-DOM');
+        assert.ok(
+            carousel._retainedImages.includes(carousel._decodedBackdrops[1]),
+            'Slide 1 Image must be retained inside _retainedImages'
+        );
         assert.equal(logoContainers[1].style.height, '100px');
-        assert.equal(carousel._decodedAssets[1], true, 'Slide 1 assets should be marked decoded');
 
         // Now execute goTo(1) and assert zero DOM queries, zero storage reads, zero visibility/willChange churn
         const queryAllBefore = queryAllCount;
@@ -321,6 +362,7 @@ test('HeroCarousel: renders stacked slides without visibility:hidden, pre-decode
 
         carousel.goTo(1);
 
+        assert.equal(backdrops[1].children[0], carousel._decodedBackdrops[1], 'goTo(1) must attach pre-decoded <img>');
         assert.equal(queryAllCount, queryAllBefore, 'goTo() must reuse cached slide/dot arrays without querySelectorAll');
         assert.equal(queryOneCount, queryOneBefore, 'goTo() must not call querySelector inside hot transition');
         assert.equal(storageReads, storageReadsBefore, 'goTo() must reuse cached preferences without storage reads');
@@ -339,8 +381,11 @@ test('HeroCarousel: renders stacked slides without visibility:hidden, pre-decode
     }
 });
 
-test('HeroCarousel: prewarms up to 5 slides via ImageCache and keeps progress dot active smoothly across goTo()', async () => {
+test('HeroCarousel: staggers slide preloads every 100ms behind idleGate (no ImageCache burst) and keeps progress dot active smoothly across goTo()', async () => {
     const { imageCache } = await import('../src/utils/ImageCache.js');
+    const { idleGate } = await import('../src/utils/IdleGate.js');
+    idleGate.setBootComplete();
+
     const preloadedBatches = [];
     const origPreload = imageCache.preload;
     imageCache.preload = (urls) => {
@@ -359,14 +404,16 @@ test('HeroCarousel: prewarms up to 5 slides via ImageCache and keeps progress do
     try {
         carousel.init(container);
 
-        assert.equal(preloadedBatches.length, 1, 'init() must call imageCache.preload once');
-        const batch = preloadedBatches[0];
-        // Slides 1..4 (up to slide 5 total) = 4 backdrops + 4 logos = 8 unique URLs; slides 5..6 excluded
-        assert.ok(batch.includes('http://test/backdrop-1.jpg'));
-        assert.ok(batch.includes('http://test/backdrop-4.jpg'));
-        assert.ok(!batch.includes('http://test/backdrop-5.jpg'), 'Must cap prewarm at first 5 slides');
-        assert.ok(batch.includes('http://test/logo-4.png'));
-        assert.ok(!batch.includes('http://test/logo-5.png'), 'Must cap logo prewarm at first 5 slides');
+        // Removing _prewarmHeroImages() avoids duplicate simultaneous ImageCache.preload bursts
+        assert.equal(preloadedBatches.length, 0, 'init() must NOT fire redundant ImageCache.preload bursts');
+        assert.ok(carousel._decodedBackdrops[0], 'Slide 0 must decode immediately on mount');
+        assert.equal(carousel._decodedBackdrops[1], undefined, 'Slide 1 must wait for 100ms staggered preload');
+
+        // After ~160ms (> 100ms spacing timer + idleGate check), Slide 1 starts preloading
+        // while Slide 2 is still deferred to its own 100ms window
+        await new Promise((r) => setTimeout(r, 160));
+        assert.ok(carousel._decodedBackdrops[1], 'Slide 1 must preload after 100ms idle interval');
+        assert.equal(carousel._decodedBackdrops[2], undefined, 'Slide 2 must wait its own 100ms interval');
 
         carousel.goTo(1);
         assert.equal(dots[1].classList.contains('active'), true, 'goTo() must keep new dot active without stripping');

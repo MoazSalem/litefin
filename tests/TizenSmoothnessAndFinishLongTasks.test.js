@@ -397,7 +397,7 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, read-only AVPlay ch
 // 3. Part 3 Cluster 1 — HeroCarousel CSS, Decode Ordering & Deferred AutoStart
 // ============================================================================
 
-test('HeroCarousel CSS: removes dot width layout transition and promotes prewarm content rasterization', () => {
+test('HeroCarousel CSS: pins compositor layer, removes .hero-item--prewarm bloat, and isolates logo container', () => {
     const css = readSrc('src/styles/hero-carousel.css');
     const dotRuleMatch = css.match(/^\.hero-dot\s*\{([^}]+)\}/m);
     assert.ok(dotRuleMatch, '.hero-dot rule must exist');
@@ -406,15 +406,24 @@ test('HeroCarousel CSS: removes dot width layout transition and promotes prewarm
         '.hero-dot must not animate width (forces flex layout thrash across indicators after goTo)'
     );
 
-    const prewarmContentMatch = css.match(/^\.hero-item--prewarm\s+\.hero-content\s*\{([^}]+)\}/m);
-    assert.ok(prewarmContentMatch, '.hero-item--prewarm .hero-content rule must exist');
+    const carouselRule = css.match(/^\.hero-carousel\s*\{([^}]+)\}/m);
+    assert.ok(carouselRule, '.hero-carousel rule must exist');
     assert.ok(
-        prewarmContentMatch[1].includes('opacity: 1;') && prewarmContentMatch[1].includes('transition: none;'),
-        '.hero-item--prewarm .hero-content must make content paint-eligible without fade transition'
+        carouselRule[1].includes('will-change: transform;') &&
+            carouselRule[1].includes('backface-visibility: hidden;') &&
+            carouselRule[1].includes('contain: layout style paint;'),
+        '.hero-carousel must pin its compositor layer and layout/paint containment'
     );
+
+    const logoContainerRule = css.match(/^\.hero-logo-container\s*\{([^}]+)\}/m);
+    assert.ok(logoContainerRule && logoContainerRule[1].includes('contain: layout style;'), '.hero-logo-container must contain layout/style');
+
+    const backdropImgRule = css.match(/^\.hero-backdrop-img\s*\{([^}]+)\}/m);
+    assert.ok(backdropImgRule && backdropImgRule[1].includes('object-fit: cover;'), '.hero-backdrop-img rule must exist');
+    assert.ok(!css.includes('.hero-item--prewarm'), '.hero-item--prewarm rule must be removed');
 });
 
-test('HeroCarousel: _preloadSlide waits for decode() instead of premature onload and triggers neighbor prewarm', async () => {
+test('HeroCarousel: _preloadSlide awaits decode() off-DOM before marking slide ready and swaps on goTo()', async () => {
     rafQueue.length = 0;
     storageMap.clear();
     storageMap.set('pref:heroCarouselStyle', 'immersive-performance');
@@ -447,8 +456,32 @@ test('HeroCarousel: _preloadSlide waits for decode() instead of premature onload
     const slide0 = createMockElement('div', ['hero-item', 'active']);
     const slide1 = createMockElement('div', ['hero-item']);
     const backdrop0 = createMockElement('div', ['hero-backdrop'], { backdrop: 'http://test/b0.jpg' });
-    backdrop0.style.backgroundImage = "url('http://test/b0.jpg')";
     const backdrop1 = createMockElement('div', ['hero-backdrop'], { backdrop: 'http://test/b1.jpg' });
+    const canvas1 = createMockElement('canvas', ['hero-blurhash-canvas']);
+    canvas1.style.opacity = '1';
+
+    for (const b of [backdrop0, backdrop1]) {
+        b.children = [];
+        Object.defineProperty(b, 'firstChild', { get: () => b.children[0] || null });
+        b.appendChild = (c) => {
+            if (!b.children.includes(c)) b.children.push(c);
+            c.parentNode = b;
+            return c;
+        };
+        b.insertBefore = (c, ref) => {
+            const idx = ref ? b.children.indexOf(ref) : -1;
+            if (idx === -1) b.children.push(c);
+            else b.children.splice(idx, 0, c);
+            c.parentNode = b;
+            return c;
+        };
+        b.removeChild = (c) => {
+            const idx = b.children.indexOf(c);
+            if (idx !== -1) b.children.splice(idx, 1);
+            c.parentNode = null;
+            return c;
+        };
+    }
 
     const logoContainer1 = createMockElement('div', ['hero-logo-container']);
     const logo1 = createMockElement('img', ['hero-logo'], { src: 'http://test/l1.png' });
@@ -467,6 +500,7 @@ test('HeroCarousel: _preloadSlide waits for decode() instead of premature onload
     slide1.childrenBySelector.set('.hero-backdrop', backdrop1);
     slide1.childrenBySelector.set('.hero-logo', logo1);
     slide1.childrenBySelector.set('.hero-logo-container', logoContainer1);
+    slide1.childrenBySelector.set('.hero-blurhash-canvas', canvas1);
 
     const dots = [
         createMockElement('div', ['hero-dot', 'active'], { index: '0' }),
@@ -488,25 +522,26 @@ test('HeroCarousel: _preloadSlide waits for decode() instead of premature onload
             'When img.decode is supported, img.onload must NOT race ahead of decode()'
         );
         assert.equal(logo1.onload, null, 'When logo.decode is supported, logo.onload must NOT short-circuit decode()');
-        assert.equal(backdrop1.style.backgroundImage, undefined, 'Backdrop must stay uncommitted until decode() settles');
+        assert.equal(canvas1.style.opacity, '1', 'BlurHash must stay visible until backdrop decode() settles');
+        assert.equal(backdrop1.children.length, 0, 'Inactive backdrop must stay off-DOM during decode');
 
         resolveBackdropDecode();
         await Promise.resolve();
         await Promise.resolve();
-        assert.equal(backdrop1.style.backgroundImage, "url('http://test/b1.jpg')");
-        assert.equal(carousel._decodedAssets[1], undefined, 'Slide must not mark decoded until logo decode also resolves');
+        assert.equal(canvas1.style.opacity, '0', 'BlurHash must fade once backdrop decode() settles');
+        assert.equal(backdrop1.children.length, 0, 'Inactive Slide 1 <img> remains off-DOM after pre-decode');
+        assert.ok(carousel._decodedBackdrops[1] === backdropImgInstance, 'Pre-decoded Image must be kept in _decodedBackdrops');
+        assert.equal(logoContainer1.style.height, undefined, 'Logo height must wait until logo.decode() resolves');
 
         resolveLogoDecode();
         await Promise.resolve();
         await Promise.resolve();
-        assert.equal(carousel._decodedAssets[1], true, 'Slide must mark decoded after both backdrop and logo decode');
+        assert.equal(logoContainer1.style.height, '100px', 'Logo container must adjust after logo decode');
+        assert.ok(carousel._retainedImages.includes(logo1), 'Decoded logo must be retained in _retainedImages');
 
-        // Running the post-decode rAF should apply .hero-item--prewarm onto slide 1 for two frames
-        flushOneRaf();
-        assert.equal(slide1.classList.contains('hero-item--prewarm'), true);
-        flushOneRaf();
-        flushOneRaf();
-        assert.equal(slide1.classList.contains('hero-item--prewarm'), false);
+        // Switching to Slide 1 swaps in the pre-decoded <img> immediately without re-decoding
+        carousel.goTo(1);
+        assert.equal(backdrop1.children[0], backdropImgInstance, 'goTo(1) must attach pre-decoded <img> onto active slide');
     } finally {
         nextImageFactory = null;
         globalThis.window.__scrollController = prevSc;
@@ -688,7 +723,7 @@ test('ScrollController: defers scroll:finished to macrotask, cancels on rapid re
 // 5. Staggered HeroCarousel Warm, LazyLoader Decode, CSS Containment & Easing Frame-K
 // ============================================================================
 
-test('HeroCarousel: staggers neighbor prewarm strictly 1 slide per 150ms quiet tick and cancels on goTo', async () => {
+test('HeroCarousel: staggers slide preloads behind idleGate every 100ms, retains off-DOM Images, and defers IO timer start', async () => {
     rafQueue.length = 0;
     storageMap.clear();
     storageMap.set('pref:heroCarouselStyle', 'immersive-performance');
@@ -696,17 +731,41 @@ test('HeroCarousel: staggers neighbor prewarm strictly 1 slide per 150ms quiet t
     const prevSc = globalThis.window.__scrollController;
     globalThis.window.__scrollController = { isAnimating: false };
 
+    const css = readSrc('src/styles/hero-carousel.css');
+    const carouselSrc = readSrc('src/ui/HeroCarousel.js');
+
+    // Pin compositor layer + contain boundaries, remove .hero-item--prewarm bloat
+    assert.match(
+        css,
+        /\.hero-carousel\s*\{[\s\S]*will-change:\s*transform;[\s\S]*backface-visibility:\s*hidden;[\s\S]*contain:\s*layout style paint;/,
+        '.hero-carousel must pin its compositor layer and isolate layout/style/paint across offscreen scroll cycles'
+    );
+    assert.match(
+        css,
+        /\.hero-logo-container\s*\{[\s\S]*contain:\s*layout style;/,
+        '.hero-logo-container must isolate layout/style invalidation'
+    );
+    assert.match(css, /\.hero-backdrop-img\s*\{[\s\S]*object-fit:\s*cover;/, '.hero-backdrop-img style rule must exist');
+    assert.ok(!css.includes('.hero-item--prewarm'), '.hero-item--prewarm CSS bloat must be removed');
+    assert.ok(!carouselSrc.includes('hero-item--prewarm'), 'HeroCarousel.js must not add .hero-item--prewarm');
+    assert.ok(!carouselSrc.includes('_prewarmHeroImages'), 'Duplicate _prewarmHeroImages ImageCache blast must be removed');
+
+    // Verify IntersectionObserver resumption never mutates DOM/timers synchronously mid-scroll
+    assert.match(
+        carouselSrc,
+        /IntersectionObserver\([\s\S]*eventBus\.once\('scroll:finished',\s*this\._observerScrollFinishHandler\)[\s\S]*_schedulePostScrollAutoStart\(200\)/,
+        'IntersectionObserver visibility resumption must defer behind scroll:finished + 200ms settle window'
+    );
+
     const items = [0, 1, 2, 3].map((i) => ({ Id: `s-${i}`, Name: `Show ${i}` }));
     const carousel = new HeroCarousel({ items });
 
     const container = createMockElement('div', ['hero-carousel-container']);
     container.parentElement = createMockElement('div', ['hero-placeholder']);
     const slides = items.map((_, i) => createMockElement('div', i === 0 ? ['hero-item', 'active'] : ['hero-item']));
-    const backdrops = items.map((_, i) => {
-        const b = createMockElement('div', ['hero-backdrop'], { backdrop: `http://test/b${i}.jpg` });
-        b.style.backgroundImage = `url('http://test/b${i}.jpg')`;
-        return b;
-    });
+    const backdrops = items.map((_, i) =>
+        createMockElement('div', ['hero-backdrop'], { backdrop: `http://test/b${i}.jpg` })
+    );
     const dots = items.map((_, i) =>
         createMockElement('div', i === 0 ? ['hero-dot', 'active'] : ['hero-dot'], { index: String(i) })
     );
@@ -717,40 +776,62 @@ test('HeroCarousel: staggers neighbor prewarm strictly 1 slide per 150ms quiet t
     container.childrenAllBySelector.set('.hero-logo', []);
     container.childrenAllBySelector.set('.hero-blurhash-canvas', []);
 
+    // Lightweight DOM child tracking on backdrops for this mock element stub
+    backdrops.forEach((b) => {
+        b.children = [];
+        Object.defineProperty(b, 'firstChild', { get: () => b.children[0] || null });
+        b.appendChild = (c) => {
+            if (!b.children.includes(c)) b.children.push(c);
+            c.parentNode = b;
+            return c;
+        };
+        b.insertBefore = (c, ref) => {
+            const idx = ref ? b.children.indexOf(ref) : -1;
+            if (idx === -1) b.children.push(c);
+            else b.children.splice(idx, 0, c);
+            c.parentNode = b;
+            return c;
+        };
+        b.removeChild = (c) => {
+            const idx = b.children.indexOf(c);
+            if (idx !== -1) b.children.splice(idx, 1);
+            c.parentNode = null;
+            return c;
+        };
+    });
+
     try {
         carousel.init(container);
+        await Promise.resolve();
+        await Promise.resolve();
 
-        // Mark neighbors (1 and 3) already decoded; neither should warm together on one frame
-        carousel._decodedAssets[1] = true;
-        carousel._decodedAssets[3] = true;
-        carousel._warmAdjacentSlides();
-
-        // Frame 1: ONLY slide 1 enters .hero-item--prewarm; slide 3 stays queued
-        assert.equal(slides[1].classList.contains('hero-item--prewarm'), true, 'First candidate warms immediately');
-        assert.equal(
-            slides[3].classList.contains('hero-item--prewarm'),
-            false,
-            'Second neighbor must NOT warm in the same frame'
+        // Inactive Slide 1 preloaded via _preloadSlide stays off-DOM until goTo(1)
+        carousel._preloadSlide(1);
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.ok(carousel._decodedBackdrops[1], 'Slide 1 Image must be retained in _decodedBackdrops');
+        assert.ok(
+            carousel._retainedImages.includes(carousel._decodedBackdrops[1]),
+            'Slide 1 Image must be retained in _retainedImages'
         );
+        assert.equal(backdrops[1].children.length, 0, 'Inactive Slide 1 <img> must stay off-DOM before goTo(1)');
 
-        // Two rAFs clear slide 1 and schedule the 150ms staggered tick for slide 3
-        flushOneRaf();
-        flushOneRaf();
-        assert.equal(slides[1].classList.contains('hero-item--prewarm'), false);
-        assert.equal(slides[3].classList.contains('hero-item--prewarm'), false, 'Slide 3 must wait for 150ms quiet tick');
-        assert.ok(carousel._warmTimerId, '150ms stagger timer must be pending for remaining neighbor');
+        // Switching to Slide 1 attaches the pre-decoded <img> immediately
+        carousel.goTo(1);
+        assert.equal(backdrops[1].children[0], carousel._decodedBackdrops[1], 'goTo(1) must mount decoded <img> into DOM');
 
-        // Advance past 150ms -> slide 3 warms alone
-        await new Promise((r) => setTimeout(r, 175));
-        assert.equal(slides[3].classList.contains('hero-item--prewarm'), true, 'Slide 3 warms after 150ms stagger tick');
+        // Detaching inactive slides after crossfade removes Slide 0 from DOM while retaining its Image
+        carousel._detachInactiveBackdrops(1);
+        assert.equal(backdrops[0].children.length, 0, 'Inactive Slide 0 <img> must detach after crossfade settles');
+        assert.ok(carousel._decodedBackdrops[0], 'Detached Slide 0 Image stays cached in _decodedBackdrops');
 
-        // Navigating via goTo() must abort active prewarm and cancel queue immediately
-        carousel.goTo(2);
-        assert.equal(slides[3].classList.contains('hero-item--prewarm'), false, 'goTo must clear active prewarm immediately');
-        assert.equal(carousel._warmQueue.length, 0, 'goTo must empty pending warm queue');
+        // Sequential stack preload uses 100ms spacing timer + idleGate
+        assert.ok(carousel._stackPreloadTimerId !== null, 'init() must schedule 100ms sequential stack preload');
     } finally {
         globalThis.window.__scrollController = prevSc;
         carousel.destroy();
+        assert.equal(carousel._retainedImages.length, 0, 'destroy() must release _retainedImages');
+        assert.equal(carousel._stackPreloadTimerId, null, 'destroy() must cancel stack preload timer');
     }
 });
 

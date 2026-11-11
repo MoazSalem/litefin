@@ -22,7 +22,6 @@ import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratings
 import { customHeaders } from '../utils/CustomHeaders.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { idleGate } from '../utils/IdleGate.js';
-import { imageCache } from '../utils/ImageCache.js';
 import { markPerfOperation } from '../utils/PerfMarker.js';
 
 const log = logger.create('HeroCarousel');
@@ -48,29 +47,19 @@ class HeroCarousel {
         this._preloadIdleId = null;
 
         // ---------------------------------------------------------------------
-        // Idle preload & stacked layer bookkeeping
+        // Idle preload & retained off-DOM bitmap bookkeeping
         // ---------------------------------------------------------------------
-        // Stacked slides sit in the DOM at opacity: 0 with static GPU promotion
-        // and no visibility:hidden churn, so goTo() strictly toggles .active
-        // classes without triggering layerization or alpha-mask rasterization.
-        // Backdrops/logos preload & decode asynchronously upfront for the stack.
+        // Pre-decoded backdrop and logo Image instances are kept alive inside
+        // `_retainedImages` and `_decodedBackdrops` so Chromium retains decoded
+        // textures across slide changes without keeping offscreen <img> DOM nodes
+        // mounted when idle (only the active slide's backdrop <img> stays in DOM).
         // ---------------------------------------------------------------------
         this._idlePreloadTask = null;
         this._preloadedSlides = Object.create(null);
-        this._decodedAssets = Object.create(null);
+        this._decodedBackdrops = Object.create(null);
+        this._retainedImages = [];
         this._stackPreloadTimerId = null;
-
-        // Idle layer pre-rasterization: decoded inactive slides are briefly made
-        // visible (opacity 0.02, transition disabled) across two animation frames
-        // during a quiet window so their masked 1280px backdrop is rasterized
-        // BEFORE goTo() flips .active. Without this, that rasterization lands in
-        // the 0-250ms window after goTo() — the HeroCarousel long-task cluster.
-        this._warmRafId = null;
-        this._warmTimerId = null;
-        this._warmQueue = [];
-        this._activeWarmItem = null;
-        this._warmedSlides = Object.create(null);
-        this._postDecodeWarmRafId = null;
+        this._stackPreloadIdleTask = null;
         this._postScrollAutoStartTimerId = null;
 
         // Cached DOM node references populated in init() and cleared in destroy()
@@ -277,7 +266,12 @@ class HeroCarousel {
         const initialBackdrop = customHeaders?.hasCustomHeaders?.()
             ? (customHeaders.hasNativeInterception?.(backdropUrl) ? backdropUrl : customHeaders.getCachedBlobUrl(backdropUrl) || null)
             : backdropUrl;
-        const backdropStyle = isActive && initialBackdrop ? ` style="background-image: url('${initialBackdrop}')"` : '';
+        // Mount the backdrop <img> only on initial Slide 0; inactive slides keep
+        // their backdrop off-DOM until pre-decoded and attached right before crossfade.
+        const backdropImgHtml =
+            isActive && initialBackdrop
+                ? `<img class="hero-backdrop-img" src="${initialBackdrop}" decoding="async" alt="">`
+                : '';
 
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
@@ -291,7 +285,8 @@ class HeroCarousel {
                 `
                         : ''
                 }
-                <div class="hero-backdrop" data-backdrop="${backdropUrl}"${backdropStyle}>
+                <div class="hero-backdrop" data-backdrop="${backdropUrl}">
+                    ${backdropImgHtml}
                     ${blurHash && isActive ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
                 <div class="hero-content">
@@ -723,10 +718,14 @@ class HeroCarousel {
             const heroBackdrop = canvas.closest('.hero-backdrop');
             if (!heroBackdrop) return;
 
-            // Resolve the backdrop background-image URL
-            const style = heroBackdrop.style.backgroundImage;
-            const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
-            const url = (match && match[1]) || heroBackdrop.dataset.backdrop;
+            // Resolve the backdrop image URL from existing <img> or data-backdrop
+            const existingImg =
+                typeof heroBackdrop.querySelector === 'function'
+                    ? heroBackdrop.querySelector('.hero-backdrop-img')
+                    : null;
+            const url =
+                (existingImg && (existingImg.currentSrc || existingImg.getAttribute('src') || existingImg.src)) ||
+                heroBackdrop.dataset.backdrop;
             if (!url) return;
 
             // Decode blurhash at low resolution asynchronously, from an idle task.
@@ -752,21 +751,24 @@ class HeroCarousel {
                 0
             );
 
-            // Track image load to cleanly fade out the blurhash canvas placeholder
-            const img = new Image();
-            img.onload = () => {
-                requestAnimationFrame(() => {
-                    canvas.style.opacity = '0';
-                    setTimeout(() => {
-                        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                    }, 500);
-                });
-            };
-            img.onerror = () => {
-                // If loading fails, remove canvas so it doesn't block underlying display
-                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-            };
-            img.src = url;
+            // Note: _preloadSlide(0) decodes the live Slide 0 backdrop <img> and
+            // fades this blurhash canvas cleanly; avoid creating a duplicate Image().
+            if (!existingImg) {
+                const img = new Image();
+                img.onload = () => {
+                    requestAnimationFrame(() => {
+                        canvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                        }, 500);
+                    });
+                };
+                img.onerror = () => {
+                    // If loading fails, remove canvas so it doesn't block underlying display
+                    if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                };
+                img.src = url;
+            }
         });
 
         // ────────────────────────────────────────────────────────────────────
@@ -789,7 +791,7 @@ class HeroCarousel {
         // carousel is no longer visible. Running background auto-scroll transitions
         // and crossfade animations off-screen steals CPU/GPU cycles and causes
         // frame drops during vertical row navigation. We suspend the timer when
-        // off-screen and resume instantly when scrolled back into view.
+        // off-screen and defer resume until vertical scrolling settles completely.
         // ---------------------------------------------------------------------
         if ('IntersectionObserver' in window) {
             this._intersectionObserver = new IntersectionObserver(
@@ -801,20 +803,22 @@ class HeroCarousel {
                             this._isVisible = isVisible;
                             if (!isVisible) {
                                 log.debug('Hero carousel off-screen; suspending timer');
+                                this._cancelObserverScrollFinish();
                                 this._stopAutoScroll();
                             } else if (!this._timer && !this._isFocused) {
                                 log.debug('Hero carousel visible; resuming timer');
-                                // Guard against triggering indicator progress animations or timer restarts mid-scroll
-                                if (window.__scrollController && window.__scrollController.isAnimating) {
+                                // Never synchronously mutate progress bars or start timers inside
+                                // scroll frames; wait for scroll:finished + 200ms settle window.
+                                if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
                                     if (!this._observerScrollFinishHandler) {
                                         this._observerScrollFinishHandler = () => {
                                             this._observerScrollFinishHandler = null;
-                                            this._schedulePostScrollAutoStart();
+                                            this._schedulePostScrollAutoStart(200);
                                         };
                                         eventBus.once('scroll:finished', this._observerScrollFinishHandler);
                                     }
                                 } else {
-                                    this._startAutoScroll();
+                                    this._schedulePostScrollAutoStart(200);
                                 }
                             }
                         }
@@ -826,15 +830,13 @@ class HeroCarousel {
         }
 
         // Slide 0 is guaranteed to be the visible slide, so its backdrop starts
-        // loading immediately (mount path — no transition is in flight here).
+        // loading/decoding immediately (mount path — no transition is in flight here).
         // This also triggers the authenticated blob fetch when custom reverse
         // proxy headers are configured (handled inside _preloadSlide).
         this._preloadSlide(0);
 
-        // Pre-warm upcoming slides (up to the first 5 total slides) through
-        // ImageCache's scroll-aware queue and gently decode stacked slides
-        // ahead of user input so initial slide changes hit decoded layers.
-        this._prewarmHeroImages();
+        // Stagger preloading of upcoming slides (1..4) one slide every 100ms
+        // behind idleGate so no slide decodes during boot or active scrolling.
         this._scheduleStackPreload(1);
 
         // ---------------------------------------------------------------------
@@ -845,8 +847,8 @@ class HeroCarousel {
 
     /**
      * Staggers off-thread backdrop + logo decoding for stacked slides (indices
-     * 1..4) one slide per short quiet interval so stacked slides are already
-     * decoded and height-adjusted before the user transitions to them.
+     * 1..4) one slide every 100ms behind idleGate so preloading pauses safely
+     * behind the splash screen and during active scrolling.
      *
      * @param {number} index - Slide index to schedule next
      * @private
@@ -856,68 +858,32 @@ class HeroCarousel {
         const maxStack = Math.min(5, this._slideItems ? this._slideItems.length : 0);
         if (index >= maxStack) return;
 
-        if (this._stackPreloadTimerId) {
-            clearTimeout(this._stackPreloadTimerId);
-            this._stackPreloadTimerId = null;
-        }
+        this._cancelStackPreload();
 
-        // Wait one short frame window so init() paints cleanly before background
-        // stacked slides kick off async decode and logo height measurement.
+        // Wait 100ms between slide dispatches, then gate execution via idleGate so
+        // preloads wait for splash dismissal and any in-flight scroll animation.
         this._stackPreloadTimerId = setTimeout(() => {
             this._stackPreloadTimerId = null;
             if (!this._container) return;
 
-            // Pause staggered preloading while actively scrolling or fading a slide
-            const isScrolling =
-                typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
-            if (isScrolling || this._hideTimeoutId) {
-                this._stackPreloadTimerId = setTimeout(() => this._scheduleStackPreload(index), 150);
-                return;
-            }
+            this._stackPreloadIdleTask = idleGate.runWhenIdle(
+                () => {
+                    this._stackPreloadIdleTask = null;
+                    if (!this._container) return;
 
-            this._preloadSlide(index);
-            this._scheduleStackPreload(index + 1);
-        }, 60);
-    }
+                    // Do not decode stacked slides during an active slide crossfade
+                    if (this._hideTimeoutId) {
+                        this._scheduleStackPreload(index);
+                        return;
+                    }
 
-    /**
-     * Queues up to the first 5 slides' backdrop and logo URLs into ImageCache
-     * so bitmap fetching/decoding spreads gently over idle ticks instead of
-     * stalling the first D-pad slide transitions.
-     *
-     * @private
-     */
-    _prewarmHeroImages() {
-        if (!imageCache || typeof imageCache.preload !== 'function') return;
-
-        const maxSlides = Math.min(5, this._slideItems ? this._slideItems.length : 0);
-        if (maxSlides <= 1) return;
-
-        // Deduplicate URLs across slides 1..4 (slide 0 already loads eagerly above).
-        const urls = [];
-        const seen = Object.create(null);
-        const pushUrl = (url) => {
-            if (!url || seen[url]) return;
-            seen[url] = true;
-            urls.push(url);
-        };
-
-        for (let i = 1; i < maxSlides; i++) {
-            const backdrop = this._slideBackdrops ? this._slideBackdrops[i] : null;
-            if (backdrop && backdrop.dataset && backdrop.dataset.backdrop) {
-                pushUrl(backdrop.dataset.backdrop);
-            }
-
-            const logo = this._slideLogos ? this._slideLogos[i] : null;
-            if (logo) {
-                const logoUrl = (logo.dataset && logo.dataset.src) || logo.getAttribute('src');
-                pushUrl(logoUrl);
-            }
-        }
-
-        if (urls.length > 0) {
-            imageCache.preload(urls);
-        }
+                    this._preloadSlide(index);
+                    this._scheduleStackPreload(index + 1);
+                },
+                100,
+                0
+            );
+        }, 100);
     }
 
     /**
@@ -952,13 +918,8 @@ class HeroCarousel {
             window.cancelIdleCallback(this._preloadIdleId);
             this._preloadIdleId = null;
         }
-        // Cancel any staggered stacked-slide preload timer
-        if (this._stackPreloadTimerId) {
-            clearTimeout(this._stackPreloadTimerId);
-            this._stackPreloadTimerId = null;
-        }
-        // Cancel pending or active staggered neighbor pre-rasterization
-        this._cancelWarmQueue();
+        // Cancel staggered stacked-slide preload timer and idle task
+        this._cancelStackPreload();
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
             this._postScrollAutoStartTimerId = null;
@@ -967,10 +928,7 @@ class HeroCarousel {
             this._intersectionObserver.disconnect();
             this._intersectionObserver = null;
         }
-        if (this._observerScrollFinishHandler) {
-            eventBus.off('scroll:finished', this._observerScrollFinishHandler);
-            this._observerScrollFinishHandler = null;
-        }
+        this._cancelObserverScrollFinish();
         if (this._scrollFinishHandler) {
             eventBus.off('scroll:finished', this._scrollFinishHandler);
             this._scrollFinishHandler = null;
@@ -985,7 +943,9 @@ class HeroCarousel {
             this._container.removeEventListener('touchcancel', this._touchHandlers.onTouchCancel);
             this._touchHandlers = null;
         }
-        // Release cached DOM element references
+        // Release retained decoded Image references and cached DOM elements
+        this._retainedImages = [];
+        this._decodedBackdrops = Object.create(null);
         this._slideItems = null;
         this._dotItems = null;
         this._slideBackdrops = null;
@@ -1071,13 +1031,14 @@ class HeroCarousel {
     }
 
     /**
-     * Defers auto-scroll startup out of the immediate `scroll:finished` callback
-     * turn so restarting progress indicator animations never bundles into
-     * ScrollController's finish long-task window.
+     * Defers auto-scroll startup out of the immediate `scroll:finished` or
+     * visibility callback turn so restarting progress indicator animations
+     * never bundles into ScrollController's finish long-task window.
      *
+     * @param {number} [delayMs=60] - Settle window before resuming timer
      * @private
      */
-    _schedulePostScrollAutoStart() {
+    _schedulePostScrollAutoStart(delayMs = 60) {
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
         }
@@ -1087,7 +1048,7 @@ class HeroCarousel {
             if (this._isFocused || !this._timer) {
                 this._startAutoScroll();
             }
-        }, 60);
+        }, delayMs);
     }
 
     /**
@@ -1155,41 +1116,46 @@ class HeroCarousel {
         const item = items[index];
         if (!item) return;
 
-        // Deduplicate: a slide is only preloaded once. The idle sweep calls this
-        // for every slide, and adjacent preloads used to re-create Image objects
-        // every time because background-image is only applied asynchronously.
+        // Deduplicate: a slide is only preloaded once. Sequential stack preload
+        // and idle sweeps can both reach the same index.
         if (this._preloadedSlides[index]) return;
         this._preloadedSlides[index] = true;
 
-        // Track remaining async assets (backdrop and optional logo) so we can
-        // record once both textures have decoded off the main transition path.
-        let pendingAssets = 0;
-        const markAssetReady = () => {
-            pendingAssets--;
-            if (pendingAssets <= 0) {
-                this._decodedAssets[index] = true;
-                this._scheduleWarmAfterDecode(index);
+        // Helper to gently fade out Slide 0's BlurHash overlay once decoded
+        const fadeBlurhashCanvas = (immediate = false) => {
+            const canvas = typeof item.querySelector === 'function' ? item.querySelector('.hero-blurhash-canvas') : null;
+            if (!canvas) return;
+            if (immediate) {
+                if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                return;
             }
+            canvas.style.opacity = '0';
+            setTimeout(() => {
+                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            }, 500);
         };
 
-        // Preload backdrop image
+        // Preload and retain off-DOM backdrop Image instance
         const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : item.querySelector('.hero-backdrop');
-        if (backdrop && backdrop.dataset.backdrop && !backdrop.style.backgroundImage) {
-            pendingAssets++;
+        if (backdrop && backdrop.dataset && backdrop.dataset.backdrop && !this._decodedBackdrops[index]) {
             const url = backdrop.dataset.backdrop;
+            const existingImg =
+                typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null;
 
             /*
-             * Applies the loaded backdrop image to the hero element.
-             * Fades out and discards the BlurHash canvas once the graphic settles.
-             * Uses img.src or effectiveUrl so that fallback Blob URLs are correctly applied.
+             * Creates/decodes the slide's backdrop <img> off-DOM, retains a reference
+             * in _retainedImages/_decodedBackdrops, and attaches it immediately ONLY
+             * if this slide is currently active (inactive slides attach on goTo()).
              */
             const applyBackdrop = (effectiveUrl) => {
-                const img = new Image();
+                const img = existingImg || new Image();
+                if (!existingImg) {
+                    img.className = 'hero-backdrop-img';
+                    img.alt = '';
+                }
+                this._retainImage(img);
+                this._decodedBackdrops[index] = img;
 
-                // Applies the decoded bitmap to the slide's background layer.
-                // Using img.decode() guarantees the pixels are ready before the
-                // slide becomes visible, so the transition never paints a blank
-                // backdrop or blocks on a synchronous decode.
                 let applied = false;
                 const commitBackdrop = () => {
                     if (applied) return;
@@ -1197,24 +1163,14 @@ class HeroCarousel {
                     if (!this._container || backdrop.dataset.backdrop !== url) return;
 
                     if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.commitBackdrop');
-                    // Prefer resolved img.src to ensure fallback Blob URLs are utilized
-                    const finalUrl = img.src || effectiveUrl;
-                    backdrop.style.backgroundImage = `url('${finalUrl}')`;
-
-                    // Fade out blurhash canvas once the high-res graphic settles
-                    const canvas = item.querySelector('.hero-blurhash-canvas');
-                    if (canvas) {
-                        canvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                        }, 500);
+                    // Keep inactive slides detached so off-screen DOM stays minimal;
+                    // goTo() swaps _decodedBackdrops[index] in synchronously.
+                    if (index === this._currentIndex) {
+                        this._mountBackdropImage(backdrop, img);
                     }
-
-                    markAssetReady();
+                    fadeBlurhashCanvas(false);
                 };
 
-                // Wait for off-thread bitmap decode when supported so we never commit
-                // an undecoded cached image onto backgroundImage via onload first.
                 const hasDecode = typeof img.decode === 'function';
                 if (!hasDecode) {
                     img.onload = commitBackdrop;
@@ -1233,36 +1189,40 @@ class HeroCarousel {
                                             if (img.complete && img.naturalWidth > 0) {
                                                 commitBackdrop();
                                             } else {
-                                                markAssetReady();
+                                                fadeBlurhashCanvas(true);
                                             }
                                         });
                                     }
                                 } else {
-                                    markAssetReady();
+                                    fadeBlurhashCanvas(true);
                                 }
                             })
-                            .catch(markAssetReady);
+                            .catch(() => fadeBlurhashCanvas(true));
                     } else {
-                        markAssetReady();
+                        fadeBlurhashCanvas(true);
                     }
                 };
 
-                // Decode off the UI thread whenever supported before starting network fetch
+                // Request async decoding before triggering network fetch
                 if ('decoding' in img) {
                     img.decoding = 'async';
                 }
 
-                // Trigger network load
-                img.src = effectiveUrl;
+                // Avoid re-assigning identical src on pre-rendered Slide 0 <img>
+                const currentSrcAttr = typeof img.getAttribute === 'function' ? img.getAttribute('src') : img.src;
+                if (!existingImg || currentSrcAttr !== effectiveUrl) {
+                    img.src = effectiveUrl;
+                }
 
-                // Decode off the critical transition path. decode() resolves once
-                // the bitmap is fully decoded and safe to paint.
+                // Decode off the critical transition path so bitmap pixels are warm
                 if (hasDecode) {
                     img.decode().then(commitBackdrop).catch(() => {
                         if (img.complete && img.naturalWidth > 0) {
                             commitBackdrop();
                         }
                     });
+                } else if (img.complete && img.naturalWidth > 0) {
+                    commitBackdrop();
                 }
             };
 
@@ -1282,10 +1242,12 @@ class HeroCarousel {
             }
         }
 
-        // Load logo image if deferred
+        // Load logo image if deferred and retain reference across slide switches
         const logo = this._slideLogos ? this._slideLogos[index] : item.querySelector('.hero-logo');
-        if (logo && logo.dataset.src && !logo.src) {
-            pendingAssets++;
+        if (logo) {
+            this._retainImage(logo);
+        }
+        if (logo && logo.dataset && logo.dataset.src && !logo.src) {
             const container =
                 this._slideLogoContainers && this._slideLogoContainers[index]
                     ? this._slideLogoContainers[index]
@@ -1316,7 +1278,6 @@ class HeroCarousel {
                 logoDone = true;
                 if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.finalizeLogo');
                 adjustLogoHeight();
-                markAssetReady();
             };
 
             /*
@@ -1357,18 +1318,12 @@ class HeroCarousel {
                                     logo.decode().then(finalizeLogo).catch(() => {
                                         if (logo.complete && logo.naturalWidth > 0) {
                                             finalizeLogo();
-                                        } else {
-                                            markAssetReady();
                                         }
                                     });
                                 }
-                            } else {
-                                markAssetReady();
                             }
                         })
-                        .catch(markAssetReady);
-                } else {
-                    markAssetReady();
+                        .catch(() => {});
                 }
             };
 
@@ -1386,11 +1341,6 @@ class HeroCarousel {
             } else {
                 applyLogo(logo.dataset.src);
             }
-        }
-
-        // Slide had no deferred backdrop/logo left to load — mark immediately decoded
-        if (pendingAssets === 0) {
-            this._decodedAssets[index] = true;
         }
     }
 
@@ -1447,193 +1397,139 @@ class HeroCarousel {
                     this._decodeBlurhashFill(slides[i]);
                 }
             }
-
-            // Decoded neighbor slides are paint-eligible but not yet rasterized;
-            // pay that cost here, during a quiet window, instead of inside the
-            // 0-250ms following the next goTo().
-            this._warmAdjacentSlides();
         }, delay, 0);
     }
 
     /**
-     * Cancels all pending or active neighbor slide pre-rasterization timers
-     * and strips any transient `.hero-item--prewarm` class immediately.
+     * Retains a decoded Image reference so Chromium keeps its bitmap warm across
+     * slide changes and offscreen vertical scrolling until destroy() runs.
      *
+     * @param {HTMLImageElement} img
      * @private
      */
-    _cancelWarmQueue() {
-        if (this._warmTimerId) {
-            clearTimeout(this._warmTimerId);
-            this._warmTimerId = null;
+    _retainImage(img) {
+        if (!img || !this._retainedImages) return;
+        if (this._retainedImages.indexOf(img) === -1) {
+            this._retainedImages.push(img);
         }
-        if (this._warmRafId) {
-            cancelAnimationFrame(this._warmRafId);
-            this._warmRafId = null;
-        }
-        if (this._postDecodeWarmRafId) {
-            cancelAnimationFrame(this._postDecodeWarmRafId);
-            this._postDecodeWarmRafId = null;
-        }
-        if (this._activeWarmItem && this._activeWarmItem.classList) {
-            this._activeWarmItem.classList.remove('hero-item--prewarm');
-        }
-        this._activeWarmItem = null;
-        this._warmQueue = [];
     }
 
     /**
-     * Checks whether a slide index is currently eligible for pre-rasterization.
+     * Cancels both the 100ms spacing timer and the idleGate handle for
+     * background stacked slide preloading.
      *
-     * @param {number} index
-     * @returns {boolean}
      * @private
      */
-    _canWarmSlideIndex(index) {
-        const items = this._slideItems;
-        if (!items || index < 0 || index >= items.length || index === this._currentIndex) {
-            return false;
+    _cancelStackPreload() {
+        if (this._stackPreloadTimerId) {
+            clearTimeout(this._stackPreloadTimerId);
+            this._stackPreloadTimerId = null;
         }
-        if (this._warmedSlides[index] || this._decodedAssets[index] !== true) {
-            return false;
+        if (this._stackPreloadIdleTask) {
+            idleGate.cancel(this._stackPreloadIdleTask);
+            this._stackPreloadIdleTask = null;
         }
-        const item = items[index];
-        if (!item || !item.classList || item.classList.contains('active') || item.classList.contains('hero-item--prewarm')) {
-            return false;
+    }
+
+    /**
+     * Detaches the deferred IntersectionObserver scroll:finished handler if active.
+     *
+     * @private
+     */
+    _cancelObserverScrollFinish() {
+        if (this._observerScrollFinishHandler) {
+            eventBus.off('scroll:finished', this._observerScrollFinishHandler);
+            this._observerScrollFinishHandler = null;
         }
+    }
+
+    /**
+     * Inserts a backdrop <img> inside `.hero-backdrop` ahead of any active BlurHash
+     * canvas overlay, avoiding duplicate DOM mutations if already attached.
+     *
+     * @param {Element} backdrop
+     * @param {HTMLImageElement} img
+     * @private
+     */
+    _mountBackdropImage(backdrop, img) {
+        if (!backdrop || !img) return;
+        if (img.parentNode === backdrop) return;
+
+        // Place behind any active .hero-blurhash-canvas overlay while fading out
+        if (typeof backdrop.insertBefore === 'function' && 'firstChild' in backdrop) {
+            backdrop.insertBefore(img, backdrop.firstChild);
+        } else if (typeof backdrop.appendChild === 'function') {
+            backdrop.appendChild(img);
+        }
+
+        // Sync parentNode for minimal test DOM stubs without full child-tracking
+        if (img.parentNode !== backdrop) {
+            img.parentNode = backdrop;
+        }
+    }
+
+    /**
+     * Attaches the pre-decoded (or creates a fallback) backdrop <img> onto a slide
+     * right before `goTo()` transitions it to active.
+     *
+     * @param {number} index - Target slide index
+     * @private
+     */
+    _attachBackdrop(index) {
         const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
-        return Boolean(backdrop && backdrop.style && backdrop.style.backgroundImage);
+        if (!backdrop) return;
+
+        let img = this._decodedBackdrops ? this._decodedBackdrops[index] : null;
+        if (!img && typeof backdrop.querySelector === 'function') {
+            img = backdrop.querySelector('.hero-backdrop-img');
+        }
+
+        if (!img) {
+            const rawUrl = backdrop.dataset ? backdrop.dataset.backdrop : null;
+            if (!rawUrl) return;
+            const resolvedUrl = customHeaders?.hasCustomHeaders?.()
+                ? (customHeaders.hasNativeInterception?.(rawUrl) ? rawUrl : customHeaders.getCachedBlobUrl(rawUrl) || null)
+                : rawUrl;
+            if (!resolvedUrl) return;
+
+            img = new Image();
+            img.className = 'hero-backdrop-img';
+            img.alt = '';
+            if ('decoding' in img) {
+                img.decoding = 'async';
+            }
+            img.src = resolvedUrl;
+            this._retainImage(img);
+            if (this._decodedBackdrops) {
+                this._decodedBackdrops[index] = img;
+            }
+        }
+
+        this._mountBackdropImage(backdrop, img);
     }
 
     /**
-     * Queues adjacent slide warming once a decoded neighbor finishes landing.
+     * Detaches inactive slides' backdrop <img> nodes from the DOM once crossfade
+     * settles, while keeping their decoded Image instances inside `_retainedImages`
+     * and `_decodedBackdrops` for instant zero-decode subsequent swaps.
      *
-     * @param {number} decodedIndex
+     * @param {number} activeIndex - Currently active slide index to preserve
      * @private
      */
-    _scheduleWarmAfterDecode(decodedIndex) {
-        if (!this._container || this._hideTimeoutId || !this._isVisible) return;
-        const count = this._slideItems ? this._slideItems.length : 0;
-        if (count < 2) return;
+    _detachInactiveBackdrops(activeIndex) {
+        if (!this._slideBackdrops) return;
+        for (let i = 0; i < this._slideBackdrops.length; i++) {
+            if (i === activeIndex) continue;
+            const backdrop = this._slideBackdrops[i];
+            if (!backdrop) continue;
 
-        const nextIdx = (this._currentIndex + 1) % count;
-        const prevIdx = (this._currentIndex - 1 + count) % count;
-        if (decodedIndex !== nextIdx && decodedIndex !== prevIdx) return;
-
-        // If another slide is already warming or sleeping between staggered ticks,
-        // queue this newly decoded neighbor so it runs 150ms after the current one.
-        if (this._warmRafId || this._warmTimerId) {
-            if (!this._warmedSlides[decodedIndex] && this._warmQueue.indexOf(decodedIndex) === -1) {
-                this._warmQueue.push(decodedIndex);
-            }
-            return;
-        }
-
-        if (this._postDecodeWarmRafId || typeof requestAnimationFrame !== 'function') return;
-        this._postDecodeWarmRafId = requestAnimationFrame(() => {
-            this._postDecodeWarmRafId = null;
-            this._warmAdjacentSlides();
-        });
-    }
-
-    /**
-     * Pops and pre-rasterizes strictly ONE queued slide on a quiet frame, then
-     * paces any remaining neighbors by 150ms so each 1280px backdrop mask gets
-     * an isolated compositor budget instead of freezing a single frame.
-     *
-     * @private
-     */
-    _drainNextWarmSlide() {
-        if (!this._container || this._hideTimeoutId || this._warmRafId || !this._isVisible) return;
-        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
-            return;
-        }
-
-        const items = this._slideItems;
-        if (!items || items.length < 2) return;
-
-        while (this._warmQueue.length > 0) {
-            const index = this._warmQueue.shift();
-            if (!this._canWarmSlideIndex(index)) {
-                continue;
-            }
-
-            const item = items[index];
-            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlides');
-
-            this._activeWarmItem = item;
-            item.classList.add('hero-item--prewarm');
-
-            // Two frames: frame 1 commits the opacity bump, frame 2 lets the
-            // compositor upload and rasterize this single masked backdrop layer
-            // before dropping the helper class and pacing the next slide by 150ms.
-            this._warmRafId = requestAnimationFrame(() => {
-                this._warmRafId = requestAnimationFrame(() => {
-                    this._warmRafId = null;
-                    item.classList.remove('hero-item--prewarm');
-                    if (this._activeWarmItem === item) {
-                        this._activeWarmItem = null;
-                    }
-                    this._warmedSlides[index] = true;
-
-                    if (
-                        this._warmQueue.length > 0 &&
-                        this._container &&
-                        !this._hideTimeoutId &&
-                        this._isVisible
-                    ) {
-                        this._warmTimerId = setTimeout(() => {
-                            this._warmTimerId = null;
-                            this._drainNextWarmSlide();
-                        }, 150);
-                    }
-                });
-            });
-            return;
-        }
-    }
-
-    /**
-     * Enqueues decoded, non-active neighbor slides during a quiet window and
-     * drains them one slide per 150ms quiet tick.
-     *
-     * WHY: flipping `.hero-item.active` makes the browser rasterize a masked
-     * 1280px-wide backdrop layer for the first time. Warming every neighbor on
-     * a single frame creates a long compositor block; spacing one slide per
-     * 150ms tick keeps the main thread responsive while preparing upcoming transitions.
-     *
-     * @private
-     */
-    _warmAdjacentSlides() {
-        if (!this._container || this._warmRafId || this._warmTimerId || !this._isVisible) return;
-        if (this._hideTimeoutId) return;
-        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
-            return;
-        }
-
-        const items = this._slideItems;
-        if (!items || items.length < 2) return;
-
-        const count = items.length;
-        const current = this._currentIndex;
-        const candidates = [current + 1, current - 1];
-        if (count > 2) {
-            if (current === 0) {
-                candidates.push(count - 1);
-            } else if (current === count - 1) {
-                candidates.push(0);
+            const img =
+                (this._decodedBackdrops && this._decodedBackdrops[i]) ||
+                (typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null);
+            if (img && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                backdrop.removeChild(img);
             }
         }
-
-        for (let i = 0; i < candidates.length; i++) {
-            const index = ((candidates[i] % count) + count) % count;
-            if (!this._canWarmSlideIndex(index)) continue;
-            if (this._warmQueue.indexOf(index) === -1) {
-                this._warmQueue.push(index);
-            }
-        }
-
-        if (this._warmQueue.length === 0) return;
-        this._drainNextWarmSlide();
     }
 
     /**
@@ -1666,19 +1562,13 @@ class HeroCarousel {
 
         if (!items[index] || !dots[index]) return;
 
-        // Abort any in-flight or queued neighbor pre-rasterization for the previous
-        // slide so navigation transitions stay uncontested on the compositor thread.
-        this._cancelWarmQueue();
-
         const prevIndex = this._currentIndex;
         const prevItem = items[prevIndex];
         const nextItem = items[index];
 
-        // Pure class toggle: slides stay pre-stacked at opacity:0 with static
-        // CSS compositor promotion, so switching active classes triggers zero
-        // visibility flips, mask re-rasterization, or GPU layer rebuilds.
-        prevItem.classList.remove('hero-item--prewarm');
-        nextItem.classList.remove('hero-item--prewarm');
+        // Swap in the pre-decoded <img> for the incoming slide before activating it
+        this._attachBackdrop(index);
+
         prevItem.classList.remove('active');
         dots[prevIndex].classList.remove('active');
 
@@ -1692,20 +1582,13 @@ class HeroCarousel {
         // paint/compositor cost — not class-toggle cost.
         if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:classes');
 
-        // Track active 1000ms crossfade window so idle BlurHash / preload sweeps wait.
+        // Detach inactive backdrop <img> DOM nodes once the 1000ms crossfade
+        // completes while keeping their decoded Image references in _retainedImages.
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
             this._hideTimeoutId = null;
             if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:crossfadeSettled');
-
-            // Stagger pre-rasterization of newly adjacent slides once the crossfade
-            // settles (150ms quiet spacing, 1 slide per tick).
-            if (this._container && this._isVisible && !this._warmTimerId && !this._warmRafId) {
-                this._warmTimerId = setTimeout(() => {
-                    this._warmTimerId = null;
-                    this._warmAdjacentSlides();
-                }, 150);
-            }
+            this._detachInactiveBackdrops(this._currentIndex);
         }, 1050);
 
         // Extend any sliding-window preload (>5 slides) / BlurHash fill past crossfade.
