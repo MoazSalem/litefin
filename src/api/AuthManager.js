@@ -39,6 +39,7 @@ import { buildJellyfinProfile, clearCapabilitiesCache } from './DeviceProfile.js
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { customHeaders } from '../utils/CustomHeaders.js';
+import { idleGate } from '../utils/IdleGate.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -144,6 +145,8 @@ class AuthManager {
         // after the entry page's data is on the wire).
         this._splashHidden = false;
         this._pendingCapsAfterSplash = false;
+        // Pending IdleGate task handle for deferred capability probing & upload
+        this._capsReportTask = null;
 
         // Track in-flight optimistic background token validation promise and state
         this._isVerificationPending = false;
@@ -153,8 +156,8 @@ class AuthManager {
             this._splashHidden = true;
             if (this._pendingCapsAfterSplash) {
                 this._pendingCapsAfterSplash = false;
-                log.info('Splash hidden - flushing deferred capabilities report');
-                this._reportCapabilitiesNow();
+                log.info('Splash hidden - scheduling deferred capabilities report');
+                this._scheduleDeferredCapabilitiesReport();
             }
         });
     }
@@ -640,12 +643,45 @@ class AuthManager {
     establishSessionTelemetry() {
         if (!this.isAuthenticated()) return;
 
-        api.reportCapabilities({
-            ...SUPPORTED_CAPABILITIES,
-            DeviceProfile: buildJellyfinProfile()
-        }).catch((e) => log.error('✗ Failed to report capabilities on restore:', e));
+        // Defer TizenProfile hardware probing + POST /Sessions/Capabilities/Full
+        // until navigation/scroll settles so Home first-paint & D-pad input stay fast.
+        this._scheduleDeferredCapabilitiesReport();
 
+        // Keep WebSocket connection immediate for live session/sync events
         api.openWebSocket();
+    }
+
+    /**
+     * Cancels any queued deferred capability probe/report task.
+     * @private
+     */
+    _cancelDeferredCapabilitiesReport() {
+        if (this._capsReportTask) {
+            idleGate.cancel(this._capsReportTask);
+            this._capsReportTask = null;
+        }
+    }
+
+    /**
+     * Schedules capability profile construction (buildJellyfinProfile) and
+     * POST /Sessions/Capabilities/Full behind idleGate so synchronous TV codec
+     * and capability probes never compete with early Home rendering or scrolling.
+     *
+     * @private
+     */
+    _scheduleDeferredCapabilitiesReport() {
+        this._cancelDeferredCapabilitiesReport();
+
+        this._capsReportTask = idleGate.runWhenIdle(
+            () => {
+                this._capsReportTask = null;
+                if (!this.isAuthenticated()) return;
+
+                this._reportCapabilitiesNow();
+            },
+            3000,
+            15000
+        );
     }
 
     // ========================================================================
@@ -1227,6 +1263,8 @@ class AuthManager {
      */
     async logout() {
         log.info('Logging out current user...');
+        this._pendingCapsAfterSplash = false;
+        this._cancelDeferredCapabilitiesReport();
 
         /*
          * ====================================================================
@@ -1478,6 +1516,10 @@ class AuthManager {
         }
 
         log.warn('Unauthorized — session expired');
+        this._pendingCapsAfterSplash = false;
+        if (typeof this._cancelDeferredCapabilitiesReport === 'function') {
+            this._cancelDeferredCapabilitiesReport();
+        }
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
 
