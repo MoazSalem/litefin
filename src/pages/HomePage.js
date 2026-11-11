@@ -304,6 +304,12 @@ class HomePage extends Page {
          */
         this._pendingFocusRestore = null;
 
+        // Serializes row DOM builds across macrotask ticks when batch-mounting
+        // pre-fetched or cached rows so multiple VirtualCardRow mounts never clump.
+        this._rowRenderQueue = Promise.resolve();
+        this._rowRenderGateActive = false;
+        this._hasRenderedRowInTurn = false;
+
         // Mark as async page for Navigation State so scroll/focus restoration is deferred
         this._isAsyncPage = true;
 
@@ -371,6 +377,9 @@ class HomePage extends Page {
 
     onDestroyed() {
         this._isMounted = false;
+        // Disarm any pending row-render stagger gate left open during navigation
+        this._rowRenderGateActive = false;
+        this._hasRenderedRowInTurn = false;
 
         /*
          * CRITICAL: Cancel all pending background image preloads immediately.
@@ -1705,7 +1714,16 @@ class HomePage extends Page {
             if (enrichPromise) {
                 eagerPromises.push(enrichPromise);
             }
-            await Promise.all(eagerPromises);
+            // Spread pre-fetched/cached eager row builds across macrotask ticks so
+            // Tizen Chromium never stacks 6+ VirtualCardRow mounts in one Long Task.
+            this._rowRenderGateActive = true;
+            this._hasRenderedRowInTurn = false;
+            try {
+                await Promise.all(eagerPromises);
+            } finally {
+                this._rowRenderGateActive = false;
+                this._hasRenderedRowInTurn = false;
+            }
             if (!this._isMounted) return;
 
             // Let Chromium finish fetching and off-thread decoding the initially
@@ -1775,13 +1793,12 @@ class HomePage extends Page {
                 this._setupHomeScrollObserver();
                 this._scheduleHomeIdlePrefetch(2500);
             } else {
-                // All rows were rendered eagerly (short page or target near bottom)
-                this._prewarmScrollCache();
+                // All rows rendered eagerly — finalize readiness right away, and
+                // defer scroll-cache offsetTop walks & page serialization until idle
+                // so we never trigger a synchronous full-tree layout flush at paint.
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
-                if (!cache) {
-                    this._savePageCache();
-                }
+                this._scheduleDeferredBatchCacheRefresh();
             }
         } catch (error) {
             log.error('Pipeline failed', error);
@@ -2000,6 +2017,31 @@ class HomePage extends Page {
     }
 
     /**
+     * Serializes row DOM builds across separate macrotask turns when a parallel
+     * batch resolves together (e.g. cached or `/Litefin/Items/Latest` rows).
+     * The first row renders synchronously without delay; each subsequent row
+     * yields via `setTimeout(0)` so input/compositing never wait behind 6+ rows.
+     *
+     * @private
+     * @returns {Promise<void>}
+     */
+    _acquireRowRenderTurn() {
+        const nextTurn = this._rowRenderQueue.then(() => {
+            if (!this._isMounted || !this._rowRenderGateActive) {
+                return undefined;
+            }
+            if (!this._hasRenderedRowInTurn) {
+                this._hasRenderedRowInTurn = true;
+                return undefined;
+            }
+            return new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        // Keep queue settled even if an upstream caller is interrupted
+        this._rowRenderQueue = nextTurn.catch(() => {});
+        return nextTurn;
+    }
+
+    /**
      * Loads data for a single row descriptor, then replaces its skeleton
      * placeholder with the fully rendered VirtualCardRow.
      *
@@ -2052,6 +2094,14 @@ class HomePage extends Page {
                     }
                 }
                 return false;
+            }
+
+            // Wait for our staggered macrotask turn when batch-mounting multiple rows
+            if (this._rowRenderGateActive) {
+                await this._acquireRowRenderTurn();
+                if (!this._isMounted || this._rowRegistry.has(descriptor.id)) {
+                    return false;
+                }
             }
 
             // Find the placeholder and replace it with a live row
@@ -2181,21 +2231,28 @@ class HomePage extends Page {
             if (!this._isMounted) return;
             const group = priorityGroups.get(p);
             if (group) {
-                await Promise.all(group.map((d) => this._loadAndRenderRow(d)));
+                // Stagger row DOM mounts when a priority bucket contains multiple rows
+                if (group.length > 1) {
+                    this._rowRenderGateActive = true;
+                    this._hasRenderedRowInTurn = false;
+                }
+                try {
+                    await Promise.all(group.map((d) => this._loadAndRenderRow(d)));
+                } finally {
+                    this._rowRenderGateActive = false;
+                    this._hasRenderedRowInTurn = false;
+                }
             }
         }
 
         // ─── Post-background cleanup ──────────────────────────────────────
         if (!this._isMounted) return;
 
-        this._prewarmScrollCache();
+        // Mark ready right away and defer the full-row offsetTop walk + cache
+        // write until idle so scrolling stays free of synchronous layout flushes.
         this.restoreScrollFocusWhenReady();
         this.markReady();
-
-        // Save page cache for instant back-navigation (skip if restoring from cache)
-        if (!this._wasPageCached) {
-            this._savePageCache();
-        }
+        this._scheduleDeferredBatchCacheRefresh();
     }
 
     // =========================================================================
@@ -2349,6 +2406,12 @@ class HomePage extends Page {
             () => {
                 this._deferredCacheTask = null;
                 if (!this._isMounted) return;
+
+                // Re-defer if a scroll animation resumed right as the idle callback fired
+                if (scrollController && scrollController.isAnimating) {
+                    this._scheduleDeferredBatchCacheRefresh();
+                    return;
+                }
 
                 this._prewarmScrollCache();
 
@@ -2772,13 +2835,15 @@ class HomePage extends Page {
                     );
                 }
 
+                // Resolve the restoration target BEFORE scrolling or applying .focused
+                let focusTargetCard = null;
+                let focusRowId = null;
+
                 if (savedCard) {
-                    // Card is in the DOM — focus it directly
                     const rowEntry = this._getRowEntryForCard(savedCard);
                     if (rowEntry) {
-                        this.setActiveSection(`home-row-${rowEntry.descriptor.id}`, false);
-                        focusManager.focusElement(savedCard, { instantScroll: true });
-                        restoredFocus = true;
+                        focusTargetCard = savedCard;
+                        focusRowId = rowEntry.descriptor.id;
                     }
                 } else if (targetRowId) {
                     // Card was virtualized out — restore via index lookup
@@ -2786,9 +2851,8 @@ class HomePage extends Page {
                     if (rowEntry && rowEntry.virtualRow) {
                         const node = rowEntry.virtualRow.ensureItemRendered(targetId);
                         if (node) {
-                            this.setActiveSection(`home-row-${targetRowId}`, false);
-                            focusManager.focusElement(node, { instantScroll: true });
-                            restoredFocus = true;
+                            focusTargetCard = node;
+                            focusRowId = targetRowId;
                         }
                     }
                 }
@@ -2798,21 +2862,29 @@ class HomePage extends Page {
                 state.delete('home:lastFocusedItemId');
 
                 // ====================================================================
-                // Restore any captured scroll offset from NavigationState.
+                // Restore captured scrollTop BEFORE focusElement() dirties .focused
                 // ====================================================================
-                // Since we nullified this._pendingNavState synchronously above,
-                // restoreScrollFocusWhenReady() at the end of the pipeline is safely a no-op.
-                //
-                // We delegate this scroll positioning to ScrollController.smoothScrollTo
-                // with duration 0. This guarantees that if the user has GPU scroll mode
-                // enabled, we snap the translate3d transform of .vertical-scroll-track
-                // instead of corrupting the layout by writing to scrollTop directly.
+                // Snapping vertical scroll first ensures ScrollController reads clean
+                // layout metrics while passing skipVerticalScroll: true to focusElement()
+                // preserves pendingNav.scrollTop and performs horizontal centering only.
+                // Since this._pendingNavState was cleared above, restoreScrollFocusWhenReady()
+                // remains a no-op later in the pipeline.
                 // ====================================================================
-                if (restoredFocus && pendingNav) {
-                    const scrollContainer = this.$('.page-content');
-                    if (scrollContainer && pendingNav.scrollTop > 0) {
-                        scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop, 0, 'vertical');
+                if (focusTargetCard && focusRowId) {
+                    const hasSavedScroll = Boolean(pendingNav && pendingNav.scrollTop > 0);
+                    if (hasSavedScroll) {
+                        const scrollContainer = this.$('.page-content');
+                        if (scrollContainer) {
+                            scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop, 0, 'vertical');
+                        }
                     }
+
+                    this.setActiveSection(`home-row-${focusRowId}`, false);
+                    focusManager.focusElement(focusTargetCard, {
+                        instantScroll: true,
+                        skipVerticalScroll: hasSavedScroll
+                    });
+                    restoredFocus = true;
                 }
             } else if (storage.getItem('pref:disableFocusRestore') === 'true') {
                 // Clean up any stale saved state from before the toggle was turned on

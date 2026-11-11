@@ -1841,7 +1841,8 @@ class ScrollController {
         // focus transition on Tizen hardware.
         // ----------------------------------------------------------------
         if (element.id === 'hero-carousel-container' || element.closest('#hero-carousel-container')) {
-            if (pageContent) {
+            // Skip vertical snap when the caller already restored scrollTop manually
+            if (!options.skipVerticalScroll && pageContent) {
                 // ============================================================
                 // HERO FAST PATH SNAP CHECK
                 // ============================================================
@@ -1946,6 +1947,9 @@ class ScrollController {
             element.closest('.episode-row-card, .episode-row, .episode-list-container') ||
             element.classList.contains('episode-row-card');
         if (isVerticalListCard && pageContent) {
+            if (options.skipVerticalScroll) {
+                return;
+            }
             const cardEl = element.closest('.episode-row-card') || element;
             const cardTop = getCumulativeOffsetTop(cardEl, pageContent);
             const cardHeight = cardEl.offsetHeight || 100;
@@ -1993,7 +1997,8 @@ class ScrollController {
         // Row scroll aligns the entire .media-row to a top offset
         // ----------------------------------------------------------------
         const row = pageContent ? element.closest('.media-row') : null;
-        let useRowScroll = !!row;
+        // Honor skipVerticalScroll so state restores can center horizontally only
+        let useRowScroll = !options.skipVerticalScroll && !!row;
         let activePageContent = pageContent; // May be nulled for hero
         let rowMetrics = null; // Populated once, reused by the alignment branch
 
@@ -2060,7 +2065,7 @@ class ScrollController {
             element.classList.contains('details-rich-meta') ||
             Boolean(element.closest('#rich-meta, .details-rich-meta, #rich-meta-container'));
 
-        if (isRichMeta && pageContent && pageContent.querySelector('.details-main-split')) {
+        if (!options.skipVerticalScroll && isRichMeta && pageContent && pageContent.querySelector('.details-main-split')) {
             const currentScroll = this.getVerticalScroll(pageContent);
             const viewHeight = this._getContainerMetrics(pageContent).height;
             const scrollDelta = Math.abs(currentScroll);
@@ -2210,9 +2215,9 @@ class ScrollController {
 
             if (rowItems) {
                 // First: scroll the parent row into view vertically if needed
-                // (only if not already handled by row-based scroll above)
+                // (only if not already handled above or bypassed by skipVerticalScroll)
                 const parentRow = element.closest('.media-row');
-                if (parentRow && pageContent && !useRowScroll) {
+                if (!options.skipVerticalScroll && parentRow && pageContent && !useRowScroll) {
                     const rowTop = getCumulativeOffsetTop(parentRow, pageContent);
                     const rowHeight = this._getRowMetrics(parentRow, pageContent).height;
                     const rowBottom = rowTop + rowHeight;
