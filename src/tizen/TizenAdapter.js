@@ -140,7 +140,99 @@ class TizenAdapter {
         // Get device info
         this._getDeviceInfo();
 
+        // Prime hardware overlay / AVPlay compositor pipeline on Tizen boot
+        // while #app-splash covers the screen, without touching playback state.
+        this.warmupCompositor();
+
         log.info('TizenAdapter initialized');
+    }
+
+    /**
+     * Warm up the Tizen WebAppEngine / Chromium hardware overlay pipeline once
+     * during startup so subsequent home-screen scrolling benefits from hardware
+     * overlay compositing without waiting for initial video playback.
+     *
+     * Strictly isolated to Samsung Tizen targets, completely read-only against
+     * `webapis.avplay` session state, and removes the transient probe element once
+     * two compositor frames settle so zero dormant plugin nodes remain.
+     *
+     * @returns {boolean} True when Tizen warmup executed or had already run
+     */
+    warmupCompositor() {
+        // Hard isolation guard — never touch hardware plane primitives off Tizen
+        if (!this._isTizen) {
+            return false;
+        }
+        if (this._compositorWarmed) {
+            return true;
+        }
+        this._compositorWarmed = true;
+
+        // Read-only AVPlay state probe (never opens/stops/closes active sessions)
+        try {
+            const avplay = typeof window !== 'undefined' ? window.webapis?.avplay || window.tizen?.avplay : null;
+            if (avplay && typeof avplay.getState === 'function') {
+                avplay.getState();
+            }
+        } catch (_) {
+            // Safe to ignore firmware revisions where getState throws before open()
+        }
+
+        if (typeof document === 'undefined' || !document.body) {
+            return true;
+        }
+
+        try {
+            // Mount a 1x1 non-interactive AVPlayer object strictly off-view behind
+            // splash for two frames so the compositor registers its hardware layer,
+            // then tear it down completely so no dormant player instance lingers.
+            const probe = document.createElement('object');
+            probe.type = 'application/avplayer';
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.position = 'fixed';
+            probe.style.top = '0px';
+            probe.style.left = '0px';
+            probe.style.width = '1px';
+            probe.style.height = '1px';
+            probe.style.opacity = '0';
+            probe.style.pointerEvents = 'none';
+            probe.style.zIndex = '-1';
+
+            document.body.appendChild(probe);
+            this._compositorWarmupProbe = probe;
+
+            let cleaned = false;
+            let fallbackTimerId = null;
+
+            const cleanupProbe = () => {
+                if (cleaned) return;
+                cleaned = true;
+                if (fallbackTimerId) {
+                    clearTimeout(fallbackTimerId);
+                    fallbackTimerId = null;
+                }
+                if (probe.parentNode) {
+                    probe.parentNode.removeChild(probe);
+                }
+                if (this._compositorWarmupProbe === probe) {
+                    this._compositorWarmupProbe = null;
+                }
+            };
+
+            // Wait two animation frames so the compositor commits the probe layer
+            // cleanly before detaching it from the DOM tree.
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(cleanupProbe);
+                });
+            }
+            fallbackTimerId = setTimeout(cleanupProbe, 150);
+            log.debug('TizenAdapter: Compositor hardware overlay warmup scheduled');
+        } catch (err) {
+            log.debug('TizenAdapter: Compositor warmup skipped cleanly', err);
+        }
+
+        return true;
     }
 
     /**
