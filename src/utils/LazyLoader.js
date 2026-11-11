@@ -17,6 +17,31 @@ import { markPerfOperation } from './PerfMarker.js';
 
 const log = logger.create('LazyLoader');
 
+/**
+ * Quiet window (ms) required after the last user keypress / scroll before any
+ * deferred LazyLoader work (image src churn, BlurHash decode, marquee layout
+ * measure) may run.
+ *
+ * TV D-pad key repeats land every ~250-500ms. The previous 220ms settle window
+ * fired deferred work in exactly that gap between two presses — telemetry
+ * attributed it to `ScrollController.finish (+96-244ms)`. 800ms guarantees a
+ * full rapid-scroll burst has drained before the main thread is touched again.
+ */
+const USER_ACTIVITY_QUIET_MS = 800;
+
+/**
+ * Deferred post-scroll settle / pending-element flush delay (ms). Both paths
+ * re-arm themselves while the user is still active.
+ */
+const POST_SCROLL_SETTLE_MS = 800;
+
+/**
+ * IntersectionObserver lookahead cushion (top/bottom 1200px, sides 200px).
+ * Generous vertical lookahead means images are already in flight before the
+ * user reaches them, so the settle pass has far less work to do.
+ */
+const IO_ROOT_MARGIN = '1200px 200px';
+
 class LazyLoader {
     constructor() {
         this.observer = null;
@@ -39,6 +64,10 @@ class LazyLoader {
          * churn and synchronous style/decode spikes mid-flight.
          * ---------------------------------------------------------------- */
         this._scrollTimeout = null;
+
+        // Monotonic timestamp (ms) of the last user interaction (D-pad keydown
+        // or scroll event). Deferred work stays parked while the user is active.
+        this._lastInteractionAt = 0;
 
         // Track cancellable post-scroll marquee/BlurHash settle work so rapid
         // consecutive key presses never collide with ScrollController.finish.
@@ -80,6 +109,11 @@ class LazyLoader {
         window.addEventListener(
             'scroll',
             () => {
+                // Any scroll — native or ScrollController-driven — counts as user
+                // activity, so deferred image/BlurHash work never runs between two
+                // D-pad presses.
+                this._lastInteractionAt = Date.now();
+
                 // Skip per-frame timer churn while ScrollController owns an active
                 // animation; scroll:started cancels pending work and scroll:finished
                 // deterministically schedules the settle pass when motion completes.
@@ -100,13 +134,22 @@ class LazyLoader {
                     this._scrollTimeout = null;
                     // Resume deferred work once viewport scrolling settles
                     if (!this._isScrolling()) {
-                        this._processBlurHashQueue();
-                        this._scheduleMarqueeFlushRaf(() => {
+                        this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS, () => {
                             this._flushPendingMarquee();
                         });
-                        this._schedulePendingElementsFlush(220);
+                        this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
                     }
                 }, 150);
+            },
+            true
+        );
+
+        // D-pad / keyboard activity extends the quiet window. Capture phase so a
+        // handler that stops propagation cannot hide the press from us.
+        window.addEventListener(
+            'keydown',
+            () => {
+                this._lastInteractionAt = Date.now();
             },
             true
         );
@@ -114,6 +157,7 @@ class LazyLoader {
         // Cancel any pending post-scroll flush and settle timers immediately when
         // a new scroll animation begins so rapid D-pad presses never hit stalls.
         eventBus.on('scroll:started', () => {
+            this._lastInteractionAt = Date.now();
             if (this._scrollTimeout) {
                 clearTimeout(this._scrollTimeout);
                 this._scrollTimeout = null;
@@ -124,16 +168,16 @@ class LazyLoader {
 
         // Listen for ScrollController finishing its transitions
         eventBus.on('scroll:finished', () => {
-            // Defer BlurHash + marquee reflow past the 220ms rapid-scroll debounce
-            // so post-scroll measurements never fire during ScrollController.finish
+            // Defer BlurHash + marquee reflow past the 800ms quiet window so
+            // post-scroll measurements never fire during ScrollController.finish
             // or between quick consecutive D-pad steps.
-            this._schedulePostScrollSettleWork(220, () => {
+            this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS, () => {
                 this._flushPendingMarquee();
             });
 
-            // Schedule queued intersection elements 220ms after scroll settles so
-            // rapid multi-row D-pad taps (~500ms spacing) cancel before flushing.
-            this._schedulePendingElementsFlush(220);
+            // Schedule queued intersection elements 800ms after scroll settles so
+            // rapid multi-row D-pad taps (~250-500ms spacing) cancel before flushing.
+            this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
         });
 
         // Legacy TV Focus-Driven Lazy Load
@@ -262,10 +306,12 @@ class LazyLoader {
                     });
                 },
                 {
-                    // Calibrated lookahead cushion (~0.35 screens / approx 1 row ahead).
-                    // Prevents focus-driven preloads and virtual grid pre-warming from competing
-                    // for limited HTTP connections and CPU decode bandwidth on low-power TVs.
-                    rootMargin: `${Math.ceil(window.innerHeight * 0.35)}px`,
+                    // Wide vertical lookahead keeps the next screens of artwork in
+                    // flight before the user arrives, so the post-scroll settle pass
+                    // has little left to load. Actual loads are still deferred to a
+                    // quiet window (see USER_ACTIVITY_QUIET_MS), so the wider margin
+                    // never puts img.src churn on a keypress frame.
+                    rootMargin: IO_ROOT_MARGIN,
                     threshold: 0.01
                 }
             );
@@ -323,6 +369,30 @@ class LazyLoader {
             return true;
         }
         return this._scrollTimeout !== null;
+    }
+
+    /**
+     * True while the user is still actively navigating (keypress or scroll
+     * within the last 800ms). Deferred image/BlurHash/marquee work must never
+     * run inside this window — on TV hardware it always lands between two
+     * D-pad key repeats (~250-500ms apart).
+     *
+     * @returns {boolean}
+     * @private
+     */
+    _isUserActive() {
+        return Date.now() - this._lastInteractionAt < USER_ACTIVITY_QUIET_MS;
+    }
+
+    /**
+     * True when deferred work may safely run: no scroll animation in flight and
+     * the 800ms post-interaction quiet window has elapsed.
+     *
+     * @returns {boolean}
+     * @private
+     */
+    _canRunDeferredWork() {
+        return !this._isScrolling() && !this._isUserActive();
     }
 
     /**
@@ -438,43 +508,52 @@ class LazyLoader {
         this._postScrollSettleRafId = scheduleRaf(() => {
             this._postScrollSettleRafId = null;
             this._postScrollSettleRafUsesTimeout = false;
-            if (!this._isScrolling()) {
-                if (typeof onFlush === 'function') {
-                    onFlush();
-                } else {
-                    this._flushPendingMarquee();
-                }
+            if (!this._canRunDeferredWork()) {
+                // Re-arm until the 800ms quiet window elapses — never force a
+                // layout read (scrollWidth) between two D-pad presses.
+                this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS, onFlush);
+                return;
+            }
+            if (typeof onFlush === 'function') {
+                onFlush();
+            } else {
+                this._flushPendingMarquee();
             }
         });
     }
 
     /**
      * Schedule deferred BlurHash decoding and marquee layout checks after a
-     * cancellable settle window so rapid D-pad taps never pay layout/decode costs.
+     * cancellable 800ms quiet window so rapid D-pad taps never pay
+     * layout/decode costs between presses.
      *
-     * @param {number} [delayMs=220] - Quiet window after scroll:finished
+     * @param {number} [delayMs=800] - Quiet window after scroll:finished
      * @param {Function|null} [onMarqueeFlush=null] - Flush callback for deferred marquee
      * @private
      */
-    _schedulePostScrollSettleWork(delayMs = 220, onMarqueeFlush = null) {
+    _schedulePostScrollSettleWork(delayMs = POST_SCROLL_SETTLE_MS, onMarqueeFlush = null) {
         this._cancelPostScrollSettleWork();
 
         this._postScrollSettleTimerId = setTimeout(() => {
             this._postScrollSettleTimerId = null;
-            if (!this._isScrolling()) {
-                this._processBlurHashQueue();
-                this._scheduleMarqueeFlushRaf(onMarqueeFlush);
+            if (!this._canRunDeferredWork()) {
+                // The user is still navigating — push the whole settle pass out
+                // by another quiet window instead of running it in the keypress gap.
+                this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS, onMarqueeFlush);
+                return;
             }
+            this._processBlurHashQueue();
+            this._scheduleMarqueeFlushRaf(onMarqueeFlush);
         }, delayMs);
     }
 
     /**
      * Debounce and schedule flushing of elements queued during scroll.
      *
-     * @param {number} [delayMs=220] - Settle delay after scroll:finished
+     * @param {number} [delayMs=800] - Settle delay after scroll:finished
      * @private
      */
-    _schedulePendingElementsFlush(delayMs = 220) {
+    _schedulePendingElementsFlush(delayMs = POST_SCROLL_SETTLE_MS) {
         if (this._pendingFlushTimerId) {
             clearTimeout(this._pendingFlushTimerId);
             this._pendingFlushTimerId = null;
@@ -484,9 +563,13 @@ class LazyLoader {
 
         this._pendingFlushTimerId = setTimeout(() => {
             this._pendingFlushTimerId = null;
-            if (!this._isScrolling()) {
-                this._flushPendingElements();
+            if (!this._canRunDeferredWork()) {
+                // Re-arm while the user keeps pressing. Never flush img.src work
+                // inside the 250-500ms gap between key repeats.
+                this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
+                return;
             }
+            this._flushPendingElements();
         }, delayMs);
     }
 
@@ -497,9 +580,13 @@ class LazyLoader {
      * @private
      */
     _flushPendingElements() {
-        if (this._isScrolling()) return;
-        if (this._pendingFlushRafId) return;
         if (this._pendingElements.length === 0) return;
+        if (!this._canRunDeferredWork()) {
+            // Still inside the user's active window — retry after quiet.
+            this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
+            return;
+        }
+        if (this._pendingFlushRafId) return;
 
         const scheduleRaf =
             typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
@@ -509,8 +596,11 @@ class LazyLoader {
         const drainSlice = () => {
             this._pendingFlushRafId = null;
 
-            // Pause immediately if user started another scroll mid-flush
-            if (this._isScrolling() || this._pendingElements.length === 0) {
+            // Pause immediately if the user started another scroll / keypress mid-flush
+            if (!this._canRunDeferredWork() || this._pendingElements.length === 0) {
+                if (this._pendingElements.length > 0) {
+                    this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
+                }
                 return;
             }
 
@@ -534,8 +624,12 @@ class LazyLoader {
             }
 
             // Continue draining remaining targets on subsequent animation frames
-            if (this._pendingElements.length > 0 && !this._isScrolling()) {
-                this._pendingFlushRafId = scheduleRaf(drainSlice);
+            if (this._pendingElements.length > 0) {
+                if (this._canRunDeferredWork()) {
+                    this._pendingFlushRafId = scheduleRaf(drainSlice);
+                } else {
+                    this._schedulePendingElementsFlush(POST_SCROLL_SETTLE_MS);
+                }
             }
         };
 
@@ -863,18 +957,22 @@ class LazyLoader {
         if (this._blurHashProcessing) return;
         if (this._blurHashQueue.length === 0) return;
 
-        // Defer BlurHash DCT computations while viewport scroll animations are active.
-        // This ensures full CPU budget is dedicated to 60fps compositor transitions.
-        if (this._isScrolling()) {
+        // Defer BlurHash DCT computations while viewport scroll animations are
+        // active AND during the 800ms post-keypress quiet window. The old path
+        // ran them 220ms after scroll:finished, which is exactly the gap between
+        // two D-pad key repeats on Tizen.
+        if (!this._canRunDeferredWork()) {
+            this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS);
             return;
         }
 
         this._blurHashProcessing = true;
 
         const processBatch = () => {
-            // Re-check scrolling state before each animation frame batch
-            if (this._isScrolling()) {
+            // Re-check scrolling/idle state before each animation frame batch
+            if (!this._canRunDeferredWork()) {
                 this._blurHashProcessing = false;
+                this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS);
                 return;
             }
 

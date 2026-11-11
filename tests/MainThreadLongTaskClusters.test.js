@@ -982,10 +982,10 @@ test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish win
         'Native scroll listener must short-circuit while ScrollController owns an active animation'
     );
 
-    // scroll:finished must use the cancellable 220ms settle scheduler rather than an uncancelled 50ms timer.
+    // scroll:finished must use the cancellable 800ms settle scheduler rather than an uncancelled 50ms timer.
     assert.ok(
-        initBody.includes('this._schedulePostScrollSettleWork(220,'),
-        'scroll:finished must delegate BlurHash/marquee work to cancellable 220ms settle scheduler'
+        initBody.includes('this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS,'),
+        'scroll:finished must delegate BlurHash/marquee work to the cancellable 800ms settle scheduler'
     );
     assert.ok(
         !initBody.includes('}, 50);'),
@@ -994,6 +994,11 @@ test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish win
     assert.ok(
         initBody.includes('this._cancelPostScrollSettleWork();'),
         'scroll:started and native scroll must cancel pending post-scroll settle work'
+    );
+    assert.ok(
+        initBody.includes("window.addEventListener(\n            'keydown',") &&
+            initBody.includes('this._lastInteractionAt = Date.now();'),
+        'LazyLoader must track keydown activity so deferred work never runs between D-pad repeats'
     );
 
     // focus:changed must guard .marquee-active probe and skip _batchPreloadImages while scrolling.

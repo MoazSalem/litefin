@@ -76,8 +76,14 @@ const INTER_LOAD_DELAY_MS = isLegacyWebKit ? 50 : 20;
 
 /**
  * Scroll-settle delay (ms) before pre-warming resumes after a scroll finishes.
+ *
+ * TV D-pad key repeats arrive every 250-500ms. Resuming at 250ms dropped fresh
+ * image fetches/decodes straight into the gap between two keypresses — the
+ * `ScrollController.finish (+Nms)` long-task cluster. The pre-warmer now stays
+ * parked for a full 1200ms of quiet, so decode work only ever lands once the
+ * user has actually stopped navigating.
  */
-const DEFAULT_RESUME_DELAY_MS = isLegacyWebKit ? 400 : 250;
+const DEFAULT_RESUME_DELAY_MS = 1200;
 
 /**
  * Maximum number of warmed URLs remembered for de-duplication. Bounded so the

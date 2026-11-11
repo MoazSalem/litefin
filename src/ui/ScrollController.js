@@ -517,13 +517,16 @@ class ScrollController {
     }
 
     /**
-     * Resumes ImageCache pre-warming with the engine-appropriate settle delay.
-     * The delay is scheduled inside ImageCache.resume() itself.
+     * Resumes ImageCache pre-warming after a full 1200ms quiet window. D-pad
+     * key repeats land every 250-500ms, so the previous 250ms settle dropped
+     * decode work exactly between two presses (the `ScrollController.finish
+     * (+Nms)` long-task cluster). The delay itself is scheduled inside
+     * ImageCache.resume() and is cancelled by the next scroll:started.
      * @private
      */
     _resumeImagePrewarm() {
         if (imageCache && typeof imageCache.resume === 'function') {
-            imageCache.resume();
+            imageCache.resume(1200);
         }
     }
 

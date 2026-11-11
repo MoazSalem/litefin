@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
  * Library Row Recycling & Image Pre-warming Optimization Test Suite
  * ============================================================================
  * Verifies that:
- * 1. LazyLoader rootMargin is reduced from 0.8 to 0.35 viewport heights.
+ * 1. LazyLoader rootMargin uses a wide fixed-pixel vertical lookahead.
  * 2. IntersectionObserver callback loads the intersecting image directly without
  *    cascading _batchPreloadImages on every intersecting card.
  * 3. _hookGridCards accepts an eagerLoad flag (defaulting to false) to register
@@ -23,11 +23,12 @@ test('LazyLoader: rootMargin calibrated and redundant batch preloading removed f
     // Read LazyLoader source code
     const lazySource = readFileSync(new URL('../src/utils/LazyLoader.js', import.meta.url), 'utf8');
 
-    // 1. Verify rootMargin is reduced to ~0.35 viewport heights (approx 1 row ahead)
+    // 1. Verify rootMargin keeps a wide fixed-pixel vertical lookahead
     assert.strictEqual(
-        lazySource.includes('rootMargin: `${Math.ceil(window.innerHeight * 0.35)}px`'),
+        lazySource.includes("const IO_ROOT_MARGIN = '1200px 200px';") &&
+            lazySource.includes('rootMargin: IO_ROOT_MARGIN,'),
         true,
-        'LazyLoader IntersectionObserver rootMargin must be 0.35 viewport heights'
+        'LazyLoader IntersectionObserver rootMargin must use the 1200px vertical lookahead constant'
     );
 
     // 2. Verify _batchPreloadImages is NOT called inside the IntersectionObserver callback
