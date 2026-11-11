@@ -861,19 +861,46 @@ class LazyLoader {
             if (img.classList.contains('loaded')) return;
             if (img.hasAttribute('data-lazy-loading')) return;
 
-            // Mark as lazy loading immediately to prevent duplicate triggers
-            img.setAttribute('data-lazy-loading', '');
-
-            // Decode and draw BlurHash canvas if present
-            this._decodeAndDrawBlurhash(img);
-
-            // Bind shared decode-aware handlers and assign source
-            this._bindImageHandlers(img);
-            this._assignImageSource(img, img.dataset.src);
+            this._startImageLoad(img);
         });
 
         if (this.observer) {
             this.observer.unobserve(row);
+        }
+    }
+
+    /**
+     * Begins loading a single image before scheduling its BlurHash placeholder
+     * so cached images never burn main-thread DCT cycles when the real bitmap
+     * is already available.
+     *
+     * @param {HTMLImageElement} img - Image element to load
+     * @private
+     */
+    _startImageLoad(img) {
+        // Mark as lazy loading immediately to prevent duplicate triggers
+        img.setAttribute('data-lazy-loading', '');
+
+        // Bind shared decode-awaiting handlers and start fetch BEFORE BlurHash
+        this._bindImageHandlers(img);
+        this._assignImageSource(img, img.dataset.src);
+
+        // Defer BlurHash decoding by one frame so memory/HTTP cache hits skip DCT work.
+        // Skip scheduling an extra rAF entirely when the card has no BlurHash canvas.
+        const canvas =
+            img.parentElement && typeof img.parentElement.querySelector === 'function'
+                ? img.parentElement.querySelector('.blurhash-canvas')
+                : null;
+        if (canvas && !canvas.classList.contains('blurhash-decoded')) {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    if (img.isConnected !== false) {
+                        this._decodeAndDrawBlurhash(img);
+                    }
+                });
+            } else {
+                this._decodeAndDrawBlurhash(img);
+            }
         }
     }
 
@@ -951,13 +978,8 @@ class LazyLoader {
         // eagerly loaded images; setting src again can abort the fetch
         // on older Chromium (Tizen 3/4), causing the image to never load.
         if (img.hasAttribute('data-lazy-loading')) return;
-        img.setAttribute('data-lazy-loading', '');
 
-        this._decodeAndDrawBlurhash(img);
-
-        // Wire shared decode-awaiting completion + fallback handlers, then start fetch
-        this._bindImageHandlers(img);
-        this._assignImageSource(img, img.dataset.src);
+        this._startImageLoad(img);
 
         if (this.observer) {
             this.observer.unobserve(img);
@@ -974,8 +996,15 @@ class LazyLoader {
      * @private
      */
     _decodeAndDrawBlurhash(img) {
-        // Fast exit: if image is already cached or completed loading, skip BlurHash entirely
-        if (img.classList.contains('loaded') || (img.complete && img.naturalWidth > 0)) {
+        // Ignore the initial 1x1 transparent GIF placeholder when checking img.complete
+        const isPlaceholder = Boolean(img.src && img.src.startsWith('data:image/gif'));
+
+        // Fast exit: if image is already cached, errored, or completed loading a real bitmap
+        if (
+            img.classList.contains('loaded') ||
+            (img.style && img.style.display === 'none') ||
+            (!isPlaceholder && img.complete && img.naturalWidth > 0)
+        ) {
             return;
         }
 
