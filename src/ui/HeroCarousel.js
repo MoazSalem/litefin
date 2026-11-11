@@ -60,6 +60,13 @@ class HeroCarousel {
         this._decodedAssets = Object.create(null);
         this._stackPreloadTimerId = null;
 
+        // Idle layer pre-rasterization: decoded inactive slides are briefly made
+        // visible (opacity 0.02, transition disabled) across two animation frames
+        // during a quiet window so their masked 1280px backdrop is rasterized
+        // BEFORE goTo() flips .active. Without this, that rasterization lands in
+        // the 0-250ms window after goTo() — the HeroCarousel long-task cluster.
+        this._warmRafId = null;
+
         // Cached DOM node references populated in init() and cleared in destroy()
         // so navigation never re-queries the carousel DOM tree on keypress frames.
         this._slideItems = null;
@@ -946,6 +953,11 @@ class HeroCarousel {
             clearTimeout(this._stackPreloadTimerId);
             this._stackPreloadTimerId = null;
         }
+        // Cancel the idle layer pre-rasterization frame
+        if (this._warmRafId) {
+            cancelAnimationFrame(this._warmRafId);
+            this._warmRafId = null;
+        }
         if (this._intersectionObserver) {
             this._intersectionObserver.disconnect();
             this._intersectionObserver = null;
@@ -1372,7 +1384,85 @@ class HeroCarousel {
                     this._decodeBlurhashFill(slides[i]);
                 }
             }
+
+            // Decoded neighbor slides are paint-eligible but not yet rasterized;
+            // pay that cost here, during a quiet window, instead of inside the
+            // 0-250ms following the next goTo().
+            this._warmAdjacentSlides();
         }, delay, 0);
+    }
+
+    /**
+     * Pre-rasterizes decoded, non-active slides during a quiet window.
+     *
+     * WHY: flipping `.hero-item.active` makes the browser rasterize a masked
+     * 1280px-wide backdrop layer for the first time. That paint is main-thread
+     * work and reliably lands 0-250ms AFTER goTo() returns, so telemetry
+     * attributes it to `HeroCarousel.goTo`. Briefly parking a decoded slide at
+     * opacity 0.02 with transitions disabled across two frames forces the same
+     * rasterization while the user is idle; the crossfade then only composites
+     * already-rasterized tiles.
+     *
+     * @private
+     */
+    _warmAdjacentSlides() {
+        if (!this._container || this._warmRafId) return;
+        if (this._hideTimeoutId) return;
+        if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
+            return;
+        }
+
+        const items = this._slideItems;
+        if (!items || items.length < 2) return;
+
+        const count = items.length;
+        const current = this._currentIndex;
+        const candidates = [current + 1, current - 1];
+        if (count > 2) {
+            if (current === 0) {
+                candidates.push(count - 1);
+            } else if (current === count - 1) {
+                candidates.push(0);
+            }
+        }
+
+        const warmed = [];
+        for (let i = 0; i < candidates.length; i++) {
+            const index = ((candidates[i] % count) + count) % count;
+            if (index === current) continue;
+
+            const item = items[index];
+            if (!item || !item.classList) continue;
+            if (warmed.indexOf(item) !== -1) continue;
+            // Only slides whose backdrop bitmap has actually landed can be rasterized.
+            if (this._decodedAssets[index] !== true) continue;
+            if (item.classList.contains('active') || item.classList.contains('hero-item--prewarm')) continue;
+
+            const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
+            if (!backdrop || !backdrop.style || !backdrop.style.backgroundImage) continue;
+
+            warmed.push(item);
+        }
+
+        if (warmed.length === 0) return;
+
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlides');
+
+        for (let i = 0; i < warmed.length; i++) {
+            warmed[i].classList.add('hero-item--prewarm');
+        }
+
+        // Two frames: frame 1 commits the opacity change, frame 2 guarantees the
+        // compositor raster pass for the newly paint-eligible layer has run
+        // before the class is dropped again.
+        this._warmRafId = requestAnimationFrame(() => {
+            this._warmRafId = requestAnimationFrame(() => {
+                this._warmRafId = null;
+                for (let i = 0; i < warmed.length; i++) {
+                    warmed[i].classList.remove('hero-item--prewarm');
+                }
+            });
+        });
     }
 
     /**
@@ -1412,6 +1502,8 @@ class HeroCarousel {
         // Pure class toggle: slides stay pre-stacked at opacity:0 with static
         // CSS compositor promotion, so switching active classes triggers zero
         // visibility flips, mask re-rasterization, or GPU layer rebuilds.
+        prevItem.classList.remove('hero-item--prewarm');
+        nextItem.classList.remove('hero-item--prewarm');
         prevItem.classList.remove('active');
         dots[prevIndex].classList.remove('active');
 

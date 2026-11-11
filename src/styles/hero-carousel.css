@@ -127,6 +127,28 @@
     opacity: 1;
     z-index: 2;
     pointer-events: auto;
+    /*
+     * Re-assert the crossfade timing here so the idle pre-warm class below can
+     * never suppress the fade on the slide that just became active.
+     */
+    transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/*
+ * ============================================================================
+ * Idle pre-rasterization window
+ * ============================================================================
+ * Applied for two animation frames by HeroCarousel._warmAdjacentSlides() to a
+ * decoded, non-active slide. opacity 0.02 (instead of 0) makes the layer
+ * paint-eligible, so the masked 1280px backdrop is rasterized during idle time
+ * rather than in the 0-250ms after goTo() flips .active. The transition is
+ * disabled so adding/removing the class is a single style change, never a fade.
+ * ============================================================================
+ */
+.hero-item--prewarm {
+    opacity: 0.02;
+    transition: none;
+    -webkit-transition: none;
 }
 
 /* ============================================================================
