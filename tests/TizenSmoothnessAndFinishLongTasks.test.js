@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import test from 'node:test';
 
 /**
@@ -199,7 +200,8 @@ globalThis.Image = class ControllableImage {
 };
 
 const { eventBus } = await import('../src/core/EventBus.js');
-const { default: TizenAdapter } = await import('../src/tizen/TizenAdapter.js');
+const { default: TizenAdapter, tizenAdapter } = await import('../src/tizen/TizenAdapter.js');
+const { TizenAVPlayer } = await import('../src/player/core/TizenAVPlayer.js');
 const { default: HeroCarousel } = await import('../src/ui/HeroCarousel.js');
 const { lazyLoader } = await import('../src/utils/LazyLoader.js');
 const { default: ScrollController } = await import('../src/ui/ScrollController.js');
@@ -248,37 +250,33 @@ test('Splash & spinners: index HTML, base CSS, and App.js tear down infinite spl
 });
 
 // ============================================================================
-// 2. Part 2 — TizenAdapter Compositor Warmup Behavior
+// 2. Part 2 — TizenAdapter Native AVPlay Hardware Warmup & Abort Behavior
 // ============================================================================
 
-test('TizenAdapter.warmupCompositor: strict Tizen isolation, read-only AVPlay check, real micro-video play/pause, and AudioContext resume', async () => {
+test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play/close cycle, URL resolution, abort & TizenAVPlayer coordination', async () => {
     rafQueue.length = 0;
     mockBody._children.length = 0;
+
+    // Verify the packaged 1-frame MP4 asset exists, is non-empty, and is copied by webpack
+    const warmupAssetPath = resolve(__dirname, '..', 'src', 'assets', 'warmup.mp4');
+    const warmupStat = statSync(warmupAssetPath);
+    assert.ok(warmupStat.size > 200 && warmupStat.size < 16384, 'src/assets/warmup.mp4 must be a compact valid MP4');
+    assert.match(
+        readSrc('webpack.config.cjs'),
+        /from:\s*'src\/assets'\s*,\s*to:\s*'assets'/,
+        'webpack CopyWebpackPlugin must copy src/assets into assets/'
+    );
 
     const origGetById = globalThis.document.getElementById;
     const origCreateEl = globalThis.document.createElement;
     const origAudioCtx = globalThis.window.AudioContext;
-    let videoPlayCalls = 0;
-    let videoPauseCalls = 0;
-    let playReturnPromise = true;
+    const origLocation = globalThis.window.location;
     let audioConstructed = 0;
     let audioResumed = 0;
     let audioClosed = 0;
 
     globalThis.document.getElementById = (id) => mockBody._children.find((node) => node.id === id) || null;
-    globalThis.document.createElement = (tag) => {
-        const el = origCreateEl(tag);
-        if (tag === 'video') {
-            el.play = () => {
-                videoPlayCalls++;
-                return playReturnPromise ? Promise.resolve() : undefined;
-            };
-            el.pause = () => {
-                videoPauseCalls++;
-            };
-        }
-        return el;
-    };
+    globalThis.document.createElement = (tag) => origCreateEl(tag);
     globalThis.window.AudioContext = class MockAudioContext {
         constructor() {
             audioConstructed++;
@@ -298,23 +296,54 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, read-only AVPlay ch
 
     try {
         let stateReads = 0;
+        let currentState = 'NONE';
+        const callOrder = [];
         const openedUrls = [];
         const displayRects = [];
+        const pendingPrepareCbs = [];
+        let playCalls = 0;
+        let listenerResets = 0;
+        let stopCalls = 0;
         let closeCalls = 0;
+
+        globalThis.window.location = {
+            protocol: 'file:',
+            href: 'file:///opt/usr/apps/litefin/res/wgt/index.html#/home',
+            hash: '#/home'
+        };
 
         globalThis.window.webapis = {
             avplay: {
                 getState: () => {
                     stateReads++;
-                    return 'NONE';
+                    return currentState;
                 },
                 open: (url) => {
+                    callOrder.push('open');
                     openedUrls.push(url);
                 },
                 setDisplayRect: (...rect) => {
+                    callOrder.push('setDisplayRect');
                     displayRects.push(rect);
                 },
+                prepareAsync: (onPrepared, onError) => {
+                    callOrder.push('prepareAsync');
+                    pendingPrepareCbs.push({ onPrepared, onError });
+                },
+                play: () => {
+                    callOrder.push('play');
+                    playCalls++;
+                },
+                setListener: (val) => {
+                    callOrder.push('setListener');
+                    if (val === null) listenerResets++;
+                },
+                stop: () => {
+                    callOrder.push('stop');
+                    stopCalls++;
+                },
                 close: () => {
+                    callOrder.push('close');
                     closeCalls++;
                 }
             }
@@ -328,61 +357,98 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, read-only AVPlay ch
         assert.equal(audioConstructed, 0, 'Non-Tizen target must not touch AudioContext');
         assert.equal(mockBody._children.length, 0, 'Non-Tizen target must not mount warmup nodes');
 
-        // 2. Tizen path: read-only AVPlay state check (no about:blank open/close),
-        // AudioContext resume + close, persistent <object>, and real MP4 data-URI <video> play/pause.
+        // 2. Tizen path: real open(warmup.mp4) -> setDisplayRect(0,0,1,1) -> prepareAsync -> play -> 50ms -> stop+close
         const tvAdapter = new TizenAdapter();
         tvAdapter._isTizen = true;
         assert.equal(tvAdapter.warmupCompositor(), true);
-        assert.equal(stateReads, 1);
-        assert.deepEqual(openedUrls, [], 'warmupCompositor must NOT call avplay.open with dummy about:blank URL');
-        assert.deepEqual(displayRects, [], 'warmupCompositor must NOT call avplay.setDisplayRect');
-        assert.equal(closeCalls, 0, 'warmupCompositor must NOT call avplay.close');
+        assert.equal(tvAdapter.isWarmupActive(), true);
         assert.equal(audioConstructed, 1);
-        assert.equal(audioResumed, 1, 'AudioContext warmup must call resume()');
+        assert.equal(audioResumed, 1);
+        assert.deepEqual(openedUrls, ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
+        assert.deepEqual(displayRects, [[0, 0, 1, 1]]);
+        assert.equal(pendingPrepareCbs.length, 1);
 
         const probe = mockBody._children.find((el) => el.id === 'litefin-avplay-warmup');
-        const video = mockBody._children.find((el) => el.id === 'litefin-video-warmup');
-        assert.ok(probe && probe.type === 'application/avplayer', 'Persistent AVPlayer <object> must be mounted');
+        assert.ok(probe && probe.type === 'application/avplayer', 'Persistent AVPlayer <object> must mount');
         assert.equal(probe.style.pointerEvents, 'none');
         assert.equal(probe.style.opacity, '0');
-        assert.ok(video && video.muted === true && video.playsInline === true, 'Transient muted <video> must mount');
-        assert.ok(
-            typeof video.src === 'string' && video.src.startsWith('data:video/mp4;base64,'),
-            'Hidden warmup <video> must load a real inline H.264 MP4 data URI'
-        );
-        assert.equal(videoPlayCalls, 1, 'Hidden <video> warmup must call play() to exercise decoder');
 
-        // Promise resolution pauses and detaches <video> + closes AudioContext cleanly
-        await Promise.resolve();
-        await Promise.resolve();
-        assert.equal(videoPauseCalls, 1, 'Hidden <video> must pause once play() resolves');
-        assert.equal(mockBody._children.includes(video), false, 'Warmup <video> must detach after play resolves');
+        // Fire prepareAsync success and wait for the 50ms hardware frame pass
+        pendingPrepareCbs.shift().onPrepared();
+        assert.equal(playCalls, 1, 'onPrepared must start avplay.play()');
+        await new Promise((resolve) => setTimeout(resolve, 75));
+        assert.equal(listenerResets, 1);
+        assert.equal(stopCalls, 1);
+        assert.equal(closeCalls, 1);
+        assert.equal(tvAdapter.isWarmupActive(), false);
+        assert.deepEqual(callOrder, ['open', 'setDisplayRect', 'prepareAsync', 'play', 'setListener', 'stop', 'close']);
         assert.equal(mockBody._children.includes(probe), true, 'Persistent AVPlayer <object> must remain mounted');
-        assert.equal(audioClosed, 1, 'AudioContext warmup must close after resume resolves');
+        assert.equal(audioClosed, 1);
 
-        // 3. Idempotency guard: second call must not duplicate nodes or replay media
+        // 3. Idempotency guard: second call must not reopen AVPlay or duplicate DOM probe
         assert.equal(tvAdapter.warmupCompositor(), true);
-        assert.equal(stateReads, 1);
-        assert.equal(videoPlayCalls, 1);
+        assert.equal(openedUrls.length, 1);
         assert.equal(mockBody._children.length, 1);
 
-        // 4. Legacy non-Promise play() + throwing getState() fallback
-        playReturnPromise = false;
-        globalThis.window.webapis.avplay.getState = () => {
-            throw new Error('NONE state quirk');
+        // 4. Active playback guard: must skip warmup when AVPlay state is already PLAYING
+        currentState = 'PLAYING';
+        const busyAdapter = new TizenAdapter();
+        busyAdapter._isTizen = true;
+        assert.equal(busyAdapter.warmupCompositor(), true);
+        assert.equal(openedUrls.length, 1, 'Must skip avplay.open when real session is PLAYING');
+        assert.equal(busyAdapter.isWarmupActive(), false);
+
+        // 5. abortWarmup() cancels pending prepareAsync AND ignores stale late callbacks
+        currentState = 'NONE';
+        const abortAdapter = new TizenAdapter();
+        abortAdapter._isTizen = true;
+        abortAdapter.warmupCompositor();
+        assert.equal(abortAdapter.isWarmupActive(), true);
+        assert.equal(abortAdapter.abortWarmup(), true);
+        assert.equal(abortAdapter.isWarmupActive(), false);
+        const stopCountAfterAbort = stopCalls;
+        const closeCountAfterAbort = closeCalls;
+
+        // Simulate stale native callback arriving AFTER abortWarmup() already released warmup
+        pendingPrepareCbs.shift().onPrepared();
+        assert.equal(playCalls, 1, 'Stale onPrepared callback after abort must not call avplay.play()');
+        assert.equal(stopCalls, stopCountAfterAbort, 'Stale callback must not stop a newer session');
+        assert.equal(closeCalls, closeCountAfterAbort, 'Stale callback must not close a newer session');
+
+        // 6. TizenAVPlayer.play() aborts singleton tizenAdapter warmup before starting real playback
+        tizenAdapter._isTizen = true;
+        tizenAdapter._compositorWarmed = false;
+        tizenAdapter.warmupCompositor();
+        assert.equal(tizenAdapter.isWarmupActive(), true);
+
+        const fakePlayer = new TizenAVPlayer({});
+        fakePlayer._avplay = globalThis.window.webapis.avplay;
+        fakePlayer._stopInternal = async () => {
+            throw new Error('SENTINEL_AFTER_WARMUP_ABORT');
         };
+        await assert.rejects(() => fakePlayer.play({ url: 'http://test/video.mp4' }), /SENTINEL_AFTER_WARMUP_ABORT/);
+        assert.equal(
+            tizenAdapter.isWarmupActive(),
+            false,
+            'TizenAVPlayer.play() must abort active warmup before opening real stream'
+        );
+
+        // 7. Legacy firmware without prepareAsync falls back cleanly to getState() probe
+        const prevPrepare = globalThis.window.webapis.avplay.prepareAsync;
+        delete globalThis.window.webapis.avplay.prepareAsync;
+        const readsBeforeFallback = stateReads;
         const legacyAdapter = new TizenAdapter();
         legacyAdapter._isTizen = true;
         assert.equal(legacyAdapter.warmupCompositor(), true);
-        const legacyVideo = mockBody._children.find((el) => el.id === 'litefin-video-warmup');
-        assert.ok(legacyVideo, 'Legacy adapter must mount warmup <video>');
-        flushOneRaf();
-        flushOneRaf();
-        assert.equal(videoPauseCalls, 2, 'Legacy non-Promise play() fallback must pause after two rAFs');
-        assert.equal(mockBody._children.includes(legacyVideo), false, 'Legacy warmup <video> must detach after two rAFs');
+        assert.equal(stateReads, readsBeforeFallback + 1);
+        globalThis.window.webapis.avplay.prepareAsync = prevPrepare;
     } finally {
+        tizenAdapter.abortWarmup();
+        tizenAdapter._compositorWarmed = false;
+        tizenAdapter._isTizen = false;
         mockBody._children.length = 0;
         delete globalThis.window.webapis;
+        globalThis.window.location = origLocation;
         if (origAudioCtx === undefined) {
             delete globalThis.window.AudioContext;
         } else {
@@ -591,6 +657,46 @@ test('HeroCarousel: defers _startAutoScroll out of synchronous scroll:finished c
 
         await new Promise((r) => setTimeout(r, 80));
         assert.equal(startCalls, 1, 'Deferred auto-scroll timer must run cleanly ~60ms post-finish');
+    } finally {
+        globalThis.window.__scrollController = prevSc;
+        carousel.destroy();
+    }
+});
+
+test('HeroCarousel: re-checks scroll state when the deferred timer fires and re-arms behind scroll:finished', async () => {
+    storageMap.clear();
+    storageMap.set('pref:heroCarouselIndicatorStyle', 'dots');
+    const mockSc = { isAnimating: false };
+    const prevSc = globalThis.window.__scrollController;
+    globalThis.window.__scrollController = mockSc;
+
+    const carousel = new HeroCarousel({
+        items: [{ Id: 'a', Name: 'A' }, { Id: 'b', Name: 'B' }]
+    });
+    carousel._container = createMockElement('div', ['hero-carousel-container']);
+    carousel._isVisible = true;
+
+    let startCalls = 0;
+    carousel._startAutoScroll = () => {
+        startCalls++;
+    };
+
+    try {
+        // Visible callback decided to resume, then the user started a new scroll
+        // before the settle timer fired.
+        carousel._schedulePostScrollAutoStart(10);
+        mockSc.isAnimating = true;
+
+        await new Promise((r) => setTimeout(r, 40));
+        assert.equal(startCalls, 0, 'Must not start auto-scroll when a scroll began inside the settle window');
+        assert.ok(carousel._observerScrollFinishHandler, 'Must re-arm behind scroll:finished instead of starting');
+
+        mockSc.isAnimating = false;
+        eventBus.emit('scroll:finished');
+        assert.equal(startCalls, 0, 'Resume must still be deferred out of the scroll:finished callback turn');
+
+        await new Promise((r) => setTimeout(r, 230));
+        assert.equal(startCalls, 1, 'Must resume once scroll:finished + 200ms settle window elapses');
     } finally {
         globalThis.window.__scrollController = prevSc;
         carousel.destroy();
@@ -971,5 +1077,323 @@ test('ScrollController: easing smoothScrollTo suppresses sub-0.5px tail deltas a
     } finally {
         sc.resetCache();
     }
+});
+
+// ============================================================================
+// 5. Part 5 — HeroCarousel Pass-1 GPU Warmup, HomePage Batching & BlurHash Deferral
+// ============================================================================
+
+test('HeroCarousel Pass-1 optimization: single RenderSurface mask on immersive-performance and 2-rAF GPU warmup', async () => {
+    const css = readSrc('src/styles/hero-carousel.css');
+    assert.match(
+        css,
+        /\.hero-carousel-container\.immersive-performance\s+\.hero-item\s*\{[^}]*-webkit-mask-image:\s*none\s*;[^}]*mask-image:\s*none\s*;/,
+        'immersive-performance .hero-item must drop its stacked mask so only one RenderSurface exists'
+    );
+    assert.match(
+        css,
+        /\.hero-carousel-container\.immersive-performance\s+\.hero-backdrop\s*\{[^}]*-webkit-mask-composite:\s*source-in\s*;[^}]*mask-composite:\s*intersect\s*;/,
+        'immersive-performance .hero-backdrop must intersect horizontal and vertical gradients on a single mask layer'
+    );
+    assert.match(
+        css,
+        /\.hero-item\.hero-item--gpu-warm\s*\{[^}]*opacity:\s*0\.001\s*;/,
+        'hero-carousel.css must define .hero-item--gpu-warm with non-zero opacity for brief GPU layer upload'
+    );
+
+    rafQueue.length = 0;
+    const prevSc = globalThis.window.__scrollController;
+    globalThis.window.__scrollController = { isAnimating: false };
+
+    const container = createMockElement('div', ['hero-carousel-container']);
+    container.parentElement = createMockElement('div', ['hero-placeholder']);
+    const slide0 = createMockElement('div', ['hero-item', 'active'], { index: '0' });
+    const slide1 = createMockElement('div', ['hero-item'], { index: '1' });
+    const backdrop0 = createMockElement('div', ['hero-backdrop'], { backdrop: 'http://test/slide0.jpg' });
+    const backdrop1 = createMockElement('div', ['hero-backdrop'], { backdrop: 'http://test/slide1.jpg' });
+    const content0 = createMockElement('div', ['hero-content']);
+    const content1 = createMockElement('div', ['hero-content']);
+    slide0.appendChild(backdrop0);
+    slide0.appendChild(content0);
+    slide1.appendChild(backdrop1);
+    slide1.appendChild(content1);
+    container.appendChild(slide0);
+    container.appendChild(slide1);
+
+    for (const b of [backdrop0, backdrop1]) {
+        b.children = [];
+        Object.defineProperty(b, 'firstChild', { get: () => b.children[0] || null });
+        b.appendChild = (c) => {
+            if (!b.children.includes(c)) b.children.push(c);
+            c.parentNode = b;
+            return c;
+        };
+        b.insertBefore = (c, ref) => {
+            const idx = ref ? b.children.indexOf(ref) : -1;
+            if (idx === -1) b.children.push(c);
+            else b.children.splice(idx, 0, c);
+            c.parentNode = b;
+            return c;
+        };
+        b.removeChild = (c) => {
+            const idx = b.children.indexOf(c);
+            if (idx !== -1) b.children.splice(idx, 1);
+            c.parentNode = null;
+            return c;
+        };
+    }
+
+    const dot0 = createMockElement('div', ['hero-dot', 'active'], { index: '0' });
+    const dot1 = createMockElement('div', ['hero-dot'], { index: '1' });
+
+    container.childrenAllBySelector.set('.hero-item', [slide0, slide1]);
+    container.childrenAllBySelector.set('.hero-backdrop', [backdrop0, backdrop1]);
+    container.childrenAllBySelector.set('.hero-dot', [dot0, dot1]);
+    container.childrenAllBySelector.set('.hero-logo', []);
+    container.childrenAllBySelector.set('.hero-blurhash-canvas', []);
+    container.childrenAllBySelector.set('button', []);
+    slide0.childrenBySelector.set('.hero-backdrop', backdrop0);
+    slide1.childrenBySelector.set('.hero-backdrop', backdrop1);
+    slide0.childrenBySelector.set('.hero-content', content0);
+    slide1.childrenBySelector.set('.hero-content', content1);
+
+    const carousel = new HeroCarousel([
+        { Id: 'hero-0', Name: 'Slide Zero' },
+        { Id: 'hero-1', Name: 'Slide One' }
+    ]);
+
+    try {
+        carousel.init(container);
+        await Promise.resolve();
+
+        carousel._preloadSlide(1);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // GPU warmup waits for the next animation frame so decode microtasks stay non-blocking
+        assert.ok(carousel._warmSlideRafId !== null, 'Slide 1 must schedule GPU warmup pass after decode');
+        assert.equal(backdrop1.children.length, 0, 'Inactive Slide 1 <img> waits for warmup rAF before mounting');
+
+        // Frame 1: mounts decoded <img> behind active slide with .hero-item--gpu-warm
+        flushOneRaf();
+        assert.equal(slide1.classList.contains('hero-item--gpu-warm'), true, 'Slide 1 must receive .hero-item--gpu-warm');
+        assert.equal(backdrop1.children[0], carousel._decodedBackdrops[1], 'Decoded <img> must mount during warmup pass');
+
+        // Frame 2: remains composited for GPU texture upload
+        flushOneRaf();
+        assert.equal(slide1.classList.contains('hero-item--gpu-warm'), true, 'Warmup class stays across first commit frame');
+
+        // Frame 3: detaches back off-DOM and marks Slide 1 GPU-warmed
+        flushOneRaf();
+        assert.equal(slide1.classList.contains('hero-item--gpu-warm'), false, 'Warmup class clears after second frame');
+        assert.equal(backdrop1.children.length, 0, 'Warmup <img> must detach off-DOM after GPU texture upload');
+        assert.equal(Boolean(carousel._warmedSlides[1]), true, 'Slide 1 must be marked GPU-warmed once pass completes');
+
+        // Re-arm and verify goTo(1) cancels active GPU warmup cleanly before activating slide 1
+        delete carousel._warmedSlides[1];
+        carousel._warmSlideGpuCache(1);
+        flushOneRaf();
+        assert.equal(slide1.classList.contains('hero-item--gpu-warm'), true);
+        carousel.goTo(1);
+        assert.equal(slide1.classList.contains('hero-item--gpu-warm'), false, 'goTo() must cancel active GPU warmup');
+        assert.equal(backdrop1.children[0], carousel._decodedBackdrops[1], 'goTo(1) must display Slide 1 <img>');
+    } finally {
+        globalThis.window.__scrollController = prevSc;
+        carousel.destroy();
+    }
+});
+
+test('HomePage batching & restore: yields between batch row mounts, defers cache walk until scroll idle, and restores scrollTop before focusing', async () => {
+    const homeJs = readSrc('src/pages/HomePage.js');
+
+    // Extract _acquireRowRenderTurn and _scheduleDeferredBatchCacheRefresh into VM to test runtime behavior
+    const turnStart = homeJs.indexOf('_acquireRowRenderTurn() {');
+    const turnEnd = homeJs.indexOf('async _loadAndRenderRow(', turnStart);
+    assert.ok(turnStart !== -1 && turnEnd !== -1, '_acquireRowRenderTurn must exist in HomePage.js');
+
+    const cacheStart = homeJs.indexOf('_scheduleDeferredBatchCacheRefresh() {');
+    const cacheEnd = homeJs.indexOf('_setupHomeScrollObserver() {', cacheStart);
+    assert.ok(cacheStart !== -1 && cacheEnd !== -1, '_scheduleDeferredBatchCacheRefresh must exist in HomePage.js');
+
+    const turnMethodSrc = homeJs.slice(turnStart, turnEnd).replace(/\/\*\*[\s\S]*?\*\/\s*$/, '');
+    const cacheMethodSrc = homeJs.slice(cacheStart, cacheEnd).replace(/\/\*\*[\s\S]*?\*\/\s*$/, '');
+
+    const scheduledIdleCbs = [];
+    const mockIdleGate = {
+        runWhenIdle: (cb) => {
+            scheduledIdleCbs.push(cb);
+            return scheduledIdleCbs.length;
+        }
+    };
+    const mockScrollController = { isAnimating: true };
+
+    const Harness = vm.runInNewContext(
+        `(function(idleGate, scrollController) {
+            return class MockHomePage {
+                constructor() {
+                    this._isMounted = true;
+                    this._wasPageCached = false;
+                    this._rowRenderQueue = Promise.resolve();
+                    this._rowRenderGateActive = false;
+                    this._hasRenderedRowInTurn = false;
+                    this._deferredCacheTask = null;
+                    this.prewarmCalls = 0;
+                    this.saveCalls = 0;
+                }
+                _prewarmScrollCache() { this.prewarmCalls++; }
+                _savePageCache() { this.saveCalls++; }
+                ${turnMethodSrc}
+                ${cacheMethodSrc}
+            };
+        })`,
+        { Promise, setTimeout }
+    )(mockIdleGate, mockScrollController);
+
+    const instance = new Harness();
+    instance._rowRenderGateActive = true;
+
+    // 3 concurrent row turn acquisitions: row 0 runs first, row 1 & 2 yield separate macrotask ticks
+    const events = [];
+    const rowJob = async (idx) => {
+        events.push(`acquire:${idx}`);
+        await instance._acquireRowRenderTurn();
+        events.push(`render:${idx}`);
+    };
+    await Promise.all([rowJob(0), rowJob(1), rowJob(2)]);
+    assert.deepEqual(
+        events,
+        ['acquire:0', 'acquire:1', 'acquire:2', 'render:0', 'render:1', 'render:2'],
+        'Subsequent rows under _rowRenderGateActive must serialize cleanly in order across turns'
+    );
+
+    // _scheduleDeferredBatchCacheRefresh must re-defer if scrollController.isAnimating is true when fired
+    instance._scheduleDeferredBatchCacheRefresh();
+    assert.equal(scheduledIdleCbs.length, 1);
+    scheduledIdleCbs.shift()();
+    assert.equal(instance.prewarmCalls, 0, 'Must not prewarm scroll cache while scrollController.isAnimating is true');
+    assert.equal(scheduledIdleCbs.length, 1, 'Must re-arm deferred cache refresh when scroll is active');
+
+    mockScrollController.isAnimating = false;
+    scheduledIdleCbs.shift()();
+    assert.equal(instance.prewarmCalls, 1, 'Must prewarm scroll cache once idle and not scrolling');
+    assert.equal(instance.saveCalls, 1, 'Must save page cache once idle when uncached');
+
+    // Step 9 else and _loadBackgroundRows must defer _prewarmScrollCache / _savePageCache cleanly
+    const step9ElseIdx = homeJs.indexOf('if (this._deferredDescriptors.length > 0)');
+    assert.ok(step9ElseIdx !== -1);
+    const step9Slice = homeJs.slice(step9ElseIdx, step9ElseIdx + 600);
+    assert.equal(
+        step9Slice.includes('this._prewarmScrollCache('),
+        false,
+        'Step 9 else branch must not call _prewarmScrollCache synchronously at splash dismissal'
+    );
+    assert.ok(
+        step9Slice.includes('this._scheduleDeferredBatchCacheRefresh()'),
+        'Step 9 else branch must schedule deferred cache refresh'
+    );
+
+    const bgStart = homeJs.indexOf('async _loadBackgroundRows(');
+    const bgSlice = homeJs.slice(bgStart, bgStart + 900);
+    assert.ok(bgSlice.includes('this._rowRenderGateActive = true'), '_loadBackgroundRows must stagger multi-row groups');
+    assert.equal(bgSlice.includes('this._prewarmScrollCache('), false, '_loadBackgroundRows must not prewarm synchronously');
+
+    // _tryInitializeFocus must snap scrollTop BEFORE focusElement({ skipVerticalScroll: hasSavedScroll })
+    const focusStart = homeJs.indexOf('if (focusTargetCard && focusRowId)');
+    const focusEnd = homeJs.indexOf("} else if (storage.getItem('pref:disableFocusRestore')", focusStart);
+    assert.ok(focusStart !== -1 && focusEnd !== -1);
+    const focusSlice = homeJs.slice(focusStart, focusEnd);
+    const snapPos = focusSlice.indexOf('scrollController.smoothScrollTo(scrollContainer, pendingNav.scrollTop');
+    const focusPos = focusSlice.indexOf('focusManager.focusElement(focusTargetCard');
+    assert.ok(snapPos !== -1 && focusPos !== -1 && snapPos < focusPos, 'Must snap vertical scroll BEFORE focusing card');
+    assert.ok(
+        focusSlice.includes('skipVerticalScroll: hasSavedScroll'),
+        'Must pass skipVerticalScroll so focusElement centers horizontally without triggering a second vertical scroll'
+    );
+});
+
+test('ScrollController & LazyLoader: skipVerticalScroll preserves horizontal centering and source assigns before BlurHash check', () => {
+    const sc = new ScrollController();
+    sc.getHorizontalScrollMode = () => 'native';
+    sc.getScrollPhysics = () => 'easing';
+    sc.getVerticalScrollAlignment = () => 'bottom';
+
+    const calls = [];
+    sc.smoothScrollTo = (container, target, duration, axis) => {
+        calls.push({ container, target, duration, axis });
+    };
+
+    const pageContent = createMockElement('div', ['page-content']);
+    const row = createMockElement('section', ['media-row']);
+    const rowItems = createMockElement('div', ['row-items']);
+    rowItems.clientWidth = 1000;
+    const track = createMockElement('div', ['row-items-track']);
+    track.scrollWidth = 2400;
+    const card = createMockElement('div', ['media-card']);
+    card.offsetLeft = 700;
+    card.offsetWidth = 200;
+
+    pageContent.appendChild(row);
+    row.appendChild(rowItems);
+    rowItems.appendChild(track);
+    track.appendChild(card);
+
+    rowItems.closest = (sel) => (sel === '.media-row' ? row : null);
+    rowItems.querySelector = (sel) => (sel === '.row-items-track' ? track : null);
+    card.closest = (sel) => {
+        if (sel === '.page-content') return pageContent;
+        if (sel === '.media-row') return row;
+        if (sel === '.row-items') return rowItems;
+        return null;
+    };
+
+    sc.scrollIntoView(card, {}, { instantScroll: true, skipVerticalScroll: true });
+    assert.equal(
+        calls.filter((c) => c.axis === 'vertical').length,
+        0,
+        'skipVerticalScroll: true must suppress vertical row alignment scroll'
+    );
+    assert.equal(rowItems.scrollLeft, 300, 'skipVerticalScroll: true must still center the card horizontally');
+
+    // LazyLoader: source assignment occurs synchronously BEFORE rAF-deferred BlurHash check
+    rafQueue.length = 0;
+    const parent = createMockElement('div', ['card-image']);
+    const canvas = createMockElement('canvas', ['blurhash-canvas'], { blurhash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' });
+    const img = createMockElement('img', ['card-img'], { src: 'http://test/cached-poster.jpg' });
+    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    img.complete = true;
+    img.naturalWidth = 1; // 1x1 GIF placeholder dimension before real bitmap loads!
+
+    parent.appendChild(canvas);
+    parent.appendChild(img);
+    img.parentElement = parent;
+    parent.childrenBySelector.set('.blurhash-canvas', canvas);
+
+    // 1. Direct _decodeAndDrawBlurhash while src is still 1x1 GIF must NOT skip real BlurHash if pending
+    lazyLoader._decodeAndDrawBlurhash(img);
+    assert.equal(canvas.classList.contains('blurhash-decoded'), true, '1x1 GIF placeholder must not count as loaded real bitmap');
+    lazyLoader._blurHashQueue.length = 0;
+    lazyLoader._blurHashProcessing = false;
+
+    // 2. When real bitmap finishes within the frame before rAF runs, BlurHash DCT is skipped completely
+    const canvas2 = createMockElement('canvas', ['blurhash-canvas'], { blurhash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' });
+    const img2 = createMockElement('img', ['card-img'], { src: 'http://test/fast-hit.jpg' });
+    const parent2 = createMockElement('div', ['card-image']);
+    parent2.appendChild(canvas2);
+    parent2.appendChild(img2);
+    img2.parentElement = parent2;
+    parent2.childrenBySelector.set('.blurhash-canvas', canvas2);
+
+    lazyLoader._loadImage(img2);
+    assert.equal(img2.src, 'http://test/fast-hit.jpg', '_loadImage must assign real image source immediately');
+    assert.equal(canvas2.classList.contains('blurhash-decoded'), false, 'BlurHash must defer until next rAF');
+
+    // Simulate instant memory-cache load completion prior to rAF callback
+    img2.classList.add('loaded');
+    flushOneRaf();
+    assert.equal(
+        canvas2.classList.contains('blurhash-decoded'),
+        false,
+        'Loaded memory-cache hit must skip BlurHash decoding entirely'
+    );
 });
 
