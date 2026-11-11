@@ -251,27 +251,52 @@ test('Splash & spinners: index HTML, base CSS, and App.js tear down infinite spl
 // 2. Part 2 — TizenAdapter Compositor Warmup Behavior
 // ============================================================================
 
-test('TizenAdapter.warmupCompositor: strict Tizen isolation, AVPlay hardware init, persistent <object>, and transient <video>', () => {
+test('TizenAdapter.warmupCompositor: strict Tizen isolation, read-only AVPlay check, real micro-video play/pause, and AudioContext resume', async () => {
     rafQueue.length = 0;
     mockBody._children.length = 0;
 
     const origGetById = globalThis.document.getElementById;
     const origCreateEl = globalThis.document.createElement;
-    let videoLoadCalls = 0;
+    const origAudioCtx = globalThis.window.AudioContext;
+    let videoPlayCalls = 0;
+    let videoPauseCalls = 0;
+    let playReturnPromise = true;
+    let audioConstructed = 0;
+    let audioResumed = 0;
+    let audioClosed = 0;
 
     globalThis.document.getElementById = (id) => mockBody._children.find((node) => node.id === id) || null;
     globalThis.document.createElement = (tag) => {
         const el = origCreateEl(tag);
         if (tag === 'video') {
-            el.load = () => {
-                videoLoadCalls++;
+            el.play = () => {
+                videoPlayCalls++;
+                return playReturnPromise ? Promise.resolve() : undefined;
+            };
+            el.pause = () => {
+                videoPauseCalls++;
             };
         }
         return el;
     };
+    globalThis.window.AudioContext = class MockAudioContext {
+        constructor() {
+            audioConstructed++;
+            this.state = 'suspended';
+        }
+        resume() {
+            audioResumed++;
+            this.state = 'running';
+            return Promise.resolve();
+        }
+        close() {
+            audioClosed++;
+            this.state = 'closed';
+            return Promise.resolve();
+        }
+    };
 
     try {
-        let avState = 'NONE';
         let stateReads = 0;
         const openedUrls = [];
         const displayRects = [];
@@ -281,7 +306,7 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, AVPlay hardware ini
             avplay: {
                 getState: () => {
                     stateReads++;
-                    return avState;
+                    return 'NONE';
                 },
                 open: (url) => {
                     openedUrls.push(url);
@@ -295,23 +320,25 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, AVPlay hardware ini
             }
         };
 
-        // 1. Non-Tizen guard: must never touch AVPlay or mount probe/video elements
+        // 1. Non-Tizen guard: must never touch AVPlay, AudioContext, or mount warmup nodes
         const nonTizen = new TizenAdapter();
         nonTizen._isTizen = false;
         assert.equal(nonTizen.warmupCompositor(), false);
         assert.equal(stateReads, 0, 'Non-Tizen target must never call webapis.avplay');
+        assert.equal(audioConstructed, 0, 'Non-Tizen target must not touch AudioContext');
         assert.equal(mockBody._children.length, 0, 'Non-Tizen target must not mount warmup nodes');
 
-        // 2. Tizen path in NONE state: exercises native AVPlay open + setDisplayRect + close,
-        // keeps persistent <object>, and detaches transient <video> after 2 rAFs.
+        // 2. Tizen path: read-only AVPlay state check (no about:blank open/close),
+        // AudioContext resume + close, persistent <object>, and real MP4 data-URI <video> play/pause.
         const tvAdapter = new TizenAdapter();
         tvAdapter._isTizen = true;
         assert.equal(tvAdapter.warmupCompositor(), true);
         assert.equal(stateReads, 1);
-        assert.deepEqual(openedUrls, ['about:blank']);
-        assert.deepEqual(displayRects, [[0, 0, 1, 1]]);
-        assert.equal(closeCalls, 1, 'AVPlay warmup must close cleanly back to NONE');
-        assert.equal(videoLoadCalls, 1, 'Hidden <video> warmup must call load() to wake media/GPU clock');
+        assert.deepEqual(openedUrls, [], 'warmupCompositor must NOT call avplay.open with dummy about:blank URL');
+        assert.deepEqual(displayRects, [], 'warmupCompositor must NOT call avplay.setDisplayRect');
+        assert.equal(closeCalls, 0, 'warmupCompositor must NOT call avplay.close');
+        assert.equal(audioConstructed, 1);
+        assert.equal(audioResumed, 1, 'AudioContext warmup must call resume()');
 
         const probe = mockBody._children.find((el) => el.id === 'litefin-avplay-warmup');
         const video = mockBody._children.find((el) => el.id === 'litefin-video-warmup');
@@ -319,42 +346,48 @@ test('TizenAdapter.warmupCompositor: strict Tizen isolation, AVPlay hardware ini
         assert.equal(probe.style.pointerEvents, 'none');
         assert.equal(probe.style.opacity, '0');
         assert.ok(video && video.muted === true && video.playsInline === true, 'Transient muted <video> must mount');
+        assert.ok(
+            typeof video.src === 'string' && video.src.startsWith('data:video/mp4;base64,'),
+            'Hidden warmup <video> must load a real inline H.264 MP4 data URI'
+        );
+        assert.equal(videoPlayCalls, 1, 'Hidden <video> warmup must call play() to exercise decoder');
 
-        // Frame 1 keeps <video>, Frame 2 detaches <video> while keeping persistent <object> mounted
-        flushOneRaf();
-        assert.ok(mockBody._children.includes(video), 'Warmup <video> must stay through frame 1 commit');
-        flushOneRaf();
-        assert.equal(mockBody._children.includes(video), false, 'Warmup <video> must detach after frame 2');
+        // Promise resolution pauses and detaches <video> + closes AudioContext cleanly
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.equal(videoPauseCalls, 1, 'Hidden <video> must pause once play() resolves');
+        assert.equal(mockBody._children.includes(video), false, 'Warmup <video> must detach after play resolves');
         assert.equal(mockBody._children.includes(probe), true, 'Persistent AVPlayer <object> must remain mounted');
+        assert.equal(audioClosed, 1, 'AudioContext warmup must close after resume resolves');
 
-        // 3. Idempotency guard: second call must not reopen AVPlay or duplicate nodes
+        // 3. Idempotency guard: second call must not duplicate nodes or replay media
         assert.equal(tvAdapter.warmupCompositor(), true);
         assert.equal(stateReads, 1);
-        assert.equal(openedUrls.length, 1);
+        assert.equal(videoPlayCalls, 1);
         assert.equal(mockBody._children.length, 1);
 
-        // 4. Active session guard: when playback is already active, never touch open/setDisplayRect/close
-        avState = 'PLAYING';
-        const activeSessionAdapter = new TizenAdapter();
-        activeSessionAdapter._isTizen = true;
-        assert.equal(activeSessionAdapter.warmupCompositor(), true);
-        assert.equal(openedUrls.length, 1, 'Must never disturb active AVPlay sessions');
-        assert.equal(closeCalls, 1);
-
-        // 5. Resilience: throwing getState() must still execute dummy open -> setDisplayRect -> close safely
+        // 4. Legacy non-Promise play() + throwing getState() fallback
+        playReturnPromise = false;
         globalThis.window.webapis.avplay.getState = () => {
             throw new Error('NONE state quirk');
         };
-        const throwingAdapter = new TizenAdapter();
-        throwingAdapter._isTizen = true;
-        assert.equal(throwingAdapter.warmupCompositor(), true);
-        assert.equal(openedUrls.length, 2);
-        assert.equal(closeCalls, 2);
+        const legacyAdapter = new TizenAdapter();
+        legacyAdapter._isTizen = true;
+        assert.equal(legacyAdapter.warmupCompositor(), true);
+        const legacyVideo = mockBody._children.find((el) => el.id === 'litefin-video-warmup');
+        assert.ok(legacyVideo, 'Legacy adapter must mount warmup <video>');
         flushOneRaf();
         flushOneRaf();
+        assert.equal(videoPauseCalls, 2, 'Legacy non-Promise play() fallback must pause after two rAFs');
+        assert.equal(mockBody._children.includes(legacyVideo), false, 'Legacy warmup <video> must detach after two rAFs');
     } finally {
         mockBody._children.length = 0;
         delete globalThis.window.webapis;
+        if (origAudioCtx === undefined) {
+            delete globalThis.window.AudioContext;
+        } else {
+            globalThis.window.AudioContext = origAudioCtx;
+        }
         globalThis.document.getElementById = origGetById;
         globalThis.document.createElement = origCreateEl;
     }

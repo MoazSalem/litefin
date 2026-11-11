@@ -168,45 +168,85 @@ class TizenAdapter {
         }
         this._compositorWarmed = true;
 
-        // Exercise Tizen's native C++ AVPlayManager hardware initialization path
-        // once at startup. Reading getState() alone stays in JS; invoking
-        // open() + setDisplayRect() enters C++ AVPlayManager setup and then
-        // closing returns the singleton cleanly to IDLE/NONE before playback.
+        // Read-only AVPlay state probe — avoids avplay.open('about:blank') which
+        // fails or stalls native pipelines with a fake URL. Holding the persistent
+        // plugin <object> below plus real micro-media decode handles hardware warmup.
         try {
             const avplay = typeof window !== 'undefined' ? window.webapis?.avplay || window.tizen?.avplay : null;
-            if (avplay) {
-                let state = 'NONE';
-                try {
-                    if (typeof avplay.getState === 'function') {
-                        state = avplay.getState() || 'NONE';
-                    }
-                } catch (_) {
-                    // Older TV firmwares throw before open() has ever been called
-                    state = 'NONE';
-                }
+            if (avplay && typeof avplay.getState === 'function') {
+                avplay.getState();
+            }
+        } catch (_) {
+            // Hardware plugin unavailable in simulator or older TV firmwares before open()
+        }
 
-                // Never disrupt an active or prepared playback session
-                if (state === 'NONE' || !state) {
+        // Real 1-frame 16x16 baseline H.264 MP4 (~1.4KB) used once per cold boot to
+        // spin up Chromium's hardware video decoder and high-FPS compositor path
+        // without opening a network socket or spawning native AVPlay errors.
+        const MICRO_VIDEO_DATA_URI =
+            'data:video/mp4;base64,' +
+            'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMPbW9vdgAAAGxtdmhkAAAAAAAA' +
+            'AAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAA' +
+            'AAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRr' +
+            'aGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAA' +
+            'AAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAA' +
+            'AAEAAAPoAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAA' +
+            'AAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYA' +
+            'AAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAA' +
+            'AQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAA' +
+            'AAAAAAEAAABIAAAASAAAAAAAAAABFUxhdmM2Mi4zMC4xMDAgbGlieDI2NAAAAAAAAAAAAAAA' +
+            'GP//AAAALmF2Y0MBQsAe/+EAFmdCwB7ZHsBEAAADAAQAAAMACDxYuSABAAVoy4PLIAAAABBw' +
+            'YXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABPAAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAABA' +
+            'AAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAJ4AAAAAQAAABRz' +
+            'dGNvAAAAAAAAAAEAAAM/AAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRp' +
+            'cmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4x' +
+            'My4xMDIAAAAIZnJlZQAAAoBtZGF0AAACYgYF//9e3EXpvebZSLeWLNgg2SPu73gyNjQgLSBj' +
+            'b3JlIDE2NSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjUg' +
+            'LSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0w' +
+            'IHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcg' +
+            'cHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFf' +
+            'bWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tp' +
+            'cD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEg' +
+            'c2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9j' +
+            'b21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50' +
+            'PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2th' +
+            'aGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFw' +
+            'bWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAAOZYiEBX///w9F' +
+            'AAFC34A=';
+
+        // Wake the browser audio HAL / WebAudio thread silently so first playback
+        // or mixer transitions do not stall the UI compositor later.
+        try {
+            const AudioCtx = typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : null;
+            if (AudioCtx) {
+                const audioCtx = new AudioCtx();
+                const closeAudioCtx = () => {
                     try {
-                        if (typeof avplay.open === 'function') {
-                            avplay.open('about:blank');
-                        }
-                        if (typeof avplay.setDisplayRect === 'function') {
-                            avplay.setDisplayRect(0, 0, 1, 1);
-                        }
-                    } finally {
-                        try {
-                            if (typeof avplay.close === 'function') {
-                                avplay.close();
+                        if (typeof audioCtx.close === 'function' && audioCtx.state !== 'closed') {
+                            const closePromise = audioCtx.close();
+                            if (closePromise && typeof closePromise.catch === 'function') {
+                                closePromise.catch(() => {});
                             }
-                        } catch (_) {
-                            // Ignore cleanup errors on dummy warmup handles
                         }
+                    } catch (_) {
+                        // Ignore cleanup errors on restricted or mocked audio contexts
                     }
+                };
+
+                if (typeof audioCtx.resume === 'function') {
+                    const resumeResult = audioCtx.resume();
+                    // Modern Chromium returns a Promise from resume(); legacy WebKit may not
+                    if (resumeResult && typeof resumeResult.then === 'function') {
+                        resumeResult.then(closeAudioCtx, closeAudioCtx);
+                    } else {
+                        closeAudioCtx();
+                    }
+                } else {
+                    closeAudioCtx();
                 }
             }
         } catch (_) {
-            // Hardware plugin unavailable in simulator or stripped firmware
+            // AudioContext blocked or unavailable in headless/stub environments
         }
 
         if (typeof document === 'undefined' || !document.body) {
@@ -245,9 +285,9 @@ class TizenAdapter {
                 this._compositorWarmupProbe = existingProbe;
             }
 
-            // Transient hidden <video> load nudge: wakes Chromium's media
-            // thread and high-rate compositor clock profile, then detaches
-            // cleanly after two commits so decoder slots remain completely free.
+            // Decode a genuine 1-frame muted inline MP4 inside a hidden 1x1 <video>,
+            // pause right after the play promise settles, and detach so decoder
+            // slots remain completely free for real media playback.
             const existingVideo =
                 typeof document.getElementById === 'function'
                     ? document.getElementById('litefin-video-warmup')
@@ -258,16 +298,13 @@ class TizenAdapter {
                 video.muted = true;
                 video.playsInline = true;
                 video.preload = 'auto';
-                applyWarmupStyle(video);
-                document.body.appendChild(video);
-
-                try {
-                    if (typeof video.load === 'function') {
-                        video.load();
-                    }
-                } catch (_) {
-                    // Safe to ignore when browser skips empty media load
+                if (typeof video.setAttribute === 'function') {
+                    video.setAttribute('muted', '');
+                    video.setAttribute('playsinline', '');
                 }
+                applyWarmupStyle(video);
+                video.src = MICRO_VIDEO_DATA_URI;
+                document.body.appendChild(video);
 
                 let videoCleaned = false;
                 let fallbackTimerId = null;
@@ -278,21 +315,39 @@ class TizenAdapter {
                         clearTimeout(fallbackTimerId);
                         fallbackTimerId = null;
                     }
+                    try {
+                        if (typeof video.pause === 'function') {
+                            video.pause();
+                        }
+                    } catch (_) {
+                        // Safe ignore during teardown
+                    }
                     if (video.parentNode) {
                         video.parentNode.removeChild(video);
                     }
                 };
 
-                // Detach after two compositor frames (with timer fallback)
-                if (typeof requestAnimationFrame === 'function') {
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(cleanupVideo);
-                    });
+                // Guarantee bounded teardown even if the media pipeline never resolves
+                fallbackTimerId = setTimeout(cleanupVideo, 400);
+
+                try {
+                    const playResult = typeof video.play === 'function' ? video.play() : null;
+                    if (playResult && typeof playResult.then === 'function') {
+                        playResult.then(cleanupVideo, cleanupVideo);
+                    } else if (typeof requestAnimationFrame === 'function') {
+                        // Legacy Chromium/WebKit engines return undefined from video.play()
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(cleanupVideo);
+                        });
+                    } else {
+                        cleanupVideo();
+                    }
+                } catch (_) {
+                    cleanupVideo();
                 }
-                fallbackTimerId = setTimeout(cleanupVideo, 150);
             }
 
-            log.debug('TizenAdapter: Hardware AVPlay + media compositor warmup executed');
+            log.debug('TizenAdapter: Micro-video + AudioContext compositor warmup executed');
         } catch (err) {
             log.debug('TizenAdapter: Compositor warmup skipped cleanly', err);
         }
