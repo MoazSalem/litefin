@@ -9,8 +9,8 @@ import test from 'node:test';
  * pending capability reports:
  *   1. Open the WebSocket immediately on splash dismissal.
  *   2. Defer DeviceProfile probing + POST /Sessions/Capabilities/Full behind
- *      idleGate (3000ms quiet window, 15000ms ceiling) instead of blocking the
- *      splash-hide / first-paint frame synchronously.
+ *      idleGate (3000ms quiet window, 0ms unbounded maxWait) instead of forcing
+ *      telemetry mid-scroll or blocking the splash-hide / first-paint frame.
  *   3. Cancel queued capability tasks if the user logs out or becomes unauthenticated
  *      before the idle task executes.
  * ============================================================================
@@ -100,7 +100,7 @@ test('establishSessionTelemetry opens WebSocket immediately and defers capabilit
         assert.equal(capPayloads.length, 0, 'POST /Sessions/Capabilities/Full must NOT execute synchronously');
         assert.equal(scheduledIdle.length, 1, 'Capability report must be queued once via idleGate');
         assert.equal(scheduledIdle[0].minQuietMs, 3000);
-        assert.equal(scheduledIdle[0].maxWaitMs, 15000);
+        assert.equal(scheduledIdle[0].maxWaitMs, 0);
 
         // Execute the idle callback and verify capabilities report fires then
         scheduledIdle[0].fn();
@@ -152,7 +152,7 @@ test('app:hideSplash schedules deferred capabilities instead of synchronous prof
         assert.equal(capPayloads.length, 0, 'app:hideSplash must not call reportCapabilities synchronously');
         assert.equal(scheduledIdle.length, 1, 'app:hideSplash should schedule capability probe via idleGate');
         assert.equal(scheduledIdle[0].minQuietMs, 3000);
-        assert.equal(scheduledIdle[0].maxWaitMs, 15000);
+        assert.equal(scheduledIdle[0].maxWaitMs, 0);
 
         // If user signs out before idle callback runs, callback must abort cleanly
         state.set('user:authenticated', false);

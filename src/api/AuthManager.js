@@ -667,6 +667,10 @@ class AuthManager {
      * POST /Sessions/Capabilities/Full behind idleGate so synchronous TV codec
      * and capability probes never compete with early Home rendering or scrolling.
      *
+     * Passes maxWaitMs = 0 (unbounded idle wait) because capability telemetry is
+     * strictly background housekeeping and must never force-fire mid-scroll at
+     * an arbitrary deadline if the user is actively browsing.
+     *
      * @private
      */
     _scheduleDeferredCapabilitiesReport() {
@@ -679,8 +683,10 @@ class AuthManager {
 
                 this._reportCapabilitiesNow();
             },
+            // Require 3 seconds of unbroken input/scroll quietness and pass
+            // 0 for maxWaitMs so active TV navigation never hits a forced probe.
             3000,
-            15000
+            0
         );
     }
 
