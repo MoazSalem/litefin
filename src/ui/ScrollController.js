@@ -218,6 +218,8 @@ class ScrollController {
         // Resume timer for the CSS-composited horizontal track transition
         // (the only animated path that has no RAF completion callback).
         this._imageResumeTimer = null;
+        // Post-frame macrotask handle for deferred scroll:finished emission
+        this._finishEmitTimer = null;
         // Track the current target coordinate of any active native smooth scroll.
         // Prevents re-invoking container.scrollTo({ behavior: 'smooth' }) with the
         // same target coordinate mid-scroll, which would retrigger the animation.
@@ -513,11 +515,23 @@ class ScrollController {
             this._horizontalScrollAnimationId === null &&
             !this._nativeScrollActive
         ) {
-            // All motion has settled — let the image pre-warmer refill the
-            // HTTP cache after a short compositor-cool-down window.
-            if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.finish');
-            this._resumeImagePrewarm();
-            eventBus.emit('scroll:finished');
+            // Defer scroll:finished delivery by one macrotask turn so Frame K's
+            // rAF only commits the final scroll transform/offset and yields to
+            // the compositor without bundling listener work into that frame.
+            if (this._finishEmitTimer) {
+                clearTimeout(this._finishEmitTimer);
+            }
+            this._finishEmitTimer = setTimeout(() => {
+                this._finishEmitTimer = null;
+                // Bail cleanly if a consecutive navigation restarted scroll before turn ran
+                if (this.isAnimating) return;
+
+                // All motion has settled — let the image pre-warmer refill the
+                // HTTP cache after a short compositor-cool-down window.
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.finish');
+                this._resumeImagePrewarm();
+                eventBus.emit('scroll:finished');
+            }, 0);
         }
     }
 
@@ -528,6 +542,10 @@ class ScrollController {
      * @private
      */
     _pauseImagePrewarm() {
+        if (this._finishEmitTimer) {
+            clearTimeout(this._finishEmitTimer);
+            this._finishEmitTimer = null;
+        }
         // Cancel any pending CSS-track resume so a vertical RAF scroll that
         // starts during the horizontal settle window fully owns the pause.
         // Without this, a stale horizontal timer could call resume() again
@@ -1520,9 +1538,8 @@ class ScrollController {
                 const a = s.glide.alpha;
                 const shape = a * u + (3 - 2 * a) * u * u + (a - 2) * u * u * u;
                 s.x = s.glide.x0 + s.glide.span * shape;
-                // Snap bittersweet settle criterion while gliding is disabled —
-                // only the landing (u=1) or the timeout may end the state.
-                s._write(s.x);
+                // Check landing/timeout BEFORE writing so Frame K calls _finalize once
+                // instead of writing s.x and immediately overwriting with s.target.
                 if (u >= 1 || s.elapsed >= SPRING_MAX_DURATION_MS) {
                     s._finalize(s.target);
                     this[animIdKey] = null;
@@ -1530,6 +1547,7 @@ class ScrollController {
                     this._checkScrollFinished();
                     return;
                 }
+                s._write(s.x);
                 this[animIdKey] = requestAnimationFrame(animate);
                 return;
             }
@@ -1541,6 +1559,16 @@ class ScrollController {
                 s.v = nv;
                 remainingDt -= h;
             }
+
+            const settled = this._isPhysicsSettled(s);
+            if (settled || s.elapsed >= SPRING_MAX_DURATION_MS) {
+                s._finalize(s.target);
+                this[animIdKey] = null;
+                this[stateKey] = null;
+                this._checkScrollFinished();
+                return;
+            }
+
             s._write(s.x);
 
             // Glide handover: distance remaining inside the glide band and
@@ -1556,16 +1584,6 @@ class ScrollController {
                 // monotone range.
                 const alpha = Math.min(Math.max((vEntry * dur) / remaining, 0), 3);
                 s.glide = { x0: s.x, dur, start: s.elapsed, alpha, span: s.target - s.x };
-            }
-
-            const settled = this._isPhysicsSettled(s);
-
-            if (settled || s.elapsed >= SPRING_MAX_DURATION_MS) {
-                s._finalize(s.target);
-                this[animIdKey] = null;
-                this[stateKey] = null;
-                this._checkScrollFinished();
-                return;
             }
 
             this[animIdKey] = requestAnimationFrame(animate);
@@ -2522,6 +2540,10 @@ class ScrollController {
      * Should be called when navigating between pages.
      */
     resetCache() {
+        if (this._finishEmitTimer) {
+            clearTimeout(this._finishEmitTimer);
+            this._finishEmitTimer = null;
+        }
         // Clear the offsetTop cache so stale row positions don't persist
         // across page navigations (rows on the new page have different offsets).
         this._offsetCache = new WeakMap();
