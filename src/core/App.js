@@ -1354,6 +1354,10 @@ class App {
             if (splashHidden) return;
             splashHidden = true;
 
+            // Unlock IdleGate as soon as the splash screen drops so deferred
+            // background tasks only begin their quiet timers post-splash.
+            idleGate.setBootComplete();
+
             // Reveal the sidebar now that the content beneath is ready
             const sidebar = document.getElementById('sidebar-container');
             if (sidebar) {
