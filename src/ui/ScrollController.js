@@ -480,6 +480,7 @@ class ScrollController {
         ) {
             // All motion has settled — let the image pre-warmer refill the
             // HTTP cache after a short compositor-cool-down window.
+            if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.finish');
             this._resumeImagePrewarm();
             eventBus.emit('scroll:finished');
         }
@@ -980,6 +981,7 @@ class ScrollController {
             // Initialize startTime on the first actual frame if not set
             if (!state.startTime) {
                 state.startTime = time;
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController._step');
             }
 
             const elapsed = time - state.startTime;
@@ -1417,6 +1419,7 @@ class ScrollController {
             }
             if (s.startTime === null) {
                 s.startTime = time;
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController._step');
             }
 
             // Adaptive sampling: feed the RAW interval before clamping, but

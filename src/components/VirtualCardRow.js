@@ -4,6 +4,7 @@ import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { mouseRowScroller } from '../ui/MouseRowScroller.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 
 export class VirtualCardRow {
     /**
@@ -699,6 +700,7 @@ export class VirtualCardRow {
         // All subsequent calls fall through to the normal sliding-window logic.
         if (this._isBootRender) {
             this._isBootRender = false; // Never repeat the boot path
+            if (typeof markPerfOperation === 'function') markPerfOperation('VirtualCardRow._updateWindow');
             const bootEnd = Math.min(this.totalItems - 1, this._initialWindow - 1);
 
             // Build [0 .. bootEnd] — unconditionally, no size checks needed
@@ -837,6 +839,7 @@ export class VirtualCardRow {
             return;
         }
         this._renderedRange = { start, end };
+        if (typeof markPerfOperation === 'function') markPerfOperation('VirtualCardRow._updateWindow');
 
         const requiredIndices = new Set();
         for (let i = start; i <= end; i++) {

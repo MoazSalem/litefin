@@ -2452,6 +2452,7 @@ class HomePage extends Page {
      * @param {Array} items - Fetched media items
      */
     _renderRow(descriptor, items) {
+        if (typeof markPerfOperation === 'function') markPerfOperation('HomePage._renderRow');
         const container = this.$('#home-rows');
         if (!container) return;
 

@@ -388,22 +388,34 @@ export class PerformanceReportCollector {
     }
 
     /**
-     * Resolves the most recent marked UI operation overlapping `[entry.startTime - 20, entry.startTime + entry.duration]`.
+     * Resolves the most recent marked UI operation overlapping `[entry.startTime - 50, entry.startTime + entry.duration]`.
+     * When no synchronous overlap matches, falls back to the newest operation within `250ms` prior
+     * so deferred callbacks (timer/rAF follow-ups) still carry timing attribution (e.g. `Op (+110ms)`).
      *
      * @param {Object} entry - LongTask performance entry
-     * @returns {string} Matched operation name or empty string
+     * @returns {string} Matched operation label or empty string
      * @private
      */
     _resolveOperationForEntry(entry) {
         if (!this._recentOperations || this._recentOperations.length === 0) return '';
 
-        const windowStart = entry.startTime - 20;
+        const windowStart = entry.startTime - 50;
         const windowEnd = entry.startTime + (entry.duration || 0);
 
+        // Pass 1: Direct overlap within [startTime - 50ms, startTime + duration]
         for (let i = this._recentOperations.length - 1; i >= 0; i--) {
             const op = this._recentOperations[i];
             if (op.timestamp >= windowStart && op.timestamp <= windowEnd) {
                 return op.name;
+            }
+        }
+
+        // Pass 2: Deferred callback correlation within 250ms prior to entry.startTime
+        for (let i = this._recentOperations.length - 1; i >= 0; i--) {
+            const op = this._recentOperations[i];
+            const elapsedMs = entry.startTime - op.timestamp;
+            if (elapsedMs >= 0 && elapsedMs <= 250) {
+                return `${op.name} (+${Math.round(elapsedMs)}ms)`;
             }
         }
 

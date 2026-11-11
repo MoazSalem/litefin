@@ -1126,6 +1126,7 @@ class HeroCarousel {
                 return;
             }
             if (slide.style.visibility !== 'visible') {
+                if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.warmSlide');
                 slide.style.visibility = 'visible';
             }
         };
@@ -1205,6 +1206,7 @@ class HeroCarousel {
                     applied = true;
                     if (!this._container || backdrop.dataset.backdrop !== url) return;
 
+                    if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.commitBackdrop');
                     // Prefer resolved img.src to ensure fallback Blob URLs are utilized
                     const finalUrl = img.src || effectiveUrl;
                     backdrop.style.backgroundImage = `url('${finalUrl}')`;
@@ -1305,6 +1307,7 @@ class HeroCarousel {
             const finalizeLogo = () => {
                 if (logoDone) return;
                 logoDone = true;
+                if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.finalizeLogo');
                 adjustLogoHeight();
                 markAssetReady();
             };
@@ -1394,6 +1397,7 @@ class HeroCarousel {
                 return;
             }
 
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.idlePreload');
             const count = this._items.length;
             const start = Math.max(0, this._currentIndex - 1);
             const end = Math.min(count - 1, this._currentIndex + 2);
@@ -1497,6 +1501,7 @@ class HeroCarousel {
             this._hideTimeoutId = null;
             if (!this._container) return;
 
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.settleTransition');
             if (!this._isAdjacentSlide(prevIndex) && prevItem.style.visibility !== 'hidden') {
                 prevItem.style.visibility = 'hidden';
             }

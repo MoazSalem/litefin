@@ -441,24 +441,36 @@ test('PerformanceReportCollector: markOperation ring buffer & time-window attrib
         assert.equal(collector._recentOperations.length, 5, 'Operation ring buffer capped at 5 entries');
         assert.equal(collector._recentOperations[0].name, 'Op.2', 'Oldest entry evicted from 5-slot ring buffer');
 
-        // Task within [op.timestamp - duration, op.timestamp + 20] -> op inside [startTime - 20, startTime + duration]
+        // 1. Primary window [startTime - 50, startTime + duration] matches Op.6 (at 1600) cleanly
         collector._recordLongTask({
-            startTime: baseNow + 615, // window [1595, 1695] matches Op.6 (1600)
+            startTime: baseNow + 640, // window [1590, 1720] includes Op.6 (1600) within 50ms lookback
             duration: 80,
             attribution: []
         });
 
-        // Out-of-window task -> no operation attribution
+        // 2. Fallback window: task starting 110ms after Op.6 -> 'Op.6 (+110ms)'
         collector._recordLongTask({
-            startTime: baseNow + 2000,
+            startTime: baseNow + 710, // delta = 1710 - 1600 = 110ms (outside 50ms primary, inside 250ms fallback)
+            duration: 65,
+            attribution: []
+        });
+
+        // 3. Beyond 250ms fallback (delta = 260ms) -> no operation attribution
+        collector._recordLongTask({
+            startTime: baseNow + 860, // delta = 1860 - 1600 = 260ms > 250ms
             duration: 60,
             attribution: []
         });
 
         const report = collector.buildReport();
         assert.equal(report.json.longTasks.entries[0].operation, 'Op.6');
-        assert.equal(report.json.longTasks.entries[1].operation, '');
+        assert.equal(report.json.longTasks.entries[1].operation, 'Op.6 (+110ms)');
+        assert.equal(report.json.longTasks.entries[2].operation, '');
         assert.ok(report.text.includes('| Op: Op.6 |'), 'ASCII long task line must display matched Op label');
+        assert.ok(
+            report.text.includes('| Op: Op.6 (+110ms) |'),
+            'ASCII long task line must display 250ms fallback delta format'
+        );
         assert.ok(!report.text.includes('| Op:  |'), 'ASCII long task line must omit empty Op label');
 
         // Stop collector and confirm PerfMarker bridge unbinds cleanly
