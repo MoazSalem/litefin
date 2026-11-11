@@ -36,11 +36,12 @@ const USER_ACTIVITY_QUIET_MS = 800;
 const POST_SCROLL_SETTLE_MS = 800;
 
 /**
- * IntersectionObserver lookahead cushion (top/bottom 1200px, sides 200px).
- * Generous vertical lookahead means images are already in flight before the
- * user reaches them, so the settle pass has far less work to do.
+ * IntersectionObserver lookahead cushion (top/bottom 1800px, sides 300px).
+ * Extended vertical lookahead reaches below-the-fold home rows (rows 2-5 at
+ * 1080p) right away so images start loading and decoding before the first
+ * scroll instead of decoding mid-flight inside ScrollController._step.
  */
-const IO_ROOT_MARGIN = '1200px 200px';
+const IO_ROOT_MARGIN = '1800px 300px';
 
 class LazyLoader {
     constructor() {
@@ -105,11 +106,17 @@ class LazyLoader {
         // intersections changed mid-scroll or inside the post-scroll settle window.
         this._pendingShimmerStates = new Map();
 
+        // Tracks in-flight fetch + img.decode() settlement per image element so
+        // pre-splash initial viewports can await off-screen decodes without expando fields.
+        this._settleTrackers = new WeakMap();
+
         this._init();
     }
 
     _init() {
-        // Capture native scroll events in the capture phase to track all scrollable nodes
+        // Capture native scroll events in the capture phase to track all scrollable nodes.
+        // Marked passive so Chromium's compositor never stalls vertical scrolls waiting
+        // on main-thread preventDefault() inspection.
         window.addEventListener(
             'scroll',
             () => {
@@ -145,7 +152,7 @@ class LazyLoader {
                     }
                 }, 150);
             },
-            true
+            { capture: true, passive: true }
         );
 
         // D-pad / keyboard activity extends the quiet window. Capture phase so a
@@ -732,6 +739,116 @@ class LazyLoader {
     }
 
     /**
+     * Commits loaded card classes and transitions out BlurHash overlays once the
+     * image bitmap has finished decoding off-thread.
+     *
+     * @param {HTMLImageElement} img
+     * @private
+     */
+    _finalizeLoadedImage(img) {
+        if (!img || img.classList.contains('loaded')) return;
+
+        img.classList.add('loaded');
+        img.removeAttribute('data-lazy-loading');
+
+        const parent = img.parentElement;
+        if (!parent) return;
+
+        parent.classList.remove('skeleton-shimmer');
+        if (this._shimmerObserver) {
+            this._shimmerObserver.unobserve(parent);
+        }
+
+        if (parent.classList.contains('card-image')) {
+            const canvas = parent.querySelector('.blurhash-canvas');
+            if (canvas) {
+                canvas.classList.add('fade-out');
+                setTimeout(() => canvas.remove(), 160);
+            }
+        }
+    }
+
+    /**
+     * Attaches unified onload/onerror lifecycle handlers and resolves the
+     * settlement tracker once `img.decode()` completes off-thread. Calling
+     * `img.decode()` forces Chromium to decode below-the-fold home cards into
+     * GPU texture memory immediately rather than deferring until first scroll.
+     *
+     * @param {HTMLImageElement} img
+     * @private
+     */
+    _bindImageHandlers(img) {
+        let tracker = this._settleTrackers.get(img);
+        if (!tracker || tracker.settled) {
+            let resolveFn;
+            const promise = new Promise((resolve) => {
+                resolveFn = resolve;
+            });
+            tracker = { promise, resolve: resolveFn, settled: false };
+            this._settleTrackers.set(img, tracker);
+        }
+
+        const markSettled = () => {
+            if (!tracker.settled) {
+                tracker.settled = true;
+                tracker.resolve();
+            }
+        };
+
+        const completeLoad = () => {
+            this._finalizeLoadedImage(img);
+            markSettled();
+        };
+
+        img.onload = () => {
+            // Ignore load events fired by the initial transparent 1x1 GIF placeholder
+            if (img.src && img.src.startsWith('data:image/gif')) return;
+
+            // Force off-thread bitmap decoding before revealing or settling so
+            // off-screen home rows do not stall ScrollController._step on first visit.
+            if (typeof img.decode === 'function') {
+                Promise.resolve(img.decode()).then(completeLoad, completeLoad);
+            } else {
+                completeLoad();
+            }
+        };
+
+        img.onerror = () => {
+            // Ignore error events fired while transitioning from placeholder
+            if (img.src && img.src.startsWith('data:image/gif')) return;
+
+            // When native request interception encounters a glitch, seamlessly retry
+            // via the authenticated JavaScript fetch + Blob URL fallback pipeline.
+            const targetSrc = img.dataset.src;
+            if (!img.dataset.nativeFallbackTried && customHeaders?.hasCustomHeaders?.() && targetSrc) {
+                img.dataset.nativeFallbackTried = 'true';
+                customHeaders
+                    .resolveImageUrl(targetSrc, null, { bypassNative: true })
+                    .then((blobUrl) => {
+                        if (blobUrl && blobUrl !== targetSrc && img.isConnected) {
+                            img.removeAttribute('crossorigin');
+                            img.src = blobUrl;
+                            return;
+                        }
+                        img.removeAttribute('data-lazy-loading');
+                        this._handleImageError(img);
+                        markSettled();
+                    })
+                    .catch(() => {
+                        img.removeAttribute('data-lazy-loading');
+                        this._handleImageError(img);
+                        markSettled();
+                    });
+                return;
+            }
+
+            img.removeAttribute('data-lazy-loading');
+            this._handleImageError(img);
+            markSettled();
+        };
+    }
+
+    /**
      * Helper to load all images in a row container
      * @param {HTMLElement} row
      * @private
@@ -750,62 +867,8 @@ class LazyLoader {
             // Decode and draw BlurHash canvas if present
             this._decodeAndDrawBlurhash(img);
 
-            img.onload = () => {
-                // Ignore load events fired by the initial transparent 1x1 GIF placeholder
-                if (img.src && img.src.startsWith('data:image/gif')) return;
-
-                img.classList.add('loaded');
-                img.removeAttribute('data-lazy-loading');
-
-                const parent = img.parentElement;
-                if (parent) {
-                    parent.classList.remove('skeleton-shimmer');
-
-                    if (this._shimmerObserver) {
-                        this._shimmerObserver.unobserve(parent);
-                    }
-
-                    if (parent.classList.contains('card-image')) {
-                        const canvas = parent.querySelector('.blurhash-canvas');
-                        if (canvas) {
-                            canvas.classList.add('fade-out');
-                            setTimeout(() => canvas.remove(), 160);
-                        }
-                    }
-                }
-            };
-            img.onerror = () => {
-                // Ignore error events fired while transitioning from placeholder
-                if (img.src && img.src.startsWith('data:image/gif')) return;
-
-                // When native request interception is active but encounters a network glitch,
-                // seamlessly fallback to the authenticated JavaScript fetch and Blob URL pipeline.
-                const targetSrc = img.dataset.src;
-                if (!img.dataset.nativeFallbackTried && customHeaders?.hasCustomHeaders?.() && targetSrc) {
-                    img.dataset.nativeFallbackTried = 'true';
-                    customHeaders
-                        .resolveImageUrl(targetSrc, null, { bypassNative: true })
-                        .then((blobUrl) => {
-                            if (blobUrl && blobUrl !== targetSrc && img.isConnected) {
-                                img.removeAttribute('crossorigin');
-                                img.src = blobUrl;
-                                return;
-                            }
-                            img.removeAttribute('data-lazy-loading');
-                            this._handleImageError(img);
-                        })
-                        .catch(() => {
-                            img.removeAttribute('data-lazy-loading');
-                            this._handleImageError(img);
-                        });
-                    return;
-                }
-
-                img.removeAttribute('data-lazy-loading');
-                this._handleImageError(img);
-            };
-
-            // Assign image source (handles crossOrigin and custom headers resolution)
+            // Bind shared decode-aware handlers and assign source
+            this._bindImageHandlers(img);
             this._assignImageSource(img, img.dataset.src);
         });
 
@@ -892,62 +955,8 @@ class LazyLoader {
 
         this._decodeAndDrawBlurhash(img);
 
-        img.onload = () => {
-            // Ignore load events fired by the initial transparent 1x1 GIF placeholder
-            if (img.src && img.src.startsWith('data:image/gif')) return;
-
-            img.classList.add('loaded');
-            img.removeAttribute('data-lazy-loading');
-
-            const parent = img.parentElement;
-            if (parent) {
-                parent.classList.remove('skeleton-shimmer');
-
-                if (this._shimmerObserver) {
-                    this._shimmerObserver.unobserve(parent);
-                }
-
-                if (parent.classList.contains('card-image')) {
-                    const canvas = parent.querySelector('.blurhash-canvas');
-                    if (canvas) {
-                        canvas.classList.add('fade-out');
-                        setTimeout(() => canvas.remove(), 160);
-                    }
-                }
-            }
-        };
-        img.onerror = () => {
-            // Ignore error events fired while transitioning from placeholder
-            if (img.src && img.src.startsWith('data:image/gif')) return;
-
-            // When native request interception is active but encounters a network glitch,
-            // seamlessly fallback to the authenticated JavaScript fetch and Blob URL pipeline.
-            const targetSrc = img.dataset.src;
-            if (!img.dataset.nativeFallbackTried && customHeaders?.hasCustomHeaders?.() && targetSrc) {
-                img.dataset.nativeFallbackTried = 'true';
-                customHeaders
-                    .resolveImageUrl(targetSrc, null, { bypassNative: true })
-                    .then((blobUrl) => {
-                        if (blobUrl && blobUrl !== targetSrc && img.isConnected) {
-                            img.removeAttribute('crossorigin');
-                            img.src = blobUrl;
-                            return;
-                        }
-                        img.removeAttribute('data-lazy-loading');
-                        this._handleImageError(img);
-                    })
-                    .catch(() => {
-                        img.removeAttribute('data-lazy-loading');
-                        this._handleImageError(img);
-                    });
-                return;
-            }
-
-            img.removeAttribute('data-lazy-loading');
-            this._handleImageError(img);
-        };
-
-        // Assign image source (handles crossOrigin and custom headers resolution)
+        // Wire shared decode-awaiting completion + fallback handlers, then start fetch
+        this._bindImageHandlers(img);
         this._assignImageSource(img, img.dataset.src);
 
         if (this.observer) {
@@ -1343,12 +1352,24 @@ class LazyLoader {
             });
         }
 
-        // Unobserve all images tracked by the main observer
-        if (this.observer) {
+        // Resolve any in-flight decode/load settlement promises so navigation away
+        // from a page unblocks waitForContainerDecode immediately.
+        if (typeof container.querySelectorAll === 'function') {
             const images = container.querySelectorAll('img.lazy, img[data-src]');
-            images.forEach((img) => this.observer.unobserve(img));
-            const rows = container.querySelectorAll('[data-lazy-row]');
-            rows.forEach((row) => this.observer.unobserve(row));
+            images.forEach((img) => {
+                const tracker = this._settleTrackers.get(img);
+                if (tracker && !tracker.settled) {
+                    tracker.settled = true;
+                    tracker.resolve();
+                }
+                if (this.observer) {
+                    this.observer.unobserve(img);
+                }
+            });
+            if (this.observer) {
+                const rows = container.querySelectorAll('[data-lazy-row]');
+                rows.forEach((row) => this.observer.unobserve(row));
+            }
         }
 
         // Unobserve shimmers tracked by the shimmer observer
@@ -1356,6 +1377,59 @@ class LazyLoader {
             const shimmers = container.querySelectorAll('.card-image.skeleton-shimmer');
             shimmers.forEach((el) => this._shimmerObserver.unobserve(el));
         }
+    }
+
+    /**
+     * Resolves once all currently initiated images inside a container finish
+     * loading + `img.decode()` off-thread, or when `timeoutMs` expires.
+     * Used during page boot to let initial below-the-fold rows finish GPU
+     * texture upload behind the splash screen without risking startup stalls.
+     *
+     * @param {HTMLElement} container
+     * @param {number} [timeoutMs=650]
+     * @returns {Promise<void>}
+     */
+    waitForContainerDecode(container, timeoutMs = 650) {
+        if (!container || typeof container.querySelectorAll !== 'function') {
+            return Promise.resolve();
+        }
+
+        const images = container.querySelectorAll('img[data-src]');
+        const pending = [];
+        images.forEach((img) => {
+            if (img.classList.contains('loaded')) return;
+            const tracker = this._settleTrackers.get(img);
+            if (tracker && !tracker.settled) {
+                pending.push(tracker.promise);
+            }
+        });
+
+        if (pending.length === 0) {
+            return Promise.resolve();
+        }
+
+        const budget = Math.max(0, Number(timeoutMs) || 0);
+        if (budget === 0) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            let settled = false;
+            let timerId = null;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                if (timerId !== null) {
+                    clearTimeout(timerId);
+                    timerId = null;
+                }
+                resolve();
+            };
+
+            // Cap splash hold strictly so slow servers never delay interactive reveal
+            timerId = setTimeout(finish, budget);
+            Promise.all(pending).then(finish, finish);
+        });
     }
 
     /**

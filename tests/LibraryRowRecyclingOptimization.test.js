@@ -23,12 +23,12 @@ test('LazyLoader: rootMargin calibrated and redundant batch preloading removed f
     // Read LazyLoader source code
     const lazySource = readFileSync(new URL('../src/utils/LazyLoader.js', import.meta.url), 'utf8');
 
-    // 1. Verify rootMargin keeps a wide fixed-pixel vertical lookahead
+    // 1. Verify rootMargin keeps a wide fixed-pixel vertical lookahead covering below-the-fold home rows
     assert.strictEqual(
-        lazySource.includes("const IO_ROOT_MARGIN = '1200px 200px';") &&
+        lazySource.includes("const IO_ROOT_MARGIN = '1800px 300px';") &&
             lazySource.includes('rootMargin: IO_ROOT_MARGIN,'),
         true,
-        'LazyLoader IntersectionObserver rootMargin must use the 1200px vertical lookahead constant'
+        'LazyLoader IntersectionObserver rootMargin must use the 1800px vertical lookahead constant'
     );
 
     // 2. Verify _batchPreloadImages is NOT called inside the IntersectionObserver callback
