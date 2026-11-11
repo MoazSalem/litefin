@@ -66,6 +66,8 @@ class HeroCarousel {
         // BEFORE goTo() flips .active. Without this, that rasterization lands in
         // the 0-250ms window after goTo() — the HeroCarousel long-task cluster.
         this._warmRafId = null;
+        this._postDecodeWarmRafId = null;
+        this._postScrollAutoStartTimerId = null;
 
         // Cached DOM node references populated in init() and cleared in destroy()
         // so navigation never re-queries the carousel DOM tree on keypress frames.
@@ -803,9 +805,7 @@ class HeroCarousel {
                                     if (!this._observerScrollFinishHandler) {
                                         this._observerScrollFinishHandler = () => {
                                             this._observerScrollFinishHandler = null;
-                                            if (this._isVisible && !this._timer && !this._isFocused) {
-                                                this._startAutoScroll();
-                                            }
+                                            this._schedulePostScrollAutoStart();
                                         };
                                         eventBus.once('scroll:finished', this._observerScrollFinishHandler);
                                     }
@@ -953,10 +953,18 @@ class HeroCarousel {
             clearTimeout(this._stackPreloadTimerId);
             this._stackPreloadTimerId = null;
         }
-        // Cancel the idle layer pre-rasterization frame
+        // Cancel the idle layer pre-rasterization frames
         if (this._warmRafId) {
             cancelAnimationFrame(this._warmRafId);
             this._warmRafId = null;
+        }
+        if (this._postDecodeWarmRafId) {
+            cancelAnimationFrame(this._postDecodeWarmRafId);
+            this._postDecodeWarmRafId = null;
+        }
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+            this._postScrollAutoStartTimerId = null;
         }
         if (this._intersectionObserver) {
             this._intersectionObserver.disconnect();
@@ -1055,10 +1063,34 @@ class HeroCarousel {
      * @private
      */
     _stopAutoScroll() {
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+            this._postScrollAutoStartTimerId = null;
+        }
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = null;
         }
+    }
+
+    /**
+     * Defers auto-scroll startup out of the immediate `scroll:finished` callback
+     * turn so restarting progress indicator animations never bundles into
+     * ScrollController's finish long-task window.
+     *
+     * @private
+     */
+    _schedulePostScrollAutoStart() {
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+        }
+        this._postScrollAutoStartTimerId = setTimeout(() => {
+            this._postScrollAutoStartTimerId = null;
+            if (!this._container || !this._isVisible) return;
+            if (this._isFocused || !this._timer) {
+                this._startAutoScroll();
+            }
+        }, 60);
     }
 
     /**
@@ -1139,6 +1171,7 @@ class HeroCarousel {
             pendingAssets--;
             if (pendingAssets <= 0) {
                 this._decodedAssets[index] = true;
+                this._scheduleWarmAfterDecode(index);
             }
         };
 
@@ -1183,8 +1216,12 @@ class HeroCarousel {
                     markAssetReady();
                 };
 
-                // When image finishes downloading, attach to background-image
-                img.onload = commitBackdrop;
+                // Wait for off-thread bitmap decode when supported so we never commit
+                // an undecoded cached image onto backgroundImage via onload first.
+                const hasDecode = typeof img.decode === 'function';
+                if (!hasDecode) {
+                    img.onload = commitBackdrop;
+                }
 
                 // Handle backdrop loading failure with authenticated JS fetch fallback
                 img.onerror = () => {
@@ -1194,6 +1231,15 @@ class HeroCarousel {
                             .then((blobUrl) => {
                                 if (blobUrl && blobUrl !== url) {
                                     img.src = blobUrl;
+                                    if (typeof img.decode === 'function') {
+                                        img.decode().then(commitBackdrop).catch(() => {
+                                            if (img.complete && img.naturalWidth > 0) {
+                                                commitBackdrop();
+                                            } else {
+                                                markAssetReady();
+                                            }
+                                        });
+                                    }
                                 } else {
                                     markAssetReady();
                                 }
@@ -1214,8 +1260,12 @@ class HeroCarousel {
 
                 // Decode off the critical transition path. decode() resolves once
                 // the bitmap is fully decoded and safe to paint.
-                if (typeof img.decode === 'function') {
-                    img.decode().then(commitBackdrop).catch(() => {});
+                if (hasDecode) {
+                    img.decode().then(commitBackdrop).catch(() => {
+                        if (img.complete && img.naturalWidth > 0) {
+                            commitBackdrop();
+                        }
+                    });
                 }
             };
 
@@ -1280,10 +1330,17 @@ class HeroCarousel {
                 if ('decoding' in logo) {
                     logo.decoding = 'async';
                 }
-                logo.onload = finalizeLogo;
+                const hasLogoDecode = typeof logo.decode === 'function';
+                if (!hasLogoDecode) {
+                    logo.onload = finalizeLogo;
+                }
                 logo.src = effectiveUrl;
-                if (typeof logo.decode === 'function') {
-                    logo.decode().then(finalizeLogo).catch(() => {});
+                if (hasLogoDecode) {
+                    logo.decode().then(finalizeLogo).catch(() => {
+                        if (logo.complete && logo.naturalWidth > 0) {
+                            finalizeLogo();
+                        }
+                    });
                 } else if (logo.complete) {
                     finalizeLogo();
                 }
@@ -1299,6 +1356,15 @@ class HeroCarousel {
                             if (blobUrl && blobUrl !== logo.dataset.src) {
                                 logo.removeAttribute('crossorigin');
                                 logo.src = blobUrl;
+                                if (typeof logo.decode === 'function') {
+                                    logo.decode().then(finalizeLogo).catch(() => {
+                                        if (logo.complete && logo.naturalWidth > 0) {
+                                            finalizeLogo();
+                                        } else {
+                                            markAssetReady();
+                                        }
+                                    });
+                                }
                             } else {
                                 markAssetReady();
                             }
@@ -1390,6 +1456,30 @@ class HeroCarousel {
             // 0-250ms following the next goTo().
             this._warmAdjacentSlides();
         }, delay, 0);
+    }
+
+    /**
+     * Schedules neighbor layer pre-rasterization right after an adjacent slide's
+     * images finish asynchronous decode (helpful when boot preloads land after
+     * the initial 800ms idle sweep has already fired).
+     *
+     * @param {number} decodedIndex - Slide index whose assets just finished decoding
+     * @private
+     */
+    _scheduleWarmAfterDecode(decodedIndex) {
+        if (!this._container || this._hideTimeoutId || this._warmRafId || this._postDecodeWarmRafId) return;
+        const count = this._slideItems ? this._slideItems.length : 0;
+        if (count < 2) return;
+
+        const nextIdx = (this._currentIndex + 1) % count;
+        const prevIdx = (this._currentIndex - 1 + count) % count;
+        if (decodedIndex !== nextIdx && decodedIndex !== prevIdx) return;
+
+        if (typeof requestAnimationFrame !== 'function') return;
+        this._postDecodeWarmRafId = requestAnimationFrame(() => {
+            this._postDecodeWarmRafId = null;
+            this._warmAdjacentSlides();
+        });
     }
 
     /**
@@ -1566,9 +1656,7 @@ class HeroCarousel {
         if (window.__scrollController && window.__scrollController.isAnimating) {
             this._scrollFinishHandler = () => {
                 this._scrollFinishHandler = null;
-                if (this._isFocused && this._isVisible) {
-                    this._startAutoScroll();
-                }
+                this._schedulePostScrollAutoStart();
             };
             eventBus.once('scroll:finished', this._scrollFinishHandler);
         } else {

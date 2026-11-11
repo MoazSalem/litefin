@@ -151,6 +151,16 @@
     -webkit-transition: none;
 }
 
+/* Ensure child typography/logos inside an idle pre-warmed slide rasterize at
+ * full child opacity (0.02 * 1 = 0.02) without triggering the slide-in transition. */
+.hero-item--prewarm .hero-content {
+    opacity: 1;
+    transform: translateY(0);
+    -webkit-transform: translateY(0);
+    transition: none;
+    -webkit-transition: none;
+}
+
 /* ============================================================================
    Backdrop image layer
    ============================================================================ */
@@ -434,9 +444,9 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
     margin-right: 12px;
-    /* width + background are cheap GPU ops — short duration for responsiveness */
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                background 0.2s ease;
+    /* Only animate background color on active dot switches; transitioning width
+     * forces flexbox layout recalculation across .hero-indicators for 300ms after goTo(). */
+    transition: background 0.2s ease;
     overflow: hidden;
 }
 
