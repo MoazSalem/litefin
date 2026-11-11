@@ -40,6 +40,16 @@ class LazyLoader {
          * ---------------------------------------------------------------- */
         this._scrollTimeout = null;
 
+        // Track cancellable post-scroll marquee/BlurHash settle work so rapid
+        // consecutive key presses never collide with ScrollController.finish.
+        this._postScrollSettleTimerId = null;
+        this._postScrollSettleRafId = null;
+        this._postScrollSettleRafUsesTimeout = false;
+
+        // Fast flag tracking whether any .marquee-active element exists so
+        // focus:changed skips full-document querySelector probes when idle.
+        this._hasActiveMarquee = false;
+
         // ── Deferred marquee measurement ────────────────────────────────────
         // Holds the focused card element when its text-overflow measurement was
         // deferred because a scroll transition was in flight. Flushed when
@@ -70,8 +80,17 @@ class LazyLoader {
         window.addEventListener(
             'scroll',
             () => {
-                // Cancel any pending flush if scrolling resumes
+                // Skip per-frame timer churn while ScrollController owns an active
+                // animation; scroll:started cancels pending work and scroll:finished
+                // deterministically schedules the settle pass when motion completes.
+                const sc = typeof window !== 'undefined' ? window.__scrollController : null;
+                if (sc && sc.isAnimating) {
+                    return;
+                }
+
+                // Cancel any pending flush work if native scrolling resumes
                 this._cancelPendingElementsFlush();
+                this._cancelPostScrollSettleWork();
 
                 if (this._scrollTimeout) {
                     clearTimeout(this._scrollTimeout);
@@ -82,7 +101,7 @@ class LazyLoader {
                     // Resume deferred work once viewport scrolling settles
                     if (!this._isScrolling()) {
                         this._processBlurHashQueue();
-                        this._flushPendingMarquee();
+                        this._scheduleMarqueeFlushRaf();
                         this._schedulePendingElementsFlush(220);
                     }
                 }, 150);
@@ -90,23 +109,23 @@ class LazyLoader {
             true
         );
 
-        // Cancel any pending post-scroll flush immediately when a new scroll
-        // animation begins so consecutive D-pad presses never hit image decode stalls.
+        // Cancel any pending post-scroll flush and settle timers immediately when
+        // a new scroll animation begins so rapid D-pad presses never hit stalls.
         eventBus.on('scroll:started', () => {
+            if (this._scrollTimeout) {
+                clearTimeout(this._scrollTimeout);
+                this._scrollTimeout = null;
+            }
             this._cancelPendingElementsFlush();
+            this._cancelPostScrollSettleWork();
         });
 
         // Listen for ScrollController finishing its transitions
         eventBus.on('scroll:finished', () => {
-            // Tiny buffer allows subsequent animation frames to settle or register
-            setTimeout(() => {
-                if (!this._isScrolling()) {
-                    // Resume deferred BlurHash decoding once scrolling transitions settle
-                    this._processBlurHashQueue();
-                    // Engage any marquee check deferred during the scroll transition
-                    this._flushPendingMarquee();
-                }
-            }, 50);
+            // Defer BlurHash + marquee reflow past the 220ms rapid-scroll debounce
+            // so post-scroll measurements never fire during ScrollController.finish
+            // or between quick consecutive D-pad steps.
+            this._schedulePostScrollSettleWork(220);
 
             // Schedule queued intersection elements 220ms after scroll settles so
             // rapid multi-row D-pad taps (~500ms spacing) cancel before flushing.
@@ -120,25 +139,32 @@ class LazyLoader {
         eventBus.on('focus:changed', (target) => {
             if (!target || !target.classList) return;
 
+            // Drop any previously deferred marquee target if focus moved onward.
+            if (this._pendingMarqueeTarget && this._pendingMarqueeTarget !== target) {
+                this._pendingMarqueeTarget = null;
+            }
+
             // Reset any previous active marquees
             // ----------------------------------------------------------------
             // MARQUEE CLEANUP: Ensure any previously animating text elements
             // are reset to their default static states. This drops animation
             // loops and releases Compositor layers when they are off focus.
-            // PERFORMANCE: probe with a single querySelector first — the vast
-            // majority of focus moves have no marquee running, and this avoids
-            // allocating a NodeList + forEach callback on every keypress.
+            // PERFORMANCE: skip DOM probing completely unless a marquee was
+            // actually activated, and probe with a single querySelector first.
             // ----------------------------------------------------------------
-            if (document.querySelector('.marquee-active')) {
-                document.querySelectorAll('.marquee-active').forEach((el) => {
-                    el.classList.remove('marquee-active');
-                    const span = el.querySelector('span');
-                    if (span) {
-                        span.style.removeProperty('transform');
-                    }
-                    el.style.removeProperty('--scroll-dist');
-                    el.style.removeProperty('--marquee-duration');
-                });
+            if (this._hasActiveMarquee) {
+                if (document.querySelector('.marquee-active')) {
+                    document.querySelectorAll('.marquee-active').forEach((el) => {
+                        el.classList.remove('marquee-active');
+                        const span = el.querySelector('span');
+                        if (span) {
+                            span.style.removeProperty('transform');
+                        }
+                        el.style.removeProperty('--scroll-dist');
+                        el.style.removeProperty('--marquee-duration');
+                    });
+                }
+                this._hasActiveMarquee = false;
             }
 
             // If it's a media card
@@ -148,17 +174,18 @@ class LazyLoader {
                     this.forceLoad(img);
                 }
                 // Batch preload ahead to prevent popping.
-                // PERFORMANCE: Defer to the next animation frame so the 20-sibling
+                // PERFORMANCE: Defer to the next animation frame so the sibling
                 // DOM walk doesn't block the critical focus transition paint.
-                // The focus ring appears instantly; images preload before the next frame.
-                //
-                // VirtualCardRow cards are skipped: that row materializes only the
-                // slides in its window and eager-loads every card it mounts, so a
-                // sibling walk here would only touch cards outside the window.
+                // Skip if a scroll animation is running on that frame so sibling
+                // img.src mutations never contend with Frame 1 scroll work.
                 const isVirtualCard = target.dataset && target.dataset.virtualIndex !== undefined;
                 if (!isVirtualCard) {
                     const preloadTarget = img || target;
-                    requestAnimationFrame(() => this._batchPreloadImages(preloadTarget));
+                    requestAnimationFrame(() => {
+                        if (!this._isScrolling()) {
+                            this._batchPreloadImages(preloadTarget);
+                        }
+                    });
                 }
 
                 // ----------------------------------------------------------------
@@ -366,6 +393,72 @@ class LazyLoader {
     }
 
     /**
+     * Cancel any pending post-scroll BlurHash/marquee settle timer and its
+     * deferred rAF callback when new scrolling starts or a view tears down.
+     *
+     * @private
+     */
+    _cancelPostScrollSettleWork() {
+        if (this._postScrollSettleTimerId) {
+            clearTimeout(this._postScrollSettleTimerId);
+            this._postScrollSettleTimerId = null;
+        }
+        if (this._postScrollSettleRafId) {
+            // Cancel via matching primitive when falling back to setTimeout.
+            if (this._postScrollSettleRafUsesTimeout) {
+                clearTimeout(this._postScrollSettleRafId);
+            } else if (typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(this._postScrollSettleRafId);
+            }
+            this._postScrollSettleRafId = null;
+            this._postScrollSettleRafUsesTimeout = false;
+        }
+    }
+
+    /**
+     * Schedule deferred marquee overflow measurement on its own animation frame
+     * once scrolling is idle so scrollWidth/clientWidth reads never share a frame
+     * with ScrollController transitions.
+     *
+     * @private
+     */
+    _scheduleMarqueeFlushRaf() {
+        if (!this._pendingMarqueeTarget) return;
+        if (this._postScrollSettleRafId) return;
+
+        const hasRaf = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function';
+        this._postScrollSettleRafUsesTimeout = !hasRaf;
+        const scheduleRaf = hasRaf ? window.requestAnimationFrame : (cb) => setTimeout(cb, 16);
+
+        this._postScrollSettleRafId = scheduleRaf(() => {
+            this._postScrollSettleRafId = null;
+            this._postScrollSettleRafUsesTimeout = false;
+            if (!this._isScrolling()) {
+                this._flushPendingMarquee();
+            }
+        });
+    }
+
+    /**
+     * Schedule deferred BlurHash decoding and marquee layout checks after a
+     * cancellable settle window so rapid D-pad taps never pay layout/decode costs.
+     *
+     * @param {number} [delayMs=220] - Quiet window after scroll:finished
+     * @private
+     */
+    _schedulePostScrollSettleWork(delayMs = 220) {
+        this._cancelPostScrollSettleWork();
+
+        this._postScrollSettleTimerId = setTimeout(() => {
+            this._postScrollSettleTimerId = null;
+            if (!this._isScrolling()) {
+                this._processBlurHashQueue();
+                this._scheduleMarqueeFlushRaf();
+            }
+        }, delayMs);
+    }
+
+    /**
      * Debounce and schedule flushing of elements queued during scroll.
      *
      * @param {number} [delayMs=220] - Settle delay after scroll:finished
@@ -473,6 +566,7 @@ class LazyLoader {
                 el.style.setProperty('--scroll-dist', `-${totalScroll}px`);
                 el.style.setProperty('--marquee-duration', `${duration}s`);
                 el.classList.add('marquee-active');
+                this._hasActiveMarquee = true;
             }
         });
     }
@@ -1062,6 +1156,16 @@ class LazyLoader {
         if (this._deferredPreloadFrameId) {
             cancelAnimationFrame(this._deferredPreloadFrameId);
             this._deferredPreloadFrameId = null;
+        }
+
+        // Drop pending marquee measurements targeting DOM inside the torn-down view.
+        if (
+            this._pendingMarqueeTarget &&
+            (this._pendingMarqueeTarget === container ||
+                (typeof container.contains === 'function' && container.contains(this._pendingMarqueeTarget)))
+        ) {
+            this._pendingMarqueeTarget = null;
+            this._cancelPostScrollSettleWork();
         }
 
         // Prune queued elements belonging to the destroyed container so stale DOM

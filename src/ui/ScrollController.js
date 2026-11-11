@@ -192,6 +192,10 @@ class ScrollController {
         // same target coordinate mid-scroll, which would retrigger the animation.
         this._nativeTargetScroll = null;
 
+        // Track containers wrapped with .vertical-scroll-track in GPU mode so
+        // native/horizontal scrolls skip full-subtree querySelector scans.
+        this._gpuTrackedContainers = typeof WeakSet === 'function' ? new WeakSet() : null;
+
         // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
         //
         // getCumulativeOffsetTop() walks the offsetParent chain — each step
@@ -736,18 +740,29 @@ class ScrollController {
             durationToUse = 0;
         }
 
-        // Reset the vertical track's transform if we've switched away from GPU mode.
-        if (!isVertical || scrollMode !== 'gpu') {
+        // Reset the vertical track's transform if we've switched away from GPU mode,
+        // skipping the 1,500+ node subtree query when container never used GPU tracks.
+        if (
+            (!isVertical || scrollMode !== 'gpu') &&
+            (!this._gpuTrackedContainers || this._gpuTrackedContainers.has(container))
+        ) {
             const existingTrack = container.querySelector('.vertical-scroll-track');
             if (existingTrack && (existingTrack.style.transform || existingTrack.style.webkitTransform)) {
                 existingTrack.style.transform = 'translate3d(0px, 0px, 0px)';
                 existingTrack.style.webkitTransform = 'translate3d(0px, 0px, 0px)';
+            }
+            // Clear tracking once the lingering GPU track transform is zeroed out.
+            if (this._gpuTrackedContainers) {
+                this._gpuTrackedContainers.delete(container);
             }
         }
 
         // Initialize or retrieve the vertical scroll track in GPU mode.
         let track = null;
         if (isVertical && scrollMode === 'gpu') {
+            if (this._gpuTrackedContainers) {
+                this._gpuTrackedContainers.add(container);
+            }
             track = container.querySelector('.vertical-scroll-track');
             if (!track) {
                 // Wrap all direct children inside a hardware-accelerated wrapper container.
@@ -837,10 +852,8 @@ class ScrollController {
                 } else {
                     container.scrollTop = targetScroll;
                 }
-                // STABILIZATION: Force reset of horizontal drift on vertical containers.
-                if (container.scrollLeft !== 0) {
-                    container.scrollLeft = 0;
-                }
+                // Horizontal drift was already cleared on clean layout prior to writing scrollTop;
+                // never read scrollLeft immediately after scrollTop or layout forces a full reflow.
             } else {
                 container.scrollLeft = targetScroll;
             }
@@ -1050,11 +1063,8 @@ class ScrollController {
                     } else {
                         state.container.scrollTop = state.target;
                     }
-                    // STABILIZATION: Settle any horizontal drift once at animation completion,
-                    // avoiding per-frame layout recalculations during motion.
-                    if (state.container.scrollLeft !== 0) {
-                        state.container.scrollLeft = 0;
-                    }
+                    // Horizontal drift is cleared at smoothScrollTo entry before scrollTop dirties layout;
+                    // reading scrollLeft right after scrollTop would trigger a full-tree reflow inside finish.
                 } else {
                     state.container.scrollLeft = state.target;
                 }
@@ -1184,10 +1194,8 @@ class ScrollController {
                 } else {
                     container.scrollTop = value;
                 }
-                // STABILIZATION: settle any horizontal drift once on completion.
-                if (container.scrollLeft !== 0) {
-                    container.scrollLeft = 0;
-                }
+                // Horizontal drift is already zeroed at smoothScrollTo entry against clean layout;
+                // skip post-write scrollLeft read so ScrollController.finish never forces synchronous layout.
             };
         } else {
             write = (value) => {

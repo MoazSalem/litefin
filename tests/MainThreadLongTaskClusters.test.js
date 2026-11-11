@@ -938,3 +938,72 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'SettingsSlider must guard against double-binding across progressive mounts'
     );
 });
+
+test('ScrollController: avoids post-scrollTop scrollLeft reflows and unnecessary GPU track queries', () => {
+    const source = read('src/ui/ScrollController.js');
+
+    // Guarded WeakSet prevents full-tree .vertical-scroll-track querySelector on native pages.
+    assert.ok(
+        source.includes('this._gpuTrackedContainers = typeof WeakSet ==='),
+        'ScrollController must track containers wrapped with GPU tracks'
+    );
+
+    const smoothBody = sliceBetween(
+        source,
+        "smoothScrollTo(container, targetScroll, duration = null, direction = 'vertical') {",
+        '    _springScrollTo({'
+    );
+    assert.ok(
+        smoothBody.includes('!this._gpuTrackedContainers || this._gpuTrackedContainers.has(container)'),
+        'Non-GPU mode switch reset must skip DOM query when container was never GPU-tracked'
+    );
+
+    // Neither instant snap nor easing completion may read scrollLeft right after scrollTop write.
+    assert.ok(
+        !smoothBody.includes('if (container.scrollLeft !== 0)') &&
+            !smoothBody.includes('if (state.container.scrollLeft !== 0)'),
+        'Snap and easing completion must not read scrollLeft after writing scrollTop (pre-clamped at entry)'
+    );
+
+    const springBody = sliceBetween(source, '    _springScrollTo({', '_springTrackHorizontal(');
+    assert.ok(
+        !springBody.includes('container.scrollLeft !== 0'),
+        'Spring finalize must not force synchronous layout by reading scrollLeft after scrollTop'
+    );
+});
+
+test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish window and guards active scroll', () => {
+    const source = read('src/utils/LazyLoader.js');
+    const initBody = sliceBetween(source, '_init() {', "if ('IntersectionObserver' in window)");
+
+    // Native scroll listener must not allocate debounce timers every rAF step during ScrollController motion.
+    assert.ok(
+        initBody.includes('if (sc && sc.isAnimating) {'),
+        'Native scroll listener must short-circuit while ScrollController owns an active animation'
+    );
+
+    // scroll:finished must use the cancellable 220ms settle scheduler rather than an uncancelled 50ms timer.
+    assert.ok(
+        initBody.includes('this._schedulePostScrollSettleWork(220);'),
+        'scroll:finished must delegate BlurHash/marquee work to cancellable 220ms settle scheduler'
+    );
+    assert.ok(
+        !initBody.includes('}, 50);'),
+        'scroll:finished must not spawn an uncancelled 50ms timer inside ScrollController.finish attribution window'
+    );
+    assert.ok(
+        initBody.includes('this._cancelPostScrollSettleWork();'),
+        'scroll:started and native scroll must cancel pending post-scroll settle work'
+    );
+
+    // focus:changed must guard .marquee-active probe and skip _batchPreloadImages while scrolling.
+    assert.ok(
+        initBody.includes('if (this._hasActiveMarquee) {'),
+        'focus:changed must short-circuit .marquee-active DOM queries when no marquee is active'
+    );
+    assert.ok(
+        initBody.includes('if (!this._isScrolling()) {\n                            this._batchPreloadImages(preloadTarget);') ||
+            initBody.includes('if (!this._isScrolling()) {\r\n                            this._batchPreloadImages(preloadTarget);'),
+        'focus:changed rAF preload must skip sibling DOM walks while scrolling is active'
+    );
+});
