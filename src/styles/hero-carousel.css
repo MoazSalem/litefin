@@ -135,6 +135,19 @@
     transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/*
+ * Transient idle-only GPU warm state: elevates an inactive slide just above
+ * zero opacity (invisible in 8-bit color) behind the active slide for two frames
+ * so Chromium uploads scaled backdrop textures and rasterizes .hero-content
+ * ahead of its first goTo() transition, then immediately detaches again.
+ */
+.hero-item.hero-item--gpu-warm {
+    opacity: 0.001;
+    z-index: 0;
+    pointer-events: none;
+    transition: none;
+}
+
 /* ============================================================================
    Backdrop image layer
    ============================================================================ */
@@ -1079,10 +1092,10 @@
     transform: translateZ(0);
 
     /*
-     * Horizontal Alpha Masking:
-     * Feathers the left edge of the backdrop image into the typography side.
-     * The vertical bottom fade is handled universally on the parent (.hero-item),
-     * avoiding multi-mask compositing bugs across different TV browser engines.
+     * Combined Alpha Masking (Single RenderSurface):
+     * Intersects the horizontal left edge feather and vertical bottom fade directly
+     * on .hero-backdrop (65% width) instead of stacking a second 1920x972 parent mask
+     * on .hero-item, halving intermediate offscreen mask FBOs during transitions.
      */
     -webkit-mask-image: linear-gradient(
         to right,
@@ -1095,7 +1108,16 @@
         rgba(0, 0, 0, 0.86) 70%,
         rgba(0, 0, 0, 0.96) 82%,
         black 92%
+    ), linear-gradient(
+        to bottom,
+        black 35%,
+        rgba(0, 0, 0, 0.96) 48%,
+        rgba(0, 0, 0, 0.75) 62%,
+        rgba(0, 0, 0, 0.38) 76%,
+        rgba(0, 0, 0, 0.08) 88%,
+        transparent 96%
     );
+    -webkit-mask-composite: source-in;
     mask-image: linear-gradient(
         to right,
         transparent 0%,
@@ -1107,11 +1129,65 @@
         rgba(0, 0, 0, 0.86) 70%,
         rgba(0, 0, 0, 0.96) 82%,
         black 92%
+    ), linear-gradient(
+        to bottom,
+        black 35%,
+        rgba(0, 0, 0, 0.96) 48%,
+        rgba(0, 0, 0, 0.75) 62%,
+        rgba(0, 0, 0, 0.38) 76%,
+        rgba(0, 0, 0, 0.08) 88%,
+        transparent 96%
     );
+    mask-composite: intersect;
+}
+
+.hero-carousel-container.immersive-performance.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    ), linear-gradient(
+        to bottom,
+        black 30%,
+        rgba(0, 0, 0, 0.95) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.32) 72%,
+        rgba(0, 0, 0, 0.06) 84%,
+        transparent 94%
+    );
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    ), linear-gradient(
+        to bottom,
+        black 30%,
+        rgba(0, 0, 0, 0.95) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.32) 72%,
+        rgba(0, 0, 0, 0.06) 84%,
+        transparent 94%
+    );
+    mask-composite: intersect;
 }
 
 [dir="rtl"] .hero-carousel-container.immersive-performance .hero-backdrop {
-    /* Mirrored horizontal alpha mask for RTL reading direction */
+    /* Mirrored horizontal + vertical alpha mask intersect for RTL reading direction */
     right: auto;
     left: 0;
     -webkit-mask-image: linear-gradient(
@@ -1125,7 +1201,16 @@
         rgba(0, 0, 0, 0.86) 70%,
         rgba(0, 0, 0, 0.96) 82%,
         black 92%
+    ), linear-gradient(
+        to bottom,
+        black 35%,
+        rgba(0, 0, 0, 0.96) 48%,
+        rgba(0, 0, 0, 0.75) 62%,
+        rgba(0, 0, 0, 0.38) 76%,
+        rgba(0, 0, 0, 0.08) 88%,
+        transparent 96%
     );
+    -webkit-mask-composite: source-in;
     mask-image: linear-gradient(
         to left,
         transparent 0%,
@@ -1137,7 +1222,61 @@
         rgba(0, 0, 0, 0.86) 70%,
         rgba(0, 0, 0, 0.96) 82%,
         black 92%
+    ), linear-gradient(
+        to bottom,
+        black 35%,
+        rgba(0, 0, 0, 0.96) 48%,
+        rgba(0, 0, 0, 0.75) 62%,
+        rgba(0, 0, 0, 0.38) 76%,
+        rgba(0, 0, 0, 0.08) 88%,
+        transparent 96%
     );
+    mask-composite: intersect;
+}
+
+[dir="rtl"] .hero-carousel-container.immersive-performance.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(
+        to left,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    ), linear-gradient(
+        to bottom,
+        black 30%,
+        rgba(0, 0, 0, 0.95) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.32) 72%,
+        rgba(0, 0, 0, 0.06) 84%,
+        transparent 94%
+    );
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(
+        to left,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    ), linear-gradient(
+        to bottom,
+        black 30%,
+        rgba(0, 0, 0, 0.95) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.32) 72%,
+        rgba(0, 0, 0, 0.06) 84%,
+        transparent 94%
+    );
+    mask-composite: intersect;
 }
 
 /*
@@ -1288,9 +1427,14 @@
  * Guarantees that no theme paints an artificial black gradient over the bottom row cards.
  */
 
-/* Standard widescreen - Universal Across All Themes */
-.hero-carousel-container.immersive:not(.compact) .hero-item,
-.hero-carousel-container.immersive-performance:not(.compact) .hero-item {
+/* Leave .hero-item unmasked in immersive-performance so content crossfades natively */
+.hero-carousel-container.immersive-performance .hero-item {
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+/* Standard widescreen - Immersive Theme */
+.hero-carousel-container.immersive:not(.compact) .hero-item {
     -webkit-mask-image: linear-gradient(
         to bottom,
         black 35%,
@@ -1311,9 +1455,8 @@
     );
 }
 
-/* Compact widescreen - Universal Across All Themes */
-.hero-carousel-container.immersive.compact .hero-item,
-.hero-carousel-container.immersive-performance.compact .hero-item {
+/* Compact widescreen - Immersive Theme */
+.hero-carousel-container.immersive.compact .hero-item {
     -webkit-mask-image: linear-gradient(
         to bottom,
         black 30%,

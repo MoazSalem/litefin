@@ -57,6 +57,9 @@ class HeroCarousel {
         this._idlePreloadTask = null;
         this._preloadedSlides = Object.create(null);
         this._decodedBackdrops = Object.create(null);
+        this._warmedSlides = Object.create(null);
+        this._warmSlideRafId = null;
+        this._warmSlideIndex = -1;
         this._retainedImages = [];
         this._stackPreloadTimerId = null;
         this._stackPreloadIdleTask = null;
@@ -920,6 +923,7 @@ class HeroCarousel {
         }
         // Cancel staggered stacked-slide preload timer and idle task
         this._cancelStackPreload();
+        this._cancelWarmSlideGpuCache();
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
             this._postScrollAutoStartTimerId = null;
@@ -946,6 +950,7 @@ class HeroCarousel {
         // Release retained decoded Image references and cached DOM elements
         this._retainedImages = [];
         this._decodedBackdrops = Object.create(null);
+        this._warmedSlides = Object.create(null);
         this._slideItems = null;
         this._dotItems = null;
         this._slideBackdrops = null;
@@ -1045,6 +1050,23 @@ class HeroCarousel {
         this._postScrollAutoStartTimerId = setTimeout(() => {
             this._postScrollAutoStartTimerId = null;
             if (!this._container || !this._isVisible) return;
+
+            // A second scroll can begin inside the settle window (e.g. the user
+            // taps Down again 100ms after the first stop). Re-check the live
+            // scroll state here instead of trusting the earlier visibility
+            // callback: restarting the timer would reset indicator classes and
+            // inject style/DOM work straight into ScrollController._step.
+            const sc = typeof window !== 'undefined' ? window.__scrollController : null;
+            if (sc && sc.isAnimating) {
+                this._cancelObserverScrollFinish();
+                this._observerScrollFinishHandler = () => {
+                    this._observerScrollFinishHandler = null;
+                    this._schedulePostScrollAutoStart(200);
+                };
+                eventBus.once('scroll:finished', this._observerScrollFinishHandler);
+                return;
+            }
+
             if (this._isFocused || !this._timer) {
                 this._startAutoScroll();
             }
@@ -1167,6 +1189,10 @@ class HeroCarousel {
                     // goTo() swaps _decodedBackdrops[index] in synchronously.
                     if (index === this._currentIndex) {
                         this._mountBackdropImage(backdrop, img);
+                    } else {
+                        // Warm Skia/GPU bitmap and layer caches for inactive slides in the
+                        // background so Pass #1 of goTo() avoids synchronous first-paint stalls.
+                        this._warmSlideGpuCache(index);
                     }
                     fadeBlurhashCanvas(false);
                 };
@@ -1444,6 +1470,103 @@ class HeroCarousel {
     }
 
     /**
+     * Cancels any in-flight two-frame GPU surface warming pass and detaches
+     * any non-active backdrop <img> it temporarily mounted.
+     *
+     * @param {number} [keepIndex=-1] - Optional incoming active index whose warmed <img> should remain attached
+     * @private
+     */
+    _cancelWarmSlideGpuCache(keepIndex = -1) {
+        if (this._warmSlideRafId !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._warmSlideRafId);
+            this._warmSlideRafId = null;
+        }
+        const prevWarmIdx = this._warmSlideIndex;
+        this._warmSlideIndex = -1;
+        if (prevWarmIdx < 0) return;
+
+        const warmItem = this._slideItems ? this._slideItems[prevWarmIdx] : null;
+        if (warmItem && warmItem.classList) {
+            warmItem.classList.remove('hero-item--gpu-warm');
+        }
+        // Keep the warmed <img> attached if goTo() is activating this exact slide
+        if (
+            prevWarmIdx !== this._currentIndex &&
+            prevWarmIdx !== keepIndex &&
+            this._slideBackdrops &&
+            this._decodedBackdrops
+        ) {
+            const backdrop = this._slideBackdrops[prevWarmIdx];
+            const img = this._decodedBackdrops[prevWarmIdx];
+            if (backdrop && img && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                backdrop.removeChild(img);
+            }
+        }
+    }
+
+    /**
+     * Briefly composites one pre-decoded inactive slide for two animation frames
+     * behind the active slide (via `.hero-item--gpu-warm`), forcing Chromium to
+     * scale/upload the backdrop texture and rasterize text/logo layers before its
+     * first `goTo()` transition, then detaches the `<img>` again so vertical
+     * scrolling never carries extra inactive DOM layers.
+     *
+     * @param {number} index - Slide index to warm
+     * @private
+     */
+    _warmSlideGpuCache(index) {
+        if (typeof requestAnimationFrame !== 'function') return;
+        if (!this._container || index === this._currentIndex || this._warmedSlides[index]) return;
+
+        const items = this._slideItems || (typeof this._container.querySelectorAll === 'function' ? this._container.querySelectorAll('.hero-item') : null);
+        const item = items ? items[index] : null;
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
+        const img = this._decodedBackdrops ? this._decodedBackdrops[index] : null;
+        if (!item || !backdrop || !img) return;
+
+        // Only warm one inactive slide at a time
+        this._cancelWarmSlideGpuCache();
+
+        const isScrollAnimating = () =>
+            typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+
+        this._warmSlideRafId = requestAnimationFrame(() => {
+            this._warmSlideRafId = null;
+            if (!this._container || index === this._currentIndex || this._hideTimeoutId || isScrollAnimating()) {
+                return;
+            }
+
+            // Stage slide briefly at near-zero opacity behind active slide so Chromium
+            // uploads GPU textures instead of culling opacity: 0 layers.
+            this._warmSlideIndex = index;
+            this._mountBackdropImage(backdrop, img);
+            if (item.classList) {
+                item.classList.add('hero-item--gpu-warm');
+            }
+
+            // Wait two frames for commit + GPU composite before detaching again
+            this._warmSlideRafId = requestAnimationFrame(() => {
+                this._warmSlideRafId = null;
+                this._warmSlideRafId = requestAnimationFrame(() => {
+                    this._warmSlideRafId = null;
+                    if (!this._container) return;
+
+                    if (item.classList) {
+                        item.classList.remove('hero-item--gpu-warm');
+                    }
+                    if (index !== this._currentIndex && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                        backdrop.removeChild(img);
+                    }
+                    this._warmedSlides[index] = true;
+                    if (this._warmSlideIndex === index) {
+                        this._warmSlideIndex = -1;
+                    }
+                });
+            });
+        });
+    }
+
+    /**
      * Inserts a backdrop <img> inside `.hero-backdrop` ahead of any active BlurHash
      * canvas overlay, avoiding duplicate DOM mutations if already attached.
      *
@@ -1561,6 +1684,9 @@ class HeroCarousel {
         const dots = this._dotItems || this._container.querySelectorAll('.hero-dot');
 
         if (!items[index] || !dots[index]) return;
+
+        // Cancel any background GPU-warming frame cleanly while preserving the incoming slide's <img>
+        this._cancelWarmSlideGpuCache(index);
 
         const prevIndex = this._currentIndex;
         const prevItem = items[prevIndex];
