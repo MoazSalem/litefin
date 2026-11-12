@@ -59,8 +59,9 @@ function _getResponsiveHeight(fraction) {
 }
 
 /**
+ * ============================================================================
  * Stroked Text Border Capability
- *
+ * ============================================================================
  * Determines whether -webkit-text-stroke + paint-order can outline HTML text
  * without thinning the glyphs.
  *
@@ -69,29 +70,29 @@ function _getResponsiveHeight(fraction) {
  * the stroke paints over the fill and eats into the glyphs, so callers must
  * fall back to an outer text-shadow ring.
  *
+ * Evaluated on demand (rather than memoized at module scope) so dynamic test
+ * environments and runtime platform refreshes are always respected.
+ *
  * @returns {boolean} True when the stroke/paint-order border renders correctly.
  */
-let _hasStrokedTextBorder;
-
 function _supportsStrokedTextBorder() {
-    // Capability never changes at runtime; evaluate once.
-    if (_hasStrokedTextBorder !== undefined) return _hasStrokedTextBorder;
-
     try {
         // 999 = non-Chromium/unknown engine; CSS.supports is authoritative there.
         const chromeVersion = typeof platformInfo !== 'undefined' ? platformInfo.chromeVersion : 999;
 
-        _hasStrokedTextBorder =
+        // Require native CSS support for both properties and exclude Chromium < 123,
+        // where paint-order parses cleanly but has no effect on HTML text strokes.
+        return (
             typeof CSS !== 'undefined' &&
             typeof CSS.supports === 'function' &&
             CSS.supports('-webkit-text-stroke-width', '1px') &&
             CSS.supports('paint-order', 'stroke fill') &&
-            (chromeVersion === 999 || chromeVersion >= 123);
+            (chromeVersion === 999 || chromeVersion >= 123)
+        );
     } catch (_) {
-        _hasStrokedTextBorder = false;
+        // Fail closed to the shadow fallback if CSS/platform inspection throws.
+        return false;
     }
-
-    return _hasStrokedTextBorder;
 }
 
 /**
