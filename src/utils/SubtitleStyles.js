@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { platformInfo } from './PlatformInfo.js';
 import { getFallbackFontFamily, getFallbackFontName } from './FallbackFonts.js';
 
 /**
@@ -55,6 +56,67 @@ function _getResponsiveHeight(fraction) {
     }
     // Safe legacy fallback to standard viewport height
     return `${fraction * 100}vh`;
+}
+
+/**
+ * Stroked Text Border Capability
+ *
+ * Determines whether -webkit-text-stroke + paint-order can outline HTML text
+ * without thinning the glyphs.
+ *
+ * Chromium 35–122 parse paint-order but ignore it for stroked HTML text
+ * (crbug.com/41372165); real support starts in Chromium 123. On those engines
+ * the stroke paints over the fill and eats into the glyphs, so callers must
+ * fall back to an outer text-shadow ring.
+ *
+ * @returns {boolean} True when the stroke/paint-order border renders correctly.
+ */
+let _hasStrokedTextBorder;
+
+function _supportsStrokedTextBorder() {
+    // Capability never changes at runtime; evaluate once.
+    if (_hasStrokedTextBorder !== undefined) return _hasStrokedTextBorder;
+
+    try {
+        // 999 = non-Chromium/unknown engine; CSS.supports is authoritative there.
+        const chromeVersion = typeof platformInfo !== 'undefined' ? platformInfo.chromeVersion : 999;
+
+        _hasStrokedTextBorder =
+            typeof CSS !== 'undefined' &&
+            typeof CSS.supports === 'function' &&
+            CSS.supports('-webkit-text-stroke-width', '1px') &&
+            CSS.supports('paint-order', 'stroke fill') &&
+            (chromeVersion === 999 || chromeVersion >= 123);
+    } catch (_) {
+        _hasStrokedTextBorder = false;
+    }
+
+    return _hasStrokedTextBorder;
+}
+
+/**
+ * Builds an outer outline from zero-blur text shadows. Unlike text-stroke,
+ * this never paints over the glyph fill.
+ *
+ * @param {number|string} borderWidth - Configured stroke width in pixels.
+ * @param {string} color - Border color (RGBA string).
+ * @returns {string} Comma-separated text-shadow value, or '' when width <= 0.
+ */
+function _buildOutlineShadows(borderWidth, color) {
+    // text-stroke straddles the glyph edge; only its outer half is visible
+    // once paint-order works. Match that footprint with radius = width / 2.
+    const radius = Number(borderWidth) / 2;
+    if (!radius || radius <= 0) return '';
+
+    const shadows = [];
+    for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        const x = Number((Math.cos(angle) * radius).toFixed(2));
+        const y = Number((Math.sin(angle) * radius).toFixed(2));
+        shadows.push(`${color} ${x}px ${y}px 0`);
+    }
+
+    return shadows.join(', ');
 }
 
 // ============================================================================
@@ -157,6 +219,9 @@ export function getTextStyles(isHdr = false) {
     const shadowColor = _hexToRgba(shadowColorHex, shadowOpacity);
     const highlightColor = _hexToRgba('#ffffff', shadowOpacity); // Keep highlight white but respect opacity
 
+    // Uniform 8-direction drop shadow, shared by 'uniform' and 'uniform_border'.
+    const uniformShadow = `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`;
+
     switch (shadow) {
         case 'heavy':
         case 'dropshadow':
@@ -178,25 +243,42 @@ export function getTextStyles(isHdr = false) {
         case 'uniform':
             styles.push({
                 name: 'textShadow',
-                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
+                value: uniformShadow
             });
             break;
         case 'border':
-            // Solid border logic using -webkit-text-stroke.
-            // Using 'paint-order: stroke fill' ensures the border stays behind the text
-            // so it doesn't thin out the glyphs even at high widths.
-            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
-            styles.push({ name: 'paintOrder', value: 'stroke fill' });
-            styles.push({ name: 'textShadow', value: 'none' });
+            if (_supportsStrokedTextBorder()) {
+                // Solid border logic using -webkit-text-stroke.
+                // Using 'paint-order: stroke fill' ensures the border stays behind the text
+                // so it doesn't thin out the glyphs even at high widths.
+                styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
+                styles.push({ name: 'paintOrder', value: 'stroke fill' });
+                styles.push({ name: 'textShadow', value: 'none' });
+            } else {
+                // Fallback: paint the outline outside the glyph with shadows so
+                // the stroke never eats into the fill. Chromium < 123 ignores
+                // paint-order for stroked HTML text.
+                styles.push({
+                    name: 'textShadow',
+                    value: _buildOutlineShadows(borderWidth, borderShadowColor) || 'none'
+                });
+            }
             break;
         case 'uniform_border':
-            // Combines stroke-based border outline with uniform drop shadow blur.
-            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
-            styles.push({ name: 'paintOrder', value: 'stroke fill' });
-            styles.push({
-                name: 'textShadow',
-                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
-            });
+            if (_supportsStrokedTextBorder()) {
+                // Combines stroke-based border outline with uniform drop shadow blur.
+                styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
+                styles.push({ name: 'paintOrder', value: 'stroke fill' });
+                styles.push({ name: 'textShadow', value: uniformShadow });
+            } else {
+                // Shadow-only outline + drop shadow. The ring is listed first so
+                // it paints on top of the blurred shadow layer.
+                const outline = _buildOutlineShadows(borderWidth, borderShadowColor);
+                styles.push({
+                    name: 'textShadow',
+                    value: outline ? `${outline}, ${uniformShadow}` : uniformShadow
+                });
+            }
             break;
         case 'none':
             styles.push({ name: 'textShadow', value: 'none' });
