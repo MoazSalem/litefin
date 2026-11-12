@@ -674,16 +674,17 @@ export class HtmlVideoPlayer {
             // Browsers impose strict MediaSource Engine (MSE) memory quotas. Retaining 60-120s
             // of forward buffer at high bitrates (e.g. 4K / high-bitrate 1080p) triggers quota
             // exceeded exceptions, GC pauses, and aggressive buffer evictions.
-            // We align with the official jellyfin-web baseline (30s buffer / 60s max).
+            // Derived from the shared bufferSeconds target (see SPEC-buffer.md) unless the
+            // user already has an explicit html5MaxBufferLength/html5MaxMaxBufferLength
+            // override saved, which keeps taking precedence.
             // -------------------------------------------------------------------------
-            const configuredMaxBuffer = PlayerSettings.get('html5MaxBufferLength');
-            const maxBufferLength = configuredMaxBuffer !== undefined && configuredMaxBuffer !== null
-                ? Number(configuredMaxBuffer)
-                : 30;
-            const configuredMaxMaxBuffer = PlayerSettings.get('html5MaxMaxBufferLength');
-            const maxMaxBufferLength = configuredMaxMaxBuffer !== undefined && configuredMaxMaxBuffer !== null
-                ? Number(configuredMaxMaxBuffer)
-                : 60;
+            const bufferSeconds = Number(PlayerSettings.get('bufferSeconds')) || 30;
+            const maxBufferLength = PlayerSettings.isSet('html5MaxBufferLength')
+                ? Number(PlayerSettings.get('html5MaxBufferLength'))
+                : bufferSeconds;
+            const maxMaxBufferLength = PlayerSettings.isSet('html5MaxMaxBufferLength')
+                ? Number(PlayerSettings.get('html5MaxMaxBufferLength'))
+                : Math.max(bufferSeconds * 2, 60);
 
             const hls = this._createHlsPlayer({
                 startPosition: (options.playerStartPositionTicks || 0) / 10000000,

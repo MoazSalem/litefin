@@ -141,6 +141,14 @@ export class PlayerTab {
         if (!isWebos && !isTizen && !isHtml5) return '';
 
         let html = `<h3 class="setting-section-title" data-i18n="PlaybackBuffering">${i18n.t('PlaybackBuffering') || 'Playback Buffering'}</h3>`;
+        // Target forward buffer in seconds: drives the DirectPlay start-gate + prefetch
+        // (WebOSPlayer._playNativeDirect) and the HLS buffer config on both webOS and
+        // html5 (_playWithHlsJs in WebOSPlayer / HtmlVideoPlayer). Tizen uses neither
+        // code path (TizenAVPlayer is unaffected), so it is omitted there.
+        if (isWebos || isHtml5) {
+            html += `
+                <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="BufferSize">${i18n.t('BufferSize') || 'Buffer Size'}</span><span class="setting-description" data-i18n="BufferSizeDescription">${i18n.t('BufferSizeDescription') || 'Target forward buffer in seconds, used for both DirectPlay (client-side prefetch) and HLS transcoding.'}</span></div><div class="setting-control">${this._drop('buffer-seconds-select', SEC_OPTS([10, 20, 30, 45, 60, 90, 120]), PlayerSettings.get('bufferSeconds') || 30)}</div></div>`;
+        }
         if (isWebos) {
             html += `
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="WebosBufferGate">${i18n.t('WebosBufferGate') || 'Buffer Gate'}</span><span class="setting-description" data-i18n="WebosBufferGateDesc">${i18n.t('WebosBufferGateDesc') || 'Threshold in seconds for micro-stall recovery.'}</span></div><div class="setting-control">${this._drop('webos-buffer-gate-select', [0.05, 0.1, 0.3, 0.5, 1.0, 2.0, 3.0, 5.0].map((v) => ({ value: v, label: `${v}s` })), PlayerSettings.get('webosBufferGate') || 0.3)}</div></div>

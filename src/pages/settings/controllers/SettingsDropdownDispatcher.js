@@ -342,6 +342,7 @@ export class SettingsDropdownDispatcher {
             'html5MaxBufferLength',
             'html5MaxMaxBufferLength',
             'html5SegmentLength',
+            'bufferSeconds',
             'playQueueEpisodeLimit'
         ];
 

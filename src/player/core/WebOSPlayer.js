@@ -123,6 +123,25 @@ const LOAD_WATCHDOG_HLS_MS = 60000;
 const LOAD_WATCHDOG_DIRECT_MS = 30000;
 
 /**
+ * DirectPlay start-gate + forward-read-ahead prefetch (see SPEC-buffer.md).
+ * Warms the server-side cache (rclone VFS) ahead of the native player's own
+ * shallow buffer window by issuing the same ranged GETs the <video> element
+ * would eventually make itself, over a separate fetch() stream.
+ */
+/** Longest wait for the forward buffer to reach bufferSeconds before play() runs anyway */
+const DIRECT_PLAY_BUFFER_GATE_TIMEOUT_MS = 10000;
+/** How often the start-gate re-checks video.buffered while waiting */
+const DIRECT_PLAY_BUFFER_GATE_POLL_MS = 250;
+/** Size of each sequential ranged GET the prefetch loop issues */
+const DIRECT_PLAY_PREFETCH_CHUNK_BYTES = 4 * 1024 * 1024;
+/** Assumed byte rate when the source file size (and therefore a measured rate) is unknown */
+const DIRECT_PLAY_PREFETCH_FALLBACK_BYTES_PER_SEC = 8 * 1024 * 1024;
+/** Hard ceiling on bytes prefetched per playback session, regardless of bufferSeconds */
+const DIRECT_PLAY_PREFETCH_SESSION_CAP_BYTES = 1.5 * 1024 * 1024 * 1024;
+/** Poll interval while the prefetch loop is caught up, waiting for currentTime to advance */
+const DIRECT_PLAY_PREFETCH_IDLE_POLL_MS = 1000;
+
+/**
  * After a native HLS load that got no data at all: how long the server gets
  * to answer a playlist request before the load counts as a network failure.
  */
@@ -398,6 +417,17 @@ export class WebOSPlayer {
         // Seek being watched until it lands (_watchSeek)
         this._seekWatch = null;
 
+        // ---- DirectPlay forward-read-ahead prefetch (see SPEC-buffer.md) ----
+        /** @type {AbortController|null} In-flight prefetch ranged GET, if any */
+        this._prefetchController = null;
+        // Bumped on every abort/restart (seek, pause, stop, new play) to invalidate the running loop
+        this._prefetchGeneration = 0;
+        // Probed once per item (survives seeks, cleared on session end) — null until known/attempted
+        this._prefetchFileSize = null;
+        this._prefetchRangeSupported = null;
+        // Cumulative bytes fetched this playback session, capped at DIRECT_PLAY_PREFETCH_SESSION_CAP_BYTES
+        this._prefetchBytesFetchedSession = 0;
+
         // ====================================================================
         // Audio Suppression State (Resume Playback):
         // Prevents brief audio bursts from timestamp 0:00 when resuming playback.
@@ -579,6 +609,12 @@ export class WebOSPlayer {
         this._seekWatch = null;
         // A Dolby Vision flush ends with its session (its resume timer is cleared below)
         this._recoveryFlush = null;
+        // Stop, trackwechsel-triggered restart, and leaving the player page all end the
+        // session — abort any in-flight prefetch request and drop its per-item probe cache
+        this._abortDirectPlayPrefetch();
+        this._prefetchFileSize = null;
+        this._prefetchRangeSupported = null;
+        this._prefetchBytesFetchedSession = 0;
         const cleanups = this._sessionCleanups;
         this._sessionCleanups = [];
         for (let i = 0; i < cleanups.length; i++) {
@@ -1378,6 +1414,302 @@ export class WebOSPlayer {
      *
      * @private
      */
+
+    // ========================================================================
+    // DirectPlay Forward-Read-Ahead Prefetch (see SPEC-buffer.md)
+    // ========================================================================
+    //
+    // webOS's native DirectPlay buffer window stays at a shallow 2-3s ahead of
+    // currentTime regardless of configuration, so a transient slowdown of the
+    // underlying source (e.g. a cloud-backed rclone VFS mount) turns straight
+    // into a frozen frame. The server/mount answer fast once bytes have been
+    // fetched once (25GB local VFS cache), so warming that cache ahead of
+    // where the native pipeline will actually need the bytes prevents the
+    // stall without the player ever holding two copies of the same data.
+    //
+    // This is done with a second, independent fetch() stream issuing the
+    // exact same ranged GETs the <video> element will eventually make itself:
+    // by the time its own request for those bytes lands, they are already
+    // resident in the mount's cache and arrive at LAN speed.
+    // ========================================================================
+
+    /**
+     * Delays play() until the forward buffer reaches `bufferSeconds` ahead of
+     * the current position, or until the gate times out — whichever comes
+     * first. No-op (resolves immediately) when bufferSeconds is 0.
+     *
+     * While waiting, no 'playing'/'playbackstart' event fires, so the
+     * existing loading overlay (shown since play() was called) stays up.
+     *
+     * @private
+     * @param {HTMLVideoElement} video
+     * @returns {Promise<void>} Resolves once gated, or rejects with
+     *   PlaybackAbortedError if the session ends first (via _sessionPromise)
+     */
+    _waitForDirectPlayBufferGate(video) {
+        const bufferSeconds = Number(PlayerSettings.get('bufferSeconds'));
+        if (!bufferSeconds || bufferSeconds <= 0) {
+            return Promise.resolve();
+        }
+
+        return this._sessionPromise((resolve) => {
+            const startTime = video.currentTime || 0;
+            const targetAhead = (video.duration > 0 && Number.isFinite(video.duration))
+                ? Math.min(bufferSeconds, Math.max(0, video.duration - startTime))
+                : bufferSeconds;
+
+            const bufferedAheadSeconds = () => {
+                try {
+                    const ranges = video.buffered;
+                    for (let i = 0; i < ranges.length; i++) {
+                        if (ranges.start(i) <= startTime && ranges.end(i) > startTime) {
+                            return ranges.end(i) - startTime;
+                        }
+                    }
+                } catch (e) {
+                    log.debug('WebOSPlayer: start-gate — reading video.buffered threw', e);
+                }
+                return 0;
+            };
+
+            let settled = false;
+            const finish = (reason) => {
+                if (settled) return;
+                settled = true;
+                log.info(`WebOSPlayer: DirectPlay start-gate resolved (${reason}) — target ${targetAhead.toFixed(1)}s ahead of ${startTime.toFixed(1)}s`);
+                resolve();
+            };
+
+            if (bufferedAheadSeconds() >= targetAhead) {
+                finish('already buffered');
+                return;
+            }
+
+            log.info(`WebOSPlayer: DirectPlay start-gate waiting for ${targetAhead.toFixed(1)}s forward buffer (bufferSeconds=${bufferSeconds}, timeout=${DIRECT_PLAY_BUFFER_GATE_TIMEOUT_MS}ms)`);
+
+            const poll = () => {
+                if (settled) return;
+                if (bufferedAheadSeconds() >= targetAhead) {
+                    finish('buffer target reached');
+                    return;
+                }
+                this._timer(poll, DIRECT_PLAY_BUFFER_GATE_POLL_MS);
+            };
+            this._timer(poll, DIRECT_PLAY_BUFFER_GATE_POLL_MS);
+
+            this._timer(() => finish('timeout'), DIRECT_PLAY_BUFFER_GATE_TIMEOUT_MS);
+        });
+    }
+
+    /**
+     * HEAD-probes the DirectPlay URL for its total byte size. Used to derive
+     * an accurate byte rate (fileSize / duration) for the prefetch loop.
+     * Never throws — returns null when the size cannot be determined, in
+     * which case the loop falls back to a fixed byte-rate estimate and the
+     * 1.5GB session cap instead of a precise end-of-file check.
+     *
+     * @private
+     * @param {string} url
+     * @returns {Promise<number|null>}
+     */
+    async _probeDirectPlayFileSize(url) {
+        try {
+            const res = await fetch(url, { method: 'HEAD' });
+            const len = Number(res.headers.get('content-length'));
+            return Number.isFinite(len) && len > 0 ? len : null;
+        } catch (e) {
+            log.debug('WebOSPlayer: DirectPlay prefetch HEAD probe failed (ignored):', e);
+            return null;
+        }
+    }
+
+    /**
+     * Resolves `true` after `ms` if the prefetch loop should keep running, or
+     * `false` immediately (without waiting out `ms`) if the session ended or
+     * the prefetch was aborted/superseded while waiting.
+     *
+     * @private
+     * @param {number} ms
+     * @param {number} generation - The loop's _prefetchGeneration snapshot
+     * @returns {Promise<boolean>}
+     */
+    _prefetchDelay(ms, generation) {
+        return new Promise((resolve) => {
+            const session = this._sessionId;
+            const cancel = () => {
+                clearTimeout(timeoutId);
+                resolve(false);
+            };
+            const timeoutId = setTimeout(() => {
+                this._dropSessionCleanup(cancel);
+                resolve(this._isSessionActive(session) && generation === this._prefetchGeneration);
+            }, ms);
+            this._sessionCleanups.push(cancel);
+        });
+    }
+
+    /**
+     * Fetches one forward-read-ahead chunk via a ranged GET and discards the
+     * body — the goal is only to warm the server/mount cache, not to retain
+     * the bytes. Never throws: failures are logged and signal the caller to
+     * stop the loop (403/404/network/abort all end up here).
+     *
+     * @private
+     * @param {string} url
+     * @param {number} start - Inclusive byte offset
+     * @param {number} end - Inclusive byte offset
+     * @param {number} generation - The loop's _prefetchGeneration snapshot
+     * @param {number} session - The loop's _sessionId snapshot
+     * @returns {Promise<boolean>} true on success, false if the loop should stop
+     */
+    async _fetchPrefetchChunk(url, start, end, generation, session) {
+        const controller = new AbortController();
+        this._prefetchController = controller;
+        try {
+            const res = await fetch(url, {
+                headers: { Range: `bytes=${start}-${end}` },
+                signal: controller.signal
+            });
+
+            if (!this._isSessionActive(session) || generation !== this._prefetchGeneration) {
+                return false;
+            }
+
+            if (res.status !== 206) {
+                // No Partial Content → the platform/server/CDN does not honor Range for
+                // this URL. Disable prefetch for the rest of this item (SPEC-buffer.md).
+                log.warn(`WebOSPlayer: DirectPlay prefetch got status ${res.status} (expected 206 Partial Content) — disabling prefetch for this item`);
+                this._prefetchRangeSupported = false;
+                if (res.body && typeof res.body.cancel === 'function') res.body.cancel();
+                return false;
+            }
+            this._prefetchRangeSupported = true;
+
+            // Drain the body: only the server/mount cache needs warming, not these bytes.
+            await res.arrayBuffer();
+            this._prefetchBytesFetchedSession += (end - start + 1);
+            return true;
+        } catch (e) {
+            if (e && e.name === 'AbortError') {
+                log.debug('WebOSPlayer: DirectPlay prefetch chunk aborted');
+            } else {
+                log.warn('WebOSPlayer: DirectPlay prefetch chunk failed (ignored, playback unaffected):', e);
+            }
+            return false;
+        } finally {
+            if (this._prefetchController === controller) this._prefetchController = null;
+        }
+    }
+
+    /**
+     * Core prefetch loop body. Not called directly — see _startDirectPlayPrefetch.
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {Object} options - The play() options (needs options.url)
+     */
+    async _runDirectPlayPrefetch(video, options) {
+        const bufferSeconds = Number(PlayerSettings.get('bufferSeconds'));
+        if (!bufferSeconds || bufferSeconds <= 0) {
+            log.debug('WebOSPlayer: DirectPlay prefetch disabled (bufferSeconds=0)');
+            return;
+        }
+        if (typeof fetch !== 'function' || typeof AbortController !== 'function') {
+            log.debug('WebOSPlayer: DirectPlay prefetch unavailable on this platform (no fetch/AbortController)');
+            return;
+        }
+        if (this._prefetchRangeSupported === false) {
+            log.debug('WebOSPlayer: DirectPlay prefetch previously found unsupported for this item — skipping');
+            return;
+        }
+
+        const url = options.url;
+        const session = this._sessionId;
+
+        // A seek restarts the loop at the new position: abort whatever chunk of the
+        // previous one is still in flight first (exactly one stream, ever).
+        this._abortDirectPlayPrefetch();
+        const generation = ++this._prefetchGeneration;
+
+        if (this._prefetchFileSize === null) {
+            this._prefetchFileSize = await this._probeDirectPlayFileSize(url);
+            if (!this._isSessionActive(session) || generation !== this._prefetchGeneration) return;
+        }
+
+        const byteRate = () => {
+            const duration = video.duration;
+            return (this._prefetchFileSize && duration > 0 && Number.isFinite(duration))
+                ? this._prefetchFileSize / duration
+                : DIRECT_PLAY_PREFETCH_FALLBACK_BYTES_PER_SEC;
+        };
+        const bytesForSeconds = (seconds) => Math.max(0, Math.round(seconds * byteRate()));
+
+        let nextOffset = bytesForSeconds(video.currentTime || 0);
+        log.info(`WebOSPlayer: DirectPlay prefetch (re)started at ${(video.currentTime || 0).toFixed(1)}s — target ${bufferSeconds}s ahead (~${(byteRate() / 1e6).toFixed(1)} MB/s estimate)`);
+
+        while (this._isSessionActive(session) && generation === this._prefetchGeneration) {
+            const current = this._videoElement;
+            if (!current || current.ended) break;
+
+            if (this._prefetchBytesFetchedSession >= DIRECT_PLAY_PREFETCH_SESSION_CAP_BYTES) {
+                log.info('WebOSPlayer: DirectPlay prefetch reached the 1.5GB session cap — stopping');
+                break;
+            }
+            if (this._prefetchFileSize !== null && nextOffset >= this._prefetchFileSize - 1) {
+                log.debug('WebOSPlayer: DirectPlay prefetch reached end of file');
+                break;
+            }
+
+            const targetOffset = bytesForSeconds((current.currentTime || 0) + bufferSeconds);
+            if (nextOffset >= targetOffset) {
+                // Caught up to target — wait for playback to consume some of it, then recheck.
+                const stillRunning = await this._prefetchDelay(DIRECT_PLAY_PREFETCH_IDLE_POLL_MS, generation);
+                if (!stillRunning) break;
+                continue;
+            }
+
+            const rangeEnd = this._prefetchFileSize !== null
+                ? Math.min(nextOffset + DIRECT_PLAY_PREFETCH_CHUNK_BYTES - 1, targetOffset, this._prefetchFileSize - 1)
+                : Math.min(nextOffset + DIRECT_PLAY_PREFETCH_CHUNK_BYTES - 1, targetOffset);
+
+            const ok = await this._fetchPrefetchChunk(url, nextOffset, rangeEnd, generation, session);
+            if (!ok) break;
+            nextOffset = rangeEnd + 1;
+        }
+
+        log.debug(`WebOSPlayer: DirectPlay prefetch loop ended (${(this._prefetchBytesFetchedSession / 1e6).toFixed(1)} MB fetched this session)`);
+    }
+
+    /**
+     * Fire-and-forget entry point: starts (or, called again after a seek,
+     * restarts) the DirectPlay forward prefetch loop. Never throws/rejects
+     * into the caller — prefetch failures must never affect playback
+     * (SPEC-buffer.md requirement).
+     *
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {Object} options - The play() options (needs options.url)
+     */
+    _startDirectPlayPrefetch(video, options) {
+        this._runDirectPlayPrefetch(video, options).catch((e) => {
+            log.warn('WebOSPlayer: DirectPlay prefetch loop failed unexpectedly (ignored):', e);
+        });
+    }
+
+    /**
+     * Aborts the in-flight DirectPlay prefetch range request, if any, and
+     * invalidates the running loop so it exits on its next check. Safe to
+     * call when no prefetch is active. Does not clear the per-item probe
+     * cache (file size / range support) — see _endSession for that.
+     * @private
+     */
+    _abortDirectPlayPrefetch() {
+        this._prefetchGeneration++;
+        if (this._prefetchController) {
+            this._prefetchController.abort();
+            this._prefetchController = null;
+        }
+    }
+
     async _playNativeDirect(video, options) {
         // Clear any stale source
         video.removeAttribute('src');
@@ -1459,6 +1791,11 @@ export class WebOSPlayer {
 
         video.load();
 
+        // Start warming the server/mount cache ahead of currentTime right away, in
+        // parallel with the canplay/buffer-gate wait below (see SPEC-buffer.md).
+        // Fire-and-forget: failures are only logged, never thrown.
+        this._startDirectPlayPrefetch(video, options);
+
         const session = this._sessionId;
         this._loadPending = true;
         try {
@@ -1471,6 +1808,10 @@ export class WebOSPlayer {
         // audioTracks is not reliably populated at loadedmetadata on WebOS native
         // player, so doing it here (before play()) ensures the array is ready.
         this._applyInitialTracks(options);
+
+        // Hold play() back until the forward buffer reaches bufferSeconds, or the
+        // gate times out — see SPEC-buffer.md. No-op when bufferSeconds is 0.
+        await this._waitForDirectPlayBufferGate(video);
 
         return this._sessionPromise((resolve, reject) => {
             this._resumeSeekThenPlay(video, options, resolve, reject);
@@ -1497,16 +1838,17 @@ export class WebOSPlayer {
             // -------------------------------------------------------------------------
             // Browsers/emulators impose strict MSE memory quotas. Retaining 60-120s of
             // forward buffer at high bitrates triggers quota exceeded exceptions and stalls.
-            // Align with jellyfin-web MSE defaults (30s buffer / 60s max).
+            // Derived from the shared bufferSeconds target (see SPEC-buffer.md) unless the
+            // user already has an explicit html5MaxBufferLength/html5MaxMaxBufferLength
+            // override saved, which keeps taking precedence.
             // -------------------------------------------------------------------------
-            const configuredMaxBuffer = PlayerSettings.get('html5MaxBufferLength');
-            const maxBufferLength = configuredMaxBuffer !== undefined && configuredMaxBuffer !== null
-                ? Number(configuredMaxBuffer)
-                : 30;
-            const configuredMaxMaxBuffer = PlayerSettings.get('html5MaxMaxBufferLength');
-            const maxMaxBufferLength = configuredMaxMaxBuffer !== undefined && configuredMaxMaxBuffer !== null
-                ? Number(configuredMaxMaxBuffer)
-                : 60;
+            const bufferSeconds = Number(PlayerSettings.get('bufferSeconds')) || 30;
+            const maxBufferLength = PlayerSettings.isSet('html5MaxBufferLength')
+                ? Number(PlayerSettings.get('html5MaxBufferLength'))
+                : bufferSeconds;
+            const maxMaxBufferLength = PlayerSettings.isSet('html5MaxMaxBufferLength')
+                ? Number(PlayerSettings.get('html5MaxMaxBufferLength'))
+                : Math.max(bufferSeconds * 2, 60);
 
             const hls = new Hls({
                 startPosition:         (options.playerStartPositionTicks || 0) / 10000000,
@@ -4074,6 +4416,8 @@ export class WebOSPlayer {
     _onPause() {
         // The Dolby Vision flush pausing the element: not a pause of the user's
         if (this._recoveryFlush === 'pausing') return;
+        // Stop warming the cache while paused — nothing is being consumed to stay ahead of (SPEC-buffer.md)
+        if (!this._isHls) this._abortDirectPlayPrefetch();
         this.onEvent({ type: 'pause' });
     }
 
@@ -4271,6 +4615,13 @@ export class WebOSPlayer {
     _onSeeked() {
         const video = this._videoElement;
         this._seekWatch = null;
+
+        // A seek invalidates whatever forward range was being pre-warmed — restart the
+        // prefetch loop at the landed position (SPEC-buffer.md). The restart aborts
+        // whatever chunk of the old one is still in flight, so this stays a single stream.
+        if (!this._isHls && video && this._currentPlayOptions) {
+            this._startDirectPlayPrefetch(video, this._currentPlayOptions);
+        }
 
         // ---------------------------------------------------------------------
         // Demuxer Landed Confirmation:

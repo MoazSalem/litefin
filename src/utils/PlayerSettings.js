@@ -576,6 +576,22 @@ const DEFAULTS = {
     html5MaxMaxBufferLength: 120,
     html5SegmentLength: 2,
 
+    // -------------------------------------------------------------------------
+    // TARGET FORWARD BUFFER (DirectPlay + HLS)
+    // -------------------------------------------------------------------------
+    // Target forward buffer in seconds, shared by both playback paths:
+    //  - HLS (_playWithHlsJs): derives maxBufferLength/maxMaxBufferLength from
+    //    this value unless html5MaxBufferLength/html5MaxMaxBufferLength were
+    //    explicitly configured (those keep taking precedence).
+    //  - DirectPlay (WebOSPlayer._playNativeDirect): gates playback start until
+    //    this much of the stream is buffered ahead (or a timeout elapses), then
+    //    keeps warming the server-side cache this far ahead of currentTime via
+    //    a sequential Range-request prefetch loop.
+    // 0 disables the DirectPlay start-gate and prefetch entirely (today's
+    // behavior). See SPEC-buffer.md.
+    // -------------------------------------------------------------------------
+    bufferSeconds: 30,
+
     // =========================================================================
     // PLAYBACK SETTINGS
     // =========================================================================
@@ -1081,6 +1097,18 @@ export const PlayerSettings = {
 
         // Notify subscribers that a setting has changed
         eventBus.emit(`pref:${key}`, normalizedValue);
+    },
+
+    /**
+     * Check whether a setting has an explicit stored value, as opposed to
+     * currently resolving to its baked-in default. Used where a newer
+     * derived default (e.g. bufferSeconds feeding the HLS buffer config)
+     * must defer to an already-configured explicit override.
+     * @param {string} key - Setting key from DEFAULTS
+     * @returns {boolean}
+     */
+    isSet(key) {
+        return storage.getItem(STORAGE_PREFIX + key) !== null;
     },
 
     /**

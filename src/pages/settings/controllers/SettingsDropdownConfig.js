@@ -172,6 +172,9 @@ export function getSettingsDropdownMap() {
         'webos-stall-recovery-select': { type: 'player', key: 'webosStallRecovery' },
         'webos-segment-length-select': { type: 'player', key: 'webosSegmentLength' },
 
+        // Target forward buffer (DirectPlay prefetch + HLS derivation) — see SPEC-buffer.md
+        'buffer-seconds-select': { type: 'player', key: 'bufferSeconds' },
+
         // Tizen & HTML5 Streaming Buffer Thresholds
         'tizen-initial-buffer-select': { type: 'player', key: 'tizenInitialBuffer' },
         'tizen-resume-buffer-select': { type: 'player', key: 'tizenResumeBuffer' },
