@@ -326,14 +326,15 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
             hash: '#/home'
         };
 
-        // Tizen wgt-package virtual root: dir.path is the absolute Linux folder
-        // AVPlay needs; toURI() yields the file:// form.
+        // Tizen wgt-package virtual root: toURI() yields the working file:// URI
+        // prioritized first; dir.path can be a virtual "wgt-package" handle on real TVs
+        // or an absolute Linux path on legacy builds.
         globalThis.tizen = {
             filesystem: {
                 resolve: (location, onSuccess, onError, mode) => {
                     fsResolveCalls.push({ location, mode });
                     onSuccess({
-                        path: '/opt/usr/apps/litefin/res/wgt',
+                        path: 'wgt-package',
                         toURI: () => 'file:///opt/usr/apps/litefin/res/wgt'
                     });
                 },
@@ -386,7 +387,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(audioConstructed, 0, 'Non-Tizen target must not touch AudioContext');
         assert.equal(mockBody._children.length, 0, 'Non-Tizen target must not mount warmup nodes');
 
-        // 2. Tizen path: absolute wgt-package path -> 1920x1080 prepareAsync -> play -> 200ms -> stop+close
+        // 2. Tizen path: file:// toURI() candidate first -> 1920x1080 prepareAsync -> play -> 200ms -> stop+close
         const tvAdapter = new TizenAdapter();
         tvAdapter._isTizen = true;
         assert.equal(tvAdapter.warmupCompositor(), true);
@@ -394,7 +395,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(audioConstructed, 1);
         assert.equal(audioResumed, 1);
         assert.deepEqual(fsResolveCalls, [{ location: 'wgt-package', mode: 'r' }]);
-        assert.deepEqual(openedUrls, ['/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
+        assert.deepEqual(openedUrls, ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
         assert.deepEqual(displayRects, [[0, 0, 1920, 1080]]);
         assert.equal(pendingPrepareCbs.length, 1);
 
@@ -417,12 +418,12 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(mockDocEl.classList.contains('player-active'), true, 'html must get player-active during warmup');
         assert.equal(mockBody.classList.contains('player-active'), true, 'body must get player-active during warmup');
 
-        // Invalid raw path: firmware rejects it, adapter must retry with the file:// URI form
+        // Rejected file:// URI: adapter must fall back to the stripped raw Linux path before virtual dir.path
         pendingPrepareCbs.shift().onError(new Error('PLAYER_ERROR_INVALID_URI'));
         assert.deepEqual(
             openedUrls,
-            ['/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4', 'file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4'],
-            'Adapter must fall back from the raw Linux path to the file:// URI on prepare errors'
+            ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4', '/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4'],
+            'Adapter must try the file:// URI from dir.toURI() first and fall back to the raw Linux path on prepare errors'
         );
         assert.equal(pendingPrepareCbs.length, 1);
 

@@ -325,12 +325,14 @@ class TizenAdapter {
             const str = String(value);
             if (candidates.indexOf(str) === -1) candidates.push(str);
         };
-        // Joins assets/warmup.mp4 onto a directory path/URI and emits both the
-        // raw Linux form (AVPlay's preferred) and the file:// form.
+        // Joins assets/warmup.mp4 onto a directory URI/path and emits the base
+        // candidate first, followed by its file://-stripped raw Linux path.
         const addAssetPath = (base) => {
             if (!base) return;
             let dir = String(base);
             if (dir.charAt(dir.length - 1) !== '/') dir += '/';
+            // Keep the supplied URI/path ahead of the stripped variant so file://
+            // URIs from dir.toURI() stay at the front of the probe list.
             addCandidate(dir + 'assets/warmup.mp4');
             const raw = dir.replace(/^file:\/\//, '');
             if (raw !== dir) addCandidate(raw + 'assets/warmup.mp4');
@@ -361,14 +363,9 @@ class TizenAdapter {
         budgetTimer = setTimeout(() => finish('resolve timeout'), WARMUP_RESOLVE_TIMEOUT_MS);
 
         const onDir = (dir) => {
-            try {
-                if (dir && dir.path) {
-                    // dir.path is the absolute Linux directory (/opt/usr/.../res/wgt)
-                    addAssetPath(dir.path);
-                }
-            } catch (_) {
-                // Ignore malformed directory handles
-            }
+            // Try dir.toURI() first: modern Tizen returns the real file:///.../res/wgt
+            // URI that AVPlay opens directly, whereas dir.path can be the virtual
+            // "wgt-package" handle that triggers PLAYER_ERROR_INVALID_URI (~80ms loss).
             try {
                 if (dir && typeof dir.toURI === 'function') {
                     const dirUri = dir.toURI();
@@ -377,6 +374,8 @@ class TizenAdapter {
             } catch (_) {
                 // toURI() is missing on a few legacy Tizen 2.3 builds
             }
+            // Secondary file:// resolution via filesystem.toURI() when dir.toURI()
+            // is absent or returns empty.
             try {
                 if (typeof fsApi.toURI === 'function') {
                     const directUri = fsApi.toURI('wgt-package/assets/warmup.mp4');
@@ -386,7 +385,16 @@ class TizenAdapter {
                     }
                 }
             } catch (_) {
-                // Ignore toURI() failures; dir.path candidates already cover it
+                // Ignore toURI() failures; dir.path fallback below covers legacy builds
+            }
+            // Keep dir.path last: useful on legacy Tizen 2.3 where toURI() is missing
+            // and dir.path already holds an absolute Linux path.
+            try {
+                if (dir && dir.path) {
+                    addAssetPath(dir.path);
+                }
+            } catch (_) {
+                // Ignore malformed directory handles
             }
             finish('wgt-package resolved');
         };
@@ -845,7 +853,7 @@ class TizenAdapter {
 
     /**
      * Releases a half-open native session and advances to the next URL
-     * candidate (raw Linux path -> file:// URI -> WebView URL).
+     * candidate (file:// URI -> raw Linux path -> WebView URL).
      *
      * @param {string} reason - Human-readable rejection reason for the log
      * @param {number} warmupGen - Generation token of the owning warmup cycle
