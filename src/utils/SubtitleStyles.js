@@ -60,15 +60,55 @@ function _getResponsiveHeight(fraction) {
 
 /**
  * ============================================================================
+ * WebKit Version Helper for HTML paint-order
+ * ============================================================================
+ * WebKit parsed paint-order for SVG prior to Safari 17.4 while ignoring it
+ * on HTML text strokes, producing the same CSS.supports() false positive as
+ * Chromium < 123. Inspects the UA only when chromeVersion === 999.
+ *
+ * @returns {boolean} True when running on WebKit/Safari older than 17.4.
+ */
+function _isPre174WebKit() {
+    if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+
+    const ua = navigator.userAgent;
+
+    // Desktop and mobile Safari expose the engine version via Version/<major>.<minor>.
+    const isSafari = /Safari\//i.test(ua) && !/(?:Chrome|Chromium|Edg|OPR|Firefox)\//i.test(ua);
+    if (isSafari) {
+        const versionMatch = ua.match(/Version\/(\d+)(?:\.(\d+))?/i);
+        if (versionMatch) {
+            const major = parseInt(versionMatch[1], 10);
+            const minor = parseInt(versionMatch[2] || '0', 10);
+            return major < 17 || (major === 17 && minor < 4);
+        }
+    }
+
+    // Third-party iOS browsers wrap the system WebKit engine and report the OS version.
+    if (/(?:CriOS|FxiOS|EdgiOS)\//i.test(ua)) {
+        const osMatch = ua.match(/OS (\d+)[._](\d+)/i);
+        if (osMatch) {
+            const major = parseInt(osMatch[1], 10);
+            const minor = parseInt(osMatch[2] || '0', 10);
+            return major < 17 || (major === 17 && minor < 4);
+        }
+    }
+
+    return false;
+}
+
+/**
+ * ============================================================================
  * Stroked Text Border Capability
  * ============================================================================
  * Determines whether -webkit-text-stroke + paint-order can outline HTML text
  * without thinning the glyphs.
  *
- * Chromium 35–122 parse paint-order but ignore it for stroked HTML text
- * (crbug.com/41372165); real support starts in Chromium 123. On those engines
- * the stroke paints over the fill and eats into the glyphs, so callers must
- * fall back to an outer text-shadow ring.
+ * Chromium 35–122 (crbug.com/41372165) and WebKit/Safari < 17.4 parse
+ * paint-order for SVG but ignore it for stroked HTML text; real HTML text
+ * support starts in Chromium 123 and Safari 17.4. On older engines the stroke
+ * paints over the fill and eats into the glyphs, so callers must fall back to
+ * an outer text-shadow ring.
  *
  * Evaluated on demand (rather than memoized at module scope) so dynamic test
  * environments and runtime platform refreshes are always respected.
@@ -77,17 +117,19 @@ function _getResponsiveHeight(fraction) {
  */
 function _supportsStrokedTextBorder() {
     try {
-        // 999 = non-Chromium/unknown engine; CSS.supports is authoritative there.
+        // 999 = non-Chromium/unknown engine; CSS.supports is authoritative there
+        // once pre-17.4 WebKit engines are excluded.
         const chromeVersion = typeof platformInfo !== 'undefined' ? platformInfo.chromeVersion : 999;
 
-        // Require native CSS support for both properties and exclude Chromium < 123,
-        // where paint-order parses cleanly but has no effect on HTML text strokes.
+        // Require native CSS support for both properties and exclude Chromium < 123
+        // and WebKit < 17.4, where paint-order parses cleanly but has no effect on
+        // HTML text strokes.
         return (
             typeof CSS !== 'undefined' &&
             typeof CSS.supports === 'function' &&
             CSS.supports('-webkit-text-stroke-width', '1px') &&
             CSS.supports('paint-order', 'stroke fill') &&
-            (chromeVersion === 999 || chromeVersion >= 123)
+            (chromeVersion === 999 ? !_isPre174WebKit() : chromeVersion >= 123)
         );
     } catch (_) {
         // Fail closed to the shadow fallback if CSS/platform inspection throws.
