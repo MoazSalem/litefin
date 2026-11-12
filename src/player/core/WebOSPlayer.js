@@ -28,6 +28,7 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { getDeviceCapabilities } from '../../api/DeviceProfile.js';
+import { mapDefaultFirstAudioIndex } from './AudioTrackMap.js';
 
 const log = logger.create('WebOSPlayer');
 
@@ -1975,13 +1976,22 @@ export class WebOSPlayer {
                 const defaultStream = options.mediaSource?.MediaStreams?.find(
                     s => s.Type === 'Audio' && s.Index === Number(defaultIndex)
                 );
+                const defaultCodec = (defaultStream?.Codec || '').toLowerCase();
+                const isTrueHdDefault = defaultCodec === 'truehd' || defaultCodec === 'mlp';
                 const isDefaultPlayable = isWebOSAudioTrackPlayable(defaultStream);
 
                 // If the requested track is already the container's default track AND
                 // that default track is confirmed natively decodable, WebOS hardware
                 // is already demuxing and playing it natively.
-                // Skipping track switch prevents spurious audiotrackswitchfailed events.
-                if (isDefaultTrack && isDefaultPlayable) {
+                // NOTE: On webOS with TrueHD forced on, the hardware audio pipeline
+                // stays silent on initial load unless kicked with an explicit track switch.
+                // When nativeTracks is populated, bypass this early return so the track switch
+                // below executes and kicks the hardware decoder. When nativeTracks is empty,
+                // return early to prevent false startup failures.
+                const shouldSkipForDefault = isDefaultTrack && isDefaultPlayable &&
+                    (!isTrueHdDefault || !nativeTracks || nativeTracks.length === 0);
+
+                if (shouldSkipForDefault) {
                     log.info('WebOSPlayer: _applyInitialTracks — requested track', requestedIndex,
                         'is container default and natively playable. Already playing in hardware, skipping track switch.');
                     return;
@@ -1989,6 +1999,13 @@ export class WebOSPlayer {
 
                 // If audioTracks collection is absent or empty, we cannot switch tracks in the browser
                 if (!nativeTracks || nativeTracks.length === 0) {
+                    // Safety check: if the requested track is the container default and natively playable,
+                    // do NOT schedule a remux failure restart just because audioTracks is unpopulated.
+                    if (isDefaultTrack && isDefaultPlayable) {
+                        log.info('WebOSPlayer: _applyInitialTracks — requested track matches playable container default with empty audioTracks. Continuing direct play.');
+                        return;
+                    }
+
                     log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty, requested index', requestedIndex,
                         '≠ container default', defaultIndex, '. Scheduling deferred remux restart.');
                     // Reported by play() once it has resolved: JellyfinPlayer restarts the
@@ -3045,6 +3062,17 @@ export class WebOSPlayer {
         }
 
         log.info('  - targetStream Index:', targetStream.Index, 'Language:', targetStream.Language, 'Codec:', targetStream.Codec);
+
+        // ====================================================================
+        // Default-first mapping: when the TV's list is exactly one shorter and starts
+        // with TrueHD, the TV drops TrueHD and moves its default track to the front.
+        // Other cases fall through to the strategies below.
+        // ====================================================================
+        const defaultFirstIndex = mapDefaultFirstAudioIndex(jellyfinAudioStreams, nativeTracks.length, targetStream.Index);
+        if (defaultFirstIndex !== null) {
+            log.info('  - Default-first mapping: stream', targetStream.Index, '→ native index', defaultFirstIndex);
+            return defaultFirstIndex;
+        }
 
         // ====================================================================
         // Strategy 1: Codec-Aware Playable Stream Mapping (PRIMARY)

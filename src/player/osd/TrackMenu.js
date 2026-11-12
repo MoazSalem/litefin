@@ -1,6 +1,8 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
 import { languageManager } from '../../utils/LanguageManager.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 /**
  * TrackMenu
@@ -200,7 +202,23 @@ export default class TrackMenu extends BaseMenu {
                     ? !player.isAudioTrackNativelyPlayable(track)
                     : false;
 
-                if (isUnsupported) {
+                // webOS: a forced TrueHD or DTS track is passed through to the soundbar/AVR directly,
+                // so it operates in direct play rather than requiring a transcode.
+                // Clear the unsupported state so button styling remains standard and attach PASSTHROUGH badge.
+                const codec = (track.Codec || '').toLowerCase();
+                const isTrueHd = codec === 'truehd' || codec === 'mlp';
+                const isDts = codec.includes('dts') || codec === 'dca';
+                const onWebOS = Boolean(platformInfo?.isWebOS);
+                const isWebOSPassthrough = onWebOS && (
+                    (isTrueHd && PlayerSettings.get('enableTrueHd') === 'enable') ||
+                    (isDts && PlayerSettings.get('enableDts') === 'enable')
+                );
+
+                if (isWebOSPassthrough) {
+                    isUnsupported = false;
+                    const badgeText = (i18n.t('Passthrough') || 'PASSTHROUGH').toUpperCase();
+                    metadataHtml += `<span class="track-badge">${badgeText}</span>`;
+                } else if (isUnsupported) {
                     metadataHtml += `<span class="track-badge track-badge-unsupported">${i18n.t('Transcode') || 'TRANSCODE'}</span>`;
                 }
             }

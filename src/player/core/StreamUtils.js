@@ -141,9 +141,32 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // 3. Maximum Audio Channels Resolution & Constraint Checking
     // -------------------------------------------------------------------------
     const userAllowedChannels = PlayerSettings.get('allowedAudioChannels');
+
+    // Resolve whether the webOS player backend is currently active, checking both
+    // explicit backend parameter or runtime platform environment detection.
+    const isWebOSActive =
+        backendType === 'webos' ||
+        (!backendType && typeof platformInfo !== 'undefined' && Boolean(platformInfo.isWebOS));
+
+    // webOS with TrueHD or DTS forced on: when the user explicitly forces passthrough,
+    // the TV forwards uncompressed 7.1 bitstreams over HDMI eARC to the sound system.
+    // The default 6-channel ceiling from device capabilities must not reject 8-channel
+    // TrueHD or DTS-HD MA tracks and falsely flag them for server transcoding.
+    const isForcedTrueHdWebOS =
+        isWebOSActive &&
+        (codec === 'truehd' || codec === 'mlp') &&
+        PlayerSettings.get('enableTrueHd') === 'enable';
+
+    const isForcedDtsWebOS =
+        isWebOSActive &&
+        (codec.includes('dts') || codec === 'dca') &&
+        PlayerSettings.get('enableDts') === 'enable';
+
+    const passthroughForcedOnWebOS = isForcedTrueHdWebOS || isForcedDtsWebOS;
+
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : (isAdvancedBackend ? 8 : caps?.maxAudioChannels);
+        : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
 
     if (effectiveMaxChannels && typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
         return false;
@@ -831,7 +854,14 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     }
 
     const physicalDefaultStream = audioStreams.find((s) => s.IsDefault) || audioStreams[0];
-    if (physicalDefaultStream && !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
+    // With Force DTS on webOS, an unplayable default track (e.g. TrueHD) must not force a remux
+    // of a DTS track: the DTS bitstream is selected natively once the default is in place.
+    const targetCodec = (targetStream.Codec || '').toLowerCase();
+    const isForcedDtsTarget = backendType === 'webos' &&
+        (targetCodec.includes('dts') || targetCodec === 'dca') &&
+        PlayerSettings.get('enableDts') === 'enable';
+    if (physicalDefaultStream && !isForcedDtsTarget &&
+        !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
         return true;
     }
 
@@ -852,12 +882,26 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     // On WebOS and HTML5, the browser cannot switch to non-default tracks of these
     // formats in DirectPlay mode without server remuxing isolating the audio stream.
     const codec = (targetStream.Codec || '').toLowerCase();
+
+    // webOS with DTS or TrueHD forced on: the user has confirmed that the TV and
+    // connected external sound system support direct bitstream passthrough over eARC.
+    // In DirectPlay, native audioTracks switching selects the bitstream directly.
+    // Server-side remuxing packages audio into HLS where bitstreams become silent.
+    // On Auto or Disabled, remuxing remains required as before.
+    const isWebOSForcedPassthrough =
+        backendType === 'webos' && (
+            ((codec.includes('dts') || codec === 'dca') && PlayerSettings.get('enableDts') === 'enable') ||
+            ((codec === 'truehd' || codec === 'mlp') && PlayerSettings.get('enableTrueHd') === 'enable')
+        );
+
     const isPassthroughOrDropped =
-        codec.includes('dts') ||
-        codec === 'dca' ||
-        codec === 'truehd' ||
-        codec === 'flac' ||
-        codec === 'alac';
+        !isWebOSForcedPassthrough && (
+            codec.includes('dts') ||
+            codec === 'dca' ||
+            codec === 'truehd' ||
+            codec === 'flac' ||
+            codec === 'alac'
+        );
 
     if (isPassthroughOrDropped) {
         return true;
