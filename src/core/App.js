@@ -175,42 +175,94 @@ function loadPlayerModule() {
 // prewarmed right after boot: fetching it while the home page is still
 // rendering steals CPU and memory from the first paint on TV hardware.
 // Instead it loads when there is a real playback signal:
-//   1. 600ms after the user enters a /details route (strongest predictor of
-//      playback on media-first apps like this one). The grace delay lets
-//      DetailsPage finish its own metadata fetch + backdrop/button render
-//      first - on a 1.0GHz sticker engine, parsing 1.8MB of player JS in the
-//      same tick as the route render shows up as a visible paint stall - and
-//      then loads while the user is reading title/synopsis instead, and
+//   1. After entering a /details route (strongest predictor of playback on
+//      media-first apps like this one): wait for DetailsPage to finish mounting
+//      its rows (details:ready, with a safety fallback) and then gate behind
+//      idleGate.runWhenIdle(..., 1500, 6000) so compiling the 1.4MB player
+//      bundle never collides with Similar/Collections/Seerr DOM construction
+//      or active D-pad scrolling.
 //   2. After a long inactivity window otherwise - schedulePlayerPrewarm() is
 //      re-armed by every remote/keyboard interaction (focus moves, OK,
 //      back presses, route changes), so background chunk reads never compete
 //      with active navigation.
 // ============================================================================
 const PLAYER_PREWARM_IDLE_MS = 12000;
-const DETAILS_PREWARM_DELAY_MS = 600;
+const DETAILS_PREWARM_IDLE_MS = 1500;
+const DETAILS_PREWARM_MAX_WAIT_MS = 6000;
+const DETAILS_READY_FALLBACK_MS = 5000;
 // Primary views (Details, Library) are non-urgent: wait for a genuinely quiet
 // UI after splash dismissal. The router still loads them on demand if the user
 // navigates first, so an unbounded wait is safe.
 const PRIMARY_CHUNK_PREWARM_IDLE_MS = 4000;
 let playerPrewarmTimer = null;
-let detailsPrewarmTimer = null;
+let detailsPrewarmTaskId = null;
+let detailsReadyFallbackTimer = null;
 
 /**
- * Arms the delayed details-entry prewarm window. Debounced per route entry;
- * if playback starts within the window, prewarmPlayerChunk() runs the
- * loading itself (a single import() promise serves both paths).
+ * Cancels any pending details-entry player prewarm timers or idle-gate tasks.
+ */
+function cancelDetailsPrewarm() {
+    if (detailsReadyFallbackTimer) {
+        clearTimeout(detailsReadyFallbackTimer);
+        detailsReadyFallbackTimer = null;
+    }
+    if (detailsPrewarmTaskId) {
+        idleGate.cancel(detailsPrewarmTaskId);
+        detailsPrewarmTaskId = null;
+    }
+}
+
+/**
+ * Arms the idle-gated player chunk prewarm once DetailsPage rows have settled.
+ * Anchors idle tracking so slow row network fetches never consume the quiet window.
+ */
+function armDetailsIdlePrewarm() {
+    if (playerPrewarmPromise) {
+        cancelDetailsPrewarm();
+        return;
+    }
+
+    // Ignore stale details:ready notifications if the user already backed out
+    const currentPath = router.getCurrentPath ? router.getCurrentPath() : '';
+    if (!currentPath.startsWith('/details')) {
+        cancelDetailsPrewarm();
+        return;
+    }
+
+    cancelDetailsPrewarm();
+
+    // Anchor activity to row completion so the full 1500ms quiet window applies
+    // after DOM construction rather than ticking down during async fetches.
+    idleGate.markActivity();
+    detailsPrewarmTaskId = idleGate.runWhenIdle(
+        () => {
+            detailsPrewarmTaskId = null;
+            const activePath = router.getCurrentPath ? router.getCurrentPath() : '';
+            if (!activePath.startsWith('/details')) {
+                return;
+            }
+            prewarmPlayerChunk('details entry');
+        },
+        DETAILS_PREWARM_IDLE_MS,
+        DETAILS_PREWARM_MAX_WAIT_MS
+    );
+}
+
+/**
+ * Arms the deferred details-entry prewarm pipeline. Waits for DetailsPage to
+ * emit 'details:ready' (with a bounded safety fallback) before scheduling the
+ * idle-gated chunk import so player compilation never overlaps row rendering.
  */
 function scheduleDetailsPrewarm() {
     if (playerPrewarmPromise) {
         return;
     }
-    if (detailsPrewarmTimer) {
-        clearTimeout(detailsPrewarmTimer);
-    }
-    detailsPrewarmTimer = setTimeout(() => {
-        detailsPrewarmTimer = null;
-        prewarmPlayerChunk('details entry');
-    }, DETAILS_PREWARM_DELAY_MS);
+    cancelDetailsPrewarm();
+    // Safety fallback in case a details route stalls or fails before emitting details:ready
+    detailsReadyFallbackTimer = setTimeout(() => {
+        detailsReadyFallbackTimer = null;
+        armDetailsIdlePrewarm();
+    }, DETAILS_READY_FALLBACK_MS);
 }
 
 /**
@@ -245,10 +297,7 @@ function prewarmPlayerChunk(reason) {
         clearTimeout(playerPrewarmTimer);
         playerPrewarmTimer = null;
     }
-    if (detailsPrewarmTimer) {
-        clearTimeout(detailsPrewarmTimer);
-        detailsPrewarmTimer = null;
-    }
+    cancelDetailsPrewarm();
     log.info(`Prewarming PlayerPage chunk in background (${reason})...`);
     loadPlayerModule()
         .then(() => log.info('PlayerPage chunk prewarmed in background'))
@@ -1505,14 +1554,19 @@ class App {
             }
 
             // One-time activity wiring for the lazy player prewarm. Every
-            // interaction resets the idle timer; a details entry is
-            // playback-likely enough to fetch the chunk, after a 600ms grace
-            // period that lets DetailsPage render and paint first.
+            // interaction resets the idle timer; a details entry waits for
+            // DetailsPage row mounting (details:ready) and then runs behind
+            // idleGate so 1.4MB player compilation never stalls active rendering.
+            eventBus.on('details:ready', () => {
+                armDetailsIdlePrewarm();
+            });
             eventBus.on('router:navigate', (event) => {
                 if (event && typeof event.path === 'string' && event.path.startsWith('/details')) {
                     scheduleDetailsPrewarm();
                     return;
                 }
+                // Cancel any pending details-entry prewarm when navigating away
+                cancelDetailsPrewarm();
                 schedulePlayerPrewarm();
             });
             eventBus.on('focus:changed', () => schedulePlayerPrewarm());

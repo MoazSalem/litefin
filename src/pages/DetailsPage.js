@@ -524,6 +524,16 @@ class DetailsPage extends Page {
             // to restore scroll/focus natively
             this.markReady();
 
+            // Notify App once the post-render frame settles so deferred player
+            // chunk prewarming waits until all secondary rows have mounted.
+            if (this._isMounted) {
+                requestAnimationFrame(() => {
+                    if (this._isMounted) {
+                        eventBus.emit('details:ready', { itemId: this._itemId });
+                    }
+                });
+            }
+
             // ----------------------------------------------------------------
             // Auto-chain check: did we just return from a local trailer that
             // was launched as part of an auto-chain sequence?
