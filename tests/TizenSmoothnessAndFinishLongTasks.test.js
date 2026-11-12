@@ -253,14 +253,27 @@ test('Splash & spinners: index HTML, base CSS, and App.js tear down infinite spl
 // 2. Part 2 — TizenAdapter Native AVPlay Hardware Warmup & Abort Behavior
 // ============================================================================
 
-test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play/close cycle, URL resolution, abort & TizenAVPlayer coordination', async () => {
+test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play/close cycle, wgt-package path resolution, abort & TizenAVPlayer coordination', async () => {
     rafQueue.length = 0;
     mockBody._children.length = 0;
 
-    // Verify the packaged 1-frame MP4 asset exists, is non-empty, and is copied by webpack
+    /*
+     * Verify the packaged warmup clip is a valid, short, standard MP4 with both
+     * H.264 video and AAC audio. A 1-frame / 40ms video-only clip can leave the
+     * native decoder in READY without ever presenting a frame.
+     */
     const warmupAssetPath = resolve(__dirname, '..', 'src', 'assets', 'warmup.mp4');
+    const warmupBuffer = readFileSync(warmupAssetPath);
     const warmupStat = statSync(warmupAssetPath);
+    const warmupAscii = warmupBuffer.toString('latin1');
     assert.ok(warmupStat.size > 200 && warmupStat.size < 16384, 'src/assets/warmup.mp4 must be a compact valid MP4');
+    assert.ok(warmupAscii.includes('ftyp'), 'warmup.mp4 must be a valid ISO-BMFF MP4 container');
+    assert.ok(warmupAscii.includes('avc1'), 'warmup.mp4 must contain an H.264 (avc1) video track');
+    assert.ok(warmupAscii.includes('mp4a'), 'warmup.mp4 must contain an AAC (mp4a) audio track');
+    assert.ok(
+        warmupAscii.includes('moov') && warmupAscii.includes('mdat'),
+        'warmup.mp4 must contain moov + mdat boxes for AVPlay demuxing'
+    );
     assert.match(
         readSrc('webpack.config.cjs'),
         /from:\s*'src\/assets'\s*,\s*to:\s*'assets'/,
@@ -301,6 +314,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         const openedUrls = [];
         const displayRects = [];
         const pendingPrepareCbs = [];
+        const fsResolveCalls = [];
         let playCalls = 0;
         let listenerResets = 0;
         let stopCalls = 0;
@@ -310,6 +324,21 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
             protocol: 'file:',
             href: 'file:///opt/usr/apps/litefin/res/wgt/index.html#/home',
             hash: '#/home'
+        };
+
+        // Tizen wgt-package virtual root: dir.path is the absolute Linux folder
+        // AVPlay needs; toURI() yields the file:// form.
+        globalThis.tizen = {
+            filesystem: {
+                resolve: (location, onSuccess, onError, mode) => {
+                    fsResolveCalls.push({ location, mode });
+                    onSuccess({
+                        path: '/opt/usr/apps/litefin/res/wgt',
+                        toURI: () => 'file:///opt/usr/apps/litefin/res/wgt'
+                    });
+                },
+                toURI: (path) => 'file://' + String(path).replace('wgt-package', '/opt/usr/apps/litefin/res/wgt')
+            }
         };
 
         globalThis.window.webapis = {
@@ -357,45 +386,122 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(audioConstructed, 0, 'Non-Tizen target must not touch AudioContext');
         assert.equal(mockBody._children.length, 0, 'Non-Tizen target must not mount warmup nodes');
 
-        // 2. Tizen path: real open(warmup.mp4) -> setDisplayRect(0,0,1,1) -> prepareAsync -> play -> 50ms -> stop+close
+        // 2. Tizen path: absolute wgt-package path -> 1920x1080 prepareAsync -> play -> 200ms -> stop+close
         const tvAdapter = new TizenAdapter();
         tvAdapter._isTizen = true;
         assert.equal(tvAdapter.warmupCompositor(), true);
         assert.equal(tvAdapter.isWarmupActive(), true);
         assert.equal(audioConstructed, 1);
         assert.equal(audioResumed, 1);
-        assert.deepEqual(openedUrls, ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
-        assert.deepEqual(displayRects, [[0, 0, 1, 1]]);
+        assert.deepEqual(fsResolveCalls, [{ location: 'wgt-package', mode: 'r' }]);
+        assert.deepEqual(openedUrls, ['/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
+        assert.deepEqual(displayRects, [[0, 0, 1920, 1080]]);
         assert.equal(pendingPrepareCbs.length, 1);
 
         const probe = mockBody._children.find((el) => el.id === 'litefin-avplay-warmup');
-        assert.ok(probe && probe.type === 'application/avplayer', 'Persistent AVPlayer <object> must mount');
+        assert.ok(probe && probe.type === 'application/avplayer', 'AVPlayer <object> must mount');
+        assert.equal(probe.style.width, '1920px', 'AVPlayer <object> must be sized 1920x1080');
+        assert.equal(probe.style.height, '1080px');
         assert.equal(probe.style.pointerEvents, 'none');
-        assert.equal(probe.style.opacity, '0');
+        assert.equal(probe.style.opacity, '1');
 
-        // Fire prepareAsync success and wait for the 50ms hardware frame pass
+        const warmupVideo = mockBody._children.find((el) => el.id === 'litefin-html5-warmup');
+        assert.ok(warmupVideo, 'Full-screen HTML5 <video> warmup layer must mount behind the splash');
+        assert.ok(
+            String(warmupVideo.src).endsWith('assets/warmup.mp4'),
+            'HTML5 <video> must use the WebView-relative assets/warmup.mp4 URL'
+        );
+        assert.equal(warmupVideo.style.width, '1920px');
+        assert.equal(warmupVideo.style.height, '1080px');
+        assert.equal(warmupVideo.muted, true);
+        assert.equal(mockDocEl.classList.contains('player-active'), true, 'html must get player-active during warmup');
+        assert.equal(mockBody.classList.contains('player-active'), true, 'body must get player-active during warmup');
+
+        // Invalid raw path: firmware rejects it, adapter must retry with the file:// URI form
+        pendingPrepareCbs.shift().onError(new Error('PLAYER_ERROR_INVALID_URI'));
+        assert.deepEqual(
+            openedUrls,
+            ['/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4', 'file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4'],
+            'Adapter must fall back from the raw Linux path to the file:// URI on prepare errors'
+        );
+        assert.equal(pendingPrepareCbs.length, 1);
+
+        // Second candidate succeeds: prepareAsync -> play -> hold -> stop+close
         pendingPrepareCbs.shift().onPrepared();
         assert.equal(playCalls, 1, 'onPrepared must start avplay.play()');
-        await new Promise((resolve) => setTimeout(resolve, 75));
+        await new Promise((resolve) => setTimeout(resolve, 240));
         assert.equal(listenerResets, 1);
-        assert.equal(stopCalls, 1);
-        assert.equal(closeCalls, 1);
+        assert.equal(stopCalls, 2, 'One stop for the rejected candidate, one on final teardown');
+        assert.equal(closeCalls, 2, 'One close for the rejected candidate, one on final teardown');
         assert.equal(tvAdapter.isWarmupActive(), false);
-        assert.deepEqual(callOrder, ['open', 'setDisplayRect', 'prepareAsync', 'play', 'setListener', 'stop', 'close']);
-        assert.equal(mockBody._children.includes(probe), true, 'Persistent AVPlayer <object> must remain mounted');
+        assert.deepEqual(callOrder, [
+            'open',
+            'setDisplayRect',
+            'prepareAsync',
+            'stop',
+            'close',
+            'open',
+            'setDisplayRect',
+            'prepareAsync',
+            'play',
+            'setListener',
+            'stop',
+            'close'
+        ]);
+        assert.equal(
+            mockBody._children.includes(probe),
+            false,
+            'Warmup AVPlayer <object> must be removed entirely on teardown (TizenAVPlayer owns the playback host)'
+        );
+        assert.equal(
+            mockBody._children.includes(warmupVideo),
+            false,
+            'Full-screen HTML5 <video> warmup layer must be removed'
+        );
+        assert.equal(mockDocEl.classList.contains('player-active'), false, 'player-active must be cleared on html');
+        assert.equal(mockBody.classList.contains('player-active'), false, 'player-active must be cleared on body');
         assert.equal(audioClosed, 1);
 
         // 3. Idempotency guard: second call must not reopen AVPlay or duplicate DOM probe
         assert.equal(tvAdapter.warmupCompositor(), true);
-        assert.equal(openedUrls.length, 1);
-        assert.equal(mockBody._children.length, 1);
+        assert.equal(openedUrls.length, 2);
+        assert.equal(mockBody._children.length, 0, 'Warmup must leave no dormant DOM node behind');
+
+        // 3b. TizenAVPlayer owns the playback <object> and releases it again
+        const hostPlayer = new TizenAVPlayer({});
+        hostPlayer._avplay = globalThis.window.webapis.avplay;
+        const host = hostPlayer._ensureAvPlayerObject();
+        assert.ok(host && host.type === 'application/avplayer', 'TizenAVPlayer must mount its own AVPlayer host');
+        assert.equal(host.id, 'litefin-avplayer-host');
+        assert.equal(mockBody._children.includes(host), true);
+        assert.equal(host.style.position, 'fixed');
+        assert.equal(host.style.width, '100%', 'Playback host must span the viewport for setDisplayRect() planes');
+        assert.equal(host.style.height, '100%');
+        assert.equal(host.style.pointerEvents, 'none', 'Playback host must not swallow OSD input');
+        assert.equal(hostPlayer._ensureAvPlayerObject(), host, 'Host mount must be idempotent');
+        assert.equal(mockBody._children.length, 1, 'Host mount must never duplicate the <object>');
+
+        hostPlayer._removeAvPlayerObject();
+        assert.equal(mockBody._children.includes(host), false, 'TizenAVPlayer must remove its host on teardown');
+        assert.equal(mockBody._children.length, 0);
+
+        const tizenPlayerSrc = readSrc('src/player/core/TizenAVPlayer.js');
+        assert.match(
+            tizenPlayerSrc,
+            /this\._ensureAvPlayerObject\(\);\s*this\._avplay\.open\(/,
+            'TizenAVPlayer.play() must mount the plane host before avplay.open()'
+        );
+        assert.ok(
+            tizenPlayerSrc.includes('this._removeAvPlayerObject();'),
+            'TizenAVPlayer must release the plane host on stop()/destroy()'
+        );
 
         // 4. Active playback guard: must skip warmup when AVPlay state is already PLAYING
         currentState = 'PLAYING';
         const busyAdapter = new TizenAdapter();
         busyAdapter._isTizen = true;
         assert.equal(busyAdapter.warmupCompositor(), true);
-        assert.equal(openedUrls.length, 1, 'Must skip avplay.open when real session is PLAYING');
+        assert.equal(openedUrls.length, 2, 'Must skip avplay.open when real session is PLAYING');
         assert.equal(busyAdapter.isWarmupActive(), false);
 
         // 5. abortWarmup() cancels pending prepareAsync AND ignores stale late callbacks
@@ -404,6 +510,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         abortAdapter._isTizen = true;
         abortAdapter.warmupCompositor();
         assert.equal(abortAdapter.isWarmupActive(), true);
+        assert.equal(openedUrls.length, 3);
         assert.equal(abortAdapter.abortWarmup(), true);
         assert.equal(abortAdapter.isWarmupActive(), false);
         const stopCountAfterAbort = stopCalls;
@@ -448,6 +555,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         tizenAdapter._isTizen = false;
         mockBody._children.length = 0;
         delete globalThis.window.webapis;
+        delete globalThis.tizen;
         globalThis.window.location = origLocation;
         if (origAudioCtx === undefined) {
             delete globalThis.window.AudioContext;

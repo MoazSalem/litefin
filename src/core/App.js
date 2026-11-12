@@ -1373,6 +1373,26 @@ class App {
             // Remove the body class that blocks duplicate page-level spinners
             document.body.classList.remove('app-splash-active');
 
+            /*
+             * ================================================================
+             * TIZEN BOOT WARMUP TEARDOWN (before the splash starts fading)
+             * ================================================================
+             * warmupCompositor() may still be running the native AVPlay cycle
+             * (and the parallel HTML5 <video>) behind the opaque splash. Stop
+             * and close AVPlay, remove both warmup layers and drop the
+             * temporary player-active transparency classes HERE, while
+             * #app-splash is still fully opaque. Doing it after the fade
+             * starts would expose the bare video plane as a black flash.
+             * ================================================================
+             */
+            try {
+                if (tizenAdapter && typeof tizenAdapter.abortWarmup === 'function') {
+                    tizenAdapter.abortWarmup();
+                }
+            } catch (err) {
+                log.warn('Tizen boot warmup teardown failed:', err);
+            }
+
             const splash = document.getElementById('app-splash');
             if (splash) {
                 log.info('Hiding initial splash screen');

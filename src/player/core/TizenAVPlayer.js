@@ -74,6 +74,11 @@ const isDtsSupported = () => {
 // TizenAVPlayer Class
 // ============================================================================
 
+// Id of the <object type="application/avplayer"> element that hosts the AVPlay
+// hardware plane during real playback. The id lets a previous session's node be
+// re-adopted instead of duplicated, and lets destroy() clean up after a crash.
+const AVPLAY_OBJECT_ID = 'litefin-avplayer-host';
+
 export class TizenAVPlayer {
     /**
      * @param {Object} options
@@ -92,6 +97,8 @@ export class TizenAVPlayer {
 
         this._currentSrc = null;
         this._currentPlayOptions = null;
+        // <object type="application/avplayer"> owned by this player instance
+        this._avplayObjectEl = null;
         this._duration = 0;
         this._isPlaying = false;
         this._isTizenPlaying = false;
@@ -562,6 +569,82 @@ export class TizenAVPlayer {
     }
 
     // ========================================================================
+    // AVPlay Hardware Plane Host
+    // ========================================================================
+
+    /**
+     * Mounts the <object type="application/avplayer"> element that hosts the
+     * hardware video plane for this playback session.
+     *
+     * TizenAVPlayer owns this node so the boot warmup can remove its full-screen
+     * plane completely instead of leaving a dormant placeholder behind. The host
+     * spans the whole viewport because AVPlay composites through setDisplayRect()
+     * screen coordinates — the element itself just has to give the plugin a
+     * surface. pointer-events stays 'none' so the OSD overlay keeps receiving
+     * keys and pointer input above the video.
+     *
+     * Idempotent: re-adopts any node left over from a previous session.
+     *
+     * @returns {HTMLElement|null} The host element, or null if the DOM is inert
+     * @private
+     */
+    _ensureAvPlayerObject() {
+        if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+            return null;
+        }
+        try {
+            const existing =
+                this._avplayObjectEl ||
+                (typeof document.getElementById === 'function' ? document.getElementById(AVPLAY_OBJECT_ID) : null);
+
+            let el = existing;
+            if (!el) {
+                el = document.createElement('object');
+                el.id = AVPLAY_OBJECT_ID;
+                el.type = 'application/avplayer';
+                document.body.appendChild(el);
+            }
+
+            el.setAttribute('aria-hidden', 'true');
+            el.style.position = 'fixed';
+            el.style.top = '0px';
+            el.style.left = '0px';
+            el.style.width = '100%';
+            el.style.height = '100%';
+            el.style.opacity = '1';
+            el.style.pointerEvents = 'none';
+            el.style.zIndex = '0';
+            el.style.background = 'transparent';
+
+            this._avplayObjectEl = el;
+            return el;
+        } catch (err) {
+            log.warn('TizenAVPlayer: Failed to mount AVPlayer hardware plane host:', err.message || err);
+            return null;
+        }
+    }
+
+    /**
+     * Removes the AVPlay hardware plane host once the native session is fully
+     * closed, so no dormant plugin node is left on screen for the next page.
+     * @private
+     */
+    _removeAvPlayerObject() {
+        const el =
+            this._avplayObjectEl ||
+            (typeof document !== 'undefined' && typeof document.getElementById === 'function'
+                ? document.getElementById(AVPLAY_OBJECT_ID)
+                : null);
+        this._avplayObjectEl = null;
+        if (!el) return;
+        try {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        } catch (err) {
+            log.debug('TizenAVPlayer: AVPlayer hardware plane host removal skipped:', err.message || err);
+        }
+    }
+
+    // ========================================================================
     // Playback Control
     // ========================================================================
 
@@ -634,6 +717,9 @@ export class TizenAVPlayer {
             }
 
             // Open the media
+            // Mount our own AVPlay plane host first: the boot warmup removes its
+            // element on teardown, so nothing is guaranteed to be in the DOM here.
+            this._ensureAvPlayerObject();
             this._avplay.open(options.url);
             this._currentSrc = options.url; // Set currentSrc after open
             try {
@@ -2647,6 +2733,8 @@ export class TizenAVPlayer {
     async stop() {
         this._stopPositionTracking();
         await this._stopInternal();
+        // Native session is closed — release the plane host we mounted for it.
+        this._removeAvPlayerObject();
 
         this._currentSrc = null;
         this._currentPlayOptions = null;
@@ -3738,6 +3826,7 @@ export class TizenAVPlayer {
             }
         }
 
+        this._removeAvPlayerObject();
         this._avplay = null;
         this._currentSrc = null;
         this._currentPlayOptions = null;

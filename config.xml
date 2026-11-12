@@ -6,6 +6,9 @@
    <icon src="assets/icon.png"></icon>
    <content src="index.html"></content>
    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+   <!-- Required to resolve the wgt-package virtual root to the absolute Linux
+        path AVPlay.open() needs for the boot warmup clip. -->
+   <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
    <tizen:privilege name="http://tizen.org/privilege/tv.window"/>

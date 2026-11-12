@@ -68,6 +68,22 @@ const TIZEN_KEYS = {
     MUTE: 449
 };
 
+// ============================================================================
+// Boot warmup tuning (runs entirely behind the opaque #app-splash)
+// ============================================================================
+const WARMUP_WIDTH = 1920;
+const WARMUP_HEIGHT = 1080;
+// Keep the native plane playing long enough for the compositor to promote the
+// plane and present real frames, but short enough to never delay first paint.
+const WARMUP_PLAY_HOLD_MS = 200;
+// Per-candidate prepareAsync budget: an invalid URI can fail silently on some
+// firmwares, so we advance to the next candidate instead of waiting forever.
+const WARMUP_PREPARE_TIMEOUT_MS = 900;
+// wgt-package resolution budget before falling back to the WebView URL.
+const WARMUP_RESOLVE_TIMEOUT_MS = 500;
+// Hard ceiling for the whole warmup cycle.
+const WARMUP_MAX_MS = 3000;
+
 class TizenAdapter {
     constructor() {
         this._isTizen = false;
@@ -77,7 +93,17 @@ class TizenAdapter {
         this._compositorWarmupProbe = null;
         this._warmupActive = false;
         this._warmupTimerId = null;
+        this._warmupPrepareTimerId = null;
+        this._warmupHoldTimerId = null;
         this._warmupGen = 0;
+        this._warmupCandidates = [];
+        this._warmupCandidateIndex = 0;
+        this._warmupAttempt = 0;
+        this._warmupPrepared = false;
+        this._warmupVideoEl = null;
+        this._warmupSplashEl = null;
+        this._warmupSplashPrevBg = '';
+        this._warmupPlayerActive = false;
 
         // Detect Tizen environment
         this._detectPlatform();
@@ -153,20 +179,13 @@ class TizenAdapter {
     }
 
     /**
-     * Warm up the Tizen WebAppEngine / Chromium hardware overlay pipeline once
-     * during startup so subsequent home-screen scrolling benefits from hardware
-     * overlay compositing without waiting for initial video playback.
-     *
-     * Strictly isolated to Samsung Tizen targets, completely read-only against
-     * `webapis.avplay` session state, and removes the transient probe element once
-     * two compositor frames settle so zero dormant plugin nodes remain.
-     *
-     * @returns {boolean} True when Tizen warmup executed or had already run
-     */
-    /**
      * Resolves the local packaged URL for assets/warmup.mp4 without being
      * corrupted by hash-router fragments or file:// origin quirks on Tizen.
      * Mirrors i18n._getUrl() directory resolution.
+     *
+     * This is the URL form an HTML5 <video> element resolves against the
+     * WebView document. AVPlay needs a filesystem path instead — see
+     * _resolveWarmupCandidates().
      *
      * @returns {string} Resolved URL pointing to assets/warmup.mp4
      * @private
@@ -198,55 +217,402 @@ class TizenAdapter {
     }
 
     /**
-     * Aborts any in-flight boot AVPlay warmup immediately and releases native
-     * AVPlay resources so real media playback can call avplay.open() cleanly.
+     * Resolves the native AVPlay manager from the Samsung webapis namespace,
+     * falling back to the standard Tizen global on older firmwares.
      *
-     * @returns {boolean} true if an active warmup cycle was cancelled
+     * @returns {Object|null}
+     * @private
      */
-    abortWarmup() {
+    _getAvplay() {
+        if (typeof window === 'undefined') return null;
+        return (window.webapis && window.webapis.avplay) || (window.tizen && window.tizen.avplay) || null;
+    }
+
+    /**
+     * Clears every timer owned by the boot warmup cycle.
+     * @private
+     */
+    _clearWarmupTimers() {
         if (this._warmupTimerId) {
             clearTimeout(this._warmupTimerId);
             this._warmupTimerId = null;
         }
-        if (!this._warmupActive) {
-            return false;
+        if (this._warmupPrepareTimerId) {
+            clearTimeout(this._warmupPrepareTimerId);
+            this._warmupPrepareTimerId = null;
         }
+        if (this._warmupHoldTimerId) {
+            clearTimeout(this._warmupHoldTimerId);
+            this._warmupHoldTimerId = null;
+        }
+    }
+
+    /**
+     * Aborts any in-flight boot AVPlay warmup immediately and releases native
+     * AVPlay resources so real media playback can call avplay.open() cleanly.
+     *
+     * Also tears down the full-screen warmup layers and drops the temporary
+     * player-active transparency classes. App.hideSplash() calls this right
+     * before #app-splash starts fading out, so the user can never see a
+     * black or transparent flash between the warmup plane and the home page.
+     *
+     * @returns {boolean} true if an active warmup cycle was cancelled
+     */
+    abortWarmup() {
+        const wasActive = !!this._warmupActive;
         // Advance generation token so late async prepareAsync callbacks cannot touch a
         // subsequent real video session opened after abortWarmup() returns.
         this._warmupGen += 1;
+        this._clearWarmupTimers();
         this._warmupActive = false;
 
-        // Release native AVPlay state cleanly before returning control to TizenAVPlayer
-        const avplay =
-            typeof window !== 'undefined' ? (window.webapis && window.webapis.avplay) || (window.tizen && window.tizen.avplay) : null;
-        if (avplay) {
-            try {
-                if (typeof avplay.setListener === 'function') {
-                    avplay.setListener(null);
+        if (wasActive) {
+            // Release native AVPlay state cleanly before returning control to TizenAVPlayer
+            const avplay = this._getAvplay();
+            if (avplay) {
+                try {
+                    if (typeof avplay.setListener === 'function') {
+                        avplay.setListener(null);
+                    }
+                } catch (_) {
+                    // Ignore listener cleanup errors during abort
                 }
-            } catch (_) {
-                // Ignore listener cleanup errors during abort
-            }
-            try {
-                if (typeof avplay.stop === 'function') {
-                    avplay.stop();
+                try {
+                    if (typeof avplay.stop === 'function') {
+                        avplay.stop();
+                    }
+                } catch (_) {
+                    // Ignore stop errors if still preparing
                 }
-            } catch (_) {
-                // Ignore stop errors if still preparing
-            }
-            try {
-                if (typeof avplay.close === 'function') {
-                    avplay.close();
+                try {
+                    if (typeof avplay.close === 'function') {
+                        avplay.close();
+                    }
+                } catch (_) {
+                    // Ignore close errors if already NONE
                 }
-            } catch (_) {
-                // Ignore close errors if already NONE
             }
         }
 
-        log.info('AVPlay hardware warmup aborted for real playback');
-        return true;
+        this._teardownWarmupLayers();
+
+        if (wasActive) {
+            log.info('AVPlay hardware warmup aborted for real playback');
+        }
+        return wasActive;
     }
 
+    /**
+     * Resolves the real packaged filesystem location of assets/warmup.mp4.
+     *
+     * avplay.open() does NOT accept the WebView-relative 'assets/warmup.mp4'
+     * URL that HTML5 <video> resolves: it needs an absolute Linux path
+     * (/opt/usr/.../res/wgt/assets/warmup.mp4) or a tizen.filesystem URI.
+     *
+     * Returns an ordered candidate list — raw Linux path first, file:// URI
+     * second, WebView URL last — so warmupCompositor() can retry the next
+     * form when a firmware rejects one with PLAYER_ERROR_INVALID_URI.
+     *
+     * @param {Function} onResolved - Called with the ordered candidate array
+     * @private
+     */
+    _resolveWarmupCandidates(onResolved) {
+        const fallbackUrl = this._resolveWarmupVideoUrl();
+        const candidates = [];
+
+        const addCandidate = (value) => {
+            if (!value) return;
+            const str = String(value);
+            if (candidates.indexOf(str) === -1) candidates.push(str);
+        };
+        // Joins assets/warmup.mp4 onto a directory path/URI and emits both the
+        // raw Linux form (AVPlay's preferred) and the file:// form.
+        const addAssetPath = (base) => {
+            if (!base) return;
+            let dir = String(base);
+            if (dir.charAt(dir.length - 1) !== '/') dir += '/';
+            addCandidate(dir + 'assets/warmup.mp4');
+            const raw = dir.replace(/^file:\/\//, '');
+            if (raw !== dir) addCandidate(raw + 'assets/warmup.mp4');
+        };
+
+        let settled = false;
+        let budgetTimer = null;
+        const finish = (reason) => {
+            if (settled) return;
+            settled = true;
+            if (budgetTimer) {
+                clearTimeout(budgetTimer);
+                budgetTimer = null;
+            }
+            // HTML5 <video> fallback: always last, always resolvable by the WebView
+            addCandidate(fallbackUrl);
+            log.info(`AVPlay warmup URL candidates (${reason}): ${candidates.join(' | ')}`);
+            onResolved(candidates);
+        };
+
+        const fsApi = typeof tizen !== 'undefined' && tizen.filesystem ? tizen.filesystem : null;
+        if (!fsApi || typeof fsApi.resolve !== 'function') {
+            finish('tizen.filesystem unavailable');
+            return;
+        }
+
+        // A wedged filesystem backend must never delay splash dismissal.
+        budgetTimer = setTimeout(() => finish('resolve timeout'), WARMUP_RESOLVE_TIMEOUT_MS);
+
+        const onDir = (dir) => {
+            try {
+                if (dir && dir.path) {
+                    // dir.path is the absolute Linux directory (/opt/usr/.../res/wgt)
+                    addAssetPath(dir.path);
+                }
+            } catch (_) {
+                // Ignore malformed directory handles
+            }
+            try {
+                if (dir && typeof dir.toURI === 'function') {
+                    const dirUri = dir.toURI();
+                    if (dirUri) addAssetPath(dirUri);
+                }
+            } catch (_) {
+                // toURI() is missing on a few legacy Tizen 2.3 builds
+            }
+            try {
+                if (typeof fsApi.toURI === 'function') {
+                    const directUri = fsApi.toURI('wgt-package/assets/warmup.mp4');
+                    if (directUri) {
+                        addCandidate(directUri);
+                        addCandidate(String(directUri).replace(/^file:\/\//, ''));
+                    }
+                }
+            } catch (_) {
+                // Ignore toURI() failures; dir.path candidates already cover it
+            }
+            finish('wgt-package resolved');
+        };
+
+        try {
+            fsApi.resolve(
+                'wgt-package',
+                onDir,
+                (err) => {
+                    log.warn('AVPlay warmup: tizen.filesystem.resolve(wgt-package) failed', err);
+                    finish('resolve error');
+                },
+                'r'
+            );
+        } catch (err) {
+            log.warn('AVPlay warmup: tizen.filesystem.resolve threw', err);
+            finish('resolve threw');
+        }
+    }
+
+    /**
+     * Mounts the full-screen AVPlay <object> used by the warmup cycle.
+     *
+     * The element belongs exclusively to the warmup cycle and is removed again
+     * in _teardownWarmupLayers(). Real playback is not affected: TizenAVPlayer
+     * mounts its own hardware-plane host element before calling avplay.open().
+     *
+     * @private
+     */
+    _mountWarmupObjectLayer() {
+        if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+            return;
+        }
+        try {
+            let probe =
+                typeof document.getElementById === 'function' ? document.getElementById('litefin-avplay-warmup') : null;
+            if (!probe) {
+                probe = document.createElement('object');
+                probe.id = 'litefin-avplay-warmup';
+                probe.type = 'application/avplayer';
+                document.body.appendChild(probe);
+            }
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.position = 'fixed';
+            probe.style.top = '0px';
+            probe.style.left = '0px';
+            probe.style.pointerEvents = 'none';
+            probe.style.width = WARMUP_WIDTH + 'px';
+            probe.style.height = WARMUP_HEIGHT + 'px';
+            probe.style.opacity = '1';
+            probe.style.zIndex = '0';
+            probe.style.background = '#000000';
+            this._compositorWarmupProbe = probe;
+        } catch (err) {
+            log.debug('TizenAdapter: Failed to mount AVPlayer warmup <object>', err);
+        }
+    }
+
+    /**
+     * Mounts a full-screen HTML5 <video> playing the same warmup clip.
+     *
+     * Unlike AVPlay, <video> resolves the WebView-relative assets/warmup.mp4
+     * URL, so this warms the media element / software decoder pipeline in
+     * parallel behind the opaque splash.
+     *
+     * @private
+     */
+    _mountWarmupVideoLayer() {
+        if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+            return;
+        }
+        try {
+            const video = document.createElement('video');
+            video.id = 'litefin-html5-warmup';
+            video.setAttribute('aria-hidden', 'true');
+            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+            video.setAttribute('autoplay', '');
+            video.setAttribute('loop', '');
+            video.setAttribute('preload', 'auto');
+            video.muted = true;
+            video.volume = 0;
+            video.style.position = 'fixed';
+            video.style.top = '0px';
+            video.style.left = '0px';
+            video.style.width = WARMUP_WIDTH + 'px';
+            video.style.height = WARMUP_HEIGHT + 'px';
+            video.style.objectFit = 'cover';
+            video.style.opacity = '1';
+            video.style.pointerEvents = 'none';
+            video.style.zIndex = '0';
+            video.style.background = '#000000';
+            video.src = this._resolveWarmupVideoUrl();
+            document.body.appendChild(video);
+            this._warmupVideoEl = video;
+            if (typeof video.play === 'function') {
+                const playResult = video.play();
+                if (playResult && typeof playResult.catch === 'function') {
+                    playResult.catch(() => {});
+                }
+            }
+            log.info(`Mounted HTML5 warmup <video> (${video.src})`);
+        } catch (err) {
+            log.debug('TizenAdapter: HTML5 warmup <video> mount skipped', err);
+        }
+    }
+
+    /**
+     * Forces the boot splash opaque black for the duration of the warmup so
+     * the hardware video plane behind the (now transparent) WebView can never
+     * bleed through. The previous inline value is restored on teardown.
+     * @private
+     */
+    _maskSplashForWarmup() {
+        if (typeof document === 'undefined' || typeof document.getElementById !== 'function') {
+            return;
+        }
+        try {
+            const splash = document.getElementById('app-splash');
+            if (!splash || !splash.style) return;
+            this._warmupSplashEl = splash;
+            this._warmupSplashPrevBg = splash.style.backgroundColor || '';
+            splash.style.backgroundColor = '#000000';
+        } catch (_) {
+            // Splash may already be detached on a very fast boot
+        }
+    }
+
+    /**
+     * Toggles the player-active transparency classes exactly like PlayerPage
+     * does. Only classes added by the warmup are removed again.
+     *
+     * @param {boolean} enable - true to add, false to remove
+     * @private
+     */
+    _applyWarmupPlayerActive(enable) {
+        if (typeof document === 'undefined' || !document.documentElement || !document.body) {
+            return;
+        }
+        try {
+            if (enable) {
+                if (this._warmupPlayerActive) return;
+                document.documentElement.classList.add('player-active');
+                document.body.classList.add('player-active');
+                this._warmupPlayerActive = true;
+                return;
+            }
+            if (!this._warmupPlayerActive) return;
+            document.documentElement.classList.remove('player-active');
+            document.body.classList.remove('player-active');
+            this._warmupPlayerActive = false;
+        } catch (_) {
+            // Never let DOM cleanup break splash dismissal
+        }
+    }
+
+    /**
+     * Removes the full-screen warmup layers, drops player-active and restores
+     * the splash background. Idempotent — safe to call from abortWarmup(),
+     * _finishWarmup() and App.hideSplash().
+     * @private
+     */
+    _teardownWarmupLayers() {
+        const video = this._warmupVideoEl;
+        this._warmupVideoEl = null;
+        if (video) {
+            try {
+                if (typeof video.pause === 'function') video.pause();
+            } catch (_) {
+                // Ignore pause on already-detached elements
+            }
+            try {
+                video.removeAttribute('src');
+                if (typeof video.load === 'function') video.load();
+            } catch (_) {
+                // Ignore src teardown errors on legacy WebKit
+            }
+            try {
+                if (video.parentNode) video.parentNode.removeChild(video);
+            } catch (_) {
+                // Ignore detached-node removal
+            }
+        }
+
+        /*
+         * Remove the full-screen 1920x1080 AVPlay plane entirely. The element is
+         * owned by the warmup cycle; TizenAVPlayer mounts its own
+         * application/avplayer host before opening a real stream, so nothing
+         * dormant is left behind in the DOM.
+         */
+        if (this._compositorWarmupProbe) {
+            const probe = this._compositorWarmupProbe;
+            this._compositorWarmupProbe = null;
+            try {
+                if (probe.parentNode) probe.parentNode.removeChild(probe);
+            } catch (_) {
+                // Ignore detached-node removal
+            }
+        }
+
+        this._applyWarmupPlayerActive(false);
+
+        if (this._warmupSplashEl) {
+            try {
+                this._warmupSplashEl.style.backgroundColor = this._warmupSplashPrevBg;
+            } catch (_) {
+                // Splash may already be detached
+            }
+            this._warmupSplashEl = null;
+            this._warmupSplashPrevBg = '';
+        }
+    }
+
+    /**
+     * Boot-time compositor warmup.
+     *
+     * Runs a real native AVPlayManager cycle — open -> setDisplayRect ->
+     * prepareAsync -> play -> stop -> close — against assets/warmup.mp4 at
+     * 1920x1080 directly behind the still-opaque #app-splash, and warms the
+     * HTML5 <video> pipeline in parallel. Every layer is torn down before the
+     * splash fades (see abortWarmup()), so the user never sees a black or
+     * transparent flash.
+     *
+     * @returns {boolean} True when Tizen warmup executed or had already run
+     */
     warmupCompositor() {
         // Hard isolation guard — never touch hardware plane primitives off Tizen
         if (!this._isTizen) {
@@ -257,187 +623,297 @@ class TizenAdapter {
         }
         this._compositorWarmed = true;
 
-        // Wake the browser audio HAL / WebAudio thread silently so first playback
-        // or mixer transitions do not stall the UI compositor later.
+        this._wakeAudioPipeline();
+
+        const avplay = this._getAvplay();
+        const hasFullPipeline =
+            avplay &&
+            typeof avplay.open === 'function' &&
+            typeof avplay.setDisplayRect === 'function' &&
+            typeof avplay.prepareAsync === 'function' &&
+            typeof avplay.play === 'function' &&
+            typeof avplay.stop === 'function' &&
+            typeof avplay.close === 'function';
+
+        if (!hasFullPipeline) {
+            // Legacy firmware: no prepareAsync, so no plane can be opened. Just
+            // read AVPlay state to touch the pipeline; TizenAVPlayer will mount
+            // its own application/avplayer host when real playback starts.
+            if (avplay && typeof avplay.getState === 'function') {
+                avplay.getState();
+            }
+            log.debug('TizenAdapter: AVPlay prepareAsync unavailable — basic warmup executed');
+            return true;
+        }
+
+        // Never clobber an active real playback session if somehow open already
+        let currentState = 'NONE';
+        try {
+            if (typeof avplay.getState === 'function') {
+                currentState = avplay.getState();
+            }
+        } catch (_) {
+            currentState = 'NONE';
+        }
+        if (currentState === 'PLAYING' || currentState === 'PAUSED' || currentState === 'READY') {
+            log.debug(`TizenAdapter: Skipping AVPlay warmup because state is already ${currentState}`);
+            return true;
+        }
+
+        const warmupGen = ++this._warmupGen;
+        this._warmupActive = true;
+        this._warmupCandidates = [];
+        this._warmupCandidateIndex = 0;
+        this._warmupAttempt = 0;
+        this._warmupPrepared = false;
+
+        // Full-screen native plane + HTML5 <video> behind the opaque splash
+        this._mountWarmupObjectLayer();
+        this._mountWarmupVideoLayer();
+        this._maskSplashForWarmup();
+        this._applyWarmupPlayerActive(true);
+
+        log.info(`Starting AVPlay hardware warmup (${WARMUP_WIDTH}x${WARMUP_HEIGHT} behind #app-splash)`);
+
+        // Hard ceiling: never let a wedged decoder hold the splash hostage.
+        this._warmupTimerId = setTimeout(() => {
+            this._warmupTimerId = null;
+            this._finishWarmup('watchdog timeout', warmupGen);
+        }, WARMUP_MAX_MS);
+
+        this._resolveWarmupCandidates((candidates) => {
+            if (!this._warmupActive || this._warmupGen !== warmupGen) return;
+            this._warmupCandidates = candidates;
+            this._tryWarmupCandidate(warmupGen);
+        });
+
+        return true;
+    }
+
+    /**
+     * Wake the browser audio HAL / WebAudio thread silently so first playback
+     * or mixer transitions do not stall the UI compositor later.
+     * @private
+     */
+    _wakeAudioPipeline() {
         try {
             const AudioCtx = typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : null;
-            if (AudioCtx) {
-                const audioCtx = new AudioCtx();
-                const closeAudioCtx = () => {
-                    try {
-                        if (typeof audioCtx.close === 'function' && audioCtx.state !== 'closed') {
-                            const closePromise = audioCtx.close();
-                            if (closePromise && typeof closePromise.catch === 'function') {
-                                closePromise.catch(() => {});
-                            }
-                        }
-                    } catch (_) {
-                        // Ignore cleanup errors on restricted or mocked audio contexts
-                    }
-                };
+            if (!AudioCtx) return;
 
-                if (typeof audioCtx.resume === 'function') {
-                    const resumeResult = audioCtx.resume();
-                    // Modern Chromium returns a Promise from resume(); legacy WebKit may not
-                    if (resumeResult && typeof resumeResult.then === 'function') {
-                        resumeResult.then(closeAudioCtx, closeAudioCtx);
-                    } else {
-                        closeAudioCtx();
+            const audioCtx = new AudioCtx();
+            const closeAudioCtx = () => {
+                try {
+                    if (typeof audioCtx.close === 'function' && audioCtx.state !== 'closed') {
+                        const closePromise = audioCtx.close();
+                        if (closePromise && typeof closePromise.catch === 'function') {
+                            closePromise.catch(() => {});
+                        }
                     }
+                } catch (_) {
+                    // Ignore cleanup errors on restricted or mocked audio contexts
+                }
+            };
+
+            if (typeof audioCtx.resume === 'function') {
+                const resumeResult = audioCtx.resume();
+                // Modern Chromium returns a Promise from resume(); legacy WebKit may not
+                if (resumeResult && typeof resumeResult.then === 'function') {
+                    resumeResult.then(closeAudioCtx, closeAudioCtx);
                 } else {
                     closeAudioCtx();
                 }
+            } else {
+                closeAudioCtx();
             }
         } catch (_) {
             // AudioContext blocked or unavailable in headless/stub environments
         }
+    }
 
-        if (typeof document !== 'undefined' && document.body) {
-            // Helper for off-view 1x1 hidden layer styling without layout impact
-            const applyWarmupStyle = (el) => {
-                el.setAttribute('aria-hidden', 'true');
-                el.style.position = 'fixed';
-                el.style.top = '0px';
-                el.style.left = '0px';
-                el.style.width = '1px';
-                el.style.height = '1px';
-                el.style.opacity = '0';
-                el.style.pointerEvents = 'none';
-                el.style.zIndex = '-1';
-            };
+    /**
+     * Opens and prepares the next warmup URL candidate.
+     *
+     * @param {number} warmupGen - Generation token of the owning warmup cycle
+     * @private
+     */
+    _tryWarmupCandidate(warmupGen) {
+        if (!this._warmupActive || this._warmupGen !== warmupGen) return;
+
+        const avplay = this._getAvplay();
+        if (!avplay) {
+            this._finishWarmup('AVPlay unavailable', warmupGen);
+            return;
+        }
+
+        if (this._warmupCandidateIndex >= this._warmupCandidates.length) {
+            this._finishWarmup('all URL candidates rejected', warmupGen);
+            return;
+        }
+
+        const warmupUrl = this._warmupCandidates[this._warmupCandidateIndex];
+        const attempt = ++this._warmupAttempt;
+        this._warmupPrepared = false;
+
+        // Attempt token: a stale prepareAsync callback from a candidate that was
+        // already abandoned (timeout / invalid URI) must never drive the next
+        // candidate's native session.
+        const isCurrentAttempt = () =>
+            this._warmupActive && this._warmupGen === warmupGen && this._warmupAttempt === attempt;
+
+        const onPrepared = () => {
+            if (!isCurrentAttempt()) return;
+            if (this._warmupPrepareTimerId) {
+                clearTimeout(this._warmupPrepareTimerId);
+                this._warmupPrepareTimerId = null;
+            }
+            this._warmupPrepared = true;
+
+            let state = 'UNKNOWN';
+            try {
+                if (typeof avplay.getState === 'function') state = avplay.getState();
+            } catch (_) {
+                state = 'UNKNOWN';
+            }
+            log.info(`AVPlay warmup prepareAsync succeeded (state=${state}) for ${warmupUrl}`);
 
             try {
-                // Keep a persistent 1x1 AVPlayer object mounted in the body so Tizen
-                // retains its native video-plane compositor mode across navigation.
-                const existingProbe =
-                    typeof document.getElementById === 'function'
-                        ? document.getElementById('litefin-avplay-warmup')
-                        : null;
-                if (!existingProbe) {
-                    const probe = document.createElement('object');
-                    probe.id = 'litefin-avplay-warmup';
-                    probe.type = 'application/avplayer';
-                    applyWarmupStyle(probe);
-                    document.body.appendChild(probe);
-                    this._compositorWarmupProbe = probe;
-                } else {
-                    this._compositorWarmupProbe = existingProbe;
+                avplay.play();
+                log.info('AVPlay warmup prepareAsync + play() succeeded');
+            } catch (playErr) {
+                const msg = playErr && playErr.message ? playErr.message : String(playErr || 'unknown');
+                this._finishWarmup(`play error: ${msg}`, warmupGen);
+                return;
+            }
+
+            // Let the plane present real frames behind the opaque splash before
+            // releasing the single hardware decoder slot.
+            this._warmupHoldTimerId = setTimeout(() => {
+                this._warmupHoldTimerId = null;
+                let playingState = 'UNKNOWN';
+                try {
+                    if (typeof avplay.getState === 'function') playingState = avplay.getState();
+                } catch (_) {
+                    playingState = 'UNKNOWN';
                 }
-            } catch (err) {
-                log.debug('TizenAdapter: Failed to mount AVPlayer warmup <object>', err);
+                log.info(`AVPlay warmup reached ${playingState} state after play()`);
+                this._finishWarmup(`completed ${WARMUP_PLAY_HOLD_MS}ms play cycle`, warmupGen);
+            }, WARMUP_PLAY_HOLD_MS);
+        };
+
+        const onPrepareError = (prepErr) => {
+            if (!isCurrentAttempt()) return;
+            if (this._warmupPrepareTimerId) {
+                clearTimeout(this._warmupPrepareTimerId);
+                this._warmupPrepareTimerId = null;
+            }
+            const msg = prepErr && prepErr.message ? prepErr.message : String(prepErr || 'unknown');
+            this._retryWarmupCandidate(`prepareAsync rejected ${warmupUrl} (${msg})`, warmupGen);
+        };
+
+        // Per-candidate watchdog: an invalid URI can fail silently on some firmware.
+        this._warmupPrepareTimerId = setTimeout(() => {
+            this._warmupPrepareTimerId = null;
+            if (!isCurrentAttempt() || this._warmupPrepared) return;
+            this._retryWarmupCandidate(`prepareAsync timed out for ${warmupUrl}`, warmupGen);
+        }, WARMUP_PREPARE_TIMEOUT_MS);
+
+        try {
+            log.info(`Starting AVPlay hardware warmup (${warmupUrl})`);
+            avplay.open(warmupUrl);
+            avplay.setDisplayRect(0, 0, WARMUP_WIDTH, WARMUP_HEIGHT);
+            avplay.prepareAsync(onPrepared, onPrepareError);
+        } catch (openErr) {
+            if (this._warmupPrepareTimerId) {
+                clearTimeout(this._warmupPrepareTimerId);
+                this._warmupPrepareTimerId = null;
+            }
+            if (!isCurrentAttempt()) return;
+            const msg = openErr && openErr.message ? openErr.message : String(openErr || 'unknown');
+            this._retryWarmupCandidate(`open/prepareAsync threw for ${warmupUrl} (${msg})`, warmupGen);
+        }
+    }
+
+    /**
+     * Releases a half-open native session and advances to the next URL
+     * candidate (raw Linux path -> file:// URI -> WebView URL).
+     *
+     * @param {string} reason - Human-readable rejection reason for the log
+     * @param {number} warmupGen - Generation token of the owning warmup cycle
+     * @private
+     */
+    _retryWarmupCandidate(reason, warmupGen) {
+        if (!this._warmupActive || this._warmupGen !== warmupGen) return;
+
+        // Invalidate the abandoned attempt before touching the native session:
+        // a synchronous prepare error callback from stop()/close() must not
+        // trigger another retry for the same candidate.
+        this._warmupAttempt += 1;
+
+        const avplay = this._getAvplay();
+        if (avplay) {
+            try {
+                if (typeof avplay.stop === 'function') avplay.stop();
+            } catch (_) {
+                // Ignore stop errors if still preparing
+            }
+            try {
+                if (typeof avplay.close === 'function') avplay.close();
+            } catch (_) {
+                // Ignore close errors if already NONE
             }
         }
 
-        // Execute a real native C++ AVPlayManager open -> setDisplayRect -> prepareAsync -> play
-        // -> stop -> close cycle against the local 1-frame 64x64 black warmup.mp4 asset so WAM
-        // promotes the WebView to its 60Hz hardware multimedia compositor plane on cold boot.
-        try {
-            const avplay =
-                typeof window !== 'undefined' ? (window.webapis && window.webapis.avplay) || (window.tizen && window.tizen.avplay) : null;
-            const hasFullPipeline =
-                avplay &&
-                typeof avplay.open === 'function' &&
-                typeof avplay.setDisplayRect === 'function' &&
-                typeof avplay.prepareAsync === 'function' &&
-                typeof avplay.play === 'function' &&
-                typeof avplay.stop === 'function' &&
-                typeof avplay.close === 'function';
+        this._warmupCandidateIndex += 1;
+        log.warn(`AVPlay warmup ${reason} — trying next URL candidate`);
 
-            if (!hasFullPipeline) {
-                if (avplay && typeof avplay.getState === 'function') {
-                    avplay.getState();
-                }
-                log.debug('TizenAdapter: AVPlay prepareAsync unavailable — basic warmup executed');
-                return true;
-            }
+        if (this._warmupCandidateIndex >= this._warmupCandidates.length) {
+            this._finishWarmup('all URL candidates rejected', warmupGen);
+            return;
+        }
+        this._tryWarmupCandidate(warmupGen);
+    }
 
-            // Never clobber an active real playback session if somehow open already
-            let currentState = 'NONE';
-            try {
-                if (typeof avplay.getState === 'function') {
-                    currentState = avplay.getState();
-                }
-            } catch (_) {
-                currentState = 'NONE';
-            }
-            if (currentState === 'PLAYING' || currentState === 'PAUSED' || currentState === 'READY') {
-                log.debug(`TizenAdapter: Skipping AVPlay warmup because state is already ${currentState}`);
-                return true;
-            }
+    /**
+     * Ends the warmup cycle: clears timers, releases the native decoder and
+     * removes every temporary layer. Idempotent.
+     *
+     * @param {string} reason - Human-readable completion reason for the log
+     * @param {number} [warmupGen] - Generation token of the owning warmup cycle
+     * @private
+     */
+    _finishWarmup(reason, warmupGen) {
+        if (warmupGen !== undefined && this._warmupGen !== warmupGen) return;
 
-            const warmupUrl = this._resolveWarmupVideoUrl();
-            const warmupGen = ++this._warmupGen;
-            this._warmupActive = true;
-            let cycleClosed = false;
+        this._clearWarmupTimers();
+        const wasActive = this._warmupActive;
+        this._warmupActive = false;
 
-            const finishWarmup = (reason) => {
-                // Ignore stale callbacks once abortWarmup() has superseded this warmup run
-                if (cycleClosed || this._warmupGen !== warmupGen) return;
-                cycleClosed = true;
-                if (this._warmupTimerId) {
-                    clearTimeout(this._warmupTimerId);
-                    this._warmupTimerId = null;
-                }
-                this._warmupActive = false;
-
-                // Teardown native decoder session cleanly to free the single hardware slot
+        if (wasActive) {
+            const avplay = this._getAvplay();
+            if (avplay) {
                 try {
-                    if (typeof avplay.setListener === 'function') {
-                        avplay.setListener(null);
-                    }
+                    if (typeof avplay.setListener === 'function') avplay.setListener(null);
                 } catch (_) {
-                    // Safe ignore on firmwares without active listener
+                    // Safe ignore on firmwares without an active listener
                 }
                 try {
-                    avplay.stop();
+                    if (typeof avplay.stop === 'function') avplay.stop();
                 } catch (_) {
                     // Safe ignore if prepare failed before entering READY/PLAYING
                 }
                 try {
-                    avplay.close();
+                    if (typeof avplay.close === 'function') avplay.close();
                 } catch (_) {
                     // Safe ignore if already NONE
                 }
-                log.info(`AVPlay hardware warmup closed (${reason})`);
-            };
-
-            const onPrepared = () => {
-                if (!this._warmupActive || this._warmupGen !== warmupGen) {
-                    finishWarmup('aborted before prepareAsync resolved');
-                    return;
-                }
-                try {
-                    avplay.play();
-                    log.info('AVPlay hardware warmup prepareAsync + play started');
-                    // Allow a brief 50ms hardware frame pass before stopping and freeing the decoder
-                    this._warmupTimerId = setTimeout(() => {
-                        this._warmupTimerId = null;
-                        finishWarmup('completed 50ms play cycle');
-                    }, 50);
-                } catch (playErr) {
-                    finishWarmup(`play error: ${playErr && playErr.message ? playErr.message : String(playErr || 'unknown')}`);
-                }
-            };
-
-            const onPrepareError = (prepErr) => {
-                if (this._warmupGen !== warmupGen) return;
-                finishWarmup(`prepareAsync error: ${prepErr && prepErr.message ? prepErr.message : String(prepErr || 'unknown')}`);
-            };
-
-            try {
-                log.info(`Starting AVPlay hardware warmup (${warmupUrl})`);
-                avplay.open(warmupUrl);
-                avplay.setDisplayRect(0, 0, 1, 1);
-                avplay.prepareAsync(onPrepared, onPrepareError);
-            } catch (openErr) {
-                finishWarmup(`open/prepareAsync threw: ${openErr && openErr.message ? openErr.message : String(openErr || 'unknown')}`);
             }
-        } catch (err) {
-            this._warmupActive = false;
-            log.debug('TizenAdapter: Compositor warmup skipped cleanly', err);
         }
 
-        return true;
+        this._teardownWarmupLayers();
+
+        if (wasActive) {
+            log.info(`AVPlay hardware warmup closed (${reason})`);
+        }
     }
 
     /**
