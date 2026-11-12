@@ -96,8 +96,15 @@ function _supportsStrokedTextBorder() {
 }
 
 /**
+ * ============================================================================
+ * Fallback Outline Shadow Builder
+ * ============================================================================
  * Builds an outer outline from zero-blur text shadows. Unlike text-stroke,
  * this never paints over the glyph fill.
+ *
+ * Sample count scales in multiples of 8 with the ring radius (up to 32) so
+ * small border widths stay fast while larger slider widths (up to 20px) avoid
+ * notched or scalloped corners between adjacent shadow offsets.
  *
  * @param {number|string} borderWidth - Configured stroke width in pixels.
  * @param {string} color - Border color (RGBA string).
@@ -109,9 +116,15 @@ function _buildOutlineShadows(borderWidth, color) {
     const radius = Number(borderWidth) / 2;
     if (!radius || radius <= 0) return '';
 
+    // Keep chord spacing along the ring around ~1.6px so corners stay smooth,
+    // quantized to multiples of 8 (preserving cardinal + diagonal offsets) and
+    // capped at 32 layers to bound TV software rasterization cost.
+    const steps = Math.min(32, Math.max(8, Math.ceil((2 * Math.PI * radius) / 1.6 / 8) * 8));
     const shadows = [];
-    for (let i = 0; i < 8; i++) {
-        const angle = (i * Math.PI) / 4;
+
+    for (let i = 0; i < steps; i++) {
+        // Distribute sample angles evenly around the full circle.
+        const angle = (i * 2 * Math.PI) / steps;
         const x = Number((Math.cos(angle) * radius).toFixed(2));
         const y = Number((Math.sin(angle) * radius).toFixed(2));
         shadows.push(`${color} ${x}px ${y}px 0`);
