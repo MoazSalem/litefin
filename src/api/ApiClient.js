@@ -1494,6 +1494,40 @@ export class ApiClient {
      *
      * When the Litefin server plugin is not installed, downstream callers
     /**
+     * Persist the companion plugin availability hint per server so cold-boot
+     * row prefetching knows whether /Litefin/MergedRows/ContinueAndNextUp can
+     * be used before the async /Litefin/Hero probe resolves.
+     * Uses the global serverPlugin:available: prefix so StorageService flushes
+     * it immediately and BackupTab excludes it from user backups.
+     *
+     * @param {boolean} isAvailable - Confirmed companion plugin state
+     * @private
+     */
+    _persistLitefinPluginAvailability(isAvailable) {
+        if (!this._serverUrl) return;
+        storage.setItem(`serverPlugin:available:litefin:${this._serverUrl}`, String(Boolean(isAvailable)));
+    }
+
+    /**
+     * Synchronously report whether the Litefin server companion plugin is known
+     * to be installed on the active server. Checks the live in-session probe
+     * result first, then falls back to the persisted server-scoped hint.
+     *
+     * @returns {boolean} True if companion plugin availability is confirmed or persisted
+     */
+    hasKnownLitefinPlugin() {
+        // Prefer the live in-session probe result whenever already resolved
+        if (this._hasLitefinServerPlugin !== null) {
+            return this._hasLitefinServerPlugin === true;
+        }
+        if (!this._serverUrl) {
+            return false;
+        }
+        // Fall back to the persisted per-server hint across cold boots
+        return storage.getItem(`serverPlugin:available:litefin:${this._serverUrl}`) === 'true';
+    }
+
+    /**
      * Checks if the Litefin companion server plugin is installed, enabled, and active on the Jellyfin server.
      * Caches the result after the initial check so downstream calls can
      * immediately bypass all /Litefin/* endpoints and seamlessly fall back to
@@ -1505,6 +1539,9 @@ export class ApiClient {
     async isLitefinPluginAvailable(force = false) {
         if (force) {
             this._hasLitefinServerPlugin = null;
+            if (this._serverUrl) {
+                storage.removeItem(`serverPlugin:available:litefin:${this._serverUrl}`);
+            }
         }
 
         // 1. Return cached evaluation immediately if already resolved
@@ -1548,6 +1585,7 @@ export class ApiClient {
                                 return matchesId && isActive;
                             });
                             this._hasLitefinServerPlugin = match;
+                            this._persistLitefinPluginAvailability(match);
                             log.info(
                                 `Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`
                             );
@@ -1564,6 +1602,7 @@ export class ApiClient {
                 // The Litefin Client web plugin answers unknown /Litefin/* paths with index.html
                 const isAvailable = Array.isArray(probeResult?.Items);
                 this._hasLitefinServerPlugin = isAvailable;
+                this._persistLitefinPluginAvailability(isAvailable);
                 log.info(
                     `Litefin server companion plugin ${isAvailable ? 'is installed and accessible' : 'not found'}`
                 );
@@ -1575,11 +1614,13 @@ export class ApiClient {
                         'Litefin server companion plugin is not installed or disabled — using native Jellyfin routes'
                     );
                     this._hasLitefinServerPlugin = false;
+                    this._persistLitefinPluginAvailability(false);
                     return false;
                 }
                 // 403 / 401 indicates endpoint exists on server but user is not authorized
                 if (err.status === 403 || err.status === 401) {
                     this._hasLitefinServerPlugin = true;
+                    this._persistLitefinPluginAvailability(true);
                     return true;
                 }
                 // Network or unexpected error — return false without permanently caching

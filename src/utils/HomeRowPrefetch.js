@@ -39,6 +39,25 @@ const log = logger.create('HomeRowPrefetch');
 let store = null;
 
 /**
+ * Determines whether Continue Watching and Next Up should use the server-side
+ * merged endpoint (/Litefin/MergedRows/ContinueAndNextUp).
+ *
+ * - Explicit 'true' always enables merged rows.
+ * - Explicit 'false' honors the user's choice for separate rows.
+ * - When unset (null), automatically enables merged rows whenever the Litefin
+ *   companion plugin is confirmed or persisted as installed on the server.
+ *
+ * @returns {boolean}
+ * @public
+ */
+export function shouldMergeResumeNextUp() {
+    const pref = storage.getItem('pref:mergeResumeNextUp');
+    if (pref === 'true') return true;
+    if (pref === 'false') return false;
+    return api.hasKnownLitefinPlugin();
+}
+
+/**
  * Fire the Continue Watching / Next Up requests for the given user (unless
  * already fired for that same user). Safe to call multiple times: repeated
  * calls for the same user are no-ops, and a call for a different user
@@ -69,10 +88,13 @@ export function fireHomeRowPrefetch(userId) {
         const savedLayout = homeLayoutManager.getSavedLayout() || [];
         const isHidden = (id) => savedLayout.some((c) => c.id === id && c.hidden);
 
-        const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
+        const mergeResumeNextUp = shouldMergeResumeNextUp();
 
         if (mergeResumeNextUp) {
-            if (isHidden('resume')) return;
+            if (isHidden('resume')) {
+                store = null;
+                return;
+            }
 
             // Replicate the merged-mode params computed inside the row's
             // fetchFn (limit / watched threshold / NextUpDateCutoff).
@@ -110,9 +132,18 @@ export function fireHomeRowPrefetch(userId) {
                 p.catch(() => {});
                 store.nextUp = p;
             }
+            // Reset store when every row was hidden so future visits can re-arm
+            if (!store.resume && !store.nextUp) {
+                store = null;
+                return;
+            }
         }
 
-        log.debug('Home row prefetch fired (resume/next-up in flight)');
+        log.debug(
+            mergeResumeNextUp
+                ? 'Home row prefetch fired (MergedRows/ContinueAndNextUp in flight)'
+                : 'Home row prefetch fired (resume/next-up in flight)'
+        );
     } catch (err) {
         log.warn('Home row prefetch failed:', err);
     }

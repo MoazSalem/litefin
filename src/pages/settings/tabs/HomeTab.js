@@ -23,6 +23,7 @@ import { logger } from '../../../utils/Logger.js';
 import { UP_SVG, DOWN_SVG, EYE_OFF, EYE_ON } from '../../../utils/Icons.js';
 import { CustomCollectionsModal, getCustomCollectionsLabel } from '../modals/CustomCollectionsModal.js';
 import { appendHomeScreenSectionsRows } from '../helpers/HomeScreenSectionsSettings.js';
+import { shouldMergeResumeNextUp } from '../../../utils/HomeRowPrefetch.js';
 
 const log = logger.create('HomeTab');
 
@@ -144,7 +145,7 @@ export class HomeTab {
 
                 ${this._item(i18n.t('HomeInitialFocus') || 'Initial Focus', i18n.t('HomeInitialFocusDescription') || 'Choose whether the home page initially focuses the hero carousel or the first content row.', this._drop('home-initial-focus-select', initialFocusOpts, initialFocus), 'home-initial-focus-item', heroEnabled)}
                 ${this._item(i18n.t('LabelHomeRowsLimit') || 'Home Rows Limit', i18n.t('HomeRowsLimitDescription') || 'Maximum items per row.', this._drop('home-rows-limit-select', rowsOpts, parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10)))}
-                ${this._item(i18n.t('LabelMergeResumeNextUp'), i18n.t('LabelMergeResumeNextUpDescription'), this._toggle('toggle-merge-resume-nextup', storage.getItem('pref:mergeResumeNextUp') === 'true'))}
+                ${this._item(i18n.t('LabelMergeResumeNextUp'), i18n.t('LabelMergeResumeNextUpDescription'), this._toggle('toggle-merge-resume-nextup', shouldMergeResumeNextUp()))}
                 ${this._item(i18n.t('LabelEnableRecommendationRows') || i18n.t('EnableRecommendationRows') || 'Enable Recommendation Rows', i18n.t('LabelEnableRecommendationRowsDescription') || i18n.t('EnableRecommendationRowsDescription') || 'Display personalized recommendations based on viewing history and favorites.', this._toggle('toggle-enable-recommendations', enableRecommendations))}
                 ${this._item(i18n.t('LabelBecauseYouWatched'), i18n.t('LabelBecauseYouWatchedDescription'), this._toggle('toggle-because-you-watched', bywEnabled), 'recommendation-byw-item', enableRecommendations)}
                 ${TASTE_KINDS.map((kind) => this._item(i18n.t(TASTE_LABEL_KEYS[kind]), i18n.t(TASTE_LABEL_KEYS[kind] + 'Description'), this._toggle(`toggle-reco-${kind}`, storage.getItem(TASTE_PREF_KEYS[kind]) === 'true'), `recommendation-kind-${kind}-item`, enableRecommendations)).join('')}
@@ -194,7 +195,7 @@ export class HomeTab {
         try {
             const viewsResponse = await api.getUserViews();
             const views = viewsResponse.Items || [];
-            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
+            const mergeResumeNextUp = shouldMergeResumeNextUp();
             const descriptors = [{ id: 'my-media', title: i18n.t('HeaderMyMedia') }, { id: 'resume', title: i18n.t('HeaderContinueWatching') }];
 
             const useTrendingColName = storage.getItem('pref:useTrendingCollectionName') === 'true';
@@ -399,7 +400,7 @@ export class HomeTab {
         const mergeBtn = rootEl.querySelector('#toggle-merge-resume-nextup');
         if (mergeBtn) {
             mergeBtn.addEventListener('click', () => {
-                const next = !(storage.getItem('pref:mergeResumeNextUp') === 'true');
+                const next = !shouldMergeResumeNextUp();
                 storage.setItem('pref:mergeResumeNextUp', next.toString());
                 mergeBtn.classList.toggle('active', next);
                 this.setupHomeLayoutUI();

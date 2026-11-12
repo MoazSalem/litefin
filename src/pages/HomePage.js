@@ -54,7 +54,7 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
 import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
-import { fireHomeRowPrefetch, consumeHomeRowPrefetch } from '../utils/HomeRowPrefetch.js';
+import { fireHomeRowPrefetch, consumeHomeRowPrefetch, shouldMergeResumeNextUp } from '../utils/HomeRowPrefetch.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 // -----------------------------------------------------------------------------
 // Recommendation Engine & Taste Profiling (Because You Watched / Similar)
@@ -537,7 +537,7 @@ class HomePage extends Page {
         }
 
         // ── Priority 1: Continue Watching & Next Up ──────────────────────────
-        const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
+        const mergeResumeNextUp = shouldMergeResumeNextUp();
 
         // ── Priority 1: Trending / Em Alta (Movies & Series custom slots) ───
         // Shared memoized promise to avoid duplicate recursive collections queries
@@ -887,10 +887,10 @@ class HomePage extends Page {
                         const preflight = this._consumePrefetch('merged');
                         const response = await (preflight || api.getMergedRows(mergedParams));
 
-                        // Verify that response contains valid items and no corrupted zero IDs
+                        // Verify that response contains a valid Items array and no corrupted zero IDs.
                         // Older or misconfigured server plugins can return Id: "0", which causes broken routes.
                         const hasCorruptIds = response?.Items?.some((i) => !i.Id || i.Id === '0');
-                        if (response && response.Items && response.Items.length > 0 && !hasCorruptIds) {
+                        if (response && Array.isArray(response.Items) && !hasCorruptIds) {
                             // Defensively filter items to ensure finished items and items exceeding watched threshold are excluded
                             const filteredPluginItems = response.Items.filter((item) => {
                                 // Exclude invalid items and container folders
@@ -919,12 +919,12 @@ class HomePage extends Page {
                                 return true;
                             });
 
-                            if (filteredPluginItems.length > 0) {
-                                log.info(
-                                    'Successfully fetched and verified merged items from server-side Litefin plugin'
-                                );
-                                return filteredPluginItems;
-                            }
+                            // Empty array from a healthy companion plugin means zero active items
+                            // (e.g. after marking the last item played) — avoid firing legacy endpoints.
+                            log.info(
+                                'Successfully fetched and verified merged items from server-side Litefin plugin'
+                            );
+                            return filteredPluginItems.length > 0 ? filteredPluginItems : null;
                         }
 
                         if (hasCorruptIds) {
