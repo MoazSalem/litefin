@@ -15,3 +15,4 @@ export { default as SeerrDetailsPage } from './SeerrDetailsPage.js';
 export { default as SeerrPersonPage } from './SeerrPersonPage.js';
 export { default as SettingsPage } from './settings/SettingsPage.js';
 export { default as EmulatorPage } from './EmulatorPage.js';
+export { default as NowPlayingPage } from './NowPlayingPage.js';
