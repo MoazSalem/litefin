@@ -629,6 +629,56 @@ test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-on
 });
 
 // ============================================================================
+// 2c. Packaging — warmup.mp4 ships only in Tizen packages
+// ============================================================================
+
+test('Packaging: warmup.mp4 is excluded from every non-Tizen package', () => {
+    const webpackCfg = readSrc('webpack.config.cjs');
+
+    assert.match(
+        webpackCfg,
+        /const assetsPattern = \{ from: 'src\/assets', to: 'assets', noErrorOnMissing: true \};/,
+        'Asset copy pattern must stay centralized in assetsPattern'
+    );
+    assert.match(
+        webpackCfg,
+        /if \(buildTier === 'desktop' \|\| buildTier === 'web'\) \{\s*assetsPattern\.globOptions = \{ ignore: \['\*\*\/warmup\.mp4'\] \};/,
+        'Desktop/Android (Tauri) and web tiers must not copy warmup.mp4'
+    );
+
+    // Tizen TV tiers must keep copying it untouched.
+    assert.ok(
+        !/buildTier === 'modern'[\s\S]{0,120}warmup\.mp4/.test(webpackCfg),
+        'Tizen TV tiers must still ship the warmup clip'
+    );
+
+    // webOS IPK: stripped from the staging copy, never from the shared dist dir.
+    const gulp = readSrc('gulpfile.mjs');
+    assert.match(
+        gulp,
+        /path\.join\(stagingDir, 'assets\/warmup\.mp4'\)/,
+        'createIpk must delete assets/warmup.mp4 from the WebOS staging copy'
+    );
+    assert.ok(
+        !/del\(\s*\[[^\]]*path\.join\(buildDir, 'assets\/warmup\.mp4'\)/.test(gulp),
+        'IPK packaging must never delete the asset from the shared Tizen build directory'
+    );
+
+    // Web client plugin: stripped from the bundled web/ copy only.
+    const pluginScript = readSrc('scripts/package-plugin.mjs');
+    assert.match(
+        pluginScript,
+        /const warmupAssetPath = path\.join\(targetWebDir, 'assets', 'warmup\.mp4'\);/,
+        'Plugin packaging must strip warmup.mp4 from the bundled web/ directory'
+    );
+    assert.match(
+        pluginScript,
+        /if \(fs\.existsSync\(warmupAssetPath\)\) \{\s*fs\.unlinkSync\(warmupAssetPath\);/,
+        'Plugin packaging must unlink the warmup clip when present'
+    );
+});
+
+// ============================================================================
 // 3. Part 3 Cluster 1 — HeroCarousel CSS, Decode Ordering & Deferred AutoStart
 // ============================================================================
 

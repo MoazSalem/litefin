@@ -233,6 +233,17 @@ if (fs.existsSync(targetWebDir)) {
 }
 fs.cpSync(distClientDir, targetWebDir, { recursive: true });
 
+/*
+ * The AVPlay boot warmup clip is Tizen-only: the web client plugin runs in a
+ * browser and has no hardware AVPlay plane, so it never requests or needs the
+ * asset. Drop it from the bundled web/ copy (the source dist/<tier> folder is
+ * left untouched for Tizen WGT packaging).
+ */
+const warmupAssetPath = path.join(targetWebDir, 'assets', 'warmup.mp4');
+if (fs.existsSync(warmupAssetPath)) {
+    fs.unlinkSync(warmupAssetPath);
+}
+
 // Copy icon_oblong.png into plugin package root
 const iconOblongSrc = path.join(rootDir, 'assets', 'icon_oblong.png');
 if (fs.existsSync(iconOblongSrc)) {

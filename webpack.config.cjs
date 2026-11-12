@@ -198,6 +198,19 @@ function getPlugins(tier, options = {}) {
     // Retrieve the source icon path, defaulting to standard icon.png in assets/
     const iconSrc = options.iconSrc || 'assets/icon.png';
 
+    /*
+     * Bundled assets (images, resources, etc.).
+     *
+     * warmup.mp4 is a Tizen-only artifact: the boot compositor warmup replays it
+     * through the hardware AVPlay plane behind the app splash. Desktop, Android
+     * (both Tauri) and the web client plugin have no AVPlay plane, so the clip is
+     * deliberately omitted from those outputs instead of shipping dead weight.
+     */
+    const assetsPattern = { from: 'src/assets', to: 'assets', noErrorOnMissing: true };
+    if (buildTier === 'desktop' || buildTier === 'web') {
+        assetsPattern.globOptions = { ignore: ['**/warmup.mp4'] };
+    }
+
     // Build files pattern list for CopyWebpackPlugin
     const patterns = [
         // Copy Tizen config file to root of build directory
@@ -210,7 +223,7 @@ function getPlugins(tier, options = {}) {
         { from: 'assets/icon-80.png', to: 'assets/icon-80.png' },
         { from: 'assets/icon-130.png', to: 'assets/icon-130.png' },
         // Copy general assets (images, resources, etc.)
-        { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+        assetsPattern,
         /*
          * Canonical translation keys dictionary:
          * Emits _keys.json containing only the ordered keys array.
