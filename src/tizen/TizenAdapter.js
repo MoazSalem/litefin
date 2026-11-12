@@ -618,6 +618,16 @@ class TizenAdapter {
         if (!this._isTizen) {
             return false;
         }
+        /*
+         * User preference gate (Settings > Performance > AVPlay Boot Warmup).
+         * This warmup opens a real native AVPlay session behind the splash, so it
+         * stays opt-out on firmware where the extra decoder cycle delays startup.
+         * Default is enabled: only an explicit 'false' disables it.
+         */
+        if (storage.getItem('pref:avplayBootWarmup') === 'false') {
+            log.info('TizenAdapter: AVPlay boot warmup disabled in Performance settings');
+            return false;
+        }
         if (this._compositorWarmed) {
             return true;
         }

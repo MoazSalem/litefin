@@ -20,6 +20,7 @@ import { platformInfo } from '../../../utils/PlatformInfo.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { PlayerSettings } from '../../../utils/PlayerSettings.js';
 import { i18n } from '../../../utils/i18n.js';
+import { tizenAdapter } from '../../../tizen/TizenAdapter.js';
 import { logger } from '../../../utils/Logger.js';
 
 const log = logger.create('PerformanceTab');
@@ -83,12 +84,26 @@ export class PerformanceTab {
         const scrollAlignment = storage.getItem('pref:verticalScrollAlignment') || 'bottom';
         const libraryPageSize = storage.getItem('pref:libraryPageSize') || 50;
         const queueEpisodeLimit = PlayerSettings.get('playQueueEpisodeLimit') || 50;
+        /*
+         * Tizen-only boot warmup toggle. The warmup is a hardware hack (it opens
+         * a real AVPlay session behind the splash), so it is user-disableable.
+         * Default is enabled; the whole row is only rendered on Samsung Tizen.
+         */
+        const avplayBootWarmupEnabled = storage.getItem('pref:avplayBootWarmup') !== 'false';
+        const avplayBootWarmupSetting = platformInfo.isTizen
+            ? `
+                <div class="setting-item">
+                    <div class="setting-label"><span class="setting-name" data-i18n="AvplayBootWarmup">${i18n.t('AvplayBootWarmup') || 'AVPlay Boot Warmup (Tizen)'}</span><span class="setting-description" data-i18n="AvplayBootWarmupDescription">${i18n.t('AvplayBootWarmupDescription') || 'Play a short hardware video behind the startup splash on Tizen to warm the TV video plane before the first screen renders. Disable if startup feels delayed on this TV.'}</span></div>
+                    <div class="setting-control"><button class="toggle-switch ${avplayBootWarmupEnabled ? 'active' : ''}" id="toggle-avplay-boot-warmup" tabindex="0"></button></div>
+                </div>
+            `
+            : '';
 
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Performance">${i18n.t('Performance') || 'Performance'}</h2>
                 <p class="content-subtitle" data-i18n="PerformanceTabDescription">${i18n.t('PerformanceTabDescription') || 'Optimize memory usage, scrolling animations, cache policies, and rendering speed.'}</p>
-
+${avplayBootWarmupSetting}
                 <div class="setting-item">
                     <div class="setting-label"><span class="setting-name" data-i18n="LabelReloadOnResume">${i18n.t('LabelReloadOnResume') || 'Reload Page on Resume'}</span><span class="setting-description" data-i18n="ReloadOnResumeDescription">${i18n.t('ReloadOnResumeDescription') || 'Automatically reload the active view when returning from background or waking from sleep.'}</span></div>
                     <div class="setting-control"><button class="toggle-switch ${reloadOnResumeEnabled ? 'active' : ''}" id="toggle-reload-on-resume" tabindex="0"></button></div>
@@ -318,6 +333,23 @@ export class PerformanceTab {
 
         const root =
             container || (this.page && typeof this.page.$ === 'function' ? this.page.element : null) || document;
+
+        // Toggle AVPlay boot warmup (Tizen only; row is absent on other targets)
+        const avplayBootWarmupToggle = root.querySelector('#toggle-avplay-boot-warmup');
+        if (avplayBootWarmupToggle) {
+            this._addListener(avplayBootWarmupToggle, 'click', () => {
+                const isEnabled = storage.getItem('pref:avplayBootWarmup') !== 'false';
+                const nextState = !isEnabled;
+                storage.setItem('pref:avplayBootWarmup', String(nextState));
+                avplayBootWarmupToggle.classList.toggle('active', nextState);
+                // Disabling while a warmup cycle is still running must release the
+                // native AVPlay session so real playback can open cleanly.
+                if (!nextState && tizenAdapter && typeof tizenAdapter.abortWarmup === 'function') {
+                    tizenAdapter.abortWarmup();
+                }
+                log.info(`AVPlay boot warmup preference set to: ${nextState}`);
+            });
+        }
 
         // Toggle Reload Page on Resume
         const reloadResumeToggle = root.querySelector('#toggle-reload-on-resume');
