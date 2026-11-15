@@ -412,10 +412,12 @@ export function buildJellyfinProfile(options = {}) {
     // Dolby TrueHD: WebOS web applications and MediaPipeline lack native decode
     // or bitstream passthrough for TrueHD from HTTP progressive media streams.
     // TrueHD bitstream is only supported on LG TVs via external HDMI inputs.
-    // We must ensure TrueHD is never advertised in DirectPlayProfiles or
-    // DirectStreamProfiles, so Jellyfin copies video and transcodes TrueHD to E-AC-3/AC-3.
+    // TrueHD is advertised only when forced on in settings. On Auto it is not advertised in
+    // DirectPlayProfiles or DirectStreamProfiles, so Jellyfin copies video and transcodes
+    // TrueHD to E-AC-3/AC-3. Forced on, Jellyfin is told the TV can take it.
     // -------------------------------------------------------------------------
-    const enableTrueHd = false;
+    const trueHdSetting = PlayerSettings.get('enableTrueHd');
+    const enableTrueHd = trueHdSetting === 'enable';
 
     log.info('Evaluation flags:', {
         isHtml5,
