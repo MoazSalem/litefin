@@ -483,3 +483,78 @@ test('PerformanceReportCollector: markOperation ring buffer & time-window attrib
         }
     }
 });
+
+test('PerformanceReportCollector: 200 long-task ring buffer capacity and pre/during/post playback telemetry split', async () => {
+    const { eventBus } = await import('../src/core/EventBus.js');
+    const collector = new PerformanceReportCollector();
+
+    assert.equal(collector._maxLongTasks, 200, 'Long tasks capacity should be sized to 200 entries');
+
+    collector.start();
+
+    // 1. Verify 200-task ring buffer capacity
+    for (let i = 0; i < 210; i++) {
+        collector._recordLongTask({
+            startTime: collector._startTime + (i * 10),
+            duration: 55,
+            attribution: []
+        });
+    }
+    assert.equal(collector._longTasks.length, 200, 'Ring buffer must hold up to 200 long tasks');
+    assert.equal(collector._longTasks[0].timeOffsetMs, 100, 'Oldest 10 tasks evicted when exceeding 200 capacity');
+
+    // 2. Pre-playback UI frame simulation on /home
+    collector._lastFrameTime = 1000;
+    globalThis.window.location.hash = '#/home';
+    collector._onFrame(1016); // 16ms -> <16.7ms
+    collector._onFrame(1036); // 20ms -> 16.7-25ms
+    collector._onFrame(1096); // 60ms -> >50ms
+
+    assert.equal(collector._prePlaybackFrames.count, 3, 'Pre-playback frame count');
+    assert.equal(collector._prePlaybackFrames.under16ms, 1, 'Pre-playback <16.7ms frame count');
+    assert.equal(collector._prePlaybackFrames.under25ms, 1, 'Pre-playback 16.7-25ms frame count');
+    assert.equal(collector._prePlaybackFrames.over50ms, 1, 'Pre-playback >50ms frame count');
+
+    // 3. During playback frame simulation on /player
+    eventBus.emit('router:navigate', { path: '/player/video123' });
+    globalThis.window.location.hash = '#/player/video123';
+    collector._onFrame(1112); // 16ms -> <16.7ms
+    collector._onFrame(1132); // 20ms -> 16.7-25ms
+
+    assert.equal(collector._duringPlaybackFrames.count, 2, 'During-playback frame count');
+    assert.equal(collector._duringPlaybackFrames.under16ms, 1, 'During-playback <16.7ms frame count');
+    assert.equal(collector._duringPlaybackFrames.under25ms, 1, 'During-playback 16.7-25ms frame count');
+
+    // 4. Post-playback frame simulation on /details after player:stop
+    eventBus.emit('player:stopped', { itemId: 'video123', reason: 'back' });
+    eventBus.emit('router:navigate', { path: '/details/video123' });
+    globalThis.window.location.hash = '#/details/video123';
+    collector._onFrame(1148); // 16ms -> <16.7ms
+    collector._onFrame(1210); // 62ms -> >50ms
+
+    assert.equal(collector._postPlaybackFrames.count, 2, 'Post-playback frame count');
+    assert.equal(collector._postPlaybackFrames.under16ms, 1, 'Post-playback <16.7ms frame count');
+    assert.equal(collector._postPlaybackFrames.over50ms, 1, 'Post-playback >50ms frame count');
+
+    // 5. Build report and verify Section 3 breakdown in ASCII text and structured JSON
+    const report = collector.buildReport();
+
+    // Verify structured JSON contains playback phase objects
+    assert.ok(report.json.framerates.prePlayback, 'JSON contains prePlayback telemetry');
+    assert.equal(report.json.framerates.prePlayback.totalFrames, 3);
+    assert.ok(report.json.framerates.duringPlayback, 'JSON contains duringPlayback telemetry');
+    assert.equal(report.json.framerates.duringPlayback.totalFrames, 2);
+    assert.ok(report.json.framerates.postPlayback, 'JSON contains postPlayback telemetry');
+    assert.equal(report.json.framerates.postPlayback.totalFrames, 2);
+
+    // Verify ASCII report includes Section 3 playback phase breakdown
+    assert.ok(report.text.includes('Playback Phase Breakdown:'), 'ASCII includes Playback Phase Breakdown header');
+    assert.ok(report.text.includes('Pre-Playback UI Frames:'), 'ASCII includes Pre-Playback UI Frames');
+    assert.ok(report.text.includes('During Playback Frames:'), 'ASCII includes During Playback Frames');
+    assert.ok(report.text.includes('Post-Playback UI Frames:'), 'ASCII includes Post-Playback UI Frames');
+
+    // Verify JSON bundle retains all 200 long tasks
+    assert.equal(report.json.longTasks.entries.length, 200, 'JSON retains all 200 long tasks');
+
+    collector.stop();
+});

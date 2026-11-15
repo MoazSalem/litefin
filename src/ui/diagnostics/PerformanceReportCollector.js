@@ -83,13 +83,29 @@ export class PerformanceReportCollector {
             over50ms: 0 // > 50.0ms (< 20 FPS - Severe Stutter)
         };
 
+        /*
+         * Playback lifecycle telemetry state.
+         * Distinguishes whether the user has triggered media playback during the session,
+         * segmenting framerate telemetry into pre-playback, active playback, and post-playback.
+         */
+        this._hasPlayedVideo = false;
+
+        // Telemetry counters partitioned by playback lifecycle phase
+        this._prePlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        this._duringPlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        this._postPlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+
         // Ring buffer of worst frame drop events (duration > 26ms)
         this._jankEvents = [];
         this._maxJankEvents = 30;
 
-        // Main thread long tasks (> 50ms) recorded after collector start()
+        /*
+         * Main thread long tasks (> 50ms) recorded after collector start().
+         * Sized to 200-task capacity so multi-minute profiling sessions retain early
+         * boot and page-mount freezes alongside sustained navigation tasks.
+         */
         this._longTasks = [];
-        this._maxLongTasks = 50;
+        this._maxLongTasks = 200;
         this._totalLongTaskTimeMs = 0;
         this._maxLongTaskMs = 0;
 
@@ -178,6 +194,12 @@ export class PerformanceReportCollector {
             under50ms: 0,
             over50ms: 0
         };
+
+        // Reset video playback state and frame phase telemetry buckets
+        this._hasPlayedVideo = false;
+        this._prePlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        this._duringPlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        this._postPlaybackFrames = { count: 0, durationMs: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
 
         // Capture initial memory and DOM node baselines
         this._recordInitialBaselines();
@@ -514,6 +536,20 @@ export class PerformanceReportCollector {
                 this._activeNavigation = null;
             }
 
+            /*
+             * Transition boundary: entering or exiting the player route indicates
+             * that video playback has occurred, distinguishing subsequent UI ticks
+             * as post-playback frames.
+             */
+            if (
+                to.startsWith('/player') ||
+                to.startsWith('#/player') ||
+                from.startsWith('/player') ||
+                from.startsWith('#/player')
+            ) {
+                this._hasPlayedVideo = true;
+            }
+
             const navEntry = {
                 timestampMs: relativeOffsetMs,
                 from,
@@ -545,6 +581,22 @@ export class PerformanceReportCollector {
 
         eventBus.on('router:navigate', onNavigate);
         this._unsubscribers.push(() => eventBus.off('router:navigate', onNavigate));
+
+        /*
+         * Listen for playback termination events from the core playback subsystem.
+         * Catches both 'player:stop' and 'player:stopped' signals to mark that video
+         * playback has taken place even if navigation was triggered out-of-band.
+         */
+        const onPlaybackStop = () => {
+            this._hasPlayedVideo = true;
+        };
+
+        eventBus.on('player:stop', onPlaybackStop);
+        eventBus.on('player:stopped', onPlaybackStop);
+        this._unsubscribers.push(() => {
+            eventBus.off('player:stop', onPlaybackStop);
+            eventBus.off('player:stopped', onPlaybackStop);
+        });
     }
 
     /**
@@ -587,9 +639,46 @@ export class PerformanceReportCollector {
                 this._distribution.over50ms++;
             }
 
+            /*
+             * Snapshot the active route path to segregate UI rendering telemetry
+             * based on playback lifecycle state (pre-playback vs during vs post).
+             */
+            const currentRoute =
+                router && typeof router.getCurrentPath === 'function'
+                    ? router.getCurrentPath()
+                    : typeof window !== 'undefined' && window.location
+                      ? window.location.hash || '/'
+                      : '/';
+
+            // Mark playback occurrence if currently within player route
+            const isPlayer = currentRoute.startsWith('/player') || currentRoute.startsWith('#/player');
+            if (isPlayer) {
+                this._hasPlayedVideo = true;
+            }
+
+            // Route frame sample to the active lifecycle bucket
+            let phaseBucket;
+            if (isPlayer) {
+                phaseBucket = this._duringPlaybackFrames;
+            } else if (!this._hasPlayedVideo) {
+                phaseBucket = this._prePlaybackFrames;
+            } else {
+                phaseBucket = this._postPlaybackFrames;
+            }
+
+            // Accumulate duration and framerate brackets for the active phase
+            phaseBucket.count++;
+            phaseBucket.durationMs += delta;
+            if (delta <= 16.7) {
+                phaseBucket.under16ms++;
+            } else if (delta <= 25.0) {
+                phaseBucket.under25ms++;
+            } else if (delta > 50.0) {
+                phaseBucket.over50ms++;
+            }
+
             // Record dropped frame / stutter (> 26ms represents drop below ~38 FPS)
             if (delta > 26) {
-                const currentRoute = router && typeof router.getCurrentPath === 'function' ? router.getCurrentPath() : '/';
                 const relativeOffsetMs = Math.round(now - this._startTime);
 
                 this._jankEvents.push({
@@ -795,7 +884,34 @@ export class PerformanceReportCollector {
                 pointOnePercentLowFps: pointOnePercentLow,
                 jankStuttersCount: this._jankEvents.length,
                 distribution: this._distribution,
-                recentJankSpikes: this._jankEvents
+                recentJankSpikes: this._jankEvents,
+                prePlayback: {
+                    totalFrames: this._prePlaybackFrames.count,
+                    averageFps: this._prePlaybackFrames.durationMs > 0
+                        ? Math.round((this._prePlaybackFrames.count / this._prePlaybackFrames.durationMs) * 1000)
+                        : 0,
+                    under16ms: this._prePlaybackFrames.under16ms,
+                    under25ms: this._prePlaybackFrames.under25ms,
+                    over50ms: this._prePlaybackFrames.over50ms
+                },
+                duringPlayback: {
+                    totalFrames: this._duringPlaybackFrames.count,
+                    averageFps: this._duringPlaybackFrames.durationMs > 0
+                        ? Math.round((this._duringPlaybackFrames.count / this._duringPlaybackFrames.durationMs) * 1000)
+                        : 0,
+                    under16ms: this._duringPlaybackFrames.under16ms,
+                    under25ms: this._duringPlaybackFrames.under25ms,
+                    over50ms: this._duringPlaybackFrames.over50ms
+                },
+                postPlayback: {
+                    totalFrames: this._postPlaybackFrames.count,
+                    averageFps: this._postPlaybackFrames.durationMs > 0
+                        ? Math.round((this._postPlaybackFrames.count / this._postPlaybackFrames.durationMs) * 1000)
+                        : 0,
+                    under16ms: this._postPlaybackFrames.under16ms,
+                    under25ms: this._postPlaybackFrames.under25ms,
+                    over50ms: this._postPlaybackFrames.over50ms
+                }
             },
             longTasks: {
                 totalDetected: this._longTasks.length,
@@ -849,6 +965,12 @@ export class PerformanceReportCollector {
 
         const totalDist = Math.max(1, f.totalFrames);
         const pct = (count) => ((count / totalDist) * 100).toFixed(1);
+
+        // Extract playback phase breakdowns with safe zero-division fallbacks
+        const pre = f.prePlayback || { totalFrames: 0, averageFps: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        const during = f.duringPlayback || { totalFrames: 0, averageFps: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        const post = f.postPlayback || { totalFrames: 0, averageFps: 0, under16ms: 0, under25ms: 0, over50ms: 0 };
+        const phasePct = (count, total) => (total > 0 ? ((count / total) * 100).toFixed(1) : '0.0');
 
         const lines = [
             '================================================================================',
@@ -904,6 +1026,11 @@ export class PerformanceReportCollector {
             `  • 33.3ms - 50.0ms (20-30):   ${f.distribution.under50ms.toLocaleString().padStart(6)} (${pct(f.distribution.under50ms)}%)`,
             `  • > 50.0ms (< 20 FPS):       ${f.distribution.over50ms.toLocaleString().padStart(6)} (${pct(f.distribution.over50ms)}%) [Severe Stutter]`,
             '',
+            'Playback Phase Breakdown:',
+            `  • Pre-Playback UI Frames:    ${pre.totalFrames.toLocaleString()} frames | ${pre.averageFps} FPS | <16.7ms: ${phasePct(pre.under16ms, pre.totalFrames)}% | 16.7-25ms: ${phasePct(pre.under25ms, pre.totalFrames)}% | >50ms: ${phasePct(pre.over50ms, pre.totalFrames)}%`,
+            `  • During Playback Frames:    ${during.totalFrames.toLocaleString()} frames | ${during.averageFps} FPS | <16.7ms: ${phasePct(during.under16ms, during.totalFrames)}% | 16.7-25ms: ${phasePct(during.under25ms, during.totalFrames)}% | >50ms: ${phasePct(during.over50ms, during.totalFrames)}%`,
+            `  • Post-Playback UI Frames:   ${post.totalFrames.toLocaleString()} frames | ${post.averageFps} FPS | <16.7ms: ${phasePct(post.under16ms, post.totalFrames)}% | 16.7-25ms: ${phasePct(post.under25ms, post.totalFrames)}% | >50ms: ${phasePct(post.over50ms, post.totalFrames)}%`,
+            '',
             '--------------------------------------------------------------------------------',
             '4. MAIN THREAD LONG TASKS (> 50ms)',
             '--------------------------------------------------------------------------------',
@@ -917,7 +1044,7 @@ export class PerformanceReportCollector {
         // Format recent long tasks with route, operation attribution, and container
         if (l.entries.length > 0) {
             lines.push('Captured Long Tasks Log:');
-            l.entries.slice(-15).forEach((task, idx) => {
+            l.entries.slice(-30).forEach((task, idx) => {
                 const sec = (task.timeOffsetMs / 1000).toFixed(1);
                 const src = task.containerSrc ? ` (${task.containerSrc})` : '';
                 const op = task.operation ? ` | Op: ${task.operation}` : '';
