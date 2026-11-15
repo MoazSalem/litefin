@@ -266,6 +266,12 @@ class HomePage extends Page {
         this._networkPrefetchStaggerTimers = [];
 
         /**
+         * Timer handle for prompt cache serialization on small eager-only home layouts.
+         * @type {number|null}
+         */
+        this._eagerCacheTimer = null;
+
+        /**
          * Guard ensuring only one single-shot scroll:finished listener is active.
          * @type {boolean}
          */
@@ -430,6 +436,17 @@ class HomePage extends Page {
             clearTimeout(this._homeIdlePrefetchTimer);
             this._homeIdlePrefetchTimer = null;
         }
+        // Ensure homepage state is preserved for instant back-navigation even
+        // if user navigates away before the deferred idle cache task executes
+        if (!this._wasPageCached && this._rowRegistry && this._rowRegistry.size > 0) {
+            this._cacheHomeState();
+        }
+
+        if (this._eagerCacheTimer) {
+            clearTimeout(this._eagerCacheTimer);
+            this._eagerCacheTimer = null;
+        }
+
         if (this._deferredCacheTask) {
             idleGate.cancel(this._deferredCacheTask);
             this._deferredCacheTask = null;
@@ -1831,12 +1848,20 @@ class HomePage extends Page {
                 this._scheduleHomeIdlePrefetch(350);
                 this._scheduleDeferredNetworkPrefetch(300);
             } else {
-                // All rows rendered eagerly — finalize readiness right away, and
-                // defer scroll-cache offsetTop walks & page serialization until idle
-                // so we never trigger a synchronous full-tree layout flush at paint.
+                // All rows mounted eagerly: finalize readiness and schedule prompt cache refresh
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
                 this._scheduleDeferredBatchCacheRefresh();
+
+                // On compact layouts where all rows mount eagerly (e.g. 2 rows), ensure cache
+                // serialization runs shortly after mount so rapid navigation (/home -> /library)
+                // preserves cache before the 2000ms idle threshold.
+                this._eagerCacheTimer = setTimeout(() => {
+                    this._eagerCacheTimer = null;
+                    if (this._isMounted && !this._wasPageCached) {
+                        this._cacheHomeState();
+                    }
+                }, 500);
             }
         } catch (error) {
             log.error('Pipeline failed', error);
@@ -4704,6 +4729,16 @@ class HomePage extends Page {
         });
 
         log.info('Homepage data cached for instant back-navigation');
+        this._wasPageCached = true;
+    }
+
+    /**
+     * Serializes and caches homepage state for instant back-navigation.
+     * Alias for _savePageCache().
+     * @private
+     */
+    _cacheHomeState() {
+        return this._savePageCache();
     }
 
     // =========================================================================
