@@ -23,6 +23,7 @@ import { customHeaders } from '../utils/CustomHeaders.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { idleGate } from '../utils/IdleGate.js';
 import { markPerfOperation } from '../utils/PerfMarker.js';
+import { scrollController } from './ScrollController.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -1215,6 +1216,21 @@ class HeroCarousel {
                 let applied = false;
                 const commitBackdrop = () => {
                     if (applied) return;
+
+                    // If user is actively scrolling or navigating, defer DOM/style mutations
+                    // so late-arriving image decodes never cause jank during row navigation.
+                    const isScrolling =
+                        (scrollController && scrollController.isAnimating) ||
+                        (typeof window !== 'undefined' &&
+                            window.__scrollController &&
+                            window.__scrollController.isAnimating);
+                    const isUserActive =
+                        !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                    if (isScrolling || isUserActive) {
+                        idleGate.runWhenIdle(commitBackdrop, 1500, 0);
+                        return;
+                    }
+
                     applied = true;
                     if (!this._container || backdrop.dataset.backdrop !== url) return;
 
@@ -1335,6 +1351,20 @@ class HeroCarousel {
             let logoDone = false;
             const finalizeLogo = () => {
                 if (logoDone) return;
+
+                // Defer logo height adjustments and layout queries while the user is actively scrolling
+                const isScrolling =
+                    (scrollController && scrollController.isAnimating) ||
+                    (typeof window !== 'undefined' &&
+                        window.__scrollController &&
+                        window.__scrollController.isAnimating);
+                const isUserActive =
+                    !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                if (isScrolling || isUserActive) {
+                    idleGate.runWhenIdle(finalizeLogo, 1500, 0);
+                    return;
+                }
+
                 logoDone = true;
                 if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.finalizeLogo');
                 adjustLogoHeight();

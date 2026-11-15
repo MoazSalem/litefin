@@ -4487,7 +4487,21 @@ class HomePage extends Page {
                 const enrichRemaining = async () => {
                     for (let i = 1; i < items.length; i++) {
                         if (!this._isMounted || mdblist.plugin._isServerAvailable === false) break;
-                        await new Promise((resolve) => setTimeout(resolve, 350));
+
+                        // Pause the staggered loop whenever user is actively pressing keys or scrolling
+                        const isScrolling =
+                            (scrollController && scrollController.isAnimating) ||
+                            (typeof window !== 'undefined' &&
+                                window.__scrollController &&
+                                window.__scrollController.isAnimating);
+                        const isUserActive =
+                            !idleGate.isBootLocked() && idleGate.isUserActive(2000);
+                        if (isScrolling || isUserActive) {
+                            await new Promise((resolve) => idleGate.runWhenIdle(resolve, 2000, 0));
+                        } else {
+                            await new Promise((resolve) => setTimeout(resolve, 350));
+                        }
+
                         if (!this._isMounted || mdblist.plugin._isServerAvailable === false) break;
                         await enrichItem(items[i], i);
                     }

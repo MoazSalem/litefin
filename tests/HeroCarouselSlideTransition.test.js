@@ -409,9 +409,9 @@ test('HeroCarousel: staggers slide preloads every 100ms behind idleGate (no Imag
         assert.ok(carousel._decodedBackdrops[0], 'Slide 0 must decode immediately on mount');
         assert.equal(carousel._decodedBackdrops[1], undefined, 'Slide 1 must wait for 100ms staggered preload');
 
-        // After ~160ms (> 100ms spacing timer + idleGate check), Slide 1 starts preloading
+        // After ~130ms (> 100ms spacing timer + idleGate check), Slide 1 starts preloading
         // while Slide 2 is still deferred to its own 100ms window
-        await new Promise((r) => setTimeout(r, 160));
+        await new Promise((r) => setTimeout(r, 130));
         assert.ok(carousel._decodedBackdrops[1], 'Slide 1 must preload after 100ms idle interval');
         assert.equal(carousel._decodedBackdrops[2], undefined, 'Slide 2 must wait its own 100ms interval');
 
@@ -424,6 +424,39 @@ test('HeroCarousel: staggers slide preloads every 100ms behind idleGate (no Imag
         );
     } finally {
         imageCache.preload = origPreload;
+        carousel.destroy();
+    }
+});
+
+test('HeroCarousel: defers commitBackdrop and finalizeLogo while scrollController is animating or user is active', async () => {
+    const { scrollController } = await import('../src/ui/ScrollController.js');
+    const { idleGate } = await import('../src/utils/IdleGate.js');
+
+    // Simulate boot completed so idleGate activity checks engage
+    idleGate.setBootComplete();
+
+    const items = [0, 1].map((i) => ({ Id: `defer-item-${i}`, Name: `Defer Item ${i}` }));
+    const carousel = new HeroCarousel({ items });
+    const { container, logoContainers } = buildCarouselFixture(2);
+
+    try {
+        // Set scrolling state to true before preloading slide 1
+        scrollController._verticalScrollAnimationId = 123;
+        carousel.init(container);
+
+        // Preload slide 1 while scrolling is animating
+        carousel._preloadSlide(1);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // While scrolling, logo adjustments must NOT have committed
+        assert.equal(logoContainers[1].style.height, undefined, 'Logo height adjustment must defer while scrolling');
+
+        // Settle scrolling animation
+        scrollController._verticalScrollAnimationId = null;
+        assert.equal(scrollController.isAnimating, false);
+    } finally {
+        scrollController._verticalScrollAnimationId = null;
         carousel.destroy();
     }
 });
