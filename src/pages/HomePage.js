@@ -108,39 +108,30 @@ const PAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
  * to scroll/idle. Sliced directly from descriptors in the user's custom layout order.
  * 3 rows covers the immediately visible viewport on a 1080p/4K TV without over-fetching.
  */
-const EAGER_ROW_COUNT = 3;
+const EAGER_ROW_COUNT = 6;
 
 /**
- * Maximum total rows to mount eagerly when additional contiguous rows already have
- * pre-fetched or cached items in memory (e.g. /Litefin/Items/Latest rows), preventing
+ * Maximum total rows to mount eagerly when additional rows have pre-fetched
+ * or cached items in memory (e.g. /Litefin/Items/Latest rows), preventing
  * post-splash scroll hitches while keeping huge multi-library instances bounded.
  */
-const EAGER_PREFETCH_CAP = 7;
+const EAGER_PREFETCH_CAP = 10;
 
 /**
  * Number of deferred rows to fetch per lazy-load batch.
  *
- * DEFERRED_BATCH_SIZE (1) applies to explicit user requests (D-pad boundary
- * trigger) so the focus lands on the very first new row without waiting for
- * extra work. DEFERRED_BATCH_SIZE_BACKGROUND (2) applies to background
- * prefetch while no scroll animation/render is in flight — fetching two rows
- * ahead keeps the queue permanently ahead of the user's D-pad navigation,
- * so a boundary keypress almost always finds its row already fetched.
+ * DEFERRED_BATCH_SIZE (2) applies to explicit user requests (D-pad boundary trigger)
+ * so pressing Down mounts a comfortable buffer of rows instead of hitting a dead stop
+ * on every single row. DEFERRED_BATCH_SIZE_BACKGROUND (2) applies to background prefetch.
  */
-const DEFERRED_BATCH_SIZE = 1;
+const DEFERRED_BATCH_SIZE = 2;
 const DEFERRED_BATCH_SIZE_BACKGROUND = 2;
 
 /**
  * Minimum real-time gap (ms) between two deferred batch renders.
- *
- * idleGate only compares `Date.now()` against the last user-activity timestamp.
- * Right after a batch renders that timestamp is already older than the 1500ms
- * idle threshold, so registering the next idle task immediately mounted the
- * following batch ~240ms later — back-to-back DOM work that starved the first
- * D-pad press. Wait for this much wall-clock time before registering the next
- * idle task.
+ * Spaced by 150ms to yield to the compositor between DOM mount operations.
  */
-const DEFERRED_BATCH_MIN_SPACING_MS = 800;
+const DEFERRED_BATCH_MIN_SPACING_MS = 150;
 
 /**
  * Card width definitions (matching home.css) — used by VirtualCardRow internally.
@@ -252,6 +243,33 @@ class HomePage extends Page {
          * @type {boolean}
          */
         this._isDeferredLoading = false;
+
+        /**
+         * Flag set when user presses Down at the bottom boundary.
+         * Ensures that even if a deferred batch was already in-flight, focus
+         * smoothly transfers into the first newly rendered row as soon as it mounts.
+         * @type {boolean}
+         */
+        this._autoFocusOnLoad = false;
+
+        /**
+         * Timer handle for scheduling asynchronous background network prefetching
+         * of subsequent deferred row items ahead of time.
+         * @type {number|null}
+         */
+        this._networkPrefetchTimer = null;
+
+        /**
+         * Individual stagger timer handles for in-flight background network fetches.
+         * @type {number[]}
+         */
+        this._networkPrefetchStaggerTimers = [];
+
+        /**
+         * Guard ensuring only one single-shot scroll:finished listener is active.
+         * @type {boolean}
+         */
+        this._pendingScrollFinishedBatch = false;
 
         /**
          * IntersectionObserver watching the #home-rows-sentinel element.
@@ -428,6 +446,21 @@ class HomePage extends Page {
             eventBus.off('focus:trapPopped', this._onTrapPopped);
             this._onTrapPopped = null;
         }
+
+        // Clean up asynchronous deferred prefetch timers and flags
+        if (this._networkPrefetchTimer) {
+            clearTimeout(this._networkPrefetchTimer);
+            this._networkPrefetchTimer = null;
+        }
+        if (this._networkPrefetchStaggerTimers && this._networkPrefetchStaggerTimers.length > 0) {
+            for (let i = 0; i < this._networkPrefetchStaggerTimers.length; i++) {
+                clearTimeout(this._networkPrefetchStaggerTimers[i]);
+            }
+            this._networkPrefetchStaggerTimers = [];
+        }
+        this._pendingScrollFinishedBatch = false;
+        this._autoFocusOnLoad = false;
+        this._setSentinelLoading(false);
     }
 
     /**
@@ -1790,11 +1823,13 @@ class HomePage extends Page {
             });
 
             // ─── Step 9: Setup lazy-loading for remaining deferred rows ──────
-            // If deferred descriptors remain, attach the IntersectionObserver and idle
-            // prefetcher to progressively mount them as the user scrolls down.
+            // If deferred descriptors remain, attach the IntersectionObserver, kick off
+            // early background network prefetching for subsequent rows, and schedule
+            // progressive DOM mounting with snappy 350ms quiet threshold.
             if (this._deferredDescriptors.length > 0) {
                 this._setupHomeScrollObserver();
-                this._scheduleHomeIdlePrefetch(2500);
+                this._scheduleHomeIdlePrefetch(350);
+                this._scheduleDeferredNetworkPrefetch(300);
             } else {
                 // All rows rendered eagerly — finalize readiness right away, and
                 // defer scroll-cache offsetTop walks & page serialization until idle
@@ -2269,7 +2304,7 @@ class HomePage extends Page {
      * Called by:
      *   - The IntersectionObserver sentinel when the user scrolls near the bottom.
      *   - The D-pad leaveDown hook on the last rendered live row.
-     *   - The idle prefetch timer (1.2 s after initial rows are painted).
+     *   - The idle prefetch timer (shortly after initial rows are painted).
      *
      * @param {boolean} [autoFocus=false] - Whether to move D-pad focus to the
      *   first newly rendered row (true when triggered by D-pad leaveDown).
@@ -2279,36 +2314,52 @@ class HomePage extends Page {
         if (this._isDeferredLoading || !this._isMounted) return;
         if (this._nextDeferredDescIndex >= this._deferredDescriptors.length) return;
 
-        // If viewport is actively running a scroll animation or the user is navigating,
-        // and this isn't an explicit user navigation request (autoFocus), DEFER THE RENDER —
-        // but still start the network fetch for the next batch right now so the slow HTTP round-trip
-        // overlaps with the scroll animation instead of delaying the boundary keypress that follows it.
-        // Rendering stays paused to keep the compositor frame budget clean at 60fps.
+        // If viewport is actively running a scroll animation and this isn't an explicit
+        // user navigation request (autoFocus), defer the DOM render until scrolling settles.
+        // Asynchronous network prefetching starts immediately so network latency overlaps
+        // with the animation rather than stalling after the scroll finishes.
         const isScrollAnimating =
             (scrollController && scrollController.isAnimating) ||
             (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating);
-        const isUserActive = idleGate.isUserActive(2000);
 
-        if (!autoFocus && (isScrollAnimating || isUserActive)) {
+        if (!autoFocus && isScrollAnimating) {
+            // Kick off asynchronous HTTP prefetch for the next batch immediately
             const peekStart = this._nextDeferredDescIndex;
             const peekEnd = Math.min(peekStart + DEFERRED_BATCH_SIZE_BACKGROUND, this._deferredDescriptors.length);
             const peekBatch = this._deferredDescriptors.slice(peekStart, peekEnd);
             for (const d of peekBatch) {
                 this._prefetchRow(d);
             }
-            // Defer execution until the user has been quiet for at least 2.5s
-            this._scheduleHomeIdlePrefetch(2500);
+
+            // Register a single-shot listener to mount immediately once the current scroll step finishes
+            if (!this._pendingScrollFinishedBatch) {
+                this._pendingScrollFinishedBatch = true;
+                const onScrollFinish = () => {
+                    this._pendingScrollFinishedBatch = false;
+                    eventBus.off('scroll:finished', onScrollFinish);
+                    if (
+                        this._isMounted &&
+                        !this._isDeferredLoading &&
+                        this._nextDeferredDescIndex < this._deferredDescriptors.length
+                    ) {
+                        this._loadNextDeferredBatch(false);
+                    }
+                };
+                eventBus.once('scroll:finished', onScrollFinish);
+            }
             return;
         }
 
         this._isDeferredLoading = true;
         if (typeof markPerfOperation === 'function') markPerfOperation('HomePage._loadNextDeferredBatch');
 
+        // Check if a pending boundary Down press requested autofocus
+        const shouldAutoFocus = Boolean(autoFocus || this._autoFocusOnLoad);
+        this._autoFocusOnLoad = false;
+
         // Slice out the next batch from the deferred descriptor queue.
-        // Explicit user triggers (autoFocus) consume a small batch so the cursor
-        // lands on the first new row with minimal work; background prefetch
-        // consumes a larger lookahead batch to stay ahead of ongoing navigation.
-        const batchSize = autoFocus ? DEFERRED_BATCH_SIZE : DEFERRED_BATCH_SIZE_BACKGROUND;
+        // Explicit user triggers consume DEFERRED_BATCH_SIZE (2) to ensure a smooth cushion
+        const batchSize = shouldAutoFocus ? DEFERRED_BATCH_SIZE : DEFERRED_BATCH_SIZE_BACKGROUND;
         const startIdx = this._nextDeferredDescIndex;
         const endIdx = Math.min(startIdx + batchSize, this._deferredDescriptors.length);
         const batch = this._deferredDescriptors.slice(startIdx, endIdx);
@@ -2328,25 +2379,20 @@ class HomePage extends Page {
             container.appendChild(sentinel);
         }
 
-        // Track the first descriptor key that successfully renders for autofocus
+        // Track rendered rows for autofocus
         let firstRenderedDescId = null;
+        let renderedCount = 0;
 
         // Progressive frame-by-frame rendering:
-        // Instead of executing all 3 batch rows synchronously in a single turn of the
-        // event loop, we render one row per animation frame. This spreads DOM element
-        // creation, virtual window sizing, and initial image loads across frames,
-        // eliminating the multi-frame main thread freeze.
+        // Spreads DOM element creation and VirtualCardRow instantiation across animation frames
         for (const descriptor of batch) {
             if (!this._isMounted) break;
             try {
-                await this._loadAndRenderRow(descriptor).then((rendered) => {
-                    // Only autofocus to rows that were actually rendered in THIS
-                    // batch. Skipped duplicates (already in the registry), empty
-                    // rows, and failures must not steal the D-pad focus — that
-                    // previously caused pressing Down at the boundary to teleport
-                    // focus UP into an already-rendered row.
-                    if (rendered && !firstRenderedDescId) firstRenderedDescId = descriptor.id;
-                });
+                const rendered = await this._loadAndRenderRow(descriptor);
+                if (rendered) {
+                    renderedCount++;
+                    if (!firstRenderedDescId) firstRenderedDescId = descriptor.id;
+                }
 
                 // Yield to the browser between row renders
                 await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -2355,14 +2401,43 @@ class HomePage extends Page {
             }
         }
 
+        // If this batch was triggered by a user boundary press and all descriptors in the batch
+        // were empty (e.g. 0-item plugin rows or empty libraries), automatically continue
+        // consuming subsequent descriptors until at least 1 non-empty row renders or queue empties.
+        while (
+            shouldAutoFocus &&
+            renderedCount === 0 &&
+            this._isMounted &&
+            this._nextDeferredDescIndex < this._deferredDescriptors.length
+        ) {
+            const nextDesc = this._deferredDescriptors[this._nextDeferredDescIndex++];
+            this._insertSkeletonRows([nextDesc]);
+            if (sentinel && container) {
+                container.appendChild(sentinel);
+            }
+            try {
+                const rendered = await this._loadAndRenderRow(nextDesc);
+                if (rendered) {
+                    renderedCount++;
+                    if (!firstRenderedDescId) firstRenderedDescId = nextDesc.id;
+                }
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+            } catch (err) {
+                log.warn(`Follow-up deferred row "${nextDesc.id}" failed`, err);
+            }
+        }
+
+        // Clear sentinel loading state now that mounting is complete
+        this._setSentinelLoading(false);
+
         if (!this._isMounted) {
             this._isDeferredLoading = false;
             return;
         }
 
-        // Optionally move D-pad focus to the first newly rendered row
+        // Move D-pad focus to the first newly rendered row
         // Do NOT autofocus if a modal focus trap (e.g. ExitDialog) is open
-        if (autoFocus && firstRenderedDescId && !focusManager.isTrapped()) {
+        if (shouldAutoFocus && firstRenderedDescId && !focusManager.isTrapped()) {
             const entry = this._rowRegistry.get(firstRenderedDescId);
             if (entry && entry.sectionEl) {
                 const rowId = firstRenderedDescId;
@@ -2378,11 +2453,10 @@ class HomePage extends Page {
         this._lastDeferredBatchAt = Date.now();
 
         // If there are still rows left, schedule the next idle row prefetch
-        // so deferred content loads progressively ahead of time in small 1-row chunks.
-        // The follow-up helper enforces a minimum wall-clock gap so consecutive
-        // batches never mount back-to-back in the same second.
+        // and keep asynchronous network prefetching replenished ahead of navigation
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
             this._scheduleDeferredBatchFollowup();
+            this._scheduleDeferredNetworkPrefetch(150);
         } else {
             // All deferred rows are loaded — queue cache serialization and scroll-cache
             // prewarming ONCE here behind an idle task instead of running them after
@@ -2469,13 +2543,10 @@ class HomePage extends Page {
      * Silently loads deferred rows in small batches so content is ready
      * before the user scrolls or navigates down to it.
      *
-     * Gated behind idleGate so DOM mounting and scroll-cache prewarming
-     * never collide with active user interactions, D-pad navigation, or animations.
-     *
-     * @param {number} [delay=2500] - Quiet threshold in ms before triggering prefetch
+     * @param {number} [delay=350] - Quiet threshold in ms before triggering prefetch
      * @private
      */
-    _scheduleHomeIdlePrefetch(delay = 2500) {
+    _scheduleHomeIdlePrefetch(delay = 350) {
         if (this._homeIdlePrefetchTask) {
             idleGate.cancel(this._homeIdlePrefetchTask);
             this._homeIdlePrefetchTask = null;
@@ -2500,12 +2571,7 @@ class HomePage extends Page {
 
     /**
      * Schedules the next deferred batch after a minimum real-time gap.
-     *
-     * Unlike user-activity idleness, this gap is measured from the moment the
-     * previous batch FINISHED rendering. Without it, `idleGate.runWhenIdle` sees
-     * an already-expired idle window and fires the next batch immediately,
-     * producing consecutive DOM mounts within the same second and stealing the
-     * frame budget from the first D-pad press.
+     * Enforces a 150ms spacing between batch renders to yield frames to the compositor.
      *
      * @private
      */
@@ -2521,17 +2587,106 @@ class HomePage extends Page {
         const registerNext = () => {
             this._homeIdlePrefetchTimer = null;
             if (!this._isMounted) return;
-            // Require a full 2500ms quiet window before mounting the next batch so
-            // hero carousel browsing and relaxed 1-second D-pad pauses stay hitch-free.
-            this._scheduleHomeIdlePrefetch(2500);
+            // Schedule the next idle prefetch with snappy 350ms threshold
+            this._scheduleHomeIdlePrefetch(350);
         };
 
         if (wait > 0) {
-            // Hold the idle task back until the previous batch has fully settled
+            // Hold the task back until the previous batch has fully settled
             log.debug(`Deferring next home batch by ${Math.round(wait)}ms`);
             this._homeIdlePrefetchTimer = setTimeout(registerNext, wait);
         } else {
             registerNext();
+        }
+    }
+
+    /**
+     * Proactively prefetches media data over the network for upcoming deferred descriptors
+     * without blocking the UI thread or touching the DOM.
+     *
+     * Staggers HTTP calls by 150ms to keep connection pools balanced while ensuring items
+     * are already in memory before the user scrolls down.
+     *
+     * @param {number} [delay=300] - Initial delay before starting prefetch
+     * @private
+     */
+    _scheduleDeferredNetworkPrefetch(delay = 300) {
+        if (this._networkPrefetchTimer) {
+            clearTimeout(this._networkPrefetchTimer);
+            this._networkPrefetchTimer = null;
+        }
+
+        this._networkPrefetchTimer = setTimeout(() => {
+            this._networkPrefetchTimer = null;
+            if (!this._isMounted || this._nextDeferredDescIndex >= this._deferredDescriptors.length) {
+                return;
+            }
+
+            // Cancel any pending staggered timers from a previous round
+            if (this._networkPrefetchStaggerTimers && this._networkPrefetchStaggerTimers.length > 0) {
+                for (let i = 0; i < this._networkPrefetchStaggerTimers.length; i++) {
+                    clearTimeout(this._networkPrefetchStaggerTimers[i]);
+                }
+                this._networkPrefetchStaggerTimers = [];
+            }
+
+            const start = this._nextDeferredDescIndex;
+            const count = Math.min(4, this._deferredDescriptors.length - start);
+            const lookahead = this._deferredDescriptors.slice(start, start + count);
+
+            lookahead.forEach((descriptor, idx) => {
+                const timer = setTimeout(() => {
+                    if (this._isMounted) {
+                        this._prefetchRow(descriptor);
+                    }
+                }, idx * 150);
+
+                if (this._networkPrefetchStaggerTimers) {
+                    this._networkPrefetchStaggerTimers.push(timer);
+                }
+            });
+        }, delay);
+    }
+
+    /**
+     * Displays or clears a loading indicator at the bottom scroll sentinel.
+     * Provides visual feedback when user navigates to the bottom boundary.
+     *
+     * @param {boolean} loading - Whether to show the loading indicator
+     * @private
+     */
+    _setSentinelLoading(loading) {
+        const sentinel = this.$('#home-rows-sentinel');
+        if (!sentinel) return;
+
+        if (loading) {
+            sentinel.innerHTML =
+                '<div class="home-sentinel-loader" style="display:flex;align-items:center;justify-content:center;padding:20px 0;width:100%;">' +
+                '<div class="loading-spinner-small"></div>' +
+                '</div>';
+        } else {
+            sentinel.innerHTML = '';
+        }
+    }
+
+    /**
+     * Handles boundary D-pad Down navigation when the user is on the last visible row.
+     * If a batch is already loading, sets the _autoFocusOnLoad flag so focus advances
+     * immediately upon mount. If idle, kicks off the next batch with autofocus.
+     *
+     * @private
+     */
+    _handleBoundaryLeaveDown() {
+        if (this._nextDeferredDescIndex >= this._deferredDescriptors.length) {
+            return;
+        }
+
+        // Set autofocus flag and surface visual feedback
+        this._autoFocusOnLoad = true;
+        this._setSentinelLoading(true);
+
+        if (!this._isDeferredLoading) {
+            this._loadNextDeferredBatch(true);
         }
     }
 
@@ -3176,11 +3331,9 @@ class HomePage extends Page {
                 config.leaveDown = sId(nextEl);
             } else if (hasDeferredRows) {
                 // Last visible row but the deferred queue still has content —
-                // hook Down to pull (and auto-focus) the next lazy batch.
+                // hook Down to trigger boundary loading and auto-focus the next batch.
                 config.leaveDown = () => {
-                    // Load the next batch and auto-focus its first row so the cursor
-                    // lands naturally on new content instead of staying frozen.
-                    this._loadNextDeferredBatch(true);
+                    this._handleBoundaryLeaveDown();
                     return false; // Tell FocusManager we handled navigation ourselves
                 };
             } else {
@@ -4406,10 +4559,9 @@ class HomePage extends Page {
 
     /**
      * Computes how many leading descriptors to mount eagerly before hiding splash.
-     * Covers EAGER_ROW_COUNT (3), expands contiguously across pre-fetched/in-memory
-     * core rows up to EAGER_PREFETCH_CAP (7) — stopping immediately before any
-     * un-fetched slow row so custom DOM layout ordering is preserved — and honors
-     * any saved focus restoration target beyond the initial batch.
+     * Covers EAGER_ROW_COUNT (6), expands across pre-fetched/in-memory rows up to
+     * EAGER_PREFETCH_CAP (10) without letting an un-cached row block subsequent
+     * in-memory rows, and honors any saved focus restoration target.
      *
      * @param {RowDescriptor[]} descriptors - Ordered list of home row descriptors
      * @param {number} targetIndex - Index of focus restoration target, or -1
@@ -4420,8 +4572,13 @@ class HomePage extends Page {
         let eagerCount = Math.min(EAGER_ROW_COUNT, descriptors.length);
         const prefetchCap = Math.min(EAGER_PREFETCH_CAP, descriptors.length);
 
-        while (eagerCount < prefetchCap && this._isDescriptorEagerReady(descriptors[eagerCount])) {
-            eagerCount++;
+        // Scan up to prefetchCap: if any row is eager-ready (e.g. pre-fetched
+        // /Litefin/Items/Latest rows or cached data), expand eagerCount to cover it
+        // so an earlier un-cached row never blocks in-memory rows from mounting eagerly.
+        for (let i = eagerCount; i < prefetchCap; i++) {
+            if (this._isDescriptorEagerReady(descriptors[i])) {
+                eagerCount = i + 1;
+            }
         }
 
         if (targetIndex !== -1 && targetIndex >= eagerCount) {

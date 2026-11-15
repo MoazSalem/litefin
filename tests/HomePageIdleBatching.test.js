@@ -66,18 +66,18 @@ test('HomePage: Deferred batch prefetch is gated behind idleGate', () => {
         '_scheduleHomeIdlePrefetch must use idleGate.runWhenIdle'
     );
 
-    // Verify _loadNextDeferredBatch checks isScrollAnimating and isUserActive
+    // Verify _loadNextDeferredBatch checks isScrollAnimating and registers for scroll:finished
     const loadIdx = source.indexOf('async _loadNextDeferredBatch(');
     assert.ok(loadIdx !== -1, '_loadNextDeferredBatch must exist');
 
-    const loadBody = source.slice(loadIdx, loadIdx + 1200);
-    assert.ok(
-        loadBody.includes('idleGate.isUserActive('),
-        '_loadNextDeferredBatch must check idleGate.isUserActive'
-    );
+    const loadBody = source.slice(loadIdx, loadIdx + 2500);
     assert.ok(
         loadBody.includes('scrollController.isAnimating'),
         '_loadNextDeferredBatch must check scrollController.isAnimating'
+    );
+    assert.ok(
+        loadBody.includes('scroll:finished'),
+        '_loadNextDeferredBatch must listen for scroll:finished when animating'
     );
 
     // Verify destroy cancels idle prefetch task
@@ -96,8 +96,8 @@ test('HomePage: consecutive deferred batches are spaced by a real-time gap', () 
     const source = fs.readFileSync(homePath, 'utf8');
 
     assert.ok(
-        source.includes('const DEFERRED_BATCH_MIN_SPACING_MS = 800;'),
-        'A minimum 800ms spacing constant must exist'
+        source.includes('const DEFERRED_BATCH_MIN_SPACING_MS = 150;'),
+        'A minimum 150ms spacing constant must exist'
     );
 
     // The follow-up scheduler must wait via setTimeout BEFORE registering the
@@ -111,8 +111,8 @@ test('HomePage: consecutive deferred batches are spaced by a real-time gap', () 
         'Follow-up must wait via setTimeout before registering the next idle task'
     );
     assert.ok(
-        followupBody.includes('_scheduleHomeIdlePrefetch(2500)'),
-        'Follow-up must register the next idle prefetch with a 2500ms quiet window'
+        followupBody.includes('_scheduleHomeIdlePrefetch(350)'),
+        'Follow-up must register the next idle prefetch with a 350ms quiet window'
     );
 
     // A finished batch must record its completion time and use the follow-up
@@ -128,7 +128,7 @@ test('HomePage: consecutive deferred batches are spaced by a real-time gap', () 
     );
 });
 
-test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while preserving layout order', async () => {
+test('HomePage: eagerly mounts core and pre-fetched rows up to cap while preserving layout order', async () => {
     const vm = await import('node:vm');
     const homePath = path.resolve('src/pages/HomePage.js');
     const source = fs.readFileSync(homePath, 'utf8');
@@ -150,7 +150,7 @@ test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while 
     );
     const page = new HelperClass();
 
-    // 1. Default layout with 4 pre-fetched Latest rows mounts all 7 core rows before splash dismissal
+    // 1. Default layout with 5 pre-fetched Latest rows mounts all ready core rows before splash dismissal
     const defaultDescriptors = [
         { id: 'my-media' },
         { id: 'resume' },
@@ -164,11 +164,11 @@ test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while 
     ];
     assert.equal(
         page._resolveEagerRowCount(defaultDescriptors, -1),
-        7,
-        'All pre-fetched Latest rows up to EAGER_PREFETCH_CAP (7) must mount before splash dismissal'
+        8,
+        'All pre-fetched Latest rows up to EAGER_PREFETCH_CAP (10) must mount before splash dismissal'
     );
 
-    // 2. Un-fetched slow row stops contiguous expansion so custom DOM order is never reordered
+    // 2. Un-fetched slow row does not block subsequent pre-fetched rows from mounting eagerly
     const customOrderDescriptors = [
         { id: 'my-media' },
         { id: 'resume' },
@@ -178,22 +178,25 @@ test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while 
     ];
     assert.equal(
         page._resolveEagerRowCount(customOrderDescriptors, -1),
-        3,
-        'Un-fetched slow row must stop contiguous eager expansion so visual order stays exact'
+        5,
+        'Un-fetched slow row must not block subsequent pre-fetched rows from mounting eagerly'
     );
 
-    // 3. Fallback when /Litefin/Items/Latest fails (no _preFetchedItems): stays at EAGER_ROW_COUNT = 3
+    // 3. Fallback when /Litefin/Items/Latest fails (no _preFetchedItems): stays at EAGER_ROW_COUNT = 6
     const failedPrefetchDescriptors = [
         { id: 'my-media' },
         { id: 'resume' },
         { id: 'next-up' },
         { id: 'latest-1' },
-        { id: 'latest-2' }
+        { id: 'latest-2' },
+        { id: 'latest-3' },
+        { id: 'latest-4' },
+        { id: 'latest-5' }
     ];
     assert.equal(
         page._resolveEagerRowCount(failedPrefetchDescriptors, -1),
-        3,
-        'Un-fetched fallback Latest rows must remain deferred rather than blocking splash dismissal'
+        6,
+        'Un-fetched fallback Latest rows beyond EAGER_ROW_COUNT must remain deferred'
     );
 
     // 4. Cached home screen rows get _hasCachedData stamped and mount eagerly up to cap
@@ -201,6 +204,9 @@ test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while 
         { id: 'my-media' },
         { id: 'resume' },
         { id: 'next-up' },
+        { id: 'row-4' },
+        { id: 'row-5' },
+        { id: 'row-6' },
         { id: 'trending' },
         { id: 'trending-series' }
     ];
@@ -211,8 +217,8 @@ test('HomePage: eagerly mounts contiguous pre-fetched core rows up to cap while 
     );
     assert.equal(
         page._resolveEagerRowCount(cachedDescriptors, -1),
-        5,
-        'Cached rows populated via _applyCachedRowData must mount eagerly'
+        8,
+        'Cached rows populated via _applyCachedRowData must mount eagerly up to cap'
     );
 
     // 5. Saved focus restoration target beyond cap widens eager batch cleanly
