@@ -29,7 +29,8 @@ import SpatialNavigator from '../src/ui/SpatialNavigator.js';
  * ============================================================================
  */
 
-const read = (relativePath) => fs.readFileSync(path.resolve(relativePath), 'utf8');
+// Normalize CRLF to LF so source inspection tests behave identically across Windows and POSIX checkouts
+const read = (relativePath) => fs.readFileSync(path.resolve(relativePath), 'utf8').replace(/\r\n/g, '\n');
 
 const sliceBetween = (source, startMarker, endMarker) => {
     const startIdx = source.indexOf(startMarker);
@@ -1022,7 +1023,8 @@ test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish win
         'scroll:started and native scroll must cancel pending post-scroll settle work'
     );
     assert.ok(
-        initBody.includes("window.addEventListener(\n            'keydown',") &&
+        (initBody.includes("window.addEventListener(\n            'keydown',") ||
+            initBody.includes("window.addEventListener(\r\n            'keydown',")) &&
             initBody.includes('this._lastInteractionAt = Date.now();'),
         'LazyLoader must track keydown activity so deferred work never runs between D-pad repeats'
     );
