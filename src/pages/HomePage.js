@@ -399,6 +399,23 @@ class HomePage extends Page {
         this._startRenderPipeline();
     }
 
+    /**
+     * Preserves homepage state immediately before component destruction
+     * so navigating away (/home -> /library) guarantees cached state.
+     */
+    onBeforeDestroy() {
+        // Ensure homepage state is preserved for instant back-navigation even
+        // if user navigates away before the deferred idle cache task executes.
+        // Save before child components and hero carousel are torn down.
+        if (!this._wasPageCached && this._rowRegistry && this._rowRegistry.size > 0) {
+            try {
+                this._cacheHomeState();
+            } catch (err) {
+                log.warn('Failed to cache home state during onBeforeDestroy:', err);
+            }
+        }
+    }
+
     onDestroyed() {
         this._isMounted = false;
         // Disarm any pending row-render stagger gate left open during navigation
@@ -418,6 +435,17 @@ class HomePage extends Page {
          */
         imageCache.cancel();
 
+        // Ensure homepage state is preserved for instant back-navigation even
+        // if user navigates away before the deferred idle cache task executes.
+        // Save before hero destruction so active hero items and metadata are captured.
+        if (!this._wasPageCached && this._rowRegistry && this._rowRegistry.size > 0) {
+            try {
+                this._cacheHomeState();
+            } catch (err) {
+                log.warn('Failed to cache home state during onDestroyed:', err);
+            }
+        }
+
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
@@ -435,11 +463,6 @@ class HomePage extends Page {
         if (this._homeIdlePrefetchTimer) {
             clearTimeout(this._homeIdlePrefetchTimer);
             this._homeIdlePrefetchTimer = null;
-        }
-        // Ensure homepage state is preserved for instant back-navigation even
-        // if user navigates away before the deferred idle cache task executes
-        if (!this._wasPageCached && this._rowRegistry && this._rowRegistry.size > 0) {
-            this._cacheHomeState();
         }
 
         if (this._eagerCacheTimer) {
@@ -1840,9 +1863,16 @@ class HomePage extends Page {
             });
 
             // ─── Step 9: Setup lazy-loading for remaining deferred rows ──────
-            // If deferred descriptors remain, attach the IntersectionObserver, kick off
-            // early background network prefetching for subsequent rows, and schedule
-            // progressive DOM mounting with snappy 350ms quiet threshold.
+            // On compact layouts where only eager rows render or before deferred batches load,
+            // ensure cache serialization runs shortly after mount (500ms) so rapid navigation
+            // (/home -> /library) preserves cache for instant back-navigation.
+            this._eagerCacheTimer = setTimeout(() => {
+                this._eagerCacheTimer = null;
+                if (this._isMounted && !this._wasPageCached) {
+                    this._cacheHomeState();
+                }
+            }, 500);
+
             if (this._deferredDescriptors.length > 0) {
                 this._setupHomeScrollObserver();
                 this._scheduleHomeIdlePrefetch(350);
@@ -1852,16 +1882,6 @@ class HomePage extends Page {
                 this.restoreScrollFocusWhenReady();
                 this.markReady();
                 this._scheduleDeferredBatchCacheRefresh();
-
-                // On compact layouts where all rows mount eagerly (e.g. 2 rows), ensure cache
-                // serialization runs shortly after mount so rapid navigation (/home -> /library)
-                // preserves cache before the 2000ms idle threshold.
-                this._eagerCacheTimer = setTimeout(() => {
-                    this._eagerCacheTimer = null;
-                    if (this._isMounted && !this._wasPageCached) {
-                        this._cacheHomeState();
-                    }
-                }, 500);
             }
         } catch (error) {
             log.error('Pipeline failed', error);
@@ -4676,7 +4696,10 @@ class HomePage extends Page {
      */
     _savePageCache() {
         // Respect user preference
-        if (storage.getItem('pref:homeScreenCache') === 'false') return;
+        if (storage.getItem('pref:homeScreenCache') === 'false') {
+            log.debug('Skipping _savePageCache: pref:homeScreenCache is disabled');
+            return;
+        }
 
         // If playback stopped within the last few seconds, avoid storing transitional
         // row data in the 24-hour page cache before the server fully settles.
