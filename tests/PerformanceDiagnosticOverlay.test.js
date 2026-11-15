@@ -164,7 +164,7 @@ globalThis.window = {
 };
 
 globalThis.performance = globalThis.window.performance;
-globalThis.__APP_VERSION__ = '2.0.200';
+globalThis.__APP_VERSION__ = '2.0.350';
 
 globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);

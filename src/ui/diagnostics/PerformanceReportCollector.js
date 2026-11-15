@@ -47,6 +47,26 @@ function cancelFrame(id) {
 }
 
 /**
+ * Resolves the active Litefin application version from compile-time defines or runtime globals.
+ * Fallback defaults to current package version if runtime environment lacks define injection.
+ * @returns {string} Application version string
+ */
+function resolveAppVersion() {
+    try {
+        if (typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__) {
+            return String(__APP_VERSION__);
+        }
+    } catch (_) {}
+    if (typeof globalThis !== 'undefined' && globalThis.__APP_VERSION__) {
+        return String(globalThis.__APP_VERSION__);
+    }
+    if (typeof window !== 'undefined' && window.__APP_VERSION__) {
+        return String(window.__APP_VERSION__);
+    }
+    return '2.0.350';
+}
+
+/**
  * Diagnostics collector recording telemetry for server upload.
  */
 export class PerformanceReportCollector {
@@ -850,7 +870,7 @@ export class PerformanceReportCollector {
                 generatedAt: new Date().toISOString(),
                 sessionStartDate: this._startDate,
                 sessionDurationSeconds: sessionDurationSec,
-                appVersion: globalThis.__APP_VERSION__ || '2.0.200'
+                appVersion: resolveAppVersion()
             },
             environment: {
                 platformTarget: platformStr,

@@ -22,6 +22,15 @@ const log = logger.create('Bootstrap');
 // Prevents repeated style-loader DOM insertions and reduces startup CSSOM parsing time
 import './styles/bundle.css';
 
+// Expose compile-time version to runtime window/globalThis for diagnostic reporting
+if (typeof window !== 'undefined') {
+    try {
+        window.__APP_VERSION__ = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '2.0.350';
+    } catch (_) {
+        window.__APP_VERSION__ = '2.0.350';
+    }
+}
+
 /**
  * Bootstrap the application
  */
