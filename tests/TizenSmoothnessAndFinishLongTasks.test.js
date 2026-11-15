@@ -363,6 +363,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
                 play: () => {
                     callOrder.push('play');
                     playCalls++;
+                    currentState = 'PLAYING';
                 },
                 setListener: (val) => {
                     callOrder.push('setListener');
@@ -430,7 +431,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         // Second candidate succeeds: prepareAsync -> play -> hold -> stop+close
         pendingPrepareCbs.shift().onPrepared();
         assert.equal(playCalls, 1, 'onPrepared must start avplay.play()');
-        await new Promise((resolve) => setTimeout(resolve, 240));
+        await new Promise((resolve) => setTimeout(resolve, 450));
         assert.equal(listenerResets, 1);
         assert.equal(stopCalls, 2, 'One stop for the rejected candidate, one on final teardown');
         assert.equal(closeCalls, 2, 'One close for the rejected candidate, one on final teardown');
@@ -444,6 +445,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
             'open',
             'setDisplayRect',
             'prepareAsync',
+            'setListener',
             'play',
             'setListener',
             'stop',

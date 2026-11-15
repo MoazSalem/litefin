@@ -74,15 +74,15 @@ const TIZEN_KEYS = {
 const WARMUP_WIDTH = 1920;
 const WARMUP_HEIGHT = 1080;
 // Keep the native plane playing long enough for the compositor to promote the
-// plane and present real frames, but short enough to never delay first paint.
-const WARMUP_PLAY_HOLD_MS = 200;
+// plane and present real frames (400ms-600ms), but short enough to never delay first paint.
+const WARMUP_PLAY_HOLD_MS = 400;
 // Per-candidate prepareAsync budget: an invalid URI can fail silently on some
 // firmwares, so we advance to the next candidate instead of waiting forever.
 const WARMUP_PREPARE_TIMEOUT_MS = 900;
 // wgt-package resolution budget before falling back to the WebView URL.
 const WARMUP_RESOLVE_TIMEOUT_MS = 500;
-// Hard ceiling for the whole warmup cycle.
-const WARMUP_MAX_MS = 3000;
+// Hard ceiling for the whole warmup cycle (bounded by 2500ms safety max timeout).
+const WARMUP_MAX_MS = 2500;
 
 class TizenAdapter {
     constructor() {
@@ -95,6 +95,8 @@ class TizenAdapter {
         this._warmupTimerId = null;
         this._warmupPrepareTimerId = null;
         this._warmupHoldTimerId = null;
+        this._warmupPlayingPollTimerId = null;
+        this._warmupSafetyTimerId = null;
         this._warmupGen = 0;
         this._warmupCandidates = [];
         this._warmupCandidateIndex = 0;
@@ -245,6 +247,14 @@ class TizenAdapter {
             clearTimeout(this._warmupHoldTimerId);
             this._warmupHoldTimerId = null;
         }
+        if (this._warmupPlayingPollTimerId) {
+            clearInterval(this._warmupPlayingPollTimerId);
+            this._warmupPlayingPollTimerId = null;
+        }
+        if (this._warmupSafetyTimerId) {
+            clearTimeout(this._warmupSafetyTimerId);
+            this._warmupSafetyTimerId = null;
+        }
     }
 
     /**
@@ -323,6 +333,9 @@ class TizenAdapter {
         const addCandidate = (value) => {
             if (!value) return;
             const str = String(value);
+            // Ignore raw virtual wgt-package paths that lack file:// scheme or leading slash,
+            // as avplay.open() rejects them immediately with PLAYER_ERROR_INVALID_URI.
+            if (str.startsWith('wgt-package')) return;
             if (candidates.indexOf(str) === -1) candidates.push(str);
         };
         // Joins assets/warmup.mp4 onto a directory URI/path and emits the base
@@ -794,6 +807,47 @@ class TizenAdapter {
             }
             log.info(`AVPlay warmup prepareAsync succeeded (state=${state}) for ${warmupUrl}`);
 
+            let holdStarted = false;
+            const startPlayingHold = (trigger) => {
+                if (holdStarted || !isCurrentAttempt()) return;
+                holdStarted = true;
+                if (this._warmupPlayingPollTimerId) {
+                    clearInterval(this._warmupPlayingPollTimerId);
+                    this._warmupPlayingPollTimerId = null;
+                }
+                if (this._warmupSafetyTimerId) {
+                    clearTimeout(this._warmupSafetyTimerId);
+                    this._warmupSafetyTimerId = null;
+                }
+                log.info(`AVPlay warmup confirmed PLAYING state (${trigger})`);
+                this._warmupHoldTimerId = setTimeout(() => {
+                    this._warmupHoldTimerId = null;
+                    let playingState = 'UNKNOWN';
+                    try {
+                        if (typeof avplay.getState === 'function') playingState = avplay.getState();
+                    } catch (_) {
+                        playingState = 'UNKNOWN';
+                    }
+                    log.info(`AVPlay warmup reached ${playingState} state after play()`);
+                    this._finishWarmup(`completed ${WARMUP_PLAY_HOLD_MS}ms play cycle`, warmupGen);
+                }, WARMUP_PLAY_HOLD_MS);
+            };
+
+            // Register playback listener to monitor hardware presentation timestamps
+            try {
+                if (typeof avplay.setListener === 'function') {
+                    avplay.setListener({
+                        oncurrentplaytime: (time) => {
+                            if (isCurrentAttempt() && time > 0) {
+                                startPlayingHold(`oncurrentplaytime=${time}`);
+                            }
+                        }
+                    });
+                }
+            } catch (listenerErr) {
+                log.warn('AVPlay warmup setListener failed', listenerErr);
+            }
+
             try {
                 avplay.play();
                 log.info('AVPlay warmup prepareAsync + play() succeeded');
@@ -803,19 +857,55 @@ class TizenAdapter {
                 return;
             }
 
-            // Let the plane present real frames behind the opaque splash before
-            // releasing the single hardware decoder slot.
-            this._warmupHoldTimerId = setTimeout(() => {
-                this._warmupHoldTimerId = null;
-                let playingState = 'UNKNOWN';
-                try {
-                    if (typeof avplay.getState === 'function') playingState = avplay.getState();
-                } catch (_) {
-                    playingState = 'UNKNOWN';
-                }
-                log.info(`AVPlay warmup reached ${playingState} state after play()`);
-                this._finishWarmup(`completed ${WARMUP_PLAY_HOLD_MS}ms play cycle`, warmupGen);
-            }, WARMUP_PLAY_HOLD_MS);
+            // Check if already in PLAYING state immediately after play()
+            let immediateState = 'UNKNOWN';
+            try {
+                if (typeof avplay.getState === 'function') immediateState = avplay.getState();
+            } catch (_) {
+                immediateState = 'UNKNOWN';
+            }
+            if (immediateState === 'PLAYING') {
+                startPlayingHold('immediateState === PLAYING');
+            } else {
+                // Poll every 50ms so AVPlay can transition from PAUSED/READY to PLAYING
+                // without aborting prematurely before hardware decodes its first frame.
+                this._warmupPlayingPollTimerId = setInterval(() => {
+                    if (!isCurrentAttempt()) {
+                        if (this._warmupPlayingPollTimerId) {
+                            clearInterval(this._warmupPlayingPollTimerId);
+                            this._warmupPlayingPollTimerId = null;
+                        }
+                        return;
+                    }
+                    let polledState = 'UNKNOWN';
+                    try {
+                        if (typeof avplay.getState === 'function') polledState = avplay.getState();
+                    } catch (_) {
+                        polledState = 'UNKNOWN';
+                    }
+                    if (polledState === 'PLAYING') {
+                        startPlayingHold('polledState === PLAYING');
+                    }
+                }, 50);
+
+                // Safety timeout ceiling bounded by 2500ms in case firmware never enters PLAYING
+                this._warmupSafetyTimerId = setTimeout(() => {
+                    this._warmupSafetyTimerId = null;
+                    if (!isCurrentAttempt()) return;
+                    if (this._warmupPlayingPollTimerId) {
+                        clearInterval(this._warmupPlayingPollTimerId);
+                        this._warmupPlayingPollTimerId = null;
+                    }
+                    let timedOutState = 'UNKNOWN';
+                    try {
+                        if (typeof avplay.getState === 'function') timedOutState = avplay.getState();
+                    } catch (_) {
+                        timedOutState = 'UNKNOWN';
+                    }
+                    log.info(`AVPlay warmup safety ceiling reached (state=${timedOutState})`);
+                    this._finishWarmup(`safety ceiling reached (state=${timedOutState})`, warmupGen);
+                }, 2500);
+            }
         };
 
         const onPrepareError = (prepErr) => {
