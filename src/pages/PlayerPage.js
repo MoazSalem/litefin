@@ -494,13 +494,16 @@ class PlayerPage extends Page {
                 this._item = queueItem;
             }
 
-            // Reconcile this._item with authoritative client stop state if server UserData is stale
+            // Reconcile this._item with authoritative client stop state if server UserData is stale.
+            // When playing under Ghost Mode, bypass stop state reconciliation to avoid inheriting
+            // temporary client progress into a private session.
             const lastStopped =
                 state.get(`playback:lastStopped:${this._item.Id}`) ||
                 state.get('playback:lastStoppedMap')?.[this._item.Id] ||
                 (state.get('playback:lastStopped')?.itemId === this._item.Id ? state.get('playback:lastStopped') : null);
 
-            if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+            // Reconcile only for standard non-ghost playback sessions within the 15-minute validity window
+            if (!this._isGhostMode && lastStopped && Date.now() - lastStopped.timestamp < 900000) {
                 this._item.UserData = this._item.UserData || {};
                 if (lastStopped.isNearComplete) {
                     this._item.UserData.Played = true;
@@ -5621,75 +5624,105 @@ class PlayerPage extends Page {
         // Invalidate stale caches so pages reload fresh data after playback
         if (this._item) {
             try {
-                // Resolve user-configured watched threshold percentage fraction
-                const thresholdFraction = this._getWatchedThresholdFraction();
-
-                // Live television streams have rolling buffer durations and must not trigger completion
-                const isLive =
-                    this._item?.Type === 'TvChannel' ||
-                    Boolean(mediaSource?.LiveStreamId || mediaSource?.IsInfiniteStream);
-
-                // Determine whether playback completed naturally or crossed the user threshold
-                const isNearComplete =
-                    !isLive &&
-                    durationTicks > 0 &&
-                    (this._isPlaybackEnded || positionTicks >= durationTicks * thresholdFraction);
-
                 const itemId = this._item.Id;
 
-                // Persist authoritative client playback stop snapshot to in-memory state.
-                // This acts as a reliable source of truth during immediate page navigation
-                // in case the server database transaction is still committing.
-                const stopSnapshot = {
-                    itemId,
-                    seriesId: this._item.SeriesId || null,
-                    seasonId: this._item.SeasonId || null,
-                    positionTicks: isNearComplete ? 0 : positionTicks,
-                    durationTicks,
-                    isNearComplete,
-                    timestamp: Date.now()
-                };
+                /*
+                 * -------------------------------------------------------------
+                 * GHOST MODE PLAYBACK STOP GUARD
+                 * -------------------------------------------------------------
+                 * In Ghost Mode (incognito/private playback), media is played
+                 * strictly without server reporting. To prevent leaking progress
+                 * back into the client interface, we must NEVER generate
+                 * authoritative stop snapshots or patch in-memory library/episode
+                 * caches when stopping a Ghost Mode session.
+                 *
+                 * If running in standard playback mode, we persist the stop
+                 * snapshot to bridge any delay while the server SQLite transaction
+                 * commits to disk.
+                 * -------------------------------------------------------------
+                 */
+                if (!this._isGhostMode) {
+                    // Resolve user-configured watched threshold percentage fraction
+                    const thresholdFraction = this._getWatchedThresholdFraction();
 
-                // Store singular reference for backwards compatibility
-                state.set('playback:lastStopped', stopSnapshot);
+                    // Live television streams have rolling buffer durations and must not trigger completion
+                    const isLive =
+                        this._item?.Type === 'TvChannel' ||
+                        Boolean(mediaSource?.LiveStreamId || mediaSource?.IsInfiniteStream);
 
-                // Store item-keyed reference so playing subsequent media does not erase this item's snapshot
-                state.set(`playback:lastStopped:${itemId}`, stopSnapshot);
+                    // Determine whether playback completed naturally or crossed the user threshold
+                    const isNearComplete =
+                        !isLive &&
+                        durationTicks > 0 &&
+                        (this._isPlaybackEnded || positionTicks >= durationTicks * thresholdFraction);
 
-                // Maintain bounded map of recent stop snapshots
-                const stoppedMap = state.get('playback:lastStoppedMap') || {};
-                stoppedMap[itemId] = stopSnapshot;
-                state.set('playback:lastStoppedMap', stoppedMap);
+                    // Persist authoritative client playback stop snapshot to in-memory state.
+                    // This acts as a reliable source of truth during immediate page navigation
+                    // in case the server database transaction is still committing.
+                    const stopSnapshot = {
+                        itemId,
+                        seriesId: this._item.SeriesId || null,
+                        seasonId: this._item.SeasonId || null,
+                        positionTicks: isNearComplete ? 0 : positionTicks,
+                        durationTicks,
+                        isNearComplete,
+                        timestamp: Date.now()
+                    };
 
-                // Update cached played and progress state across all library state caches
-                const allState = state.getAll();
-                for (const [key, val] of Object.entries(allState)) {
-                    if (key.startsWith('library:state:') && val?.stateData?.items) {
-                        const match = val.stateData.items.find(({ Id }) => Id === itemId);
-                        if (match) {
-                            match.UserData = match.UserData || {};
-                            if (isNearComplete) {
-                                match.UserData.Played = true;
-                                match.UserData.PlaybackPositionTicks = 0;
-                                match.UserData.UnplayedItemCount = 0;
-                            } else if (positionTicks > 0) {
-                                match.UserData.PlaybackPositionTicks = positionTicks;
+                    // Store singular reference for backwards compatibility
+                    state.set('playback:lastStopped', stopSnapshot);
+
+                    // Store item-keyed reference so playing subsequent media does not erase this item's snapshot
+                    state.set(`playback:lastStopped:${itemId}`, stopSnapshot);
+
+                    // Maintain bounded map of recent stop snapshots
+                    const stoppedMap = state.get('playback:lastStoppedMap') || {};
+                    stoppedMap[itemId] = stopSnapshot;
+                    state.set('playback:lastStoppedMap', stoppedMap);
+
+                    // Update cached played and progress state across all library state caches
+                    const allState = state.getAll();
+                    for (const [key, val] of Object.entries(allState)) {
+                        if (key.startsWith('library:state:') && val?.stateData?.items) {
+                            const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                            if (match) {
+                                match.UserData = match.UserData || {};
+                                if (isNearComplete) {
+                                    match.UserData.Played = true;
+                                    match.UserData.PlaybackPositionTicks = 0;
+                                    match.UserData.UnplayedItemCount = 0;
+                                } else if (positionTicks > 0) {
+                                    match.UserData.PlaybackPositionTicks = positionTicks;
+                                }
+                            }
+                        }
+
+                        // Also patch any in-memory episode caches so season listings reflect new progress
+                        if (key.startsWith('details:episodes:') && Array.isArray(val)) {
+                            const match = val.find((ep) => ep?.Id === itemId);
+                            if (match) {
+                                match.UserData = match.UserData || {};
+                                if (isNearComplete) {
+                                    match.UserData.Played = true;
+                                    match.UserData.PlaybackPositionTicks = 0;
+                                } else if (positionTicks > 0) {
+                                    match.UserData.PlaybackPositionTicks = positionTicks;
+                                }
                             }
                         }
                     }
-
-                    // Also patch any in-memory episode caches so season listings reflect new progress
-                    if (key.startsWith('details:episodes:') && Array.isArray(val)) {
-                        const match = val.find((ep) => ep?.Id === itemId);
-                        if (match) {
-                            match.UserData = match.UserData || {};
-                            if (isNearComplete) {
-                                match.UserData.Played = true;
-                                match.UserData.PlaybackPositionTicks = 0;
-                            } else if (positionTicks > 0) {
-                                match.UserData.PlaybackPositionTicks = positionTicks;
-                            }
-                        }
+                } else {
+                    // Under Ghost Mode: Purge any lingering stop snapshot for this specific item
+                    // to ensure destination views (DetailsPage, HomePage) never reconcile ghost playback
+                    log.info('Ghost Mode is active: skipping playback stop snapshot and client cache mutation');
+                    if (state.get('playback:lastStopped')?.itemId === itemId) {
+                        state.delete('playback:lastStopped');
+                    }
+                    state.delete(`playback:lastStopped:${itemId}`);
+                    const stoppedMap = state.get('playback:lastStoppedMap');
+                    if (stoppedMap && stoppedMap[itemId]) {
+                        delete stoppedMap[itemId];
+                        state.set('playback:lastStoppedMap', stoppedMap);
                     }
                 }
             } catch (cacheErr) {

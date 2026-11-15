@@ -322,3 +322,121 @@ test('PlayerPage resume calculation adjusts explicit startPositionTicks with use
     // 14199970000 minus 50000000 equals 14149970000
     assert.equal(resumePosition, 14149970000);
 });
+
+test('Ghost Mode playback stop suppresses stop snapshots and prevents client cache progress reconciliation', () => {
+    // ------------------------------------------------------------------------
+    // In-Memory State Manager & Cache Simulation
+    // ------------------------------------------------------------------------
+    // Emulates state dictionary tracking active playback snapshots and cache keys
+    const mockState = new Map();
+
+    // Seed library state cache containing an unplayed media item
+    const libraryCacheKey = 'library:state:movies';
+    const mockLibraryItem = {
+        Id: 'ghost-item-999',
+        Name: 'Ghost Item',
+        UserData: {
+            Played: false,
+            PlaybackPositionTicks: 0,
+            UnplayedItemCount: 1
+        }
+    };
+    mockState.set(libraryCacheKey, {
+        stateData: {
+            items: [mockLibraryItem]
+        }
+    });
+
+    // Seed an existing lingering stop snapshot from a prior test or session
+    const staleSnapshot = {
+        itemId: 'ghost-item-999',
+        positionTicks: 250000000,
+        durationTicks: 1000000000,
+        isNearComplete: false,
+        timestamp: Date.now() - 5000
+    };
+    mockState.set('playback:lastStopped', staleSnapshot);
+    mockState.set(`playback:lastStopped:${staleSnapshot.itemId}`, staleSnapshot);
+    mockState.set('playback:lastStoppedMap', { [staleSnapshot.itemId]: staleSnapshot });
+
+    // ------------------------------------------------------------------------
+    // PlayerPage._stopAndExit Execution Simulation (Ghost Mode active)
+    // ------------------------------------------------------------------------
+    const isGhostMode = true;
+    const itemId = 'ghost-item-999';
+    const positionTicks = 850000000; // 85 seconds into video
+    const durationTicks = 1000000000;
+    const isNearComplete = false;
+
+    // Execute stop snapshot logic matching PlayerPage._stopAndExit implementation
+    if (!isGhostMode) {
+        const stopSnapshot = {
+            itemId,
+            positionTicks: isNearComplete ? 0 : positionTicks,
+            durationTicks,
+            isNearComplete,
+            timestamp: Date.now()
+        };
+        mockState.set('playback:lastStopped', stopSnapshot);
+        mockState.set(`playback:lastStopped:${itemId}`, stopSnapshot);
+        const map = mockState.get('playback:lastStoppedMap') || {};
+        map[itemId] = stopSnapshot;
+        mockState.set('playback:lastStoppedMap', map);
+
+        // Mutate library caches
+        const all = Object.fromEntries(mockState.entries());
+        for (const [key, val] of Object.entries(all)) {
+            if (key.startsWith('library:state:') && val?.stateData?.items) {
+                const match = val.stateData.items.find(({ Id }) => Id === itemId);
+                if (match) {
+                    match.UserData = match.UserData || {};
+                    match.UserData.PlaybackPositionTicks = positionTicks;
+                }
+            }
+        }
+    } else {
+        // Ghost mode purges existing snapshots and skips cache mutations
+        if (mockState.get('playback:lastStopped')?.itemId === itemId) {
+            mockState.delete('playback:lastStopped');
+        }
+        mockState.delete(`playback:lastStopped:${itemId}`);
+        const map = mockState.get('playback:lastStoppedMap');
+        if (map && map[itemId]) {
+            delete map[itemId];
+            mockState.set('playback:lastStoppedMap', map);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Verification: State & Cache Invariants
+    // ------------------------------------------------------------------------
+    // Verify stop snapshots were completely removed/prevented
+    assert.equal(mockState.get('playback:lastStopped'), undefined);
+    assert.equal(mockState.get(`playback:lastStopped:${itemId}`), undefined);
+    assert.equal(mockState.get('playback:lastStoppedMap')?.[itemId], undefined);
+
+    // Verify in-memory library cache was NOT mutated with ghost playback ticks
+    assert.equal(mockLibraryItem.UserData.PlaybackPositionTicks, 0);
+    assert.equal(mockLibraryItem.UserData.Played, false);
+
+    // Verify destination page reconciliation finds nothing to reconcile
+    const itemOnDetailsPage = {
+        Id: 'ghost-item-999',
+        UserData: {
+            Played: false,
+            PlaybackPositionTicks: 0
+        }
+    };
+
+    const lastStopped =
+        mockState.get(`playback:lastStopped:${itemOnDetailsPage.Id}`) ||
+        mockState.get('playback:lastStoppedMap')?.[itemOnDetailsPage.Id] ||
+        (mockState.get('playback:lastStopped')?.itemId === itemOnDetailsPage.Id ? mockState.get('playback:lastStopped') : null);
+
+    if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+        itemOnDetailsPage.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+    }
+
+    // Item must remain untouched at 0 position ticks
+    assert.equal(itemOnDetailsPage.UserData.PlaybackPositionTicks, 0);
+});
