@@ -475,6 +475,20 @@ class LibraryPage extends Page {
             this.state.nameStartsWith = decodeURIComponent(this.params.char);
         }
 
+        // ====================================================================
+        // PERSISTED CATEGORY / TAB REHYDRATION
+        // ====================================================================
+        // When paginating or following deep links to non-default library tabs
+        // (such as Collections, Genres, Favorites, Episodes, Albums, etc.),
+        // restore viewType from the route parameters so category context is
+        // preserved rather than resetting back to the primary library default.
+        // ====================================================================
+        const tabParam = this.params.tab || this.params.viewType;
+        if (tabParam) {
+            // Unescape and apply the requested tab identifier to the state model
+            this.state.viewType = decodeURIComponent(tabParam);
+        }
+
         if (this.params.page) {
             const pageNum = parseInt(this.params.page, 10);
             if (!isNaN(pageNum) && pageNum > 0) {
@@ -1217,6 +1231,13 @@ class LibraryPage extends Page {
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
         if (this.params.searchTerm) parts.push(`search:${this.params.searchTerm}`);
+        // --------------------------------------------------------------------
+        // Category / tab partition: ensure memory caches do not collide
+        // across different tabs within the same library ID.
+        // --------------------------------------------------------------------
+        const tab =
+            this.params.tab || this.params.viewType || (this.state?.viewType !== 'Items' ? this.state?.viewType : null);
+        if (tab) parts.push(`tab:${tab}`);
         if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
         if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
         // Fall back to state.nameStartsWith if route params have not been synced yet
@@ -4896,6 +4917,25 @@ class LibraryPage extends Page {
         this.state.startIndex = 0; // Reset pagination
         this.state.nameStartsWith = null; // Reset Alpha Picker
 
+        // --------------------------------------------------------------------
+        // SYNC IN-MEMORY ROUTE PARAMS FOR TAB SWITCH
+        // --------------------------------------------------------------------
+        // Reset page offset and letter jump parameters from the previous tab.
+        // Track the active tab in params so subsequent page requests inherit it.
+        // --------------------------------------------------------------------
+        if (this.params.page) {
+            delete this.params.page;
+        }
+        if (this.params.char) {
+            delete this.params.char;
+        }
+        if (newType && newType !== 'Items') {
+            this.params.tab = newType;
+        } else {
+            delete this.params.tab;
+            delete this.params.viewType;
+        }
+
         // Rehydrate view mode and grid column preferences for the selected tab
         this._loadPersistedViewMode();
 
@@ -4914,7 +4954,8 @@ class LibraryPage extends Page {
         // Sync URL to new top-level tab state if we escaped a sub-view
         if (hasChanges) {
             log.info(`Cleared sub-view parameters for tab switch: ${newType}`);
-            router.navigate(`/library/${this.state.libraryId}`, { silent: true, replace: true });
+            const query = newType && newType !== 'Items' ? `?tab=${encodeURIComponent(newType)}` : '';
+            router.navigate(`/library/${this.state.libraryId}${query}`, { silent: true, replace: true });
         }
 
         // Update UI Tabs
@@ -6017,6 +6058,21 @@ class LibraryPage extends Page {
             currentParams.set('char', selectedChar);
         } else {
             currentParams.delete('char');
+        }
+
+        // ====================================================================
+        // ACTIVE TAB / CATEGORY PRESERVATION
+        // ====================================================================
+        // Transmit the active category viewType (such as Collections, Favorites,
+        // Episodes, Genres, or Albums) to ensure pagination keeps browsing the
+        // current category instead of resetting back to the primary library default.
+        // ====================================================================
+        const activeTab = this.state.viewType || this.params.tab;
+        if (activeTab && activeTab !== 'Items') {
+            currentParams.set('tab', activeTab);
+        } else {
+            currentParams.delete('tab');
+            currentParams.delete('viewType');
         }
 
         // Apply updated target page
