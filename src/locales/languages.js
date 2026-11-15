@@ -1,139 +1,138 @@
 // Auto-generated language mapping
 export const availableLanguages = [
     {
-        value: 'de',
-        label: 'Deutsch',
-        completeness: 92.8
+        "value": "de",
+        "label": "Deutsch",
+        "completeness": 96.77
     },
     {
-        value: 'en-us',
-        label: 'English',
-        completeness: 100
-    },
-       {
-        value: 'en-gb',
-        label: 'English - British',
-        completeness: 100
+        "value": "en-us",
+        "label": "English",
+        "completeness": 100
     },
     {
-        value: 'es',
-        label: 'Español',
-        completeness: 94.2
+        "value": "es",
+        "label": "Español",
+        "completeness": 98.3
     },
     {
-        value: 'fr',
-        label: 'Français',
-        completeness: 93.33
+        "value": "fr",
+        "label": "Français",
+        "completeness": 97.4
     },
     {
-        value: 'hr',
-        label: 'Hrvatski',
-        completeness: 94.85
+        "value": "hr",
+        "label": "Hrvatski",
+        "completeness": 98.75
     },
     {
-        value: 'it',
-        label: 'Italiano',
-        completeness: 93.68
+        "value": "it",
+        "label": "Italiano",
+        "completeness": 97.73
     },
     {
-        value: 'hu',
-        label: 'Magyar',
-        completeness: 94.96
+        "value": "hu",
+        "label": "Magyar",
+        "completeness": 98.81
     },
     {
-        value: 'nl',
-        label: 'Nederlands',
-        completeness: 92.97
+        "value": "nl",
+        "label": "Nederlands",
+        "completeness": 97
     },
     {
-        value: 'pl',
-        label: 'Polski',
-        completeness: 94.79
+        "value": "pl",
+        "label": "Polski",
+        "completeness": 98.87
     },
     {
-        value: 'pt-br',
-        label: 'Português (Brasil)',
-        completeness: 93.97
+        "value": "pt-br",
+        "label": "Português (Brasil)",
+        "completeness": 98.07
     },
     {
-        value: 'ro',
-        label: 'Română',
-        completeness: 93.44
+        "value": "ro",
+        "label": "Română",
+        "completeness": 97.51
     },
     {
-        value: 'sv',
-        label: 'Svenska',
-        completeness: 94.15
+        "value": "sv",
+        "label": "Svenska",
+        "completeness": 98.19
     },
     {
-        value: 'vi',
-        label: 'Tiếng Việt',
-        completeness: 95.37
+        "value": "vi",
+        "label": "Tiếng Việt",
+        "completeness": 99.26
     },
     {
-        value: 'tr',
-        label: 'Türkçe',
-        completeness: 94.85
+        "value": "tr",
+        "label": "Türkçe",
+        "completeness": 98.75
     },
     {
-        value: 'bg-bg',
-        label: 'Български (България)',
-        completeness: 95.32
+        "value": "bg-bg",
+        "label": "Български (България)",
+        "completeness": 99.26
     },
     {
-        value: 'ru',
-        label: 'Русский',
-        completeness: 95.2
+        "value": "ru",
+        "label": "Русский",
+        "completeness": 99.15
     },
     {
-        value: 'sr',
-        label: 'Српски',
-        completeness: 95.37
+        "value": "sr",
+        "label": "Српски",
+        "completeness": 99.32
     },
     {
-        value: 'uk',
-        label: 'Українська',
-        completeness: 95.14
+        "value": "uk",
+        "label": "Українська",
+        "completeness": 99.09
     },
     {
-        value: 'ar',
-        label: 'العربية',
-        completeness: 95.84
+        "value": "ar",
+        "label": "العربية",
+        "completeness": 99.55
     },
     {
-        value: 'hi-in',
-        label: 'हिन्दी (भारत)',
-        completeness: 95.43
+        "value": "hi-in",
+        "label": "हिन्दी (भारत)",
+        "completeness": 99.38
     },
     {
-        value: 'bn',
-        label: 'বাংলা',
-        completeness: 95.61
+        "value": "bn",
+        "label": "বাংলা",
+        "completeness": 99.38
     },
     {
-        value: 'ko',
-        label: '한국어',
-        completeness: 95.37
+        "value": "th",
+        "label": "ไทย",
+        "completeness": 98.53
     },
     {
-        value: 'zh-cn',
-        label: '中文（中国）',
-        completeness: 95.37
+        "value": "ko",
+        "label": "한국어",
+        "completeness": 99.32
     },
     {
-        value: 'zh-tw',
-        label: '中文（台灣）',
-        completeness: 95.43
+        "value": "zh-cn",
+        "label": "中文（中国）",
+        "completeness": 99.32
     },
     {
-        value: 'ja',
-        label: '日本語',
-        completeness: 95.37
+        "value": "zh-tw",
+        "label": "中文（台灣）",
+        "completeness": 99.38
     },
-        {
-        value: 'th',
-        label: 'ไทย',
-        completeness: 95.46
+    {
+        "value": "ja",
+        "label": "日本語",
+        "completeness": 98.92
+    },
+    {
+        "value": "en-gb",
+        "label": "English - British",
+        "completeness": 6.29
     }
-
 ];

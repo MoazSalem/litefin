@@ -111,12 +111,15 @@ function getStatus() {
         const arrayText = langJsContent.substring(arrayStart, arrayEnd);
         let languages;
         try {
-            // We use eval-like parsing or JSON.parse if it's clean JSON
-            // The file looks like clean JSON inside the array, but we'll be careful
+            // Support both standard JSON and JS object literal notation
             languages = JSON.parse(arrayText);
         } catch (e) {
-            console.error(`${c.red}Failed to parse array in languages.js. Ensure it is valid JSON-formatted array.${c.reset}`);
-            return;
+            try {
+                languages = (new Function(`return ${arrayText}`))();
+            } catch (evalErr) {
+                console.error(`${c.red}Failed to parse array in languages.js. Ensure it is valid JSON-formatted array.${c.reset}`);
+                return;
+            }
         }
 
         // Filter out languages that no longer exist in the locales folder
