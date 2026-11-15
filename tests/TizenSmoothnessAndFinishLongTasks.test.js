@@ -597,7 +597,172 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
 });
 
 // ============================================================================
-// 2b. Performance Tab — AVPlay Boot Warmup Opt-Out
+// 2b. Splash Hand-Off — Cold-Boot Warmup Must Not Be Aborted Early
+// ============================================================================
+
+test('TizenAdapter.hideWarmupBehindApp: App.hideSplash docks the native plane instead of aborting a cold prepareAsync', async () => {
+    rafQueue.length = 0;
+    mockBody._children.length = 0;
+
+    const origGetById = globalThis.document.getElementById;
+    const origLocation = globalThis.window.location;
+
+    globalThis.document.getElementById = (id) => mockBody._children.find((node) => node.id === id) || null;
+    globalThis.window.location = {
+        protocol: 'file:',
+        href: 'file:///opt/usr/apps/litefin/res/wgt/index.html#/home',
+        hash: '#/home'
+    };
+
+    let currentState = 'NONE';
+    const pendingPrepareCbs = [];
+    let playCalls = 0;
+    let stopCalls = 0;
+    let closeCalls = 0;
+
+    globalThis.tizen = {
+        filesystem: {
+            resolve: (location, onSuccess) =>
+                onSuccess({ path: 'wgt-package', toURI: () => 'file:///opt/usr/apps/litefin/res/wgt' }),
+            toURI: (path) => 'file://' + String(path).replace('wgt-package', '/opt/usr/apps/litefin/res/wgt')
+        }
+    };
+
+    globalThis.window.webapis = {
+        avplay: {
+            getState: () => currentState,
+            open: () => {},
+            setDisplayRect: () => {},
+            prepareAsync: (onPrepared) => pendingPrepareCbs.push(onPrepared),
+            play: () => {
+                playCalls++;
+                currentState = 'PLAYING';
+            },
+            setListener: () => {},
+            stop: () => {
+                stopCalls++;
+            },
+            close: () => {
+                closeCalls++;
+            }
+        }
+    };
+
+    try {
+        const adapter = new TizenAdapter();
+        adapter._isTizen = true;
+        assert.equal(adapter.warmupCompositor(), true);
+
+        const probe = mockBody._children.find((el) => el.id === 'litefin-avplay-warmup');
+        const warmupVideo = mockBody._children.find((el) => el.id === 'litefin-html5-warmup');
+        assert.ok(probe, 'AVPlayer <object> must mount for the warmup cycle');
+        assert.ok(warmupVideo, 'HTML5 warmup <video> must mount for the warmup cycle');
+        assert.equal(probe.style.opacity, '1');
+        assert.equal(probe.style.zIndex, '0');
+        assert.equal(mockDocEl.classList.contains('player-active'), true);
+        assert.equal(mockBody.classList.contains('player-active'), true);
+        assert.equal(pendingPrepareCbs.length, 1, 'cold-boot prepareAsync must still be in flight at splash hide');
+
+        /*
+         * Splash hides while prepareAsync is still pending (cold reboot): the
+         * hand-off must NOT stop/close the native session, must remove the
+         * visible HTML5 layer, must drop player-active so the app canvas is
+         * opaque again, and must dock the plane at z-index:-1 / opacity:0.
+         */
+        assert.equal(adapter.hideWarmupBehindApp(), true);
+        assert.equal(adapter.isWarmupActive(), true, 'Splash hand-off must keep the native warmup in flight');
+        assert.equal(stopCalls, 0, 'Splash hand-off must not avplay.stop() a cold prepareAsync');
+        assert.equal(closeCalls, 0, 'Splash hand-off must not avplay.close() a cold prepareAsync');
+
+        assert.equal(
+            mockBody._children.includes(warmupVideo),
+            false,
+            'Visible HTML5 warmup layer must not outlive the splash'
+        );
+        assert.equal(mockBody._children.includes(probe), true, 'AVPlay <object> must stay mounted behind the UI');
+        assert.equal(probe.style.opacity, '0', 'Docked warmup plane must be invisible');
+        assert.equal(probe.style.zIndex, '-1', 'Docked warmup plane must sit behind the app canvas');
+        assert.equal(
+            mockDocEl.classList.contains('player-active'),
+            false,
+            'player-active must drop on html at splash hide'
+        );
+        assert.equal(
+            mockBody.classList.contains('player-active'),
+            false,
+            'player-active must drop on body at splash hide'
+        );
+
+        // prepareAsync resolving after the splash left must still reach PLAYING + 400ms hold
+        pendingPrepareCbs.shift()();
+        assert.equal(playCalls, 1, 'Post-hand-off onPrepared must still call avplay.play()');
+        currentState = 'PLAYING';
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        assert.equal(adapter.isWarmupActive(), false, 'Warmup must finish its own 400ms PLAYING hold');
+        assert.ok(stopCalls >= 1, 'Finished warmup must stop the native session');
+        assert.ok(closeCalls >= 1, 'Finished warmup must close the native session');
+        assert.equal(
+            mockBody._children.includes(probe),
+            false,
+            'Docked plane must be removed once the cycle completes'
+        );
+        assert.equal(
+            mockDocEl.classList.contains('player-active'),
+            false,
+            'player-active must stay cleared after teardown'
+        );
+
+        // Idempotent: a second hand-off with no live cycle is a no-op that reports false
+        assert.equal(adapter.hideWarmupBehindApp(), false);
+        assert.equal(mockBody._children.length, 0);
+
+        /*
+         * Regression guard: the cold-boot budgets must stay wide enough for a
+         * 2.5-3.5s first prepareAsync plus the 400ms PLAYING hold.
+         */
+        const adapterSrc = readSrc('src/tizen/TizenAdapter.js');
+        assert.match(adapterSrc, /const WARMUP_PLAY_HOLD_MS = 400;/, 'PLAYING hold must stay 400ms');
+        assert.match(
+            adapterSrc,
+            /const WARMUP_PREPARE_TIMEOUT_MS = 5000;/,
+            'Per-candidate prepareAsync budget must cover a cold-boot 2.5-3.5s prepare'
+        );
+        assert.match(adapterSrc, /const WARMUP_MAX_MS = 8000;/, 'Total warmup watchdog must be 8000ms');
+
+        // App.hideSplash() must hand off (not abort) so the cycle can reach PLAYING
+        const appSrc = readSrc('src/core/App.js');
+        const hideSplashHandlerStart = appSrc.indexOf("eventBus.on('app:hideSplash', () => {");
+        assert.notEqual(hideSplashHandlerStart, -1, 'App.js must register the app:hideSplash handler');
+        const handOffSlice = appSrc.slice(
+            hideSplashHandlerStart,
+            appSrc.indexOf("const splash = document.getElementById('app-splash');", hideSplashHandlerStart)
+        );
+        assert.ok(
+            handOffSlice.includes('tizenAdapter.hideWarmupBehindApp()'),
+            'App.hideSplash() must dock the warmup behind the UI instead of aborting it'
+        );
+        assert.ok(
+            !/tizenAdapter\.abortWarmup\(\)/.test(handOffSlice),
+            'App.hideSplash() must never abort a warmup that has not finished its PLAYING window'
+        );
+
+        // TizenAVPlayer still owns the hard abort before real playback opens
+        assert.match(
+            readSrc('src/player/core/TizenAVPlayer.js'),
+            /tizenAdapter\.abortWarmup\(\)/,
+            'TizenAVPlayer.play() must still abort the warmup before opening a real stream'
+        );
+    } finally {
+        delete globalThis.window.webapis;
+        delete globalThis.tizen;
+        globalThis.window.location = origLocation;
+        globalThis.document.getElementById = origGetById;
+        mockBody._children.length = 0;
+    }
+});
+
+// ============================================================================
+// 2c. Performance Tab — AVPlay Boot Warmup Opt-Out
 // ============================================================================
 
 test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-only, and enabled by default', () => {
@@ -635,7 +800,7 @@ test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-on
 });
 
 // ============================================================================
-// 2c. Packaging — warmup.mp4 ships only in Tizen packages
+// 2d. Packaging — warmup.mp4 ships only in Tizen packages
 // ============================================================================
 
 test('Packaging: warmup.mp4 is excluded from every non-Tizen package', () => {

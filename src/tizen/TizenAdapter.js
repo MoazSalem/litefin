@@ -78,11 +78,25 @@ const WARMUP_HEIGHT = 1080;
 const WARMUP_PLAY_HOLD_MS = 400;
 // Per-candidate prepareAsync budget: an invalid URI can fail silently on some
 // firmwares, so we advance to the next candidate instead of waiting forever.
-const WARMUP_PREPARE_TIMEOUT_MS = 900;
+//
+// COLD-BOOT BUDGET: the FIRST native AVPlayManager.prepareAsync() after a TV
+// reboot routinely takes 2.5-3.5s (hardware decoder firmware load + DSP init).
+// A tighter budget aborted the warmup mid-prepare, so AVPlay never reached
+// PLAYING and stayed cold for the user's first real playback. 5000ms covers the
+// cold-boot window with headroom while still letting a genuinely bad URI fall
+// through to the next candidate.
+const WARMUP_PREPARE_TIMEOUT_MS = 5000;
 // wgt-package resolution budget before falling back to the WebView URL.
 const WARMUP_RESOLVE_TIMEOUT_MS = 500;
-// Hard ceiling for the whole warmup cycle (bounded by 2500ms safety max timeout).
-const WARMUP_MAX_MS = 2500;
+// Ceiling for the PAUSED/READY -> PLAYING transition once play() was called.
+const WARMUP_PLAYING_SAFETY_MS = 2500;
+// Hard ceiling for the whole warmup cycle. A cold prepareAsync (<5000ms) plus
+// the 400ms PLAYING hold plus the PLAYING safety ceiling must fit inside it, so
+// the native cycle is never cut short before it has actually warmed the decoder.
+// App.hideSplash() no longer aborts the cycle — it docks the plane behind the
+// opaque UI (see hideWarmupBehindApp()) — so this watchdog is the only bound
+// once the app canvas is visible.
+const WARMUP_MAX_MS = 8000;
 
 class TizenAdapter {
     constructor() {
@@ -106,6 +120,7 @@ class TizenAdapter {
         this._warmupSplashEl = null;
         this._warmupSplashPrevBg = '';
         this._warmupPlayerActive = false;
+        this._warmupDockedBehindUi = false;
 
         // Detect Tizen environment
         this._detectPlatform();
@@ -261,10 +276,15 @@ class TizenAdapter {
      * Aborts any in-flight boot AVPlay warmup immediately and releases native
      * AVPlay resources so real media playback can call avplay.open() cleanly.
      *
+     * TizenAVPlayer.play() calls this right before opening a real stream, and
+     * Settings > Performance calls it when the user disables the warmup. It is
+     * NOT called from App.hideSplash() any more — a cold-booted decoder needs
+     * 2.5-3.5s to prepare plus a 400ms PLAYING hold, so killing the cycle on
+     * splash dismissal left AVPlay cold for first playback. hideWarmupBehindApp()
+     * handles that hand-off instead.
+     *
      * Also tears down the full-screen warmup layers and drops the temporary
-     * player-active transparency classes. App.hideSplash() calls this right
-     * before #app-splash starts fading out, so the user can never see a
-     * black or transparent flash between the warmup plane and the home page.
+     * player-active transparency classes.
      *
      * @returns {boolean} true if an active warmup cycle was cancelled
      */
@@ -310,6 +330,67 @@ class TizenAdapter {
             log.info('AVPlay hardware warmup aborted for real playback');
         }
         return wasActive;
+    }
+
+    /**
+     * Hands the screen back to the app UI while an in-flight native AVPlay
+     * warmup keeps running behind it.
+     *
+     * App.hideSplash() calls this instead of abortWarmup(). A cold-booted Tizen
+     * TV needs 2.5-3.5s for its first native prepareAsync() plus the 400ms
+     * PLAYING hold, so aborting the cycle the moment the splash faded meant
+     * AVPlay never reached PLAYING and first playback stayed cold. Instead:
+     *
+     *   1. The visible HTML5 <video> warmup layer is removed immediately.
+     *   2. The temporary player-active transparency classes are dropped, so
+     *      html/body paint var(--jf-background) again and the UI canvas is
+     *      solid opaque black/theme instead of letting the hardware plane show.
+     *   3. The application/avplayer <object> is docked at z-index:-1 /
+     *      opacity:0 — still mounted, still decoding — so the native session
+     *      completes its PLAYING transition and 400ms hold underneath the
+     *      opaque UI. _finishWarmup() then closes the decoder and removes the
+     *      node; the 8000ms watchdog bounds the cycle if PLAYING never lands.
+     *
+     * @returns {boolean} true while the native warmup cycle is still in flight
+     */
+    hideWarmupBehindApp() {
+        const stillRunning = !!this._warmupActive;
+
+        // The HTML5 layer is a real, visible DOM layer: it must never outlive the splash.
+        this._teardownWarmupVideoLayer();
+        this._restoreWarmupSplash();
+
+        /*
+         * Drop the temporary transparency mode first: with player-active gone,
+         * html/body paint the opaque theme canvas again, so the app owns the
+         * screen before the splash even finishes fading.
+         */
+        this._applyWarmupPlayerActive(false);
+
+        if (!stillRunning) {
+            // No native session is alive: release any dormant plane as well.
+            this._teardownWarmupLayers();
+            return false;
+        }
+
+        if (this._compositorWarmupProbe) {
+            try {
+                // Park the plane behind the app canvas: invisible and
+                // non-interactive, but still mounted so AVPlay keeps decoding.
+                this._compositorWarmupProbe.style.opacity = '0';
+                this._compositorWarmupProbe.style.zIndex = '-1';
+                this._warmupDockedBehindUi = true;
+            } catch (_) {
+                // Never let compositor cosmetics break splash dismissal
+            }
+        }
+
+        log.info(
+            `AVPlay warmup docked behind the app UI (${
+                this._warmupPrepared ? 'prepared, holding PLAYING window' : 'prepareAsync still in flight'
+            })`
+        );
+        return true;
     }
 
     /**
@@ -592,32 +673,55 @@ class TizenAdapter {
     }
 
     /**
+     * Detaches the HTML5 <video> warmup layer, if one is mounted. Idempotent.
+     * @private
+     */
+    _teardownWarmupVideoLayer() {
+        const video = this._warmupVideoEl;
+        this._warmupVideoEl = null;
+        if (!video) return;
+        try {
+            if (typeof video.pause === 'function') video.pause();
+        } catch (_) {
+            // Ignore pause on already-detached elements
+        }
+        try {
+            video.removeAttribute('src');
+            if (typeof video.load === 'function') video.load();
+        } catch (_) {
+            // Ignore src teardown errors on legacy WebKit
+        }
+        try {
+            if (video.parentNode) video.parentNode.removeChild(video);
+        } catch (_) {
+            // Ignore detached-node removal
+        }
+    }
+
+    /**
+     * Restores the splash background captured by _maskSplashForWarmup().
+     * Idempotent — safe on an already-detached splash.
+     * @private
+     */
+    _restoreWarmupSplash() {
+        if (!this._warmupSplashEl) return;
+        try {
+            this._warmupSplashEl.style.backgroundColor = this._warmupSplashPrevBg;
+        } catch (_) {
+            // Splash may already be detached
+        }
+        this._warmupSplashEl = null;
+        this._warmupSplashPrevBg = '';
+    }
+
+    /**
      * Removes the full-screen warmup layers, drops player-active and restores
      * the splash background. Idempotent — safe to call from abortWarmup(),
-     * _finishWarmup() and App.hideSplash().
+     * _finishWarmup() and hideWarmupBehindApp().
      * @private
      */
     _teardownWarmupLayers() {
-        const video = this._warmupVideoEl;
-        this._warmupVideoEl = null;
-        if (video) {
-            try {
-                if (typeof video.pause === 'function') video.pause();
-            } catch (_) {
-                // Ignore pause on already-detached elements
-            }
-            try {
-                video.removeAttribute('src');
-                if (typeof video.load === 'function') video.load();
-            } catch (_) {
-                // Ignore src teardown errors on legacy WebKit
-            }
-            try {
-                if (video.parentNode) video.parentNode.removeChild(video);
-            } catch (_) {
-                // Ignore detached-node removal
-            }
-        }
+        this._teardownWarmupVideoLayer();
 
         /*
          * Remove the full-screen 1920x1080 AVPlay plane entirely. The element is
@@ -634,18 +738,10 @@ class TizenAdapter {
                 // Ignore detached-node removal
             }
         }
+        this._warmupDockedBehindUi = false;
 
         this._applyWarmupPlayerActive(false);
-
-        if (this._warmupSplashEl) {
-            try {
-                this._warmupSplashEl.style.backgroundColor = this._warmupSplashPrevBg;
-            } catch (_) {
-                // Splash may already be detached
-            }
-            this._warmupSplashEl = null;
-            this._warmupSplashPrevBg = '';
-        }
+        this._restoreWarmupSplash();
     }
 
     /**
@@ -654,9 +750,10 @@ class TizenAdapter {
      * Runs a real native AVPlayManager cycle — open -> setDisplayRect ->
      * prepareAsync -> play -> stop -> close — against assets/warmup.mp4 at
      * 1920x1080 directly behind the still-opaque #app-splash, and warms the
-     * HTML5 <video> pipeline in parallel. Every layer is torn down before the
-     * splash fades (see abortWarmup()), so the user never sees a black or
-     * transparent flash.
+     * HTML5 <video> pipeline in parallel. When the splash hides mid-cycle,
+     * hideWarmupBehindApp() drops the visible layers and docks the native plane
+     * behind the opaque UI until the 400ms PLAYING hold completes, so a
+     * cold-boot warmup is never cut short.
      *
      * @returns {boolean} True when Tizen warmup executed or had already run
      */
@@ -719,6 +816,7 @@ class TizenAdapter {
 
         const warmupGen = ++this._warmupGen;
         this._warmupActive = true;
+        this._warmupDockedBehindUi = false;
         this._warmupCandidates = [];
         this._warmupCandidateIndex = 0;
         this._warmupAttempt = 0;
@@ -914,7 +1012,8 @@ class TizenAdapter {
                     }
                 }, 50);
 
-                // Safety timeout ceiling bounded by 2500ms in case firmware never enters PLAYING
+                // Safety ceiling in case firmware never enters PLAYING. Bounded by
+                // WARMUP_MAX_MS so the docked plane can never outlive the watchdog.
                 this._warmupSafetyTimerId = setTimeout(() => {
                     this._warmupSafetyTimerId = null;
                     if (!isCurrentAttempt()) return;
@@ -930,7 +1029,7 @@ class TizenAdapter {
                     }
                     log.info(`AVPlay warmup safety ceiling reached (state=${timedOutState})`);
                     this._finishWarmup(`safety ceiling reached (state=${timedOutState})`, warmupGen);
-                }, 2500);
+                }, WARMUP_PLAYING_SAFETY_MS);
             }
         };
 
@@ -1020,6 +1119,7 @@ class TizenAdapter {
 
         this._clearWarmupTimers();
         const wasActive = this._warmupActive;
+        const wasDocked = this._warmupDockedBehindUi;
         this._warmupActive = false;
 
         if (wasActive) {
@@ -1046,7 +1146,7 @@ class TizenAdapter {
         this._teardownWarmupLayers();
 
         if (wasActive) {
-            log.info(`AVPlay hardware warmup closed (${reason})`);
+            log.info(`AVPlay hardware warmup closed (${reason})${wasDocked ? ' — docked behind the app UI' : ''}`);
         }
     }
 

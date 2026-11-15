@@ -1424,22 +1424,30 @@ class App {
 
             /*
              * ================================================================
-             * TIZEN BOOT WARMUP TEARDOWN (before the splash starts fading)
+             * TIZEN BOOT WARMUP HAND-OFF (before the splash starts fading)
              * ================================================================
-             * warmupCompositor() may still be running the native AVPlay cycle
-             * (and the parallel HTML5 <video>) behind the opaque splash. Stop
-             * and close AVPlay, remove both warmup layers and drop the
-             * temporary player-active transparency classes HERE, while
-             * #app-splash is still fully opaque. Doing it after the fade
-             * starts would expose the bare video plane as a black flash.
+             * warmupCompositor() may still be inside the native AVPlay cycle
+             * (and the parallel HTML5 <video>) behind the opaque splash. On a
+             * cold-booted TV the FIRST native prepareAsync() takes 2.5-3.5s
+             * plus a 400ms PLAYING hold, so aborting here left AVPlay cold for
+             * the user's first real playback.
+             *
+             * hideWarmupBehindApp() hands the screen back without killing the
+             * native session: it removes the visible HTML5 warmup layer, drops
+             * the temporary player-active transparency classes (so html/body
+             * paint the solid opaque theme canvas again) and docks the AVPlay
+             * <object> at z-index:-1 / opacity:0 beneath the opaque UI while
+             * AVPlay finishes its 400ms hardware play cycle. The cycle's own
+             * 8000ms watchdog bounds it, and TizenAVPlayer.play() still calls
+             * abortWarmup() before opening a real stream.
              * ================================================================
              */
             try {
-                if (tizenAdapter && typeof tizenAdapter.abortWarmup === 'function') {
-                    tizenAdapter.abortWarmup();
+                if (tizenAdapter && typeof tizenAdapter.hideWarmupBehindApp === 'function') {
+                    tizenAdapter.hideWarmupBehindApp();
                 }
             } catch (err) {
-                log.warn('Tizen boot warmup teardown failed:', err);
+                log.warn('Tizen boot warmup hand-off failed:', err);
             }
 
             const splash = document.getElementById('app-splash');
