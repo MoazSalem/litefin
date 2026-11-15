@@ -32,7 +32,7 @@ import '../styles/home.css';
 import '../styles/hero-carousel.css';
 
 import Page from './Page.js';
-import { api } from '../api/index.js';
+import { api, auth } from '../api/index.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
@@ -1204,7 +1204,8 @@ class HomePage extends Page {
         // ── Priority 2: Latest per library ───────────────────────────────────
         // Each library gets its own descriptor so they can render independently
         // as they resolve, rather than waiting for all libraries to finish.
-        const hidePlayedInLatest = storage.getItem('pref:hidePlayedInLatest') === 'true';
+        // Evaluate preference through the resolver to honor user setting and server fallback.
+        const hidePlayedInLatest = this._shouldHidePlayedInLatest();
 
         for (const lib of this._libraries) {
             descriptors.push({
@@ -1245,7 +1246,9 @@ class HomePage extends Page {
                         return this._preFetchedItems.length > 0 ? this._preFetchedItems : null;
                     }
                     try {
-                        const params = hidePlayedInLatest ? { Filters: 'IsUnplayed' } : {};
+                        // Pass isPlayed: false to /Items/Latest when hiding played items.
+                        // When false (showing all), omit isPlayed so both played and unplayed media are returned.
+                        const params = hidePlayedInLatest ? { isPlayed: false } : {};
                         params.Limit = homeRowLimit;
                         const items = await api.getLatestItems(lib.Id, params);
                         return items?.length > 0 ? items : null;
@@ -2181,7 +2184,8 @@ class HomePage extends Page {
         if (latestDescriptors.length === 0) return;
 
         const libraryIds = latestDescriptors.map((d) => d.id.replace('latest-', ''));
-        const hidePlayed = storage.getItem('pref:hidePlayedInLatest') === 'true';
+        // Resolve whether watched content should be omitted from batch pre-fetch
+        const hidePlayed = this._shouldHidePlayedInLatest();
         // Ensure we read the canonical pref:homeRowsLimit user preference (defaulting to 12)
         const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || '12', 10);
 
@@ -4145,6 +4149,29 @@ class HomePage extends Page {
     // =========================================================================
 
     /**
+     * =========================================================================
+     * Hide Played in Recently Added Resolver
+     * =========================================================================
+     * Resolves whether played content should be hidden from Recently Added rows.
+     * Evaluates local storage preference first, then falls back to server
+     * UserConfiguration.HidePlayedInLatest so server-configured state is honored.
+     *
+     * @returns {boolean} True if played items must be hidden from latest rows
+     * @private
+     */
+    _shouldHidePlayedInLatest() {
+        // Check for an explicit local preference override in storage
+        const stored = storage.getItem('pref:hidePlayedInLatest');
+        if (stored !== null && stored !== undefined) {
+            return stored === 'true';
+        }
+
+        // Fall back to authoritative server user configuration
+        const user = auth.getCurrentUser();
+        return Boolean(user?.Configuration?.HidePlayedInLatest);
+    }
+
+    /**
      * Returns the cached homepage data if it exists and hasn't expired.
      * @returns {Object|null} Cache object or null
      */
@@ -4167,6 +4194,13 @@ class HomePage extends Page {
         // Invalidate if the user changed the row items limit while the cache was active
         const currentHomeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
         if (cache.homeRowLimit !== undefined && cache.homeRowLimit !== currentHomeRowLimit) {
+            state.delete('home:pageCache');
+            return null;
+        }
+
+        // Invalidate if the user changed the hide played in latest preference
+        const currentHidePlayed = this._shouldHidePlayedInLatest();
+        if (cache.hidePlayedInLatest !== undefined && cache.hidePlayedInLatest !== currentHidePlayed) {
             state.delete('home:pageCache');
             return null;
         }
@@ -4475,6 +4509,9 @@ class HomePage extends Page {
         // Track active homeRowLimit in snapshot so any future change automatically triggers invalidation
         const homeRowLimit = parseInt(storage.getItem('pref:homeRowsLimit') || 12, 10);
 
+        // Snapshot current hidePlayedInLatest state so changes invalidate the page cache
+        const hidePlayedInLatest = this._shouldHidePlayedInLatest();
+
         state.set('home:pageCache', {
             libraries: this._libraries,
             thumbUrls,
@@ -4483,6 +4520,7 @@ class HomePage extends Page {
             heroItems,
             hssSections: this._hssSections,
             hssEnabled: isHomeScreenSectionsEnabled(storage),
+            hidePlayedInLatest,
             homeRowLimit,
             serverUrl: api._serverUrl,
             userId: api._userId,

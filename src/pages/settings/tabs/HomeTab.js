@@ -10,7 +10,7 @@
 
 import { storage } from '../../../utils/StorageService.js';
 import { i18n } from '../../../utils/i18n.js';
-import { api } from '../../../api/index.js';
+import { api, auth } from '../../../api/index.js';
 import { focusManager } from '../../../ui/FocusManager.js';
 import { homeLayoutManager } from '../../../utils/HomeLayoutManager.js';
 import { BYW_ROW_ID_PREFIX, RECO_ROW_ID_PREFIX, clampRowCount } from '../../../utils/BecauseYouWatched.js';
@@ -157,7 +157,21 @@ export class HomeTab {
                 ${this._item(i18n.t('LabelCustomCollectionRows'), i18n.t('LabelCustomCollectionRowsDesc'), customColsBtn, 'setting-custom-collections', enableRows)}
                 ${this._item(i18n.t('PreferEpisodeImages') || 'Prefer Episode Images', i18n.t('PreferEpisodeImagesDescription') || 'Show episode preview thumbnail on Next Up cards.', this._toggle('toggle-prefer-episode-images', storage.getItem('pref:preferEpisodeImagesLocal') === 'true'))}
                 ${this._item(i18n.t('LabelMaxDaysForNextUp'), i18n.t('MaxDaysForNextUpDescription'), this._drop('next-up-max-days-select', daysOpts, storage.getItem('pref:nextUpMaxDays') || 365))}
-                ${this._item(i18n.t('HideWatchedContentFromLatestMedia') || 'Hide played from Recently Added', i18n.t('HideWatchedContentFromLatestMediaDescription') || 'Hide watched items from Recently Added.', this._toggle('toggle-hide-played-latest', storage.getItem('pref:hidePlayedInLatest') === 'true'))}
+                ${/*
+                   * Resolve whether watched content should be hidden from Recently Added rows.
+                   * Check local storage preference first; if unset, fall back to authoritative
+                   * server user configuration so the toggle accurately displays server state.
+                   */
+                this._item(
+                    i18n.t('HideWatchedContentFromLatestMedia') || 'Hide played from Recently Added',
+                    i18n.t('HideWatchedContentFromLatestMediaDescription') || 'Hide watched items from Recently Added.',
+                    this._toggle(
+                        'toggle-hide-played-latest',
+                        storage.getItem('pref:hidePlayedInLatest') !== null
+                            ? storage.getItem('pref:hidePlayedInLatest') === 'true'
+                            : Boolean(auth.getCurrentUser()?.Configuration?.HidePlayedInLatest)
+                    )
+                )}
                 ${this._item(i18n.t('LibraryThumbnails') || 'Library Thumbnails', i18n.t('LibraryThumbnailsDescription') || 'Style of library cards on home screen', this._drop('library-thumb-mode-select', [{ value: 'off', label: i18n.t('fromJellyfin') || 'From Jellyfin' }, { value: 'static', label: i18n.t('RandomStatic') || 'Random Backdrop (Static)' }, { value: 'dynamic', label: i18n.t('RandomDynamic') || 'Random Backdrop (Dynamic)' }], thumbMode))}
                 ${this._item(i18n.t('RegenerateThumbnails') || 'Regenerate Thumbnails', i18n.t('RegenerateThumbnailsDescription') || 'Pick new random backdrops for libraries', regenBtn, 'library-thumb-regenerate-container', thumbMode === 'static')}
                 ${this._item(i18n.t('HideLibraryLabels'), i18n.t('HideLibraryLabelsDescription'), this._toggle('toggle-library-labels', storage.getItem('pref:hideLibraryLabels') === 'true'))}
@@ -324,7 +338,8 @@ export class HomeTab {
             const btn = rootEl.querySelector(sel);
             if (!btn) return;
             btn.addEventListener('click', () => {
-                const cur = isNegated ? storage.getItem(key) !== 'false' : storage.getItem(key) === 'true';
+                // Determine current state based on active class presence on the toggle button
+                const cur = btn.classList.contains('active');
                 const next = !cur;
                 storage.setItem(key, next.toString());
                 btn.classList.toggle('active', next);
@@ -334,7 +349,39 @@ export class HomeTab {
 
         bindToggle('#toggle-use-trending-collection-name', 'pref:useTrendingCollectionName');
         bindToggle('#toggle-prefer-episode-images', 'pref:preferEpisodeImagesLocal');
-        bindToggle('#toggle-hide-played-latest', 'pref:hidePlayedInLatest');
+        bindToggle('#toggle-hide-played-latest', 'pref:hidePlayedInLatest', false, (next) => {
+            // ================================================================
+            // Invalidate In-Memory HomePage Cache
+            // ================================================================
+            // Invalidate cached home page rows in StateManager so back-navigation
+            // to the Home screen instantly re-queries and rebuilds the rows.
+            state.delete('home:pageCache');
+
+            // ================================================================
+            // Invalidate Network ETag Cache
+            // ================================================================
+            // Clear ETag response cache in ApiClient to prevent stale 304 responses
+            // from serving unplayed-only items after the setting was disabled.
+            api.clearEtagCache();
+
+            // ================================================================
+            // Synchronize User Configuration with Server Host
+            // ================================================================
+            // Jellyfin evaluates user.HidePlayedInLatest as the authoritative
+            // source for latest media queries. Persisting the updated setting ensures
+            // backend queries apply the exact filter requested across all views.
+            const user = auth.getCurrentUser();
+            if (user) {
+                if (!user.Configuration) {
+                    user.Configuration = {};
+                }
+                user.Configuration.HidePlayedInLatest = next;
+                state.set('user:data', user);
+                api.updateUserConfiguration(user.Configuration).catch((err) => {
+                    log.warn('Failed to synchronize HidePlayedInLatest with server user configuration', err);
+                });
+            }
+        });
         bindToggle('#toggle-library-labels', 'pref:hideLibraryLabels');
         bindToggle('#toggle-hide-livetv-home', 'pref:hideLiveTvInMyMedia');
         bindToggle('#toggle-hero-carousel-text-title', 'pref:heroCarouselTextTitle');
