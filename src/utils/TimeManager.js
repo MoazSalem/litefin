@@ -16,6 +16,7 @@
 
 import { api } from '../api/index.js';
 import { eventBus } from '../core/EventBus.js';
+import { idleGate } from './IdleGate.js';
 import { logger } from './Logger.js';
 import { PlayerSettings } from './PlayerSettings.js';
 // Centralized platform capabilities & environment detection
@@ -115,44 +116,59 @@ class TimeManager {
                 (typeof PlayerSettings !== 'undefined' && PlayerSettings.get('timeSource')) || 'browser';
             log.info(`Active timeSource preference: "${activeSource}"`);
 
-            // Record baseline JavaScript Date engine state
+            // Record baseline JavaScript Date engine state without triggering Chromium ICU locale tables
             const baselineJsDate = new Date();
             log.info(
-                `JS runtime Date baseline: "${baselineJsDate.toString()}" (epoch: ${baselineJsDate.getTime()}, tzOffset: ${baselineJsDate.getTimezoneOffset()})`
+                `JS runtime Date baseline: "${baselineJsDate.toISOString()}" (epoch: ${baselineJsDate.getTime()}, tzOffset: ${baselineJsDate.getTimezoneOffset()})`
             );
 
-            // Inspect Tizen native environment if present
-            if (this._isTizen) {
-                const hasTime = Boolean(tizenObj && tizenObj.time);
-                const getCurrentDateTimeType = typeof tizenObj?.time?.getCurrentDateTime;
-                log.info(
-                    `Tizen probe — tizen.time present: ${hasTime}, getCurrentDateTime type: "${getCurrentDateTimeType}"`
-                );
-
-                // Execute live date query safely
-                const tz = this._getTizenDateTime();
-                if (tz) {
+            // Synchronous IPC to tizen.time.getCurrentDateTime() takes 1.5s+ and Date.prototype.toLocaleString()
+            // triggers heavy ICU initialization during the critical splash dismissal window.
+            // When timeSource is "browser", completely skip querying native Tizen time drivers.
+            // When an OS probe is requested, defer execution behind IdleGate by 10s so first paint is unblocked.
+            if (this._isTizen && activeSource !== 'browser') {
+                idleGate.runWhenIdle(() => {
                     try {
-                        const secOffset = typeof tz.secondsFromUTC === 'function' ? tz.secondsFromUTC() : null;
-                        const tzName = typeof tz.getTimezone === 'function' ? tz.getTimezone() : 'unknown';
+                        const hasTime = Boolean(tizenObj && tizenObj.time);
+                        const getCurrentDateTimeType = typeof tizenObj?.time?.getCurrentDateTime;
                         log.info(
-                            `Tizen startup OS clock probe — toLocaleString: "${tz.toLocaleString()}", timezone: "${tzName}", secFromUTC: ${secOffset}, raw:`,
-                            {
-                                year: tz.getFullYear(),
-                                month: tz.getMonth(),
-                                date: tz.getDate(),
-                                hours: tz.getHours(),
-                                minutes: tz.getMinutes(),
-                                seconds: tz.getSeconds(),
-                                milliseconds: tz.getMilliseconds()
-                            }
+                            `Tizen probe — tizen.time present: ${hasTime}, getCurrentDateTime type: "${getCurrentDateTimeType}"`
                         );
+
+                        // Execute live date query safely during idle period
+                        const tz = this._getTizenDateTime();
+                        if (tz) {
+                            try {
+                                const secOffset = typeof tz.secondsFromUTC === 'function' ? tz.secondsFromUTC() : null;
+                                const tzName = typeof tz.getTimezone === 'function' ? tz.getTimezone() : 'unknown';
+                                const formattedDate =
+                                    typeof tz.toISOString === 'function'
+                                        ? tz.toISOString()
+                                        : typeof tz.toString === 'function'
+                                          ? tz.toString()
+                                          : '';
+                                log.info(
+                                    `Tizen startup OS clock probe — toISOString: "${formattedDate}", timezone: "${tzName}", secFromUTC: ${secOffset}, raw:`,
+                                    {
+                                        year: tz.getFullYear(),
+                                        month: tz.getMonth(),
+                                        date: tz.getDate(),
+                                        hours: tz.getHours(),
+                                        minutes: tz.getMinutes(),
+                                        seconds: tz.getSeconds(),
+                                        milliseconds: tz.getMilliseconds()
+                                    }
+                                );
+                            } catch (probeErr) {
+                                log.warn('Tizen startup probe formatting failed:', probeErr);
+                            }
+                        } else {
+                            log.warn('Tizen OS date is currently unavailable via tizen.time.');
+                        }
                     } catch (probeErr) {
-                        log.warn('Tizen startup probe formatting failed:', probeErr);
+                        log.warn('Deferred Tizen startup diagnostic probe error:', probeErr);
                     }
-                } else {
-                    log.warn('Tizen OS date is currently unavailable via tizen.time.');
-                }
+                }, 10000, 0);
             }
         } catch (diagErr) {
             log.warn('Startup diagnostic probe exception caught safely:', diagErr);
@@ -192,8 +208,14 @@ class TimeManager {
                         const tz = this._getTizenDateTime();
                         if (tz) {
                             try {
+                                const formattedDate =
+                                    typeof tz.toISOString === 'function'
+                                        ? tz.toISOString()
+                                        : typeof tz.toString === 'function'
+                                          ? tz.toString()
+                                          : '';
                                 log.info(
-                                    `Tizen OS date on switch: toLocaleString="${tz.toLocaleString()}", timezone="${tz.getTimezone()}", raw=${tz.getFullYear()}-${tz.getMonth() + 1}-${tz.getDate()} ${tz.getHours()}:${tz.getMinutes()}:${tz.getSeconds()}`
+                                    `Tizen OS date on switch: toISOString="${formattedDate}", timezone="${tz.getTimezone()}", raw=${tz.getFullYear()}-${tz.getMonth() + 1}-${tz.getDate()} ${tz.getHours()}:${tz.getMinutes()}:${tz.getSeconds()}`
                                 );
                             } catch (e) {
                                 log.warn('Tizen OS switch probe error:', e);
@@ -439,8 +461,14 @@ class TimeManager {
                             this._lastLoggedMinute = minuteKey;
                             const secOffset = typeof tz.secondsFromUTC === 'function' ? tz.secondsFromUTC() : null;
                             const tzName = typeof tz.getTimezone === 'function' ? tz.getTimezone() : 'unknown';
+                            const formattedDate =
+                                typeof tz.toISOString === 'function'
+                                    ? tz.toISOString()
+                                    : typeof tz.toString === 'function'
+                                      ? tz.toString()
+                                      : '';
                             log.info(
-                                `Tizen OS active date: "${tz.toLocaleString()}" (tz: ${tzName}, secFromUTC: ${secOffset}, year: ${tz.getFullYear()}, hours: ${tz.getHours()}:${tz.getMinutes()}:${tz.getSeconds()})`
+                                `Tizen OS active date: "${formattedDate}" (tz: ${tzName}, secFromUTC: ${secOffset}, year: ${tz.getFullYear()}, hours: ${tz.getHours()}:${tz.getMinutes()}:${tz.getSeconds()})`
                             );
                         }
 
