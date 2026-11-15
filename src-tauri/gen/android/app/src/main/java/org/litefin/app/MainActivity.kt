@@ -3,11 +3,13 @@ package org.litefin.app
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
@@ -171,6 +173,79 @@ class MainActivity : TauriActivity() {
     // -------------------------------------------------------------------------
     val defaultFullscreen = isTvDevice()
     setFullscreen(defaultFullscreen)
+
+    // -------------------------------------------------------------------------
+    // Request Local Network & Nearby Devices Permissions
+    // -------------------------------------------------------------------------
+    // Android 13+ (API 33+) and Android 17+ (API 37+ / Samsung One UI 9) require
+    // runtime permissions under the 'Nearby devices' permission group
+    // (NEARBY_WIFI_DEVICES and ACCESS_LOCAL_NETWORK) to communicate with local
+    // network subnets (LAN IPs) and execute UDP server auto-discovery.
+    // -------------------------------------------------------------------------
+    requestLocalNetworkPermissions()
+  }
+
+  /**
+   * ===========================================================================
+   * Local Network & Nearby Devices Permission Dispatcher
+   * ===========================================================================
+   * Inspects and requests required runtime permissions for local network (LAN)
+   * communication and Jellyfin server auto-discovery.
+   *
+   * On modern Android builds (Android 13+ / API 33+ and Android 17+ / API 37+ /
+   * Samsung One UI 9), outbound sockets to local IP subnets and UDP broadcast
+   * discovery packets are blocked unless the application holds runtime
+   * permissions in the 'Nearby devices' permission group.
+   * ===========================================================================
+   */
+  internal fun requestLocalNetworkPermissions() {
+    // Collect permissions required by the current runtime platform level
+    val permissionsToRequest = ArrayList<String>()
+
+    // -------------------------------------------------------------------------
+    // Android 13+ (API 33+ / TIRAMISU) Nearby Wi-Fi Devices Permission
+    // -------------------------------------------------------------------------
+    // Enforced by Samsung One UI and Android 13+ to grant access to local Wi-Fi
+    // peer communication and local IP routing without requiring device GPS.
+    // -------------------------------------------------------------------------
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val nearbyWifiPermission = "android.permission.NEARBY_WIFI_DEVICES"
+      if (checkSelfPermission(nearbyWifiPermission) != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(nearbyWifiPermission)
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Android 17+ (API 37+ / One UI 9) Local Network Access Permission
+    // -------------------------------------------------------------------------
+    // Mandatory for applications targeting targetSdk 37. Prevents silent dropping
+    // of TCP/UDP packets when attempting to connect to private network ranges.
+    // -------------------------------------------------------------------------
+    if (Build.VERSION.SDK_INT >= 37) {
+      val localNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
+      if (checkSelfPermission(localNetworkPermission) != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(localNetworkPermission)
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Dispatch Runtime Permission Prompt
+    // -------------------------------------------------------------------------
+    // If any permissions are currently missing, request them via the registered
+    // ActivityResultContracts launcher in WryActivity.
+    // -------------------------------------------------------------------------
+    if (permissionsToRequest.isNotEmpty()) {
+      try {
+        requestPermissions(permissionsToRequest.toTypedArray()) { allGranted ->
+          Log.i(
+            "LitefinNetwork",
+            "Local network / nearby devices permission request finished: allGranted=$allGranted"
+          )
+        }
+      } catch (e: Exception) {
+        Log.e("LitefinNetwork", "Failed to launch local network permission request: ${e.message}", e)
+      }
+    }
   }
 
   /**
@@ -1150,6 +1225,56 @@ class MainActivity : TauriActivity() {
         model
       } else {
         "$manufacturer $model"
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Nearby Devices & Local Network Permission State Probe
+     * =========================================================================
+     * Verifies whether runtime permissions required for communicating with local
+     * area network devices (192.168.x.x, 10.x.x.x) have been granted.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun hasNearbyDevicesPermission(): Boolean {
+      var isGranted = true
+
+      // -----------------------------------------------------------------------
+      // Verify Android 13+ (API 33+) Nearby Wi-Fi Devices Permission Status
+      // -----------------------------------------------------------------------
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val nearbyWifi = "android.permission.NEARBY_WIFI_DEVICES"
+        if (checkSelfPermission(nearbyWifi) != PackageManager.PERMISSION_GRANTED) {
+          isGranted = false
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // Verify Android 17+ (API 37+ / One UI 9) Local Network Permission Status
+      // -----------------------------------------------------------------------
+      if (Build.VERSION.SDK_INT >= 37) {
+        val localNetwork = "android.permission.ACCESS_LOCAL_NETWORK"
+        if (checkSelfPermission(localNetwork) != PackageManager.PERMISSION_GRANTED) {
+          isGranted = false
+        }
+      }
+
+      return isGranted
+    }
+
+    /**
+     * =========================================================================
+     * Trigger Explicit Permission Dialog
+     * =========================================================================
+     * Allows the web interface or server discovery workflow to explicitly
+     * trigger the system permission request dialog if permissions are missing.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun requestNearbyDevicesPermission() {
+      runOnUiThread {
+        this@MainActivity.requestLocalNetworkPermissions()
       }
     }
 
