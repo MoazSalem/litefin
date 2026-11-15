@@ -14,6 +14,7 @@ import { storage } from './StorageService.js';
 import { escapeHtml } from './Utils.js';
 import { customHeaders } from './CustomHeaders.js';
 import { markPerfOperation } from './PerfMarker.js';
+import { imageCache } from './ImageCache.js';
 
 const log = logger.create('LazyLoader');
 
@@ -915,6 +916,11 @@ class LazyLoader {
      * @private
      */
     _assignImageSource(img, targetSrc) {
+        // Track cache hit/miss access telemetry
+        if (targetSrc && imageCache && typeof imageCache.recordAccess === 'function') {
+            imageCache.recordAccess(targetSrc);
+        }
+
         // Hint off-thread image decode before assigning src so compositor frames stay smooth
         if (img && 'decoding' in img) {
             img.decoding = 'async';
@@ -1459,6 +1465,24 @@ class LazyLoader {
             timerId = setTimeout(finish, budget);
             Promise.all(pending).then(finish, finish);
         });
+    }
+
+    /**
+     * Reports the total count of pending image loads (in-flight decode/network + queued).
+     * Used by telemetry collectors to monitor pending image pipeline depth.
+     *
+     * @returns {number} Active plus deferred image count
+     * @public
+     */
+    getPendingCount() {
+        let inFlight = 0;
+        if (this._settleTrackers && typeof this._settleTrackers.forEach === 'function') {
+            this._settleTrackers.forEach((tracker) => {
+                if (tracker && !tracker.settled) inFlight++;
+            });
+        }
+        const queued = this._pendingElements ? this._pendingElements.length : 0;
+        return queued + inFlight;
     }
 
     /**

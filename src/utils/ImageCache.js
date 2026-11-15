@@ -129,6 +129,12 @@ class ImageCache {
         /** Lookup map of warmed URLs (dedupe guard). */
         this._warmedMap = Object.create(null);
 
+        /** Cumulative count of cache hits (already warmed items re-requested). */
+        this._hits = 0;
+
+        /** Cumulative count of cache misses (un-warmed items needing network fetch). */
+        this._misses = 0;
+
         // ====================================================================
         // LEGACY WEBKIT RETENTION RING BUFFER
         // ====================================================================
@@ -190,8 +196,17 @@ class ImageCache {
         for (let i = 0; i < urls.length; i++) {
             const url = urls[i];
             if (!url) continue;
-            if (this._warmedMap[url] || this._queuedMap[url]) continue;
+            if (this._warmedMap[url]) {
+                // Requested item is already in warm cache
+                this._hits++;
+                continue;
+            }
+            if (this._queuedMap[url]) {
+                continue;
+            }
 
+            // Fresh un-warmed item requiring network prefetch
+            this._misses++;
             this._queuedMap[url] = true;
             this._queue.push(url);
         }
@@ -328,6 +343,59 @@ class ImageCache {
     }
 
     /**
+     * Checks if a specific URL has already been pre-warmed in memory.
+     *
+     * @param {string} url - Target image URL
+     * @returns {boolean} True if URL is cached in warmed registry
+     */
+    isWarmed(url) {
+        return Boolean(url && this._warmedMap && this._warmedMap[url]);
+    }
+
+    /**
+     * Records a live cache hit or miss access from LazyLoader or card renderers.
+     *
+     * @param {string} url - Accessed image URL
+     */
+    recordAccess(url) {
+        if (!url) return;
+        if (this._warmedMap && this._warmedMap[url]) {
+            this._hits++;
+        } else {
+            this._misses++;
+        }
+    }
+
+    /**
+     * Returns telemetry diagnostics on image requests, pending queues, and cache hit ratio.
+     *
+     * @returns {{
+     *   pendingRequests: number,
+     *   activeRequests: number,
+     *   queuedRequests: number,
+     *   hits: number,
+     *   misses: number,
+     *   hitRatio: number,
+     *   hitPercentage: string,
+     *   warmedCount: number
+     * }}
+     */
+    getStats() {
+        const total = this._hits + this._misses;
+        const ratio = total > 0 ? Math.round((this._hits / total) * 1000) / 1000 : 0;
+        return {
+            pendingRequests: this._queue.length + this._activeCount,
+            activeRequests: this._activeCount,
+            queuedRequests: this._queue.length,
+            hits: this._hits,
+            misses: this._misses,
+            hitRatio: ratio,
+            hitPercentage: total > 0 ? (ratio * 100).toFixed(1) + '%' : 'N/A',
+            warmedCount: this._warmedList ? this._warmedList.length : 0
+        };
+    }
+
+    /**
      * Full reset (e.g. after logout or an image-editing operation, so a new
      * user's / replaced artwork pre-warms fresh).
      */
@@ -336,6 +404,8 @@ class ImageCache {
 
         this._warmedList = [];
         this._warmedMap = Object.create(null);
+        this._hits = 0;
+        this._misses = 0;
 
         log.info('ImageCache cleared (warmed registry reset).');
     }

@@ -18,6 +18,9 @@ import { eventBus } from '../../core/EventBus.js';
 import { router } from '../../core/Router.js';
 import { setPerfOperationHandler } from '../../utils/PerfMarker.js';
 import { logger } from '../../utils/Logger.js';
+import { idleGate } from '../../utils/IdleGate.js';
+import { imageCache } from '../../utils/ImageCache.js';
+import { lazyLoader } from '../../utils/LazyLoader.js';
 
 const log = logger.create('PerfCollector');
 
@@ -165,6 +168,28 @@ export class PerformanceReportCollector {
 
         // Unsubscribe callbacks for eventBus listeners
         this._unsubscribers = [];
+
+        // requestIdleCallback execution tracking
+        this._idleCallbacks = {
+            supported: false,
+            scheduledCount: 0,
+            executedCount: 0,
+            totalDurationMs: 0,
+            maxDurationMs: 0,
+            avgDurationMs: 0
+        };
+        this._origRequestIdleCallback = null;
+
+        // Image decode execution tracking
+        this._imageDecodes = {
+            supported: false,
+            count: 0,
+            totalDurationMs: 0,
+            maxDurationMs: 0,
+            avgDurationMs: 0,
+            slowDecodesCount: 0
+        };
+        this._origImageDecode = null;
     }
 
     /**
@@ -230,6 +255,83 @@ export class PerformanceReportCollector {
         // Listen for route navigation events
         this._setupRouteListener();
 
+        // --------------------------------------------------------------------
+        // 1. requestIdleCallback execution tracking
+        // --------------------------------------------------------------------
+        this._idleCallbacks = {
+            supported: typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function',
+            scheduledCount: 0,
+            executedCount: 0,
+            totalDurationMs: 0,
+            maxDurationMs: 0,
+            avgDurationMs: 0
+        };
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+            this._origRequestIdleCallback = window.requestIdleCallback;
+            const self = this;
+            window.requestIdleCallback = function (cb, options) {
+                self._idleCallbacks.scheduledCount++;
+                return self._origRequestIdleCallback.call(window, function (deadline) {
+                    const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                    try {
+                        return cb(deadline);
+                    } finally {
+                        const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                        const dur = Math.max(0, t1 - t0);
+                        self._idleCallbacks.executedCount++;
+                        self._idleCallbacks.totalDurationMs += dur;
+                        if (dur > self._idleCallbacks.maxDurationMs) {
+                            self._idleCallbacks.maxDurationMs = Math.round(dur * 10) / 10;
+                        }
+                        self._idleCallbacks.avgDurationMs =
+                            Math.round((self._idleCallbacks.totalDurationMs / self._idleCallbacks.executedCount) * 10) / 10;
+                    }
+                }, options);
+            };
+        }
+
+        // --------------------------------------------------------------------
+        // 2. Image decode duration instrumentation
+        // --------------------------------------------------------------------
+        this._imageDecodes = {
+            supported:
+                typeof HTMLImageElement !== 'undefined' &&
+                HTMLImageElement.prototype &&
+                typeof HTMLImageElement.prototype.decode === 'function',
+            count: 0,
+            totalDurationMs: 0,
+            maxDurationMs: 0,
+            avgDurationMs: 0,
+            slowDecodesCount: 0
+        };
+        if (
+            typeof HTMLImageElement !== 'undefined' &&
+            HTMLImageElement.prototype &&
+            typeof HTMLImageElement.prototype.decode === 'function'
+        ) {
+            this._origImageDecode = HTMLImageElement.prototype.decode;
+            const self = this;
+            HTMLImageElement.prototype.decode = function () {
+                const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                const promise = self._origImageDecode.call(this);
+                if (promise && typeof promise.then === 'function') {
+                    return promise.then(
+                        (res) => {
+                            const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                            self._recordImageDecode(Math.max(0, t1 - t0));
+                            return res;
+                        },
+                        (err) => {
+                            const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                            self._recordImageDecode(Math.max(0, t1 - t0));
+                            throw err;
+                        }
+                    );
+                }
+                return promise;
+            };
+        }
+
         // Start requestAnimationFrame sampling loop
         this._lastFrameTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         this._rafId = requestFrame((now) => this._onFrame(now));
@@ -269,6 +371,22 @@ export class PerformanceReportCollector {
         // Unbind operation marker bridge so normal runtime pays zero overhead
         setPerfOperationHandler(null);
 
+        // Restore intercepted requestIdleCallback if previously active
+        if (this._origRequestIdleCallback && typeof window !== 'undefined') {
+            window.requestIdleCallback = this._origRequestIdleCallback;
+            this._origRequestIdleCallback = null;
+        }
+
+        // Restore original HTMLImageElement.prototype.decode implementation
+        if (
+            this._origImageDecode &&
+            typeof HTMLImageElement !== 'undefined' &&
+            HTMLImageElement.prototype
+        ) {
+            HTMLImageElement.prototype.decode = this._origImageDecode;
+            this._origImageDecode = null;
+        }
+
         log.info('Performance telemetry collector suspended.');
     }
 
@@ -289,6 +407,37 @@ export class PerformanceReportCollector {
         this._recentOperations.push({ name, timestamp });
         if (this._recentOperations.length > this._maxRecentOperations) {
             this._recentOperations.shift();
+        }
+    }
+
+    /**
+     * Records image decode execution metrics (HTMLImageElement.prototype.decode).
+     * Tracks execution frequency, cumulative duration, and max freeze latency
+     * to detect image decoding pressure on low-power TV chipsets.
+     *
+     * @private
+     * @param {number} dur - Image decode duration in milliseconds
+     */
+    _recordImageDecode(dur) {
+        if (!this._active) return;
+        const duration = Math.max(0, dur);
+
+        // Increment execution counters and aggregate elapsed milliseconds
+        this._imageDecodes.count++;
+        this._imageDecodes.totalDurationMs += duration;
+
+        // Track peak single-image decode latency
+        if (duration > this._imageDecodes.maxDurationMs) {
+            this._imageDecodes.maxDurationMs = Math.round(duration * 10) / 10;
+        }
+
+        // Maintain running arithmetic mean
+        this._imageDecodes.avgDurationMs =
+            Math.round((this._imageDecodes.totalDurationMs / this._imageDecodes.count) * 10) / 10;
+
+        // Flag any decode exceeding one frame budget (50ms) as a slow decode
+        if (duration > 50) {
+            this._imageDecodes.slowDecodesCount++;
         }
     }
 
@@ -527,6 +676,102 @@ export class PerformanceReportCollector {
         if (this._longTasks.length > this._maxLongTasks) {
             this._longTasks.shift();
         }
+    }
+
+    /**
+     * Aggregates main-thread long tasks by route and by initiating operation.
+     * Computes execution frequencies, total blocking durations, and maximum freeze times
+     * for granular bottleneck attribution across view controllers and background queues.
+     *
+     * @private
+     * @param {Array<Object>} tasks - List of captured long task records
+     * @returns {{
+     *   byRoute: Object.<string, { count: number, totalDurationMs: number, maxDurationMs: number, avgDurationMs: number, operations: Object }>,
+     *   byOperation: Object.<string, { count: number, totalDurationMs: number, maxDurationMs: number, avgDurationMs: number, routes: Array<string> }>
+     * }}
+     */
+    _groupLongTasks(tasks) {
+        // Plain dictionaries avoid Map/Set prototype overhead on older WebKit cores
+        const byRoute = Object.create(null);
+        const byOperation = Object.create(null);
+
+        // Guard against null, undefined, or empty long task buffers
+        if (!tasks || !tasks.length) {
+            return { byRoute, byOperation };
+        }
+
+        // Iterate through all captured long tasks
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            const routeKey = task.route || '/';
+
+            // Clean operation name by stripping dynamic deferred timing suffixes (+123ms)
+            const rawOp = task.operation || '';
+            const baseOp = rawOp ? rawOp.replace(/\s*\(\+\d+ms\)$/, '') : '(unattributed)';
+            const duration = typeof task.durationMs === 'number' ? task.durationMs : 0;
+
+            // ----------------------------------------------------------------
+            // 1. Group tasks by application route
+            // ----------------------------------------------------------------
+            if (!byRoute[routeKey]) {
+                byRoute[routeKey] = {
+                    count: 0,
+                    totalDurationMs: 0,
+                    maxDurationMs: 0,
+                    avgDurationMs: 0,
+                    operations: Object.create(null)
+                };
+            }
+            const rEntry = byRoute[routeKey];
+            rEntry.count++;
+            rEntry.totalDurationMs += duration;
+            if (duration > rEntry.maxDurationMs) {
+                rEntry.maxDurationMs = duration;
+            }
+            rEntry.avgDurationMs = Math.round((rEntry.totalDurationMs / rEntry.count) * 10) / 10;
+
+            // Sub-aggregate operations within each individual route
+            if (!rEntry.operations[baseOp]) {
+                rEntry.operations[baseOp] = {
+                    count: 0,
+                    totalDurationMs: 0,
+                    maxDurationMs: 0
+                };
+            }
+            const ropEntry = rEntry.operations[baseOp];
+            ropEntry.count++;
+            ropEntry.totalDurationMs += duration;
+            if (duration > ropEntry.maxDurationMs) {
+                ropEntry.maxDurationMs = duration;
+            }
+
+            // ----------------------------------------------------------------
+            // 2. Group tasks globally by originating operation
+            // ----------------------------------------------------------------
+            if (!byOperation[baseOp]) {
+                byOperation[baseOp] = {
+                    count: 0,
+                    totalDurationMs: 0,
+                    maxDurationMs: 0,
+                    avgDurationMs: 0,
+                    routes: []
+                };
+            }
+            const opEntry = byOperation[baseOp];
+            opEntry.count++;
+            opEntry.totalDurationMs += duration;
+            if (duration > opEntry.maxDurationMs) {
+                opEntry.maxDurationMs = duration;
+            }
+            opEntry.avgDurationMs = Math.round((opEntry.totalDurationMs / opEntry.count) * 10) / 10;
+
+            // Associate unique routes where this operation caused blocking
+            if (opEntry.routes.indexOf(routeKey) === -1) {
+                opEntry.routes.push(routeKey);
+            }
+        }
+
+        return { byRoute, byOperation };
     }
 
     /**
@@ -848,9 +1093,15 @@ export class PerformanceReportCollector {
         const curHeap = (typeof performance !== 'undefined' && performance.memory)
             ? performance.memory.usedJSHeapSize
             : null;
+        const totalHeap = (typeof performance !== 'undefined' && performance.memory)
+            ? performance.memory.totalJSHeapSize
+            : null;
         const totalHeapLimit = (typeof performance !== 'undefined' && performance.memory)
             ? performance.memory.jsHeapSizeLimit
             : null;
+        const heapUtilPct = (curHeap && totalHeapLimit && totalHeapLimit > 0)
+            ? `${((curHeap / totalHeapLimit) * 100).toFixed(1)}%`
+            : 'N/A';
 
         // Current live DOM nodes
         const currentDomNodes = (typeof document !== 'undefined' && typeof document.getElementsByTagName === 'function')
@@ -862,6 +1113,42 @@ export class PerformanceReportCollector {
             ? parseFloat(document.documentElement.style.zoom) || 1.0
             : 1.0;
         const displayScalePref = storage.getItem('pref:displayScale') || 'auto';
+
+        // Group captured long tasks by route and by initiating operation
+        const groupedTasks = this._groupLongTasks(this._longTasks);
+
+        // Compute elapsed time since the user last pressed a remote key or mouse/touch input
+        const lastInteractionTime = idleGate && typeof idleGate.getLastActivityTime === 'function'
+            ? idleGate.getLastActivityTime()
+            : Date.now();
+        const timeSinceInteractionMs = Math.max(0, Date.now() - lastInteractionTime);
+        const timeSinceInteractionSec = Math.round(timeSinceInteractionMs / 100) / 10;
+
+        // Gather image cache telemetry (pre-warm count, hits, misses, hit ratio)
+        const cacheStats = imageCache && typeof imageCache.getStats === 'function'
+            ? imageCache.getStats()
+            : {
+                pendingRequests: 0,
+                activeRequests: 0,
+                queuedRequests: 0,
+                hits: 0,
+                misses: 0,
+                hitRatio: 0,
+                hitPercentage: 'N/A',
+                warmedCount: 0
+            };
+
+        // Query LazyLoader queue and active image fetch/decode trackers
+        const lazyPending = lazyLoader && typeof lazyLoader.getPendingCount === 'function'
+            ? lazyLoader.getPendingCount()
+            : 0;
+        const totalPendingImageRequests = (cacheStats.pendingRequests || 0) + lazyPending;
+
+        // Query pending background tasks parked in IdleGate
+        const pendingIdleGateTasks = idleGate && typeof idleGate.getPendingTaskCount === 'function'
+            ? idleGate.getPendingTaskCount()
+            : 0;
+        const totalBackgroundTasks = pendingIdleGateTasks + (cacheStats.pendingRequests || 0);
 
         // Structured JSON telemetry dictionary
         const reportJson = {
@@ -937,6 +1224,8 @@ export class PerformanceReportCollector {
                 totalDetected: this._longTasks.length,
                 totalBlockingTimeMs: this._totalLongTaskTimeMs,
                 longestTaskMs: this._maxLongTaskMs,
+                groupedByRoute: groupedTasks.byRoute,
+                groupedByOperation: groupedTasks.byOperation,
                 entries: this._longTasks
             },
             preStartLongTasks: {
@@ -948,10 +1237,67 @@ export class PerformanceReportCollector {
                 initialHeapMb: bytesToMb(this._initialHeapBytes),
                 peakHeapMb: bytesToMb(this._peakHeapBytes),
                 currentHeapMb: bytesToMb(curHeap),
+                totalHeapMb: bytesToMb(totalHeap),
                 heapLimitMb: bytesToMb(totalHeapLimit),
+                heapUtilizationPct: heapUtilPct,
+                raw: (typeof performance !== 'undefined' && performance.memory) ? {
+                    usedJSHeapSize: curHeap,
+                    totalJSHeapSize: totalHeap,
+                    jsHeapSizeLimit: totalHeapLimit
+                } : null,
                 initialDomNodes: this._initialDomNodes,
                 peakDomNodes: this._peakDomNodes,
                 currentDomNodes
+            },
+            memory: (typeof performance !== 'undefined' && performance.memory) ? {
+                usedJSHeapSize: curHeap,
+                totalJSHeapSize: totalHeap,
+                jsHeapSizeLimit: totalHeapLimit,
+                usedMb: bytesToMb(curHeap),
+                totalMb: bytesToMb(totalHeap),
+                limitMb: bytesToMb(totalHeapLimit),
+                utilizationPct: heapUtilPct
+            } : null,
+            runtimeMetrics: {
+                idleCallbacks: {
+                    supported: this._idleCallbacks.supported,
+                    scheduledCount: this._idleCallbacks.scheduledCount,
+                    executedCount: this._idleCallbacks.executedCount,
+                    totalDurationMs: Math.round(this._idleCallbacks.totalDurationMs * 10) / 10,
+                    maxDurationMs: this._idleCallbacks.maxDurationMs,
+                    avgDurationMs: this._idleCallbacks.avgDurationMs
+                },
+                imageDecodes: {
+                    supported: this._imageDecodes.supported,
+                    count: this._imageDecodes.count,
+                    totalDurationMs: Math.round(this._imageDecodes.totalDurationMs * 10) / 10,
+                    maxDurationMs: this._imageDecodes.maxDurationMs,
+                    avgDurationMs: this._imageDecodes.avgDurationMs,
+                    slowDecodesCount: this._imageDecodes.slowDecodesCount
+                },
+                imageRequests: {
+                    totalPending: totalPendingImageRequests,
+                    activePreloadRequests: cacheStats.activeRequests,
+                    queuedPreloadRequests: cacheStats.queuedRequests,
+                    lazyLoaderPending: lazyPending
+                },
+                imageCache: {
+                    hits: cacheStats.hits,
+                    misses: cacheStats.misses,
+                    hitRatio: cacheStats.hitRatio,
+                    hitPercentage: cacheStats.hitPercentage,
+                    warmedCount: cacheStats.warmedCount
+                },
+                backgroundTasks: {
+                    idleGatePendingCount: pendingIdleGateTasks,
+                    imageCachePendingCount: cacheStats.pendingRequests || 0,
+                    totalPendingBackgroundTasks: totalBackgroundTasks
+                },
+                userActivity: {
+                    lastInteractionTimestamp: lastInteractionTime,
+                    timeSinceLastInteractionMs: timeSinceInteractionMs,
+                    timeSinceLastInteractionSec: timeSinceInteractionSec
+                }
             },
             routeNavigations: this._routeNavigations,
             networkBottlenecks: {
@@ -1006,11 +1352,12 @@ export class PerformanceReportCollector {
             '--------------------------------------------------------------------------------',
             '1. HARDWARE, DISPLAY & ENVIRONMENT',
             '--------------------------------------------------------------------------------',
-            `Screen Resolution:    ${e.screenResolution}`,
-            `Viewport Resolution:  ${e.viewportResolution} (DPR: ${e.devicePixelRatio})`,
-            `Display Scale Mode:   ${e.displayScalePreference} (Active Zoom: ${e.rootCssZoom.toFixed(2)}x)`,
-            `CPU Cores (Logical):  ${e.cpuCores}`,
-            `Device RAM (Est):     ${e.deviceMemoryGb !== 'N/A' ? `${e.deviceMemoryGb} GB` : 'N/A'}`,
+            `Screen Resolution:          ${e.screenResolution}`,
+            `Viewport Resolution:        ${e.viewportResolution} (DPR: ${e.devicePixelRatio})`,
+            `Display Scale Mode:         ${e.displayScalePreference} (Active Zoom: ${e.rootCssZoom.toFixed(2)}x)`,
+            `CPU Cores (Logical):        ${e.cpuCores}`,
+            `Device RAM (Est):           ${e.deviceMemoryGb !== 'N/A' ? `${e.deviceMemoryGb} GB` : 'N/A'}`,
+            `Time Since Last User Input: ${data.runtimeMetrics && data.runtimeMetrics.userActivity ? `${data.runtimeMetrics.userActivity.timeSinceLastInteractionSec}s` : 'N/A'}`,
             `Active UI Settings:`,
             `  • Low VRAM Mode:         ${e.activeSettings.lowVram ? 'Enabled' : 'Disabled'}`,
             `  • Disable Card Scaling:  ${e.activeSettings.disableCardScaling ? 'Enabled' : 'Disabled'}`,
@@ -1075,6 +1422,46 @@ export class PerformanceReportCollector {
             lines.push('');
         }
 
+        // Format grouped long tasks by route
+        if (l.groupedByRoute && Object.keys(l.groupedByRoute).length > 0) {
+            lines.push('Long Tasks Grouped by Route:');
+            const routeKeys = Object.keys(l.groupedByRoute);
+            for (let i = 0; i < routeKeys.length; i++) {
+                const rKey = routeKeys[i];
+                const rData = l.groupedByRoute[rKey];
+                lines.push(
+                    `  • ${rKey}: ${rData.count} tasks | Total: ${rData.totalDurationMs}ms | Max: ${rData.maxDurationMs}ms | Avg: ${rData.avgDurationMs}ms`
+                );
+                // Sub-breakdown of individual operations within this specific route
+                if (rData.operations) {
+                    const rOpKeys = Object.keys(rData.operations);
+                    for (let j = 0; j < rOpKeys.length; j++) {
+                        const rOp = rOpKeys[j];
+                        const oData = rData.operations[rOp];
+                        lines.push(
+                            `      - ${rOp}: ${oData.count}x (${oData.totalDurationMs}ms total, max ${oData.maxDurationMs}ms)`
+                        );
+                    }
+                }
+            }
+            lines.push('');
+        }
+
+        // Format grouped long tasks by initiating operation
+        if (l.groupedByOperation && Object.keys(l.groupedByOperation).length > 0) {
+            lines.push('Long Tasks Grouped by Operation:');
+            const opKeys = Object.keys(l.groupedByOperation);
+            for (let i = 0; i < opKeys.length; i++) {
+                const opKey = opKeys[i];
+                const opData = l.groupedByOperation[opKey];
+                const routesSummary = opData.routes && opData.routes.length > 0 ? ` [${opData.routes.join(', ')}]` : '';
+                lines.push(
+                    `  • ${opKey}: ${opData.count} tasks | Total: ${opData.totalDurationMs}ms | Max: ${opData.maxDurationMs}ms | Avg: ${opData.avgDurationMs}ms${routesSummary}`
+                );
+            }
+            lines.push('');
+        }
+
         // Format Memory and DOM complexity
         lines.push(
             '--------------------------------------------------------------------------------',
@@ -1082,7 +1469,9 @@ export class PerformanceReportCollector {
             '--------------------------------------------------------------------------------',
             `Initial JS Heap Allocated:   ${mem.initialHeapMb} MB`,
             `Peak JS Heap Allocated:      ${mem.peakHeapMb} MB`,
-            `Current JS Heap Allocated:   ${mem.currentHeapMb} MB (Limit: ${mem.heapLimitMb} MB)`,
+            `Current JS Heap Allocated:   ${mem.currentHeapMb} MB`,
+            `Total JS Heap Allocated:     ${mem.totalHeapMb || 'N/A'} MB`,
+            `JS Heap Utilization:         ${mem.heapUtilizationPct || 'N/A'} (Limit: ${mem.heapLimitMb} MB)`,
             `Initial Live DOM Nodes:      ${mem.initialDomNodes}`,
             `Peak Live DOM Nodes:         ${mem.peakDomNodes}`,
             `Current Live DOM Nodes:      ${mem.currentDomNodes}`,
@@ -1123,6 +1512,82 @@ export class PerformanceReportCollector {
                 });
             }
             lines.push('');
+        }
+
+        // Format Section 8: Runtime background work, images, and idle state
+        const rt = data.runtimeMetrics;
+        if (rt) {
+            lines.push(
+                '--------------------------------------------------------------------------------',
+                '8. RUNTIME BACKGROUND WORK, IMAGES & IDLE STATE',
+                '--------------------------------------------------------------------------------'
+            );
+
+            // Print requestIdleCallback execution counters and aggregated timing
+            if (rt.idleCallbacks) {
+                lines.push(
+                    'requestIdleCallback Telemetry:',
+                    `  • Supported:                 ${rt.idleCallbacks.supported ? 'Yes' : 'No'}`,
+                    `  • Scheduled / Executed:      ${rt.idleCallbacks.scheduledCount} / ${rt.idleCallbacks.executedCount}`,
+                    `  • Total Duration:            ${rt.idleCallbacks.totalDurationMs} ms (Max: ${rt.idleCallbacks.maxDurationMs} ms, Avg: ${rt.idleCallbacks.avgDurationMs} ms)`,
+                    ''
+                );
+            }
+
+            // Print asynchronous image decode performance measurements
+            if (rt.imageDecodes) {
+                lines.push(
+                    'Image Decode Telemetry (HTMLImageElement.decode):',
+                    `  • Supported:                 ${rt.imageDecodes.supported ? 'Yes' : 'No'}`,
+                    `  • Executed Decodes:          ${rt.imageDecodes.count} (${rt.imageDecodes.slowDecodesCount} slow > 50ms)`,
+                    `  • Total Duration:            ${rt.imageDecodes.totalDurationMs} ms (Max: ${rt.imageDecodes.maxDurationMs} ms, Avg: ${rt.imageDecodes.avgDurationMs} ms)`,
+                    ''
+                );
+            }
+
+            // Print in-flight and deferred image pipeline requests
+            if (rt.imageRequests) {
+                lines.push(
+                    'Image Pipeline & Pending Requests:',
+                    `  • Total Pending Requests:    ${rt.imageRequests.totalPending}`,
+                    `  • Active Preload Requests:   ${rt.imageRequests.activePreloadRequests}`,
+                    `  • Queued Preload Requests:   ${rt.imageRequests.queuedPreloadRequests}`,
+                    `  • LazyLoader In-Flight:      ${rt.imageRequests.lazyLoaderPending}`,
+                    ''
+                );
+            }
+
+            // Print pre-warmed image cache utilization and hit/miss ratios
+            if (rt.imageCache) {
+                lines.push(
+                    'Image Cache Hit / Miss Performance:',
+                    `  • Pre-warmed URLs in Memory: ${rt.imageCache.warmedCount}`,
+                    `  • Cache Hits:                ${rt.imageCache.hits}`,
+                    `  • Cache Misses:              ${rt.imageCache.misses}`,
+                    `  • Hit Ratio:                 ${rt.imageCache.hitPercentage} (${rt.imageCache.hitRatio})`,
+                    ''
+                );
+            }
+
+            // Print background tasks queued across the IdleGate scheduler
+            if (rt.backgroundTasks) {
+                lines.push(
+                    'Background Tasks & Queue Depth:',
+                    `  • IdleGate Pending Tasks:    ${rt.backgroundTasks.idleGatePendingCount}`,
+                    `  • ImageCache Pending Queue:  ${rt.backgroundTasks.imageCachePendingCount}`,
+                    `  • Total Background Tasks:    ${rt.backgroundTasks.totalPendingBackgroundTasks}`,
+                    ''
+                );
+            }
+
+            // Print time elapsed since the user last interacted with the app
+            if (rt.userActivity) {
+                lines.push(
+                    'User Activity State:',
+                    `  • Time Since Last Input:     ${rt.userActivity.timeSinceLastInteractionSec}s (${rt.userActivity.timeSinceLastInteractionMs} ms)`,
+                    ''
+                );
+            }
         }
 
         // Append Raw JSON payload at the end of the text file

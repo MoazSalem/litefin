@@ -287,6 +287,17 @@ export function cancelIdleTask(id) {
     }
 }
 
+/**
+ * Returns the count of pending background tasks currently parked in IdleGate.
+ * Used by diagnostics and telemetry collectors to monitor background queue depth.
+ *
+ * @returns {number} Active timer count
+ * @public
+ */
+export function getPendingTaskCount() {
+    return _timers ? Object.keys(_timers).length : 0;
+}
+
 // ============================================================================
 // Activity listeners (installed once at module evaluation)
 // ============================================================================
@@ -318,7 +329,8 @@ export const idleGate = {
     runWhenIdle,
     cancel: cancelIdleTask,
     setBootComplete,
-    isBootLocked
+    isBootLocked,
+    getPendingTaskCount
 };
 
 export default idleGate;

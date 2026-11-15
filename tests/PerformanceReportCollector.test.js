@@ -48,6 +48,8 @@ globalThis.window = {
     screen: { width: 1920, height: 1080 },
     devicePixelRatio: 1.5,
     location: { hash: '#/home' },
+    addEventListener: () => {},
+    removeEventListener: () => {},
     requestAnimationFrame: (cb) => setTimeout(() => cb(Date.now()), 16),
     cancelAnimationFrame: (id) => clearTimeout(id),
     requestIdleCallback: (cb) => setTimeout(cb, 10),
@@ -65,6 +67,15 @@ globalThis.window = {
     }
 };
 
+if (typeof globalThis.HTMLImageElement === 'undefined') {
+    globalThis.HTMLImageElement = function () {};
+    globalThis.HTMLImageElement.prototype = {
+        decode: function () {
+            return Promise.resolve();
+        }
+    };
+}
+
 globalThis.performance = globalThis.window.performance;
 globalThis.__APP_VERSION__ = '2.0.350';
 
@@ -74,6 +85,9 @@ globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 // Dynamic module imports
 const { storage } = await import('../src/utils/StorageService.js');
 const { markPerfOperation } = await import('../src/utils/PerfMarker.js');
+const { idleGate } = await import('../src/utils/IdleGate.js');
+const { imageCache } = await import('../src/utils/ImageCache.js');
+const { lazyLoader } = await import('../src/utils/LazyLoader.js');
 const { PerformanceReportCollector } = await import('../src/ui/diagnostics/PerformanceReportCollector.js');
 const {
     isPerformanceCollectorEnabled,
@@ -555,6 +569,231 @@ test('PerformanceReportCollector: 200 long-task ring buffer capacity and pre/dur
 
     // Verify JSON bundle retains all 200 long tasks
     assert.equal(report.json.longTasks.entries.length, 200, 'JSON retains all 200 long tasks');
+
+    collector.stop();
+});
+
+test('PerformanceReportCollector: Long tasks grouped by route and operation with duration aggregation', () => {
+    // Instantiate clean collector instance
+    const collector = new PerformanceReportCollector();
+
+    // Prepare simulated long tasks across different pages and operations
+    const simulatedTasks = [
+        {
+            route: '/home',
+            operation: 'HeroCarousel.commitBackdrop',
+            durationMs: 644
+        },
+        {
+            route: '/home',
+            operation: 'HeroCarousel.commitBackdrop (+45ms)',
+            durationMs: 175
+        },
+        {
+            route: '/home',
+            operation: 'HeroCarousel.finalizeLogo',
+            durationMs: 312
+        },
+        {
+            route: '/library',
+            operation: 'VirtualGrid.renderChunk',
+            durationMs: 180
+        },
+        {
+            route: '/library',
+            operation: '', // Unattributed
+            durationMs: 95
+        }
+    ];
+
+    // Execute grouping logic
+    const { byRoute, byOperation } = collector._groupLongTasks(simulatedTasks);
+
+    // ========================================================================
+    // Verify grouping by route
+    // ========================================================================
+    assert.ok(byRoute['/home'], 'Route /home exists');
+    assert.equal(byRoute['/home'].count, 3, 'Route /home should have 3 tasks');
+    assert.equal(byRoute['/home'].totalDurationMs, 644 + 175 + 312, 'Route /home total duration matches');
+    assert.equal(byRoute['/home'].maxDurationMs, 644, 'Route /home max duration matches');
+    assert.equal(byRoute['/home'].operations['HeroCarousel.commitBackdrop'].count, 2, 'Sub-operations aggregated');
+
+    assert.ok(byRoute['/library'], 'Route /library exists');
+    assert.equal(byRoute['/library'].count, 2, 'Route /library should have 2 tasks');
+    assert.equal(byRoute['/library'].totalDurationMs, 275, 'Route /library total duration matches');
+
+    // ========================================================================
+    // Verify grouping by operation (timing offsets like +45ms stripped)
+    // ========================================================================
+    assert.ok(byOperation['HeroCarousel.commitBackdrop'], 'Base operation should exist');
+    assert.equal(byOperation['HeroCarousel.commitBackdrop'].count, 2, 'Commit backdrop tasks consolidated');
+    assert.equal(byOperation['HeroCarousel.commitBackdrop'].totalDurationMs, 819, 'Sum of commitBackdrop durations');
+    assert.equal(byOperation['HeroCarousel.commitBackdrop'].maxDurationMs, 644, 'Max duration of commitBackdrop');
+    assert.deepEqual(byOperation['HeroCarousel.commitBackdrop'].routes, ['/home'], 'Associated routes list');
+
+    assert.ok(byOperation['(unattributed)'], 'Empty operation falls back to (unattributed)');
+    assert.equal(byOperation['(unattributed)'].count, 1);
+    assert.equal(byOperation['(unattributed)'].totalDurationMs, 95);
+});
+
+test('PerformanceReportCollector: requestIdleCallback & HTMLImageElement.decode execution tracking', async () => {
+    // Preserve any existing globals
+    const origRIC = globalThis.window.requestIdleCallback;
+    const origDecode = globalThis.HTMLImageElement.prototype.decode;
+
+    // Track simulated calls
+    let rICCalled = 0;
+    const testRIC = function (cb) {
+        rICCalled++;
+        return setTimeout(() => {
+            cb({ timeRemaining: () => 15, didTimeout: false });
+        }, 5);
+    };
+    globalThis.window.requestIdleCallback = testRIC;
+
+    let decodeCalled = 0;
+    const testDecode = function () {
+        decodeCalled++;
+        return new Promise((resolve) => {
+            setTimeout(resolve, 12);
+        });
+    };
+    globalThis.HTMLImageElement.prototype.decode = testDecode;
+
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    // Verify collector wrapped requestIdleCallback and HTMLImageElement.prototype.decode
+    assert.notEqual(globalThis.window.requestIdleCallback, testRIC, 'requestIdleCallback wrapped');
+    assert.notEqual(globalThis.HTMLImageElement.prototype.decode, testDecode, 'image decode wrapped');
+
+    // Trigger wrapped requestIdleCallback
+    await new Promise((resolve) => {
+        globalThis.window.requestIdleCallback(() => {
+            resolve();
+        });
+    });
+
+    assert.equal(rICCalled, 1, 'Simulated RIC was invoked');
+    assert.equal(collector._idleCallbacks.scheduledCount, 1, 'RIC scheduled count incremented');
+    assert.equal(collector._idleCallbacks.executedCount, 1, 'RIC executed count incremented');
+    assert.ok(collector._idleCallbacks.totalDurationMs >= 0, 'RIC execution duration recorded');
+
+    // Trigger wrapped image decode
+    const mockImg = new globalThis.HTMLImageElement();
+    await mockImg.decode();
+
+    assert.equal(decodeCalled, 1, 'Simulated decode was invoked');
+    assert.equal(collector._imageDecodes.count, 1, 'Image decode count incremented');
+    assert.ok(collector._imageDecodes.totalDurationMs >= 0, 'Image decode duration recorded');
+
+    // Test record slow decode (> 50ms)
+    collector._recordImageDecode(65);
+    assert.equal(collector._imageDecodes.count, 2, 'Total decode count updated');
+    assert.equal(collector._imageDecodes.slowDecodesCount, 1, 'Slow decode count detected (>50ms)');
+    assert.equal(collector._imageDecodes.maxDurationMs, 65, 'Max decode duration updated');
+
+    // Stop and verify restoration
+    collector.stop();
+    assert.equal(globalThis.HTMLImageElement.prototype.decode, testDecode, 'image decode restored to test function');
+    assert.equal(globalThis.window.requestIdleCallback, testRIC, 'requestIdleCallback restored to test function');
+
+    // Clean up globals back to originals
+    globalThis.HTMLImageElement.prototype.decode = origDecode;
+    globalThis.window.requestIdleCallback = origRIC;
+});
+
+test('PerformanceReportCollector: Image cache hit/miss ratio, pending image requests & background tasks', () => {
+    // Reset ImageCache state
+    imageCache.clear();
+
+    // Pre-warm sample URL
+    imageCache._warmedMap['http://localhost:8096/Images/1'] = true;
+    imageCache._warmedList.push('http://localhost:8096/Images/1');
+
+    // Simulate accesses
+    imageCache.recordAccess('http://localhost:8096/Images/1'); // Hit
+    imageCache.recordAccess('http://localhost:8096/Images/1'); // Hit
+    imageCache.recordAccess('http://localhost:8096/Images/2'); // Miss
+
+    const stats = imageCache.getStats();
+    assert.equal(stats.hits, 2, 'Cache hit count');
+    assert.equal(stats.misses, 1, 'Cache miss count');
+    assert.equal(stats.hitRatio, 0.667, 'Hit ratio rounded to 3 decimal places');
+    assert.equal(stats.hitPercentage, '66.7%', 'Hit percentage formatted string');
+
+    // Verify IdleGate pending task count
+    assert.equal(typeof idleGate.getPendingTaskCount(), 'number', 'IdleGate reports task count');
+
+    // Verify LazyLoader pending count
+    assert.equal(typeof lazyLoader.getPendingCount(), 'number', 'LazyLoader reports pending count');
+
+    // Build report and verify runtimeMetrics section
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    const report = collector.buildReport();
+
+    // Verify JSON payload structure
+    assert.ok(report.json.runtimeMetrics, 'Report contains runtimeMetrics');
+    assert.ok(report.json.runtimeMetrics.imageCache, 'Report contains imageCache stats');
+    assert.equal(report.json.runtimeMetrics.imageCache.hits, 2);
+    assert.equal(report.json.runtimeMetrics.imageCache.misses, 1);
+    assert.ok(report.json.runtimeMetrics.imageRequests, 'Report contains imageRequests stats');
+    assert.ok(report.json.runtimeMetrics.backgroundTasks, 'Report contains backgroundTasks stats');
+
+    // Verify ASCII formatted report contains Section 8
+    assert.ok(
+        report.text.includes('8. RUNTIME BACKGROUND WORK, IMAGES & IDLE STATE'),
+        'ASCII report contains Section 8'
+    );
+    assert.ok(report.text.includes('Image Cache Hit / Miss Performance:'), 'ASCII contains cache header');
+    assert.ok(report.text.includes('Pre-warmed URLs in Memory: 1'), 'ASCII shows warmed URL count');
+
+    collector.stop();
+});
+
+test('PerformanceReportCollector: performance.memory and user interaction elapsed time metrics', () => {
+    // Set user activity baseline
+    idleGate.markActivity();
+
+    const collector = new PerformanceReportCollector();
+    collector.start();
+
+    // Add a test long task so grouped tasks format in text
+    collector._recordLongTask({
+        startTime: collector._startTime + 500,
+        duration: 150,
+        route: '/home',
+        operation: 'HeroCarousel.commitBackdrop'
+    });
+
+    const report = collector.buildReport();
+
+    // 1. Verify performance.memory metrics
+    assert.ok(report.json.memory, 'Report contains memory object');
+    assert.equal(report.json.memory.usedMb, '45.0', 'Used JS Heap formatted in MB');
+    assert.equal(report.json.memory.totalMb, '80.0', 'Total JS Heap formatted in MB');
+    assert.equal(report.json.memory.limitMb, '2048.0', 'JS Heap Limit formatted in MB');
+    assert.ok(report.json.memory.utilizationPct.endsWith('%'), 'Heap utilization percentage present');
+
+    // 2. Verify user activity metrics
+    assert.ok(report.json.runtimeMetrics.userActivity, 'Runtime metrics contains userActivity');
+    assert.ok(
+        typeof report.json.runtimeMetrics.userActivity.timeSinceLastInteractionSec === 'number',
+        'Time since last interaction is numeric'
+    );
+
+    // 3. Verify grouped long tasks in JSON
+    assert.ok(report.json.longTasks.groupedByRoute, 'Long tasks grouped by route present');
+    assert.ok(report.json.longTasks.groupedByOperation, 'Long tasks grouped by operation present');
+
+    // 4. Verify ASCII report content
+    assert.ok(report.text.includes('Time Since Last User Input:'), 'ASCII includes Time Since Last User Input');
+    assert.ok(report.text.includes('Long Tasks Grouped by Route:'), 'ASCII includes Long Tasks Grouped by Route');
+    assert.ok(report.text.includes('Long Tasks Grouped by Operation:'), 'ASCII includes Long Tasks Grouped by Operation');
+    assert.ok(report.text.includes('Total JS Heap Allocated:'), 'ASCII includes Total JS Heap Allocated');
+    assert.ok(report.text.includes('JS Heap Utilization:'), 'ASCII includes JS Heap Utilization');
 
     collector.stop();
 });
