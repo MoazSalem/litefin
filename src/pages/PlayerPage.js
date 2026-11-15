@@ -242,6 +242,9 @@ class PlayerPage extends Page {
                 <!-- Primary Subtitle Overlay (Bottom standard default) -->
                 <div id="subtitle-overlay" class="subtitle-overlay pos-bottom"></div>
 
+                <!-- Primary Top Subtitle Overlay (Top-positioned signs and cues) -->
+                <div id="subtitle-top-overlay" class="subtitle-overlay pos-top hidden"></div>
+
                 <!-- Secondary Subtitle Overlay (Top standard default) -->
                 <!-- Positioned via CSS .subtitle-overlay.secondary (top: 10%) -->
                 <!-- Styles are inherited from primary, only size/position are independent -->
@@ -3766,13 +3769,140 @@ class PlayerPage extends Page {
         }
     }
 
-    _onSubtitleChange(data) {
-        const overlay = document.getElementById('subtitle-overlay');
+    /**
+     * Renders an array of subtitle cues into a targeted DOM overlay container.
+     * When multiple cues are active concurrently, stacks each cue within a dedicated
+     * wrapper (.subtitle-cue) to prevent collisions and overlapping lines.
+     *
+     * @param {HTMLElement} overlay - DOM overlay element
+     * @param {Array<Object>} cues - Array of cue objects { text, position, ... }
+     * @param {boolean} isHdr - HDR media status for opacity selection
+     * @param {boolean} [isSecondary=false] - Whether rendering into secondary subtitle overlay
+     * @private
+     */
+    _renderCuesIntoOverlay(overlay, cues, isHdr, isSecondary = false) {
         if (!overlay) return;
+
+        // Clear and hide overlay if no cues are active
+        if (!cues || cues.length === 0) {
+            overlay.innerHTML = '';
+            overlay.classList.add('hidden');
+            return;
+        }
+
+        // Render stacked cues or single cue
+        if (cues.length === 1) {
+            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(cues[0].text)}</span>`;
+        } else {
+            overlay.innerHTML = cues
+                .map((c) => `<div class="subtitle-cue"><span class="subtitle-line">${sanitizeSubtitleText(c.text)}</span></div>`)
+                .join('');
+        }
+        overlay.classList.remove('hidden');
+
+        // Apply visual appearance styles (color, shadow, outline, opacity) to all rendered spans
+        const styles = isSecondary
+            ? SubtitleStyles.getSecondaryTextStyles(isHdr)
+            : SubtitleStyles.getTextStyles(isHdr);
+
+        const spans = overlay.querySelectorAll('.subtitle-line');
+        spans.forEach((span) => {
+            SubtitleStyles.applyStyles(span, styles);
+        });
+
+        // Ensure configured font is loaded, then re-apply styles upon resolution to guarantee repaint
+        const fontId = SubtitleStyles.getCurrentFontId();
+        if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
+            FontLoader.loadFont(fontId).then((loaded) => {
+                if (loaded) {
+                    overlay.querySelectorAll('.subtitle-line').forEach((span) => {
+                        SubtitleStyles.applyStyles(span, styles);
+                    });
+                }
+            });
+        }
+    }
+
+    /**
+     * Dispatches active primary subtitle cues to the appropriate screen hemisphere overlay.
+     * Cues tagged for top placement (signs, {\an8}, VTT line:20%) render into #subtitle-top-overlay,
+     * while standard dialogue cues render into #subtitle-overlay at the bottom.
+     *
+     * @param {Object} data - Cue payload from SubtitleManager
+     * @param {boolean} isHdr - HDR status
+     * @private
+     */
+    _renderPrimarySubtitles(data, isHdr) {
+        const bottomOverlay = document.getElementById('subtitle-overlay');
+        const topOverlay = document.getElementById('subtitle-top-overlay');
+        if (!bottomOverlay && !topOverlay) return;
+
+        let cues = [];
+        if (data) {
+            if (Array.isArray(data.cues) && data.cues.length > 0) {
+                cues = data.cues;
+            } else if (data.text && data.text.trim().length > 0) {
+                cues = [{
+                    text: data.text,
+                    position: data.position || 'bottom',
+                    duration: data.duration,
+                    endTicks: data.endTicks
+                }];
+            }
+        }
+
+        if (cues.length === 0) {
+            if (bottomOverlay) {
+                bottomOverlay.innerHTML = '';
+                bottomOverlay.classList.add('hidden');
+            }
+            if (topOverlay) {
+                topOverlay.innerHTML = '';
+                topOverlay.classList.add('hidden');
+            }
+            return;
+        }
+
+        // Check user setting for overlapping cues and top signs
+        const allowOverlapping = PlayerSettings.get('subtitleOverlappingCues') !== false;
+        const isPrimBottom = SubtitleStyles.isPrimarySubtitleInBottomHalf();
+        const topCues = [];
+        const bottomCues = [];
+
+        // Partition cues into screen hemispheres
+        for (const cue of cues) {
+            // When overlapping cues are disabled, suppress top positioning routing
+            if (allowOverlapping && cue.position === 'top') {
+                topCues.push(cue);
+            } else {
+                bottomCues.push(cue);
+            }
+        }
+
+        if (isPrimBottom) {
+            this._renderCuesIntoOverlay(bottomOverlay, bottomCues, isHdr, false);
+            this._renderCuesIntoOverlay(topOverlay, topCues, isHdr, false);
+        } else {
+            // User explicitly configured primary subtitles in the top hemisphere
+            this._renderCuesIntoOverlay(bottomOverlay, cues, isHdr, false);
+            if (topOverlay) {
+                topOverlay.innerHTML = '';
+                topOverlay.classList.add('hidden');
+            }
+        }
+    }
+
+    _onSubtitleChange(data) {
+        const bottomOverlay = document.getElementById('subtitle-overlay');
+        const topOverlay = document.getElementById('subtitle-top-overlay');
+        if (!bottomOverlay && !topOverlay) return;
 
         // timeout logic replaced by _onTimeUpdate check
 
-        if (data && data.text && data.text.trim().length > 0) {
+        const hasText = data && typeof data.text === 'string' && data.text.trim().length > 0;
+        const hasCues = data && Array.isArray(data.cues) && data.cues.length > 0;
+
+        if (data && (hasText || hasCues)) {
             /* -------------------------------------------------------------
                Retain a reference to the active primary cue data payload so that
                real-time appearance adjustments (e.g. toggling subtitle color
@@ -3781,42 +3911,14 @@ class PlayerPage extends Page {
                ------------------------------------------------------------- */
             this._currentSubtitleData = data;
 
-            // Render subtitle
-            // Cue text is external content (SRT/VTT/ASS from the server or a
-            // sidecar file); SubtitleParser only strips ASS {...} tags, so it
-            // must be sanitized before innerHTML. sanitizeSubtitleText escapes
-            // everything and re-allows only bare <i>/<b>/<u>/<em>/<strong>,
-            // preserving legitimate cue styling without an injection surface.
-            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
-            overlay.classList.remove('hidden');
-
-            /* -------------------------------------------------------------
-               Determine if active media source represents HDR content.
-               Pass HDR context to get independent opacity styles.
-               ------------------------------------------------------------- */
             const isHdr = this._player?.isCurrentMediaHDR?.() || false;
-            const styles = SubtitleStyles.getTextStyles(isHdr);
-
-            // Apply to the span
-            const span = overlay.querySelector('.subtitle-line');
-            if (span) {
-                SubtitleStyles.applyStyles(span, styles);
-
-                // Ensure the selected font is loaded if not already ready/failed, then re-apply if needed
-                const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
-                    FontLoader.loadFont(fontId).then((loaded) => {
-                        // Re-apply styles after font is loaded to trigger repaint
-                        if (loaded) {
-                            SubtitleStyles.applyStyles(span, styles);
-                        }
-                    });
-                }
-            }
+            this._renderPrimarySubtitles(data, isHdr);
 
             // Apply container styles (position)
-            const windowStyles = SubtitleStyles.getWindowStyles();
-            SubtitleStyles.applyStyles(overlay, windowStyles);
+            if (bottomOverlay) {
+                const windowStyles = SubtitleStyles.getWindowStyles();
+                SubtitleStyles.applyStyles(bottomOverlay, windowStyles);
+            }
 
             // =====================================================================
             // Set end time for sync clearing (used by _onTimeUpdate to auto-clear
@@ -3859,6 +3961,11 @@ class PlayerPage extends Page {
             overlay.innerHTML = '';
             overlay.classList.add('hidden');
         }
+        const topOverlay = document.getElementById('subtitle-top-overlay');
+        if (topOverlay) {
+            topOverlay.innerHTML = '';
+            topOverlay.classList.add('hidden');
+        }
         this._subtitleEndTime = null;
 
         // Synchronize SubtitleManager's active cue state so that if playback re-enters
@@ -3879,49 +3986,27 @@ class PlayerPage extends Page {
      * font, weight, opacity, background) but use independent size + position settings.
      * They render into #secondary-subtitle-overlay which is positioned at the top.
      *
-     * @param {Object} data - Cue data: { text, duration, endTicks }
+     * @param {Object} data - Cue data: { text, duration, endTicks, cues }
      */
     _onSecondarySubtitleChange(data) {
         const overlay = document.getElementById('secondary-subtitle-overlay');
         if (!overlay) return;
 
-        if (data && data.text && data.text.trim().length > 0) {
+        const hasText = data && typeof data.text === 'string' && data.text.trim().length > 0;
+        const hasCues = data && Array.isArray(data.cues) && data.cues.length > 0;
+
+        if (data && (hasText || hasCues)) {
             /* -------------------------------------------------------------
                Retain secondary cue data for immediate real-time styling updates.
                ------------------------------------------------------------- */
             this._currentSecondarySubtitleData = data;
 
-            // Render the secondary subtitle text (sanitized: escapes all HTML,
-            // re-allows only bare i/b/u/em/strong styling tags)
-            overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(data.text)}</span>`;
-            overlay.classList.remove('hidden');
-
-            /* -------------------------------------------------------------
-               Retrieve player HDR state to fetch appropriate opacity values.
-               Secondary subtitles inherit opacity and styling from primary settings.
-               ------------------------------------------------------------- */
             const isHdr = this._player?.isCurrentMediaHDR?.() || false;
-            const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
-
-            const span = overlay.querySelector('.subtitle-line');
-            if (span) {
-                SubtitleStyles.applyStyles(span, styles);
-
-                // Ensure font is loaded if not already ready/failed (same font as primary — likely already cached)
-                const fontId = SubtitleStyles.getCurrentFontId();
-                if (fontId && !FontLoader.isFontLoaded(fontId) && !FontLoader.hasFontFailed(fontId)) {
-                    FontLoader.loadFont(fontId).then((loaded) => {
-                        // Re-apply after font loads to trigger repaint
-                        if (loaded) {
-                            SubtitleStyles.applyStyles(span, styles);
-                        }
-                    });
-                }
-            }
+            this._renderSecondarySubtitles(data, isHdr);
 
             // Apply secondary window/position styles (independent from primary position)
-            const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
-            SubtitleStyles.applyStyles(overlay, windowStyles);
+            const secondaryWindowStyles = SubtitleStyles.getSecondaryWindowStyles();
+            SubtitleStyles.applyStyles(overlay, secondaryWindowStyles);
 
             // =====================================================================
             // Track when this cue ends so _onTimeUpdate can clear it.
@@ -4005,6 +4090,14 @@ class PlayerPage extends Page {
             !primaryOverlay.classList.contains('hidden') &&
             primaryOverlay.innerHTML.trim().length > 0
         );
+        const topPrimaryOverlay = document.getElementById('subtitle-top-overlay');
+        const hasTopPrimary = !!(
+            topPrimaryOverlay &&
+            !topPrimaryOverlay.classList.contains('hidden') &&
+            topPrimaryOverlay.innerHTML.trim().length > 0
+        );
+        const hasAnyPrimary = hasPrimaryOverlay || hasTopPrimary;
+
         const hasSecondaryOverlay = !!(
             secondaryOverlay &&
             !secondaryOverlay.classList.contains('hidden') &&
@@ -4012,7 +4105,7 @@ class PlayerPage extends Page {
         );
 
         const isDual =
-            (hasSecondaryTrack && (hasPrimaryTrack || hasPrimaryOverlay)) || (hasPrimaryOverlay && hasSecondaryOverlay);
+            (hasSecondaryTrack && (hasPrimaryTrack || hasAnyPrimary)) || (hasAnyPrimary && hasSecondaryOverlay);
         if (pageEl) pageEl.classList.toggle('has-dual-subtitles', isDual);
         if (playerContainer) playerContainer.classList.toggle('has-dual-subtitles', isDual);
 
@@ -4035,6 +4128,11 @@ class PlayerPage extends Page {
         if (primaryOverlay) {
             primaryOverlay.classList.toggle('pos-bottom', isPrimBottom);
             primaryOverlay.classList.toggle('pos-top', !isPrimBottom);
+        }
+
+        if (topPrimaryOverlay) {
+            topPrimaryOverlay.classList.add('pos-top');
+            topPrimaryOverlay.classList.remove('pos-bottom');
         }
 
         const isSecBottom = SubtitleStyles.isSecondarySubtitleInBottomHalf();
@@ -4132,6 +4230,7 @@ class PlayerPage extends Page {
 
         // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
+        const topOverlay = document.getElementById('subtitle-top-overlay');
         if (overlay) {
             const isPrimBottom = SubtitleStyles.isPrimarySubtitleInBottomHalf();
             overlay.classList.toggle('pos-bottom', isPrimBottom);
@@ -4140,36 +4239,16 @@ class PlayerPage extends Page {
             // Re-apply container styles (position/window) unconditionally
             const windowStyles = SubtitleStyles.getWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
+        }
 
-            if (!overlay.classList.contains('hidden')) {
-                /* -------------------------------------------------------------
-                   Re-render the active primary cue through sanitizeSubtitleText
-                   so that dynamic tag formatting adjustments (such as toggling
-                   subtitleOverrideColors in the OSD) take effect immediately.
-                   ------------------------------------------------------------- */
-                if (this._currentSubtitleData && this._currentSubtitleData.text) {
-                    overlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSubtitleData.text)}</span>`;
-                }
-
-                const span = overlay.querySelector('.subtitle-line');
-                if (span) {
-                    log.debug('Refreshing primary subtitle styles');
-
-                    // Re-apply text styles with current HDR status
-                    const styles = SubtitleStyles.getTextStyles(isHdr);
-                    SubtitleStyles.applyStyles(span, styles);
-
-                    // Handle font loading if changed by user settings
-                    const fontId = SubtitleStyles.getCurrentFontId();
-                    if (fontId) {
-                        FontLoader.loadFont(fontId, true).then((loaded) => {
-                            if (loaded) {
-                                SubtitleStyles.applyStyles(span, styles);
-                            }
-                        });
-                    }
-                }
-            }
+        if (this._currentSubtitleData) {
+            /* -------------------------------------------------------------
+               Re-render the active primary cues through sanitizeSubtitleText
+               so that dynamic tag formatting adjustments (such as toggling
+               subtitleOverrideColors in the OSD) take effect immediately across
+               both bottom and top screen hemisphere overlays.
+               ------------------------------------------------------------- */
+            this._renderPrimarySubtitles(this._currentSubtitleData, isHdr);
         }
 
         // Refresh secondary overlay (inherits primary appearance — always re-apply on any change)
@@ -4183,31 +4262,11 @@ class PlayerPage extends Page {
             const secondaryWindowStyles = SubtitleStyles.getSecondaryWindowStyles();
             SubtitleStyles.applyStyles(secondaryOverlay, secondaryWindowStyles);
 
-            if (!secondaryOverlay.classList.contains('hidden')) {
+            if (this._currentSecondarySubtitleData) {
                 /* -------------------------------------------------------------
                    Re-render active secondary cue text through sanitizeSubtitleText.
                    ------------------------------------------------------------- */
-                if (this._currentSecondarySubtitleData && this._currentSecondarySubtitleData.text) {
-                    secondaryOverlay.innerHTML = `<span class="subtitle-line">${sanitizeSubtitleText(this._currentSecondarySubtitleData.text)}</span>`;
-                }
-
-                const span = secondaryOverlay.querySelector('.subtitle-line');
-                if (span) {
-                    log.debug('Refreshing secondary subtitle styles');
-
-                    // Secondary uses inherited styles with its own size override and respects HDR opacity settings
-                    const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
-                    SubtitleStyles.applyStyles(span, styles);
-
-                    const fontId = SubtitleStyles.getCurrentFontId();
-                    if (fontId) {
-                        FontLoader.loadFont(fontId, true).then((loaded) => {
-                            if (loaded) {
-                                SubtitleStyles.applyStyles(span, styles);
-                            }
-                        });
-                    }
-                }
+                this._renderSecondarySubtitles(this._currentSecondarySubtitleData, isHdr);
             }
         }
 

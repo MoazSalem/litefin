@@ -223,6 +223,7 @@ export class SubtitlesTab {
                 ], String(PlayerSettings.get('subtitleVerticalPosition'))))}
                 ${this._sliderItem('AbsolutePosition', 'Absolute Position', 'AbsolutePositionDescription', 'Position from bottom.', this._slider('subtitle-custom-pos', PlayerSettings.get('subtitleVerticalPositionCustom'), 0, 100, 1), 'subtitle-custom-pos-container')}
                 ${this._item('LabelSubtitleOsdDodging', 'Subtitle OSD Dodging', 'SubtitleOsdDodgingDescription', 'Shift subtitles above OSD controls.', this._toggle('subtitle-osd-dodging-toggle', PlayerSettings.get('subtitleOsdDodging') !== false, 'subtitleOsdDodging'))}
+                ${this._item('LabelSubtitleOverlappingCues', 'Overlapping Subtitles & Signs', 'SubtitleOverlappingCuesDescription', 'Display concurrent dialogue lines and top-positioned signs simultaneously.', this._toggle('subtitle-overlapping-cues-toggle', PlayerSettings.get('subtitleOverlappingCues') !== false, 'subtitleOverlappingCues'))}
                 ${this._item('LabelTextWeight', 'Font Weight', 'FontWeightDescription', 'Weight of font.', this._drop('subtitle-weight-select', [{ value: 'normal', label: i18n.t('Normal') }, { value: 'bold', label: i18n.t('Bold') }], PlayerSettings.get('subtitleWeight') || 'normal'))}
                 ${this._item('LabelTextColorSdr', 'SDR Text Color', 'TextColorSdrDescription', 'Color for standard dynamic range.', this._drop('subtitle-color-select', colorOptions, PlayerSettings.get('subtitleTextColor') || '#ffffff'))}
                 ${this._item('LabelTextColorHdr', 'HDR Text Color', 'TextColorHdrDescription', 'Color for high dynamic range.', this._drop('subtitle-color-select-hdr', colorOptions, PlayerSettings.get('subtitleTextColorHdr') || '#ffffff'))}
@@ -282,6 +283,18 @@ export class SubtitlesTab {
             const next = !(PlayerSettings.get('subtitleOsdDodging') !== false);
             PlayerSettings.set('subtitleOsdDodging', next);
             osdDodgingBtn?.classList.toggle('active', next);
+        });
+
+        // Overlapping Subtitles & Signs Toggle
+        // Controls whether concurrent cues and top signs are rendered concurrently or legacy single-cue
+        const overlappingCuesBtn = $('#subtitle-overlapping-cues-toggle');
+        this._addListener(overlappingCuesBtn, 'click', () => {
+            // Invert active state and persist to player configuration
+            const next = !(PlayerSettings.get('subtitleOverlappingCues') !== false);
+            PlayerSettings.set('subtitleOverlappingCues', next);
+            // Synchronize visual switch presentation
+            overlappingCuesBtn?.classList.toggle('active', next);
+            log.info(`Overlapping Subtitles and Signs set to: ${next}`);
         });
 
         // Remember Tracks for Session Toggle

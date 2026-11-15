@@ -628,6 +628,16 @@ html[data-light-music-player="true"] .audio-subtitle {
     transition: padding 0.38s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Stacking wrapper for concurrent subtitle cues */
+.subtitle-cue {
+    display: block;
+    text-align: center;
+}
+
+.subtitle-cue + .subtitle-cue {
+    margin-top: 6px;
+}
+
 /* ==========================================================================
  * Secondary Subtitle Container & Line Styling
  * ==========================================================================
@@ -684,6 +694,8 @@ html[data-light-music-player="true"] .audio-subtitle {
 .subtitle-overlay.secondary:not(.pos-bottom),
 .player-page .subtitle-overlay.pos-top,
 .player-container ~ .subtitle-overlay.pos-top {
+    bottom: auto;
+    top: 10%;
     -webkit-transform-origin: top center;
     transform-origin: top center;
 }

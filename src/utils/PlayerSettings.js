@@ -400,6 +400,18 @@ const DEFAULTS = {
      * ------------------------------------------------------------------------- */
     subtitleOsdDodging: true,
 
+    /* -------------------------------------------------------------------------
+     * OVERLAPPING SUBTITLES & SIGNS CONCURRENCY
+     * -------------------------------------------------------------------------
+     * When enabled (default = true), text subtitle formats (SRT, WebVTT, TTML)
+     * display concurrent/overlapping dialogue lines simultaneously and render
+     * top-positioned cues ({\an7}/{\an8}/{\an9} or WebVTT line: < 50%) into the
+     * upper screen hemisphere rather than discarding dialogue lines under signs.
+     *
+     * When disabled (false), reverts to legacy single active cue playback mode.
+     * ------------------------------------------------------------------------- */
+    subtitleOverlappingCues: true,
+
     // PGS Subtitle Playback Mode ('client', 'burn', 'disable')
     // 'client' = Custom Web Worker rendering on the TV (Default)
     // 'burn' = Force server to transcode video and burn into frames
