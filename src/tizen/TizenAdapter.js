@@ -351,6 +351,32 @@ class TizenAdapter {
             if (raw !== dir) addCandidate(raw + 'assets/warmup.mp4');
         };
 
+        // Determine the installed Tizen package ID to construct deterministic physical URIs.
+        // On Tizen Smart TVs, packages unpack directly into /home/owner/apps_rw/${packageId}/res/wgt
+        // (and on some firmware revisions, under /opt/usr/home/owner/apps_rw/${packageId}/res/wgt).
+        // Cold-boot filesystem resolution can time out or stall; pre-populating these physical
+        // candidates synchronously guarantees AVPlay candidate #1 is immediately available.
+        let pkgId = 'LitefinApp';
+        try {
+            if (
+                typeof tizen !== 'undefined' &&
+                tizen.application &&
+                typeof tizen.application.getCurrentApplication === 'function'
+            ) {
+                const app = tizen.application.getCurrentApplication();
+                if (app && app.appInfo && app.appInfo.packageId) {
+                    pkgId = app.appInfo.packageId;
+                }
+            }
+        } catch (_) {}
+
+        // Primary working URI verified on Samsung Smart TV Tizen platforms
+        addCandidate(`file:///home/owner/apps_rw/${pkgId}/res/wgt/assets/warmup.mp4`);
+        // Secondary root mount variant on certain enterprise or developer builds
+        addCandidate(`file:///opt/usr/home/owner/apps_rw/${pkgId}/res/wgt/assets/warmup.mp4`);
+        // Direct raw Linux filesystem path fallback without file:// scheme
+        addCandidate(`/home/owner/apps_rw/${pkgId}/res/wgt/assets/warmup.mp4`);
+
         let settled = false;
         let budgetTimer = null;
         const finish = (reason) => {

@@ -396,7 +396,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(audioConstructed, 1);
         assert.equal(audioResumed, 1);
         assert.deepEqual(fsResolveCalls, [{ location: 'wgt-package', mode: 'r' }]);
-        assert.deepEqual(openedUrls, ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4']);
+        assert.deepEqual(openedUrls, ['file:///home/owner/apps_rw/LitefinApp/res/wgt/assets/warmup.mp4']);
         assert.deepEqual(displayRects, [[0, 0, 1920, 1080]]);
         assert.equal(pendingPrepareCbs.length, 1);
 
@@ -419,12 +419,15 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(mockDocEl.classList.contains('player-active'), true, 'html must get player-active during warmup');
         assert.equal(mockBody.classList.contains('player-active'), true, 'body must get player-active during warmup');
 
-        // Rejected file:// URI: adapter must fall back to the stripped raw Linux path before virtual dir.path
+        // Rejected file:// URI: adapter must fall back to the next pre-populated candidates and resolved URIs
         pendingPrepareCbs.shift().onError(new Error('PLAYER_ERROR_INVALID_URI'));
         assert.deepEqual(
             openedUrls,
-            ['file:///opt/usr/apps/litefin/res/wgt/assets/warmup.mp4', '/opt/usr/apps/litefin/res/wgt/assets/warmup.mp4'],
-            'Adapter must try the file:// URI from dir.toURI() first and fall back to the raw Linux path on prepare errors'
+            [
+                'file:///home/owner/apps_rw/LitefinApp/res/wgt/assets/warmup.mp4',
+                'file:///opt/usr/home/owner/apps_rw/LitefinApp/res/wgt/assets/warmup.mp4'
+            ],
+            'Adapter must try the primary physical package URI first and fall back to subsequent candidates on prepare errors'
         );
         assert.equal(pendingPrepareCbs.length, 1);
 
