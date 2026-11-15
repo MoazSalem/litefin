@@ -267,7 +267,8 @@ test('HomePage: deferred batch cache work runs in one deduplicated idle task', (
     );
 });
 
-test('HomePage: deferred batch follow-up uses a 2500ms idle threshold', () => {
+test('HomePage: deferred batch follow-up uses a 350ms idle threshold', () => {
+    // Read HomePage source to verify deferred batch follow-up scheduling
     const source = read('src/pages/HomePage.js');
     const followupBody = sliceBetween(
         source,
@@ -275,9 +276,10 @@ test('HomePage: deferred batch follow-up uses a 2500ms idle threshold', () => {
         '_relinkAdjacentSections('
     );
 
+    // Follow-up prefetch uses snappy 350ms quiet threshold to ensure continuous row loading
     assert.ok(
-        followupBody.includes('_scheduleHomeIdlePrefetch(2500)'),
-        'Follow-up prefetch must require 2500ms of quiet'
+        followupBody.includes('_scheduleHomeIdlePrefetch(350)'),
+        'Follow-up prefetch must require 350ms of quiet'
     );
     assert.ok(
         followupBody.includes('scrollController.isAnimating') ||
