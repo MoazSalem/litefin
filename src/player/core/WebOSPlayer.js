@@ -3066,9 +3066,13 @@ export class WebOSPlayer {
         // ====================================================================
         // Default-first mapping: when the TV's list is exactly one shorter and starts
         // with TrueHD, the TV drops TrueHD and moves its default track to the front.
-        // Other cases fall through to the strategies below.
+        // We pass the raw container streams because the TV demuxer parses the physical
+        // file tracks directly, unaffected by client-side codec filtering.
+        // This ensures the heuristic accurately compares against the true file count
+        // even when TrueHD is set to Auto or Disabled.
         // ====================================================================
-        const defaultFirstIndex = mapDefaultFirstAudioIndex(jellyfinAudioStreams, nativeTracks.length, targetStream.Index);
+        const rawContainerAudioStreams = mediaStreams.filter(s => s.Type === 'Audio');
+        const defaultFirstIndex = mapDefaultFirstAudioIndex(rawContainerAudioStreams, nativeTracks.length, targetStream.Index);
         if (defaultFirstIndex !== null) {
             log.info('  - Default-first mapping: stream', targetStream.Index, '→ native index', defaultFirstIndex);
             return defaultFirstIndex;

@@ -17,29 +17,42 @@
  */
 
 /**
- * @param {Array<{Index:number, Codec?:string, IsDefault?:boolean}>} jellyfinStreams - Audio
- *        streams in file order, filtered the same way as the backend track list
+ * @param {Array<{Index:number, Codec?:string, IsDefault?:boolean}>} containerAudioStreams - Physical
+ *        container audio streams in container file order (unfiltered)
  * @param {number} nativeCount - Length of the TV's native audioTracks list
  * @param {number} targetStreamIndex - Jellyfin stream index being selected
  * @returns {number|null} Native position (>= 0); -1 when the target is the dropped TrueHD track;
  *          null when the rule does not apply
  */
-export function mapDefaultFirstAudioIndex(jellyfinStreams, nativeCount, targetStreamIndex) {
-    if (!Array.isArray(jellyfinStreams) || jellyfinStreams.length === 0) return null;
-    if (nativeCount !== jellyfinStreams.length - 1) return null;
+export function mapDefaultFirstAudioIndex(containerAudioStreams, nativeCount, targetStreamIndex) {
+    // Basic argument validation: ensure container streams collection is non-empty
+    if (!Array.isArray(containerAudioStreams) || containerAudioStreams.length === 0) return null;
 
-    const first = jellyfinStreams[0];
+    // The heuristic applies exclusively when the TV demuxer dropped exactly one stream
+    if (nativeCount !== containerAudioStreams.length - 1) return null;
+
+    // Inspect the leading physical container stream
+    const first = containerAudioStreams[0];
     const firstCodec = String(first?.Codec || '').toLowerCase();
+
+    // Verify whether the dropped stream is indeed TrueHD or MLP
     if (firstCodec !== 'truehd' && firstCodec !== 'mlp') return null;
 
+    // If target stream is the dropped TrueHD track, signal that it is not selectable
     if (targetStreamIndex === first.Index) return -1;
 
-    const remaining = jellyfinStreams.slice(1);
+    // Exclude the dropped primary TrueHD track and inspect remaining streams
+    const remaining = containerAudioStreams.slice(1);
+
+    // Locate the first designated default track among remaining streams
     const defaultPos = remaining.findIndex((s) => s.IsDefault);
+
+    // If a default track exists downstream, shift it to native position 0
     const ordered = defaultPos > 0
         ? [remaining[defaultPos], ...remaining.slice(0, defaultPos), ...remaining.slice(defaultPos + 1)]
         : remaining;
 
+    // Resolve native index of the target stream within the reconstructed list
     const position = ordered.findIndex((s) => s.Index === targetStreamIndex);
     return position >= 0 ? position : null;
 }

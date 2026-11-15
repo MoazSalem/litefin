@@ -854,10 +854,17 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     }
 
     const physicalDefaultStream = audioStreams.find((s) => s.IsDefault) || audioStreams[0];
+
+    // Resolve whether the webOS player backend is currently active, checking both
+    // explicit backend parameter or runtime platform environment detection.
+    const isWebOSActive =
+        backendType === 'webos' ||
+        (!backendType && typeof platformInfo !== 'undefined' && Boolean(platformInfo.isWebOS));
+
     // With Force DTS on webOS, an unplayable default track (e.g. TrueHD) must not force a remux
     // of a DTS track: the DTS bitstream is selected natively once the default is in place.
     const targetCodec = (targetStream.Codec || '').toLowerCase();
-    const isForcedDtsTarget = backendType === 'webos' &&
+    const isForcedDtsTarget = isWebOSActive &&
         (targetCodec.includes('dts') || targetCodec === 'dca') &&
         PlayerSettings.get('enableDts') === 'enable';
     if (physicalDefaultStream && !isForcedDtsTarget &&
@@ -889,7 +896,7 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
     // Server-side remuxing packages audio into HLS where bitstreams become silent.
     // On Auto or Disabled, remuxing remains required as before.
     const isWebOSForcedPassthrough =
-        backendType === 'webos' && (
+        isWebOSActive && (
             ((codec.includes('dts') || codec === 'dca') && PlayerSettings.get('enableDts') === 'enable') ||
             ((codec === 'truehd' || codec === 'mlp') && PlayerSettings.get('enableTrueHd') === 'enable')
         );
