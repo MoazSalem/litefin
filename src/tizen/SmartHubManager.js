@@ -124,6 +124,9 @@ class SmartHubManager {
         /** @type {Object|null} - Last successfully built preview JSON (in-memory cache). */
         this._cachedJson = null;
 
+        /** @type {boolean} - True until initial boot refresh delay has completed. */
+        this._initialBootRefresh = true;
+
         /**
          * @type {{ actionData: Object, owner: string, target: Object|null, resolvedFor: string|null }|null}
          * A tile not opened yet: at cold start until the default route opens it,
@@ -209,8 +212,8 @@ class SmartHubManager {
         // If a session was already restored at startup (auth.init() with
         // stored credentials), auth:login never fires — check now.
         if (state.get('user:authenticated')) {
-            log.info('Session already active — starting refresh cycle immediately');
-            this._startRefreshCycle();
+            log.info('Session already active — scheduling refresh cycle (deferred by 60s at boot)');
+            this._startRefreshCycle(true);
         }
 
         // Wire into auth events for ongoing session management.
@@ -814,9 +817,10 @@ class SmartHubManager {
      * update waits for the previous one to fully complete before the next
      * is scheduled. On slow hardware this prevents back-to-back stacking.
      *
+     * @param {boolean} [isBoot=false] - True if triggered by cold app initialization.
      * @private
      */
-    _startRefreshCycle() {
+    _startRefreshCycle(isBoot = false) {
         /* Cancel any previous cycle before starting fresh — prevents duplicate
          * timers if auth:login fires while a cycle is already running. */
         this._stopRefreshCycle();
@@ -842,9 +846,36 @@ class SmartHubManager {
             }
         };
 
-        /* Fire the first update immediately (delay=0 schedules it after the
-         * current call stack unwinds, avoiding blocking the init path). */
-        this._refreshTimer = setTimeout(runCycle, 0);
+        // Determine whether this invocation represents the initial cold boot pass.
+        // Once consumed, subsequent calls during the active session run immediately.
+        const isColdBoot = isBoot || this._initialBootRefresh;
+        this._initialBootRefresh = false;
+
+        if (isColdBoot) {
+            // Cold boot delay: hold off the very first update by 60 seconds
+            // to allow Tizen system daemons and app startup animations to finish.
+            log.info('Deferring initial Smart Hub update by 60s after app boot');
+            this._refreshTimer = setTimeout(() => {
+                this._refreshTimer = null;
+                if (!this._cycleActive || !this._ready) return;
+
+                // Wait for UI idle window so background service spawn does not hitch UI.
+                this._deferredUpdateTask = idleGate.runWhenIdle(
+                    async () => {
+                        this._deferredUpdateTask = null;
+                        if (this._cycleActive && this._ready) {
+                            await runCycle();
+                        }
+                    },
+                    USER_ACTIVITY_IDLE_MS,
+                    0
+                );
+            }, 60000);
+        } else {
+            /* Fire the first update immediately (delay=0 schedules it after the
+             * current call stack unwinds, avoiding blocking the init path). */
+            this._refreshTimer = setTimeout(runCycle, 0);
+        }
     }
 
     /**
