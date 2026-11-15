@@ -2354,7 +2354,7 @@ class HomePage extends Page {
         if (typeof markPerfOperation === 'function') markPerfOperation('HomePage._loadNextDeferredBatch');
 
         // Check if a pending boundary Down press requested autofocus
-        const shouldAutoFocus = Boolean(autoFocus || this._autoFocusOnLoad);
+        let shouldAutoFocus = Boolean(autoFocus || this._autoFocusOnLoad);
         this._autoFocusOnLoad = false;
 
         // Slice out the next batch from the deferred descriptor queue.
@@ -2399,6 +2399,13 @@ class HomePage extends Page {
             } catch (err) {
                 log.warn(`Deferred row "${descriptor.id}" failed`, err);
             }
+        }
+
+        // Re-check if a boundary Down press arrived mid-flight while this batch was mounting.
+        // Captures any late D-pad trigger that occurred while earlier rows in this batch were awaiting.
+        if (this._autoFocusOnLoad) {
+            shouldAutoFocus = true;
+            this._autoFocusOnLoad = false;
         }
 
         // If this batch was triggered by a user boundary press and all descriptors in the batch
@@ -2456,7 +2463,7 @@ class HomePage extends Page {
         // and keep asynchronous network prefetching replenished ahead of navigation
         if (this._nextDeferredDescIndex < this._deferredDescriptors.length) {
             this._scheduleDeferredBatchFollowup();
-            this._scheduleDeferredNetworkPrefetch(150);
+            this._scheduleDeferredNetworkPrefetch(200);
         } else {
             // All deferred rows are loaded — queue cache serialization and scroll-cache
             // prewarming ONCE here behind an idle task instead of running them after
@@ -3555,18 +3562,16 @@ class HomePage extends Page {
                 return;
             }
 
-            // 1. Enrich with MDBList Metadata. If plugins are already loaded, wait for the
-            //    ratings so the first paint is complete; on cold boot the plugin system
-            //    initializes after the splash, so enrich in the background instead.
+            // 1. Initialize the carousel component first so the active slide mounts immediately
+            this._hero = new HeroCarousel({ items });
+
+            // 2. Enrich with MDBList Metadata in the background. If plugins are already
+            //    loaded, start staggered enrichment immediately; otherwise wait for ready.
             if (pluginManager.isReady) {
-                await this._enrichHeroItemsWithMdbList(items);
-                if (!this._isMounted) return;
+                this._enrichHeroItemsWithMdbList(items).catch((err) => log.warn('Hero MDBList enrichment error', err));
             } else {
                 this._scheduleHeroMdbEnrichment(items);
             }
-
-            // 2. Initialize the carousel component
-            this._hero = new HeroCarousel({ items });
 
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
@@ -4399,6 +4404,7 @@ class HomePage extends Page {
      * @private
      */
     async _enrichHeroItemsWithMdbList(items) {
+        if (!items || items.length === 0) return false;
         if (storage.getItem('pref:heroCarouselMdbList') === 'false') return false;
         if (!pluginManager.isEnabled('mdblist-ratings')) return false;
         const mdblist = pluginManager.getPlugin('mdblist-ratings');
@@ -4410,20 +4416,39 @@ class HomePage extends Page {
             return false;
         }
 
-        log.info('Enriching hero items with MDBList data...');
+        log.info('Enriching hero items with MDBList data (staggered)...');
         try {
-            await Promise.all(
-                items.map(async (item) => {
-                    // Short-circuit if already enriched or server capability failed during this batch
-                    if (item._mdbMetadata || mdblist.plugin._isServerAvailable === false) return;
-                    // Prefer ProviderIds.Imdb to avoid extra API calls; skip awards for carousel performance
-                    const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                    const meta = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
-                    if (meta) {
-                        item._mdbMetadata = meta;
+            const enrichItem = async (item, index) => {
+                if (!item || item._mdbMetadata || mdblist.plugin._isServerAvailable === false) return;
+                // Prefer ProviderIds.Imdb to avoid extra API calls; skip awards for carousel performance
+                const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                const meta = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                if (meta) {
+                    item._mdbMetadata = meta;
+                    // Only update the DOM of the currently active hero slide if its metadata changed
+                    if (this._hero && typeof this._hero.updateSlideMeta === 'function') {
+                        if (this._hero._currentIndex === index) {
+                            this._hero.updateSlideMeta(index);
+                        }
                     }
-                })
-            );
+                }
+            };
+
+            // Enrich the active hero slide (index 0) first
+            await enrichItem(items[0], 0);
+
+            // Stagger remaining slides (1..N) with delays between requests
+            if (items.length > 1) {
+                const enrichRemaining = async () => {
+                    for (let i = 1; i < items.length; i++) {
+                        if (!this._isMounted || mdblist.plugin._isServerAvailable === false) break;
+                        await new Promise((resolve) => setTimeout(resolve, 350));
+                        if (!this._isMounted || mdblist.plugin._isServerAvailable === false) break;
+                        await enrichItem(items[i], i);
+                    }
+                };
+                enrichRemaining().catch((err) => log.warn('Staggered hero MDBList enrichment error', err));
+            }
         } catch (err) {
             log.warn('Enriching hero items failed, continuing with partial data', err);
         }
@@ -4431,8 +4456,7 @@ class HomePage extends Page {
     }
 
     /**
-     * Waits for the plugin system, enriches hero items with MDBList ratings and
-     * refreshes the rendered carousel's meta rows in place.
+     * Waits for the plugin system and enriches hero items with MDBList ratings.
      *
      * @param {Array} items - Items backing the current hero carousel
      * @private
@@ -4441,11 +4465,6 @@ class HomePage extends Page {
         pluginManager
             .whenReady()
             .then(() => this._enrichHeroItemsWithMdbList(items))
-            .then((enriched) => {
-                if (!enriched || !this._isMounted || !this._hero) return;
-                if (!items.includes(this._hero._items[0])) return; // Hero was rebuilt with other items
-                this._hero.refreshMeta();
-            })
             .catch((err) => log.warn('Deferred hero MDBList enrichment failed', err));
     }
 

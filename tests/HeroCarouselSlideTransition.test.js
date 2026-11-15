@@ -398,7 +398,7 @@ test('HeroCarousel: staggers slide preloads every 100ms behind idleGate (no Imag
     storageMap.set('pref:heroCarouselStyle', 'immersive-performance');
 
     const items = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ Id: `item-${i}`, Name: `Item ${i}` }));
-    const carousel = new HeroCarousel({ items });
+    const carousel = new HeroCarousel({ items, initialPreloadDelay: 100, preloadIntervalMs: 100 });
     const { container, dots } = buildCarouselFixture(7);
 
     try {

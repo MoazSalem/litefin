@@ -46,6 +46,16 @@ class HeroCarousel {
         this._preloadTimeoutId = null;
         this._preloadIdleId = null;
 
+        // Configurable preload intervals allowing snappy test cycles while keeping TV production safe
+        this._initialPreloadDelay = options.initialPreloadDelay !== undefined ? options.initialPreloadDelay : 3000;
+        this._preloadIntervalMs = options.preloadIntervalMs !== undefined ? options.preloadIntervalMs : 400;
+
+        // Progressive queue for background slide preloading (1 slide every 400ms)
+        this._pendingPreloadQueue = [];
+        this._preloadQueueTimer = null;
+        this._preloadQueueIdleTask = null;
+        this._deferredLogoHeights = Object.create(null);
+
         // ---------------------------------------------------------------------
         // Idle preload & retained off-DOM bitmap bookkeeping
         // ---------------------------------------------------------------------
@@ -364,6 +374,24 @@ class HeroCarousel {
             const row = this._container.querySelector(`.hero-item[data-index="${index}"] .hero-meta-row`);
             if (row) row.innerHTML = this._renderMetaHtml(item);
         });
+    }
+
+    /**
+     * Updates the metadata DOM row of a single slide in place if its HTML has changed.
+     * Avoids tearing down and re-rendering unaffected slides or non-active carousel DOM.
+     *
+     * @param {number} index - Slide index to update
+     */
+    updateSlideMeta(index) {
+        if (!this._container || !this._items || !this._items[index]) return;
+        const item = this._items[index];
+        const row = this._container.querySelector(`.hero-item[data-index="${index}"] .hero-meta-row`);
+        if (!row) return;
+
+        const newHtml = this._renderMetaHtml(item);
+        if (row.innerHTML !== newHtml) {
+            row.innerHTML = newHtml;
+        }
     }
 
     /**
@@ -832,38 +860,41 @@ class HeroCarousel {
             this._intersectionObserver.observe(this._container);
         }
 
-        // Slide 0 is guaranteed to be the visible slide, so its backdrop starts
-        // loading/decoding immediately (mount path — no transition is in flight here).
-        // This also triggers the authenticated blob fetch when custom reverse
-        // proxy headers are configured (handled inside _preloadSlide).
+        // ---------------------------------------------------------------------
+        // Active Slide Mount & Staggered Inactive Preload Scheduling
+        // ---------------------------------------------------------------------
+        // Slide 0 is guaranteed to be the visible slide on mount, so its backdrop
+        // starts loading/decoding immediately. Inactive slides (1..N) are strictly
+        // suppressed during the first 3 seconds after mount to prevent freeze storms
+        // while row descriptors and MDBList metadata populate.
+        // ---------------------------------------------------------------------
         this._preloadSlide(0);
 
-        // Stagger preloading of upcoming slides (1..4) one slide every 100ms
-        // behind idleGate so no slide decodes during boot or active scrolling.
-        this._scheduleStackPreload(1);
-
-        // ---------------------------------------------------------------------
-        // Deferred Sliding Preload Window (for >5 slide configurations)
-        // ---------------------------------------------------------------------
-        this._scheduleIdlePreload(800);
+        // Gate background idle preloading of subsequent slides behind a 3000ms
+        // quiet window after mount, processing strictly 1 slide every 400ms.
+        this._scheduleStackPreload(1, this._initialPreloadDelay);
+        this._scheduleIdlePreload(this._initialPreloadDelay);
     }
 
     /**
      * Staggers off-thread backdrop + logo decoding for stacked slides (indices
-     * 1..4) one slide every 100ms behind idleGate so preloading pauses safely
+     * 1..N) one slide every 400ms behind idleGate so preloading pauses safely
      * behind the splash screen and during active scrolling.
      *
      * @param {number} index - Slide index to schedule next
+     * @param {number} [delay] - Initial quiet window before starting
      * @private
      */
-    _scheduleStackPreload(index) {
+    _scheduleStackPreload(index, delay) {
         if (!this._container) return;
-        const maxStack = Math.min(5, this._slideItems ? this._slideItems.length : 0);
-        if (index >= maxStack) return;
+        const count = this._slideItems ? this._slideItems.length : (this._items ? this._items.length : 0);
+        if (index >= count) return;
 
         this._cancelStackPreload();
 
-        // Wait 100ms between slide dispatches, then gate execution via idleGate so
+        const interval = delay !== undefined ? delay : (this._preloadIntervalMs || 400);
+
+        // Wait interval between slide dispatches, then gate execution via idleGate so
         // preloads wait for splash dismissal and any in-flight scroll animation.
         this._stackPreloadTimerId = setTimeout(() => {
             this._stackPreloadTimerId = null;
@@ -874,19 +905,21 @@ class HeroCarousel {
                     this._stackPreloadIdleTask = null;
                     if (!this._container) return;
 
-                    // Do not decode stacked slides during an active slide crossfade
-                    if (this._hideTimeoutId) {
-                        this._scheduleStackPreload(index);
+                    // Abort or reschedule if scrolling or during active crossfade
+                    const isScrollAnimating = () =>
+                        typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+                    if (isScrollAnimating() || this._hideTimeoutId) {
+                        this._scheduleStackPreload(index, this._preloadIntervalMs || 400);
                         return;
                     }
 
                     this._preloadSlide(index);
-                    this._scheduleStackPreload(index + 1);
+                    this._scheduleStackPreload(index + 1, this._preloadIntervalMs || 400);
                 },
-                100,
+                interval >= 1000 ? 3000 : 100,
                 0
             );
-        }, 100);
+        }, interval);
     }
 
     /**
@@ -923,6 +956,7 @@ class HeroCarousel {
         }
         // Cancel staggered stacked-slide preload timer and idle task
         this._cancelStackPreload();
+        this._cancelPreloadQueue();
         this._cancelWarmSlideGpuCache();
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
@@ -1372,7 +1406,7 @@ class HeroCarousel {
 
     /**
      * Schedules an idle preload sweep for slides around the active index.
-     * Supports configurations beyond the initial 5 stacked preloads while
+     * Supports configurations beyond the initial stacked preloads while
      * keeping goTo() strictly a class toggle.
      *
      * @param {number} [delay=800] - Quiet window required before the sweep runs
@@ -1398,20 +1432,36 @@ class HeroCarousel {
             const start = Math.max(0, this._currentIndex - 1);
             const end = Math.min(count - 1, this._currentIndex + 2);
 
+            // Build strictly ordered queue for neighbor slides (1 slide every 400ms)
+            // instead of invoking this._preloadSlide(i) in a single synchronous burst
+            const queue = [];
             for (let i = start; i <= end; i++) {
-                this._preloadSlide(i);
+                if (i !== this._currentIndex && !this._preloadedSlides[i] && queue.indexOf(i) === -1) {
+                    queue.push(i);
+                }
             }
 
             // Preload wrap-around neighbors when parked at boundary slides
             if (count > 2) {
-                if (this._currentIndex === 0) {
-                    this._preloadSlide(count - 1);
-                } else if (this._currentIndex === count - 1) {
-                    this._preloadSlide(0);
+                if (this._currentIndex === 0 && !this._preloadedSlides[count - 1] && queue.indexOf(count - 1) === -1) {
+                    queue.push(count - 1);
+                } else if (this._currentIndex === count - 1 && !this._preloadedSlides[0] && queue.indexOf(0) === -1) {
+                    queue.push(0);
                 }
             }
 
-            // Ambient BlurHash fills are decoded here, outside any transition.
+            // Append any remaining un-preloaded slides to ensure full coverage
+            for (let i = 0; i < count; i++) {
+                if (i !== this._currentIndex && !this._preloadedSlides[i] && queue.indexOf(i) === -1) {
+                    queue.push(i);
+                }
+            }
+
+            // Dispatch slides strictly one slide every 400ms via progressive queue
+            this._startPreloadQueue(queue);
+
+            // Ambient BlurHash fills are decoded ONLY for the active slide;
+            // non-active slides must never run expensive CPU BlurHash pixel generation.
             const isBlurhashFill =
                 this._isBlurhashFill !== null
                     ? this._isBlurhashFill
@@ -1419,11 +1469,83 @@ class HeroCarousel {
                       storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
             if (isBlurhashFill) {
                 const slides = this._slideItems || this._container.querySelectorAll('.hero-item');
-                for (let i = start; i <= end && i < slides.length; i++) {
-                    this._decodeBlurhashFill(slides[i]);
+                if (slides && slides[this._currentIndex]) {
+                    this._decodeBlurhashFill(slides[this._currentIndex]);
                 }
             }
         }, delay, 0);
+    }
+
+    /**
+     * Initiates the progressive background preload queue.
+     *
+     * @param {number[]} queue - Array of slide indices to preload
+     * @private
+     */
+    _startPreloadQueue(queue) {
+        this._cancelPreloadQueue();
+        if (!queue || queue.length === 0) return;
+        this._pendingPreloadQueue = queue.slice();
+        this._processNextPreloadQueueItem();
+    }
+
+    /**
+     * Cancels any pending queue timers, idle tasks, and clears remaining items.
+     *
+     * @private
+     */
+    _cancelPreloadQueue() {
+        if (this._preloadQueueTimer) {
+            clearTimeout(this._preloadQueueTimer);
+            this._preloadQueueTimer = null;
+        }
+        if (this._preloadQueueIdleTask) {
+            idleGate.cancel(this._preloadQueueIdleTask);
+            this._preloadQueueIdleTask = null;
+        }
+        this._pendingPreloadQueue = [];
+    }
+
+    /**
+     * Pops and preloads the next slide from the queue, spacing subsequent
+     * dispatches by 400ms to yield control to the compositor and user navigation.
+     *
+     * @private
+     */
+    _processNextPreloadQueueItem() {
+        if (!this._container || this._pendingPreloadQueue.length === 0) return;
+
+        // Abort / reschedule if user is scrolling or slide crossfade is active
+        const isScrollAnimating = () =>
+            typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+        if (isScrollAnimating() || this._hideTimeoutId) {
+            this._preloadQueueTimer = setTimeout(() => {
+                this._preloadQueueTimer = null;
+                this._processNextPreloadQueueItem();
+            }, this._preloadIntervalMs || 400);
+            return;
+        }
+
+        const nextIndex = this._pendingPreloadQueue.shift();
+        if (nextIndex !== undefined && !this._preloadedSlides[nextIndex]) {
+            this._preloadSlide(nextIndex);
+        }
+
+        // Schedule next slide dispatch if queue still has items
+        if (this._pendingPreloadQueue.length > 0) {
+            const interval = this._preloadIntervalMs || 400;
+            this._preloadQueueTimer = setTimeout(() => {
+                this._preloadQueueTimer = null;
+                this._preloadQueueIdleTask = idleGate.runWhenIdle(
+                    () => {
+                        this._preloadQueueIdleTask = null;
+                        this._processNextPreloadQueueItem();
+                    },
+                    100,
+                    0
+                );
+            }, interval);
+        }
     }
 
     /**
@@ -1703,6 +1825,9 @@ class HeroCarousel {
         nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
+        // Cancel previous neighbor preload queue
+        this._cancelPreloadQueue();
+
         // Timestamp the synchronous portion only: everything after this point is
         // timer/rAF work, so a long task attributed to a later mark is deferred
         // paint/compositor cost — not class-toggle cost.
@@ -1829,6 +1954,12 @@ class HeroCarousel {
      */
     _decodeBlurhashFill(itemElement) {
         if (!itemElement) return;
+
+        // Never decode BlurHash canvases for inactive slides.
+        // Canvas operations on inactive slides burn hundreds of milliseconds of TV CPU.
+        const activeSlide = this._slideItems ? this._slideItems[this._currentIndex] : null;
+        if (activeSlide && itemElement !== activeSlide) return;
+        if (itemElement.classList && !itemElement.classList.contains('active')) return;
 
         // Locate the blurhash fill canvas element within this slide
         const canvas = itemElement.querySelector('.hero-blurhash-fill-canvas');
