@@ -9,7 +9,13 @@
 
 import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/seerrClient.js';
-import { SEERR_STATUS, seerrStatusKey, seerrSeasonStatusKey, isSeerrAnimeItem } from '../api/seerrNormalize.js';
+import {
+    SEERR_STATUS,
+    seerrStatusKey,
+    seerrSeasonStatusKey,
+    isSeerrAnimeItem,
+    isSeerrSeasonCovered
+} from '../api/seerrNormalize.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { toast } from '../ui/Toast.js';
@@ -705,13 +711,9 @@ class SeerrRequestModal {
 
         if (seasons.length === 0) return selected;
 
-        // A season is locked only if it is already available, pending, or processing.
-        // Seasons with NOT_REQUESTED, UNKNOWN (unmonitored/missing), PARTIALLY_AVAILABLE,
-        // or DELETED status remain requestable by the user.
-        const isLocked = (s) =>
-            s.status === SEERR_STATUS.AVAILABLE ||
-            s.status === SEERR_STATUS.PENDING ||
-            s.status === SEERR_STATUS.PROCESSING;
+        // A season is locked once it is available or requested (see isSeerrSeasonCovered);
+        // NOT_REQUESTED, UNKNOWN, PARTIALLY_AVAILABLE and DELETED seasons stay requestable.
+        const isLocked = (s) => isSeerrSeasonCovered(s.status);
 
         // Hide the request button if all seasons are already locked (available or requested)
         if (seasons.every((s) => isLocked(s)) && requestBtn) {

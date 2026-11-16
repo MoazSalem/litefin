@@ -110,6 +110,90 @@ export function seerrSeasonStatusKey(status) {
     }
 }
 
+// ============================================================================
+// Request State
+// ============================================================================
+// Single home for the rules that turn Seerr's status enums into UI decisions,
+// so cards, the details page and the request modal cannot drift apart.
+
+/**
+ * Whether a season is already covered by Seerr (available, or requested and not
+ * yet declined). Partially available, unknown and deleted seasons stay open.
+ * @param {number} [status] - MediaStatus value of one season
+ * @returns {boolean}
+ */
+export function isSeerrSeasonCovered(status) {
+    return status === SEERR_STATUS.AVAILABLE || status === SEERR_STATUS.PENDING || status === SEERR_STATUS.PROCESSING;
+}
+
+/**
+ * Whether any season of a series can still be requested.
+ * @param {Array<{status: number}>} seasons - Result of SeerrClient.tvSeasons
+ * @returns {boolean}
+ */
+export function hasUnrequestedSeerrSeasons(seasons) {
+    if (!Array.isArray(seasons)) return false;
+    return seasons.some((season) => season && !isSeerrSeasonCovered(season.status));
+}
+
+/**
+ * Which request actions the details page offers for an item.
+ *
+ * Cancel rules follow Seerr: a PENDING request is only a queue entry any user
+ * may withdraw; once approved (PROCESSING and beyond) only Seerr admins can.
+ * @param {Object} item - Item produced by normalizeSeerrItem
+ * @param {Object} [context]
+ * @param {boolean} [context.hasUnrequestedSeasons] - From hasUnrequestedSeerrSeasons; unknown counts as true
+ * @param {boolean} [context.isAdmin] - Seerr ADMIN or MANAGE_REQUESTS permission
+ * @returns {{requestable: boolean, canCancel: boolean, labelKey: string}}
+ */
+export function getSeerrRequestActions(item, context = {}) {
+    const status = item ? item._seerrStatus : SEERR_STATUS.NOT_REQUESTED;
+    const isTv = !!item && item._mediaType === 'tv';
+
+    // Series: more seasons can be requested until everything is available.
+    // Movies: only when nothing is requested yet.
+    const requestable = isTv
+        ? status !== SEERR_STATUS.AVAILABLE && context.hasUnrequestedSeasons !== false
+        : status === SEERR_STATUS.NOT_REQUESTED || status === SEERR_STATUS.UNKNOWN || status === SEERR_STATUS.DELETED;
+
+    const hasRequest = !!(item && item._requestId) && status !== SEERR_STATUS.AVAILABLE;
+    const canCancel = hasRequest && (status === SEERR_STATUS.PENDING || !!context.isAdmin);
+
+    // PARTIALLY_AVAILABLE → "Request More"; PENDING / PROCESSING → "View Request"
+    let labelKey = 'SeerrRequest';
+    if (isTv && status === SEERR_STATUS.PARTIALLY_AVAILABLE) {
+        labelKey = 'SeerrRequestMore';
+    } else if (isTv && (status === SEERR_STATUS.PENDING || status === SEERR_STATUS.PROCESSING)) {
+        labelKey = 'SeerrViewRequest';
+    }
+
+    return { requestable, canCancel, labelKey };
+}
+
+/**
+ * State shown by the small icon in the top-right corner of a Seerr card.
+ * @param {Object} item - Item produced by normalizeSeerrItem
+ * @returns {'requested'|'partial'|'available'|null}
+ */
+export function seerrCardState(item) {
+    if (!item || item._seerrStatus === undefined || item._seerrStatus === null) return null;
+    const status = item._seerrStatus;
+    const isPartial = status === SEERR_STATUS.PARTIALLY_AVAILABLE;
+    const isAvailable = status === SEERR_STATUS.AVAILABLE;
+
+    if (
+        status === SEERR_STATUS.PENDING ||
+        status === SEERR_STATUS.PROCESSING ||
+        (item._requestId && !isAvailable && !isPartial)
+    ) {
+        return 'requested';
+    }
+    if (isPartial) return 'partial';
+    if (isAvailable) return 'available';
+    return null;
+}
+
 /**
  * Extracts the year from a TMDB date ('1999-03-30'). Returns undefined rather
  * than NaN on missing or malformed input, so cards never render "NaN".

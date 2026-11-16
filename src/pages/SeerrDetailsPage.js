@@ -21,7 +21,12 @@ import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/seerrClient.js';
 import { renderWatchProviders, watchProviderRegion } from '../utils/WatchProviders.js';
-import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
+import {
+    SEERR_STATUS,
+    seerrStatusKey,
+    hasUnrequestedSeerrSeasons,
+    getSeerrRequestActions
+} from '../api/seerrNormalize.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { toast } from '../ui/Toast.js';
@@ -228,22 +233,9 @@ class SeerrDetailsPage extends Page {
                 this._item._mediaType = mediaType;
             }
             if (mediaType === 'tv') {
-                try {
-                    // Query season-level statuses for this series
-                    const seasons = await seerr.tvSeasons(tmdbId);
-
-                    // A season is requestable if it is NOT already available, pending, or processing.
-                    // This allows partially available, unknown, or unrequested seasons to be requested.
-                    this._hasUnrequestedSeasons = seasons.some(
-                        (s) =>
-                            s.status !== SEERR_STATUS.AVAILABLE &&
-                            s.status !== SEERR_STATUS.PENDING &&
-                            s.status !== SEERR_STATUS.PROCESSING
-                    );
-                } catch (e) {
-                    // Fallback to allowing request if season check fails
-                    this._hasUnrequestedSeasons = true;
-                }
+                // Fall back to allowing a request if the season check fails
+                const unrequested = await this._loadUnrequestedSeasons();
+                this._hasUnrequestedSeasons = unrequested === null ? true : unrequested;
             }
             try {
                 this._isWatchlisted = await seerr.isWatchlisted(mediaType, tmdbId);
@@ -665,26 +657,28 @@ class SeerrDetailsPage extends Page {
 
     async _refreshTvSeasonState() {
         if (this._item._mediaType === 'tv') {
-            try {
-                // Refresh season statuses from Seerr
-                const seasons = await seerr.tvSeasons(this._item._tmdbId);
-
-                // Check if any season is not already available or requested
-                this._hasUnrequestedSeasons = seasons.some(
-                    (s) =>
-                        s.status !== SEERR_STATUS.AVAILABLE &&
-                        s.status !== SEERR_STATUS.PENDING &&
-                        s.status !== SEERR_STATUS.PROCESSING
-                );
-            } catch (e) {
-                // Log warning if refresh fails
-                log.warn('Failed to refresh TV seasons status', e);
-            }
+            // Keep the previous answer when the refresh fails
+            const unrequested = await this._loadUnrequestedSeasons();
+            if (unrequested !== null) this._hasUnrequestedSeasons = unrequested;
         }
         this._updateRequestButton();
         this._renderStatus();
         this._registerFocus();
         focusManager.invalidateCache('seerr-details-actions');
+    }
+
+    /**
+     * Asks Seerr whether any season of this series can still be requested.
+     * @returns {Promise<boolean|null>} null when the season lookup failed
+     * @private
+     */
+    async _loadUnrequestedSeasons() {
+        try {
+            return hasUnrequestedSeerrSeasons(await seerr.tvSeasons(this._item._tmdbId));
+        } catch (err) {
+            log.warn('Failed to load TV season statuses', err);
+            return null;
+        }
     }
 
     _bindActions() {
@@ -1253,63 +1247,35 @@ class SeerrDetailsPage extends Page {
         else if (hasRichMeta) this.setActiveSection('details-rich-meta');
     }
 
+    /**
+     * @returns {{requestable: boolean, canCancel: boolean, labelKey: string}}
+     * @private
+     */
+    _getRequestActions() {
+        return getSeerrRequestActions(this._item, {
+            hasUnrequestedSeasons: this._hasUnrequestedSeasons,
+            isAdmin: this._isSeerrAdmin
+        });
+    }
+
     _updateRequestButton() {
         const button = this.$('.seerr-request-btn');
         const cancelBtn = this.$('.seerr-cancel-request-btn');
         if (!button) return;
 
-        const isTv = this._item._mediaType === 'tv';
-        let requestable;
-
-        if (isTv) {
-            // For TV shows, allow requesting missing seasons as long as the series is not
-            // completely available, and there are seasons that haven't been requested or are partial.
-            requestable = this._item._seerrStatus !== SEERR_STATUS.AVAILABLE && this._hasUnrequestedSeasons !== false;
-        } else {
-            // For movies, only unrequested, unknown, or deleted items can be requested
-            requestable =
-                this._item._seerrStatus === SEERR_STATUS.NOT_REQUESTED ||
-                this._item._seerrStatus === SEERR_STATUS.UNKNOWN ||
-                this._item._seerrStatus === SEERR_STATUS.DELETED;
-        }
+        const { requestable, canCancel, labelKey } = this._getRequestActions();
 
         // Toggle request button visibility and focus accessibility
         button.classList.toggle('hidden', !requestable);
         button.tabIndex = requestable ? 0 : -1;
 
-        // ----------------------------------------------------------------
-        // Cancel button visibility:
-        //   PENDING  → any user can cancel (just a queue entry, no admin
-        //              approval involved yet — Seerr allows this for all)
-        //   Anything past PENDING (PROCESSING, PARTIALLY_AVAILABLE, etc.) →
-        //              admin-approved work has started; only Seerr admins
-        //              can retract it at this point.
-        // ----------------------------------------------------------------
-        const hasRequest = !!(this._item._requestId && this._item._seerrStatus !== SEERR_STATUS.AVAILABLE);
-        const isPending = this._item._seerrStatus === SEERR_STATUS.PENDING;
-        const canCancel = hasRequest && (isPending || this._isSeerrAdmin);
         if (cancelBtn) {
             cancelBtn.classList.toggle('hidden', !canCancel);
             cancelBtn.tabIndex = canCancel ? 0 : -1;
         }
 
-        // Button label reflects the state of the series:
-        //   PARTIALLY_AVAILABLE → "Request More" (some content is available, more can be added)
-        //   PENDING / PROCESSING → "View Request" (content is queued/downloading, nothing available yet;
-        //                          the modal still lets the user add more seasons if needed)
-        //   Default             → "Request"
+        // "Request" / "Request More" / "View Request" (see getSeerrRequestActions)
         const span = button.querySelector('span');
-        let labelKey = 'SeerrRequest';
-        if (isTv) {
-            if (this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
-                labelKey = 'SeerrRequestMore';
-            } else if (
-                this._item._seerrStatus === SEERR_STATUS.PENDING ||
-                this._item._seerrStatus === SEERR_STATUS.PROCESSING
-            ) {
-                labelKey = 'SeerrViewRequest';
-            }
-        }
         const labelText = i18n.t(labelKey);
         if (span) {
             span.textContent = labelText;
