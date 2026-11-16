@@ -45,7 +45,7 @@ import { PlayerTab } from './tabs/PlayerTab.js';
 import { LayoutTab } from './tabs/LayoutTab.js';
 import { OsdTab } from './tabs/OsdTab.js';
 import { DetailsTab } from './tabs/DetailsTab.js';
-import { AppearanceTab } from './tabs/AppearanceTab.js';
+import { DisplayTab } from './tabs/DisplayTab.js';
 import { getCustomCollectionsLabel } from './modals/CustomCollectionsModal.js';
 import { AudioFallbackModal } from './modals/AudioFallbackModal.js';
 import { ThemeColorModal, getThemeColors } from './modals/ThemeColorModal.js';
@@ -79,7 +79,7 @@ class SettingsPage extends Page {
     constructor() {
         super();
         this.title = i18n.t('Settings');
-        this.activeTab = 'appearance'; // Default tab
+        this.activeTab = 'display'; // Default tab
 
         // UI Languages (for app interface)
         this.uiLanguages = availableLanguages;
@@ -125,7 +125,7 @@ class SettingsPage extends Page {
         this.layoutTab = typeof LayoutTab !== 'undefined' ? new LayoutTab(this) : null;
         this.osdTab = typeof OsdTab !== 'undefined' ? new OsdTab(this) : null;
         this.detailsTab = typeof DetailsTab !== 'undefined' ? new DetailsTab(this) : null;
-        this.appearanceTab = typeof AppearanceTab !== 'undefined' ? new AppearanceTab(this) : null;
+        this.displayTab = typeof DisplayTab !== 'undefined' ? new DisplayTab(this) : null;
         this.themeColorModal = typeof ThemeColorModal !== 'undefined' ? new ThemeColorModal(this) : null;
         this.loaderStyleModal = typeof LoaderStyleModal !== 'undefined' ? new LoaderStyleModal(this) : null;
         this.favoriteLanguagesModal =
@@ -257,10 +257,10 @@ class SettingsPage extends Page {
         // Base category catalogue spanning core visual and playback subsystems
         const tabs = [
             {
-                id: 'appearance',
+                id: 'display',
                 label: i18n.t('Display'),
-                desc: i18n.t('SettingsDescAppearance') || 'Themes, accent colors, background styles, and visuals',
-                icon: settingsIcons.appearance
+                desc: i18n.t('SettingsDescDisplay') || 'Themes, accent colors, background styles, and visuals',
+                icon: settingsIcons.display
             },
             {
                 id: 'layout',
@@ -464,7 +464,7 @@ class SettingsPage extends Page {
     _renderActiveTabContent() {
         // Map tab IDs directly to instantiated controller instances
         const tabControllers = {
-            appearance: this.appearanceTab,
+            appearance: this.displayTab,
             layout: this.layoutTab,
             osd: this.osdTab,
             details: this.detailsTab,
@@ -483,13 +483,13 @@ class SettingsPage extends Page {
         };
 
         // Select controller or fallback to primary appearance tab
-        const controller = tabControllers[this.activeTab] || this.appearanceTab;
+        const controller = tabControllers[this.activeTab] || this.displayTab;
         return controller ? controller.render() : '';
     }
 
     // Consolidated one-line forwarders delegating directly to extracted controllers
-    _renderAppearanceTab() {
-        return this.appearanceTab ? this.appearanceTab.render() : '';
+    _renderDisplayTab() {
+        return this.displayTab ? this.displayTab.render() : '';
     }
     _renderLayoutTab() {
         return this.layoutTab ? this.layoutTab.render() : '';
@@ -702,7 +702,7 @@ class SettingsPage extends Page {
         // Mount ONLY the active tab controller event listeners to prevent duplicate listener collisions
         const root = this.element || document;
         const tabControllers = {
-            appearance: this.appearanceTab,
+            appearance: this.displayTab,
             layout: this.layoutTab,
             osd: this.osdTab,
             details: this.detailsTab,
@@ -719,7 +719,7 @@ class SettingsPage extends Page {
             about: this.aboutTab,
             debug: this.debugTab
         };
-        const activeController = tabControllers[this.activeTab] || this.appearanceTab;
+        const activeController = tabControllers[this.activeTab] || this.displayTab;
         if (activeController && typeof activeController.mount === 'function') {
             activeController.mount(root);
         }
@@ -790,8 +790,8 @@ class SettingsPage extends Page {
         }
 
         // Bind deferred Appearance controls immediately if already in DOM (e.g., synchronous callers);
-        // incrementally mounted chunks call _bindAppearanceDeferredControls(chunkEl) as they appear.
-        this._bindAppearanceDeferredControls();
+        // incrementally mounted chunks call _bindDisplayDeferredControls(chunkEl) as they appear.
+        this._bindDisplayDeferredControls();
 
         // Playback, navigation, OSD, and profile toggles are mounted via this.playerTab.mount()
 
@@ -839,7 +839,7 @@ class SettingsPage extends Page {
      *
      * @param {HTMLElement|null} [scope=null] Optional deferred chunk root to narrow selector queries
      */
-    _bindAppearanceDeferredControls(scope = null) {
+    _bindDisplayDeferredControls(scope = null) {
         // Prefer scanning only the newly appended chunk element to avoid full-page DOM walks
         const find =
             scope && typeof scope.querySelector === 'function'
@@ -1637,7 +1637,7 @@ class SettingsPage extends Page {
 
     _setLayout(layout) {
         layoutManager.setLayout(layout);
-        this._switchTab('appearance', true);
+        this._switchTab('display', true);
 
         setTimeout(() => {
             const btn = this.$(`.layout-btn[data-layout="${layout}"]`);
@@ -1647,7 +1647,7 @@ class SettingsPage extends Page {
 
     _setTheme(theme) {
         layoutManager.setTheme(theme);
-        this._switchTab('appearance', true);
+        this._switchTab('display', true);
 
         setTimeout(() => {
             const btn = this.$(`.theme-btn[data-theme="${theme}"]`);
@@ -1753,8 +1753,8 @@ class SettingsPage extends Page {
         if (this.layoutTab) {
             this.layoutTab.destroy();
         }
-        if (this.appearanceTab) {
-            this.appearanceTab.destroy();
+        if (this.displayTab) {
+            this.displayTab.destroy();
         }
         if (this.themeColorModal) {
             this.themeColorModal.destroy();

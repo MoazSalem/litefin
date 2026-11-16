@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * Litefin Tizen - Appearance Tab Controller
+ * Litefin Tizen - Display Tab Controller
  * ============================================================================
  * Handles UI display preferences, themes, accent colors, icons, interface scaling,
  * typography, screensaver modes, and WOL settings:
@@ -25,14 +25,14 @@ import { escapeHtml } from '../../../utils/Utils.js';
 import { logger } from '../../../utils/Logger.js';
 import { getThemeColors } from '../modals/ThemeColorModal.js';
 
-const log = logger.create('AppearanceTab');
+const log = logger.create('DisplayTab');
 
 /**
  * Controller managing display and theme appearance customizations.
  */
-export class AppearanceTab {
+export class DisplayTab {
     /**
-     * Initializes a new instance of AppearanceTab.
+     * Initializes a new instance of DisplayTab.
      * @param {Object} page Host SettingsPage controller
      */
     constructor(page) {
@@ -107,10 +107,10 @@ export class AppearanceTab {
     }
 
     /**
-     * Compiles the primary above-the-fold markup for the Appearance / Display tab.
+     * Compiles the primary above-the-fold markup for the Display tab.
      * Remaining sections (Time, Screensaver, ColorTheme, Extra, WakeOnLan)
      * are incrementally mounted across post-paint frames inside
-     * `#appearance-deferred-sections` so entering `/settings` stays well under 50ms.
+     * `#display-deferred-sections` so entering `/settings` stays well under 50ms.
      *
      * @returns {string} Serialized HTML template for immediate display
      */
@@ -329,7 +329,7 @@ export class AppearanceTab {
                     )
                 )}
 
-                <div id="appearance-deferred-sections"></div>
+                <div id="display-deferred-sections"></div>
             </div>
         `;
     }
@@ -696,13 +696,13 @@ export class AppearanceTab {
         const container = root || this.page?.el || this.page?.element || document;
         if (!container) return;
         this.destroy();
-        log.debug('Mounting AppearanceTab event listeners');
+        log.debug('Mounting DisplayTab event listeners');
 
         // Bind primary above-the-fold toggle switches immediately
         this._bindListeners(container, container);
 
         // Progressively populate below-the-fold sections in bounded chunks across frames
-        const deferredWrapper = container.querySelector('#appearance-deferred-sections');
+        const deferredWrapper = container.querySelector('#display-deferred-sections');
         if (deferredWrapper && !deferredWrapper.hasChildNodes()) {
             const chunkRenderers = [
                 () => this._renderThemeSection(),
@@ -731,7 +731,7 @@ export class AppearanceTab {
 
                 // Create an isolated chunk container so innerHTML and selector scans touch only new nodes
                 const chunkEl = document.createElement('div');
-                chunkEl.className = 'appearance-deferred-chunk';
+                chunkEl.className = 'display-deferred-chunk';
                 chunkEl.innerHTML = chunkRenderers[chunkIndex]();
                 chunkIndex++;
                 deferredWrapper.appendChild(chunkEl);
@@ -739,8 +739,8 @@ export class AppearanceTab {
                 // Wire toggles, pickers, dropdowns, and sliders strictly within this new chunk
                 this._bindListeners(chunkEl, container);
                 if (this.page) {
-                    if (typeof this.page._bindAppearanceDeferredControls === 'function') {
-                        this.page._bindAppearanceDeferredControls(chunkEl);
+                    if (typeof this.page._bindDisplayDeferredControls === 'function') {
+                        this.page._bindDisplayDeferredControls(chunkEl);
                     }
                     if (
                         this.page.dropdownDispatcher &&
@@ -785,7 +785,7 @@ export class AppearanceTab {
                 storage.setItem(storageKey, String(nextVal));
                 storage.flush();
                 btn.classList.toggle('active', nextVal);
-                log.info(`Appearance storage setting changed: ${storageKey} = ${nextVal}`);
+                log.info(`Display storage setting changed: ${storageKey} = ${nextVal}`);
 
                 // Synchronize dependent UI rows on WOL or theme song changes
                 if (storageKey.startsWith('pref:enableWol')) {
@@ -816,7 +816,7 @@ export class AppearanceTab {
                 PlayerSettings.set(settingKey, nextVal);
                 storage.flush();
                 btn.classList.toggle('active', nextVal);
-                log.info(`Appearance player setting changed: ${settingKey} = ${nextVal}`);
+                log.info(`Display player setting changed: ${settingKey} = ${nextVal}`);
             });
         });
 
@@ -892,4 +892,4 @@ export class AppearanceTab {
     }
 }
 
-export default AppearanceTab;
+export default DisplayTab;

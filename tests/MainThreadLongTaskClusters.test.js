@@ -671,7 +671,7 @@ test('HomePage: schedules _scheduleDeferredBatchCacheRefresh once on final batch
 });
 
 // ============================================================================
-// Cluster 8 — Settings progressive Appearance mount & deferred font query
+// Cluster 8 — Settings progressive Display mount & deferred font query
 // ============================================================================
 
 /**
@@ -762,7 +762,7 @@ function createSettingsPerfHarness() {
         const page = new SettingsPageClass();
         page.$ = () => null;
         page.$$ = () => [];
-        page.appearanceTab = { mount() {}, destroy() {} };
+        page.displayTab = { mount() {}, destroy() {} };
         page.dropdownDispatcher = { bindDropdownEvents() {} };
         page.sliderComponent = { bindEvents() {} };
         page._openThemeColorModal = () => {
@@ -825,7 +825,7 @@ test('SettingsPage: defers fallback fonts to IdleGate, cancels on destroy, and d
     activePage.onBeforeDestroy();
     assert.equal(harness.getLoaderUnsubCalls(), 1, 'onBeforeDestroy must unsubscribe loaderStyle listener');
 
-    // 4. Scoped _bindAppearanceDeferredControls wires WOL input & pickers idempotently
+    // 4. Scoped _bindDisplayDeferredControls wires WOL input & pickers idempotently
     const handlers = {};
     const wolInput = {
         value: 'aabbccddeeff',
@@ -859,8 +859,8 @@ test('SettingsPage: defers fallback fonts to IdleGate, cancels on destroy, and d
     };
 
     // Call twice on the same mounted chunk and verify listeners bind only once
-    activePage._bindAppearanceDeferredControls(chunkScope);
-    activePage._bindAppearanceDeferredControls(chunkScope);
+    activePage._bindDisplayDeferredControls(chunkScope);
+    activePage._bindDisplayDeferredControls(chunkScope);
     assert.equal(handlers['wol:input'], 1, 'WOL input listener must not bind twice');
     assert.equal(handlers['theme:click'], 1, 'Theme color button listener must not bind twice');
     assert.equal(handlers['loader:click'], 1, 'Loader style button listener must not bind twice');
@@ -876,18 +876,18 @@ test('SettingsPage: defers fallback fonts to IdleGate, cancels on destroy, and d
     assert.equal(harness.getOpenedLoaderModal(), 1);
 });
 
-test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred sections in scoped chunks', () => {
-    const appearanceSource = read('src/pages/settings/tabs/AppearanceTab.js');
+test('DisplayTab, DropdownDispatcher & Slider: progressively mount deferred sections in scoped chunks', () => {
+    const displaySource = read('src/pages/settings/tabs/DisplayTab.js');
 
     // Initial synchronous render() holds only primary sections + deferred placeholder container
-    const renderBody = sliceBetween(appearanceSource, 'render() {', '_renderTimeAndScreensaverSections() {');
+    const renderBody = sliceBetween(displaySource, 'render() {', '_renderTimeAndScreensaverSections() {');
     assert.ok(
-        renderBody.includes('<div id="appearance-deferred-sections"></div>'),
-        'AppearanceTab.render() must leave below-the-fold placeholder container'
+        renderBody.includes('<div id="display-deferred-sections"></div>'),
+        'DisplayTab.render() must leave below-the-fold placeholder container'
     );
     assert.ok(
         !renderBody.includes('input-wol-mac-address') && !renderBody.includes('btn-theme-color-picker'),
-        'AppearanceTab.render() must exclude deferred sections from initial innerHTML parse'
+        'DisplayTab.render() must exclude deferred sections from initial innerHTML parse'
     );
 
     // All progressive chunk renderers + combined helper must be present
@@ -898,7 +898,7 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         '_renderExtraAndWolSections()',
         '_renderDeferredSections()'
     ]) {
-        assert.ok(appearanceSource.includes(methodName), `AppearanceTab must define ${methodName}`);
+        assert.ok(displaySource.includes(methodName), `DisplayTab must define ${methodName}`);
     }
 
     // Extracted OSD tab must own all OSD settings and wire its toggles
@@ -927,8 +927,8 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'OsdTab must wire PlayerSettings-backed toggle switches'
     );
     assert.ok(
-        !appearanceSource.includes('osd-layout-select') && !appearanceSource.includes('osd-button-style-select'),
-        'AppearanceTab must no longer render OSD settings'
+        !displaySource.includes('osd-layout-select') && !displaySource.includes('osd-button-style-select'),
+        'DisplayTab must no longer render OSD settings'
     );
     const playerTabSource = read('src/pages/settings/tabs/PlayerTab.js');
     assert.ok(
@@ -987,11 +987,11 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'LayoutTab must no longer render details-page settings'
     );
 
-    // mount() appends .appearance-deferred-chunk across frames, binds scoped controls, invalidates focus
-    const mountBody = sliceBetween(appearanceSource, 'mount(root) {', '_bindListeners(scope, rootContainer) {');
-    assert.ok(mountBody.includes('appearance-deferred-chunk'), 'mount() must isolate chunks inside wrapper nodes');
+    // mount() appends .display-deferred-chunk across frames, binds scoped controls, invalidates focus
+    const mountBody = sliceBetween(displaySource, 'mount(root) {', '_bindListeners(scope, rootContainer) {');
+    assert.ok(mountBody.includes('display-deferred-chunk'), 'mount() must isolate chunks inside wrapper nodes');
     assert.ok(
-        mountBody.includes('this.page._bindAppearanceDeferredControls(chunkEl)') &&
+        mountBody.includes('this.page._bindDisplayDeferredControls(chunkEl)') &&
             mountBody.includes('this.page.dropdownDispatcher.bindDropdownEvents(chunkEl)') &&
             mountBody.includes('this.page.sliderComponent.bindEvents(chunkEl)'),
         'Each mounted chunk must scope-bind deferred pickers, dropdowns, and sliders'
@@ -1001,11 +1001,11 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'Each mounted chunk must invalidate settings-content focus cache'
     );
 
-    const destroyBody = sliceBetween(appearanceSource, 'destroy() {', 'export default AppearanceTab;');
+    const destroyBody = sliceBetween(displaySource, 'destroy() {', 'export default DisplayTab;');
     assert.ok(
         destroyBody.includes('clearTimeout(this._deferredTimer)') &&
             destroyBody.includes('cancelAnimationFrame(this._deferredRaf)'),
-        'AppearanceTab.destroy() must cancel any pending deferred timer or rAF'
+        'DisplayTab.destroy() must cancel any pending deferred timer or rAF'
     );
 
     // DropdownDispatcher & SettingsSlider must accept optional chunk scope and guard against double-binding
