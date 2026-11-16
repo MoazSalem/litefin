@@ -190,7 +190,7 @@ export class SeerrClient {
     /**
      * Makes an authenticated call through the Litefin server plugin.
      * @param {string} path - Path after /Litefin/Seerr
-     * @param {Object} [options] - Request method and body
+     * @param {Object} [options] - Request method, body, and `fresh` to bypass the cached GET response
      * @returns {Promise<any>}
      * @private
      */
@@ -210,7 +210,10 @@ export class SeerrClient {
 
             const now = Date.now();
             const cacheKey = `${api._userId || 'anon'}:${path}`;
-            const cached = this._cache.get(cacheKey);
+            // options.fresh skips the cache read only (live download polling). It must
+            // never clear caches: wiping discover:pageCache would rebuild Discover on
+            // back navigation and lose the restored focus.
+            const cached = options.fresh ? null : this._cache.get(cacheKey);
             if (cached && now - cached.timestamp < this._cacheTtlMs) {
                 return cached.data;
             }
@@ -326,11 +329,13 @@ export class SeerrClient {
      * Gets the full details used by the Seerr details page.
      * @param {string} mediaType
      * @param {number} tmdbId
+     * @param {Object} [options]
+     * @param {boolean} [options.fresh] - Bypass the response cache (download progress polling)
      * @returns {Promise<Object>}
      */
-    async details(mediaType, tmdbId) {
+    async details(mediaType, tmdbId, options = {}) {
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
-        const result = await this._request(`/${type}/${tmdbId}`);
+        const result = await this._request(`/${type}/${tmdbId}`, options.fresh ? { fresh: true } : {});
         const item = normalizeSeerrItem(result, mediaType);
         if (!item) throw new Error('SeerrInvalidResponse');
         return decorateStatusBadge(item);
@@ -662,7 +667,8 @@ export class SeerrClient {
                         return {
                             ...detail,
                             _seerrStatus: item._seerrStatus !== 0 ? item._seerrStatus : detail._seerrStatus,
-                            _requestId: item._requestId || detail._requestId
+                            _requestId: item._requestId || detail._requestId,
+                            _downloads: item._downloads && item._downloads.length ? item._downloads : detail._downloads
                         };
                     }
                 } catch (err) {

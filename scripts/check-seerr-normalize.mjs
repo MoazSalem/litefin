@@ -157,4 +157,14 @@ assert.equal(isSeerrAnimeItem(undefined), false);
 assert.equal(isSeerrAnimeItem({ _mediaType: 'tv', Tags: undefined }), false);
 assert.equal(isSeerrAnimeItem({ _mediaType: 'tv' }), false);
 
+// Download progress: absent by default, normalized from mediaInfo.downloadStatus
+assert.deepEqual(movie._downloads, []);
+const downloading = normalizeSeerrItem({
+    id: 603,
+    mediaType: 'movie',
+    mediaInfo: { status: SEERR_STATUS.PROCESSING, downloadStatus: [{ size: 200, sizeLeft: 50, status: 'downloading' }] }
+});
+assert.equal(downloading._downloads.length, 1);
+assert.equal(downloading._downloads[0].percent, 75);
+
 console.log('seerrNormalize: OK');

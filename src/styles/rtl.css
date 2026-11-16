@@ -915,3 +915,14 @@ html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"][dir="
 }
 
 
+
+/* Seerr download progress */
+[dir="rtl"] .seerr-status-fill {
+    left: auto;
+    right: 0;
+}
+
+[dir="rtl"] .seerr-status-spinner {
+    margin-left: 0;
+    margin-right: 8px;
+}

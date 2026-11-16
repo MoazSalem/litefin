@@ -94,13 +94,8 @@ class CardRenderer {
                 }
                 const itemId = btn.getAttribute('data-item-id');
                 if (itemId) {
-                    const cachedItem =
-                        CardRenderer._itemCache.get(animeMarkerService.normalizeId(itemId)) ||
-                        CardRenderer._itemCache.get(itemId);
-                    if (
-                        cachedItem?.SeriesId &&
-                        animeMarkerService.normalizeId(cachedItem.SeriesId) === targetSeriesId
-                    ) {
+                    const cachedItem = CardRenderer._itemCache.get(animeMarkerService.normalizeId(itemId)) || CardRenderer._itemCache.get(itemId);
+                    if (cachedItem?.SeriesId && animeMarkerService.normalizeId(cachedItem.SeriesId) === targetSeriesId) {
                         matched.push(btn);
                     }
                 }
@@ -661,12 +656,14 @@ class CardRenderer {
 
         // Incorporate marker state into the item cache key to prevent stale renders
         // when series markers finish resolving asynchronously in the background
-        const seriesMarkers =
-            options.seriesMarkers || (item.SeriesId ? animeMarkerService.getCachedSeriesMarkers(item.SeriesId) : null);
+        const seriesMarkers = options.seriesMarkers || (item.SeriesId ? animeMarkerService.getCachedSeriesMarkers(item.SeriesId) : null);
         const markerCount = seriesMarkers?.episodes ? Object.keys(seriesMarkers.episodes).length : '0';
         const isAnimeFlag = seriesMarkers ? (seriesMarkers.matched || seriesMarkers.isAnime ? '1' : '0') : '0';
         const itemCacheKey = `${itemId}:${markerCount}:${isAnimeFlag}`;
-        const cached = CardRenderer._htmlCache.get(itemCacheKey);
+        // A card with a running Seerr download must not be served from (or stored in)
+        // the HTML cache, otherwise the spinner would outlive the download.
+        const hasSeerrDownloads = Array.isArray(item._downloads) && item._downloads.length > 0;
+        const cached = hasSeerrDownloads ? undefined : CardRenderer._htmlCache.get(itemCacheKey);
         if (cached !== undefined) return cached;
 
         let imageUrl = '';
@@ -1316,7 +1313,10 @@ class CardRenderer {
         // Top-right status icon; the rules live in seerrCardState
         const seerrState = seerrCardState(item);
         if (seerrState) {
-            if (seerrState === 'requested') {
+            if (seerrState === 'downloading') {
+                // Mirrors Seerr's mini status badge: a spinner replaces the clock while downloading
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested seerr-card-icon--downloading" title="${escapeHtml(i18n.t('SeerrStatusDownloading'))}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8"></path></svg></div>`;
+            } else if (seerrState === 'requested') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
             } else if (seerrState === 'partial') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
@@ -1877,7 +1877,7 @@ class CardRenderer {
         `;
 
         // Cache the output for reuse during this render context
-        CardRenderer._htmlCache.set(itemCacheKey, html);
+        if (!hasSeerrDownloads) CardRenderer._htmlCache.set(itemCacheKey, html);
         return html;
     }
 

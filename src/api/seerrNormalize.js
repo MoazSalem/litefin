@@ -33,6 +33,12 @@ export const SEERR_STATUS = Object.freeze({
  */
 export const SEERR_ANIME_KEYWORD_ID = 210024;
 
+/** Poll delay while Seerr reports a running download (details page). */
+export const SEERR_DOWNLOAD_POLL_ACTIVE_MS = 15000;
+
+/** Poll delay while a request is approved but no download has started yet. */
+export const SEERR_DOWNLOAD_POLL_IDLE_MS = 60000;
+
 /**
  * Tells whether a normalized Seerr item is an anime. Anime routing only
  * applies to TV series — movies are never flagged. A missing keywords list
@@ -174,7 +180,7 @@ export function getSeerrRequestActions(item, context = {}) {
 /**
  * State shown by the small icon in the top-right corner of a Seerr card.
  * @param {Object} item - Item produced by normalizeSeerrItem
- * @returns {'requested'|'partial'|'available'|null}
+ * @returns {'downloading'|'requested'|'partial'|'available'|null}
  */
 export function seerrCardState(item) {
     if (!item || item._seerrStatus === undefined || item._seerrStatus === null) return null;
@@ -182,6 +188,8 @@ export function seerrCardState(item) {
     const isPartial = status === SEERR_STATUS.PARTIALLY_AVAILABLE;
     const isAvailable = status === SEERR_STATUS.AVAILABLE;
 
+    // Like Seerr, a running download wins over every other state (even AVAILABLE, e.g. a 4K copy)
+    if (Array.isArray(item._downloads) && item._downloads.length > 0) return 'downloading';
     if (
         status === SEERR_STATUS.PENDING ||
         status === SEERR_STATUS.PROCESSING ||
@@ -192,6 +200,142 @@ export function seerrCardState(item) {
     if (isPartial) return 'partial';
     if (isAvailable) return 'available';
     return null;
+}
+
+// ============================================================================
+// Download Progress
+// ============================================================================
+
+/**
+ * Parses the *arr "timeLeft" duration ('00:18:30' or '1.02:00:00') into ms.
+ * @param {string} [timeLeft]
+ * @returns {number|null}
+ */
+function parseTimeLeft(timeLeft) {
+    if (!timeLeft || typeof timeLeft !== 'string') return null;
+    const match = /^(?:(\d+)\.)?(\d{1,2}):(\d{2}):(\d{2})/.exec(timeLeft.trim());
+    if (!match) return null;
+    const days = parseInt(match[1] || '0', 10);
+    const hours = parseInt(match[2], 10);
+    const minutes = parseInt(match[3], 10);
+    const seconds = parseInt(match[4], 10);
+    const ms = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+    return ms > 0 ? ms : null;
+}
+
+/**
+ * Converts one Seerr DownloadingItem into the shape the UI renders.
+ * @param {Object} raw
+ * @param {boolean} is4k
+ * @param {number} now
+ * @returns {Object|null}
+ */
+function normalizeDownload(raw, is4k, now) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const size = Number(raw.size) || 0;
+    const sizeLeft = Number(raw.sizeLeft) || 0;
+    // Same formula as Seerr's DownloadBlock: unknown size reads as 0%
+    const percent = size > 0 ? Math.min(100, Math.max(0, Math.round(((size - sizeLeft) / size) * 100))) : 0;
+
+    let etaMs = null;
+    if (raw.estimatedCompletionTime) {
+        const eta = new Date(raw.estimatedCompletionTime).getTime();
+        if (!isNaN(eta) && eta > now) etaMs = eta - now;
+    }
+    if (etaMs === null) etaMs = parseTimeLeft(raw.timeLeft);
+
+    const episode = raw.episode && typeof raw.episode === 'object' ? raw.episode : null;
+    const toNumber = (value) => (typeof value === 'number' && !isNaN(value) ? value : null);
+
+    return {
+        title: typeof raw.title === 'string' ? raw.title : '',
+        percent,
+        status: typeof raw.status === 'string' ? raw.status : '',
+        etaMs,
+        is4k,
+        season: episode ? toNumber(episode.seasonNumber) : null,
+        episode: episode ? toNumber(episode.episodeNumber) : null,
+        isSeasonPack: false,
+        _downloadId: raw.downloadId || ''
+    };
+}
+
+/**
+ * Extracts the active downloads Seerr attaches to a media entry
+ * (mediaInfo.downloadStatus / downloadStatus4k). Mirrors Seerr's own UI: when
+ * every entry of a list shares one downloadId it is a season pack, shown once.
+ * @param {Object|null} mediaInfo
+ * @param {number} [now] - Reference time in ms, injectable for tests
+ * @returns {Array<{title: string, percent: number, status: string, etaMs: number|null, is4k: boolean, season: number|null, episode: number|null, isSeasonPack: boolean}>}
+ */
+export function extractSeerrDownloads(mediaInfo, now = Date.now()) {
+    if (!mediaInfo || typeof mediaInfo !== 'object') return [];
+
+    const collect = (list, is4k) => {
+        if (!Array.isArray(list)) return [];
+        const items = list.map((raw) => normalizeDownload(raw, is4k, now)).filter(Boolean);
+        const isPack =
+            items.length > 1 && items.every((item) => item._downloadId && item._downloadId === items[0]._downloadId);
+        if (isPack) {
+            items[0].isSeasonPack = true;
+            items[0].episode = null;
+            return [items[0]];
+        }
+        return items;
+    };
+
+    return collect(mediaInfo.downloadStatus, false)
+        .concat(collect(mediaInfo.downloadStatus4k, true))
+        .map((item) => {
+            delete item._downloadId;
+            return item;
+        });
+}
+
+/**
+ * Splits a remaining duration into whole hours and minutes, rounded up so a
+ * running download never reads "0 min".
+ * @param {number|null} etaMs
+ * @returns {{hours: number, minutes: number}|null}
+ */
+export function splitSeerrEta(etaMs) {
+    if (typeof etaMs !== 'number' || isNaN(etaMs) || etaMs <= 0) return null;
+    const totalMinutes = Math.max(1, Math.ceil(etaMs / 60000));
+    return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
+}
+
+/**
+ * Poll cadence for the details page: fast while Seerr reports a running
+ * download, slow while an approved request waits for the downloader.
+ * @param {Object|null} item - Item produced by normalizeSeerrItem
+ * @returns {number} Delay in ms, or 0 when there is nothing to watch
+ */
+export function seerrDownloadPollDelay(item) {
+    if (!item) return 0;
+    if (Array.isArray(item._downloads) && item._downloads.length > 0) return SEERR_DOWNLOAD_POLL_ACTIVE_MS;
+    if (item._seerrStatus === SEERR_STATUS.PROCESSING) return SEERR_DOWNLOAD_POLL_IDLE_MS;
+    return 0;
+}
+
+/**
+ * What the status badge shows for a running download, mirroring Seerr's own
+ * badge: progress of the first download, an S1E3 / S1 tag and its ETA.
+ * Text is left to the caller so this module stays free of i18n.
+ * @param {Object|null} item - Item produced by normalizeSeerrItem
+ * @returns {{percent: number, episodeTag: string, eta: {hours: number, minutes: number}|null}|null}
+ */
+export function describeSeerrDownloadBadge(item) {
+    if (!item || !Array.isArray(item._downloads) || item._downloads.length === 0) return null;
+    const first = item._downloads[0];
+
+    let episodeTag = '';
+    if (item._mediaType === 'tv' && first.season !== null) {
+        episodeTag =
+            first.isSeasonPack || first.episode === null ? `S${first.season}` : `S${first.season}E${first.episode}`;
+    }
+
+    return { percent: first.percent, episodeTag, eta: splitSeerrEta(first.etaMs) };
 }
 
 /**
@@ -255,6 +399,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
         WatchProviders: Array.isArray(result.watchProviders) ? result.watchProviders : [],
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
+        _downloads: extractSeerrDownloads(result.mediaInfo),
         _jellyfinMediaId: (() => {
             const info = result.mediaInfo || {};
             return info.jellyfinMediaId || info.jellyfinMediaId4k || info.serviceId || info.externalServiceId || null;

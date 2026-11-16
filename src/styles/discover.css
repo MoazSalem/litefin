@@ -583,3 +583,70 @@ html[data-layout-media-rows="modern-posters"] .media-card.seerr-genre-card .card
     align-items: center;
     gap: 8px;
 }
+
+/* ========================================================================
+   Download progress (status badge fill + ETA, card spinner)
+   Mirrors the progress fill of Seerr's StatusBadge.
+   ======================================================================== */
+
+.seerr-details-status.is-downloading {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.seerr-status-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #00a4dc;
+    background: var(--jf-accent, #00a4dc);
+    opacity: 0.55;
+    transition: width 0.2s ease-in-out;
+}
+
+.seerr-status-label {
+    position: relative;
+    z-index: 1;
+}
+
+.seerr-status-spinner {
+    position: relative;
+    z-index: 1;
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    margin-left: 8px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    box-sizing: border-box;
+    -webkit-animation: rotation 1s linear infinite;
+    animation: rotation 1s linear infinite;
+}
+
+.seerr-card-icon--downloading svg {
+    width: 17px;
+    height: 17px;
+    -webkit-animation: rotation 1s linear infinite;
+    animation: rotation 1s linear infinite;
+}
+
+/* No spinning on constrained hardware: the icon and fill still convey the state */
+html[data-low-vram="true"] .seerr-status-spinner,
+html[data-layout-tier="legacy"] .seerr-status-spinner,
+html[data-layout-tier="ultra-legacy"] .seerr-status-spinner,
+html[data-low-vram="true"] .seerr-card-icon--downloading svg,
+html[data-layout-tier="legacy"] .seerr-card-icon--downloading svg,
+html[data-layout-tier="ultra-legacy"] .seerr-card-icon--downloading svg {
+    -webkit-animation: none !important;
+    animation: none !important;
+}
+
+html[data-low-vram="true"] .seerr-status-fill,
+html[data-layout-tier="legacy"] .seerr-status-fill,
+html[data-layout-tier="ultra-legacy"] .seerr-status-fill {
+    transition: none !important;
+}

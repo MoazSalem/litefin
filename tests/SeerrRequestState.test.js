@@ -13,7 +13,8 @@ import {
  * Unit Tests: Seerr Request State
  * ============================================================================
  * The rules shared by the Seerr details page, the request modal and the
- * card renderer: season coverage, request/cancel actions and card state.
+ * card renderer: season coverage, request/cancel actions and card state
+ * (including the running-download state).
  * ============================================================================
  */
 
@@ -61,7 +62,12 @@ test('request actions: who may request, who may cancel, and the button label', (
     );
 });
 
-test('card state: requested, partial, available', () => {
+test('card state: a running download wins, then requested, partial, available', () => {
+    const downloading = { percent: 0, season: 1, episode: 2, isSeasonPack: false, etaMs: null };
+    assert.equal(
+        seerrCardState(item({ _seerrStatus: SEERR_STATUS.AVAILABLE, _downloads: [downloading] })),
+        'downloading'
+    );
     assert.equal(seerrCardState(item({ _seerrStatus: SEERR_STATUS.PENDING })), 'requested');
     assert.equal(seerrCardState(item({ _seerrStatus: SEERR_STATUS.UNKNOWN, _requestId: 3 })), 'requested');
     assert.equal(seerrCardState(item({ _seerrStatus: SEERR_STATUS.PARTIALLY_AVAILABLE, _requestId: 3 })), 'partial');
