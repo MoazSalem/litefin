@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "Exportera och återställ appkonfiguration och inställningar",
     "SettingsDescControls": "Tangentbordsbindningar, fjärrkontrollsgenvägar och gester",
     "SettingsDescDebug": "Diagnostikloggar, lagringsanvändning och testverktyg",
+    "SettingsDescDetails": "Detaljsidelayouter, innehåll och sektionsynlighet",
     "SettingsDescHome": "Huvudkarusell, sektionsordning och radsynlighet",
     "SettingsDescLayout": "Skärmdensitet, mediekort, affischstilar och skalning",
     "SettingsDescLibraries": "Skanning av serverns mediebibliotek, uppdateringar och metadata",

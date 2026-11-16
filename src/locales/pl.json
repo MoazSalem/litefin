@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "Eksportuj i przywracaj konfigurację oraz preferencje aplikacji",
     "SettingsDescControls": "Przypisania klawiszy, skróty pilota i gesty",
     "SettingsDescDebug": "Dzienniki diagnostyczne, wykorzystanie pamięci i narzędzia testowe",
+    "SettingsDescDetails": "Układy strony szczegółów, treść i widoczność sekcji",
     "SettingsDescHome": "Karuzela główna, kolejność sekcji i widoczność wierszy",
     "SettingsDescLayout": "Zagęszczenie widoku, karty multimediów, style plakatów i skalowanie",
     "SettingsDescLibraries": "Skanowanie bibliotek serwera, odświeżanie i metadane",

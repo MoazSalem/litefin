@@ -44,6 +44,7 @@ import { SubtitlesTab } from './tabs/SubtitlesTab.js';
 import { PlayerTab } from './tabs/PlayerTab.js';
 import { LayoutTab } from './tabs/LayoutTab.js';
 import { OsdTab } from './tabs/OsdTab.js';
+import { DetailsTab } from './tabs/DetailsTab.js';
 import { AppearanceTab } from './tabs/AppearanceTab.js';
 import { getCustomCollectionsLabel } from './modals/CustomCollectionsModal.js';
 import { AudioFallbackModal } from './modals/AudioFallbackModal.js';
@@ -123,6 +124,7 @@ class SettingsPage extends Page {
         this.playerTab = typeof PlayerTab !== 'undefined' ? new PlayerTab(this) : null;
         this.layoutTab = typeof LayoutTab !== 'undefined' ? new LayoutTab(this) : null;
         this.osdTab = typeof OsdTab !== 'undefined' ? new OsdTab(this) : null;
+        this.detailsTab = typeof DetailsTab !== 'undefined' ? new DetailsTab(this) : null;
         this.appearanceTab = typeof AppearanceTab !== 'undefined' ? new AppearanceTab(this) : null;
         this.themeColorModal = typeof ThemeColorModal !== 'undefined' ? new ThemeColorModal(this) : null;
         this.loaderStyleModal = typeof LoaderStyleModal !== 'undefined' ? new LoaderStyleModal(this) : null;
@@ -271,6 +273,12 @@ class SettingsPage extends Page {
                 label: i18n.t('Home') || 'Home',
                 desc: i18n.t('SettingsDescHome') || 'Hero carousel, section ordering, and row visibility',
                 icon: settingsIcons.home
+            },
+            {
+                id: 'details',
+                label: i18n.t('DetailsPage') || 'Details Page',
+                desc: i18n.t('SettingsDescDetails') || 'Details page layouts, content, and section visibility',
+                icon: settingsIcons.details
             },
             {
                 id: 'sidebar',
@@ -459,6 +467,7 @@ class SettingsPage extends Page {
             appearance: this.appearanceTab,
             layout: this.layoutTab,
             osd: this.osdTab,
+            details: this.detailsTab,
             home: this.homeTab,
             sidebar: this.sidebarTab,
             player: this.playerTab,
@@ -487,6 +496,9 @@ class SettingsPage extends Page {
     }
     _renderOsdTab() {
         return this.osdTab ? this.osdTab.render() : '';
+    }
+    _renderDetailsTab() {
+        return this.detailsTab ? this.detailsTab.render() : '';
     }
     _renderHomeTab() {
         return this.homeTab ? this.homeTab.render() : '';
@@ -693,6 +705,7 @@ class SettingsPage extends Page {
             appearance: this.appearanceTab,
             layout: this.layoutTab,
             osd: this.osdTab,
+            details: this.detailsTab,
             home: this.homeTab,
             sidebar: this.sidebarTab,
             player: this.playerTab,

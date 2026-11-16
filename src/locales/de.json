@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "App-Konfiguration und Einstellungen exportieren und wiederherstellen",
     "SettingsDescControls": "Tastaturbelegungen, Fernbedienungskürzel und Gesten",
     "SettingsDescDebug": "Diagnoseprotokolle, Speicherplatzbelegung und Testwerkzeuge",
+    "SettingsDescDetails": "Detailseiten-Layouts, Inhalte und Sichtbarkeit von Abschnitten",
     "SettingsDescHome": "Hero-Karussell, Bereichsreihenfolge und Zeilensichtbarkeit",
     "SettingsDescLayout": "Anzeigedichte, Medienkarten, Posterstile und Skalierung",
     "SettingsDescLibraries": "Server-Medienbibliotheksscans, Aktualisierungen und Metadaten",

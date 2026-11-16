@@ -104,8 +104,6 @@ export class ControlsTab {
                     ${i18n.t('ControlsTabDescription') || 'Map physical remote buttons, mouse cursor behavior, and navigation gestures.'}
                 </p>
 
-                <h3 class="setting-section-title" data-i18n="AppBehavior">${i18n.t('AppBehavior')}</h3>
-
                 <!-- Confirm App Exit Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">

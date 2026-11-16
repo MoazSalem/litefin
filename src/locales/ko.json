@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "앱 설정 및 환경설정 내보내기 및 복원",
     "SettingsDescControls": "키보드 매핑, 리모컨 단축키 및 제스처",
     "SettingsDescDebug": "진단 로그, 스토리지 사용 내역 및 테스트 도구",
+    "SettingsDescDetails": "상세 페이지 레이아웃, 콘텐츠 및 섹션 표시 여부",
     "SettingsDescHome": "히어로 캐러셀, 섹션 순서 및 행 표시 여부",
     "SettingsDescLayout": "표시 밀도, 미디어 카드, 포스터 스타일 및 크기 조절",
     "SettingsDescLibraries": "서버 미디어 라이브러리 검사, 새로고침 및 메타데이터",

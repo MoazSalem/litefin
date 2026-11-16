@@ -943,6 +943,50 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'ControlsTab must no longer render player OSD overlay toggles'
     );
 
+    // Extracted Details tab must own all details-page settings; LayoutTab must not render them
+    const detailsSource = read('src/pages/settings/tabs/DetailsTab.js');
+    for (const detailsId of [
+        'details-layout-select',
+        'season-episode-details-layout-select',
+        'episode-layout-select',
+        'score-visibility-select',
+        'details-title-style-select',
+        'details-overview-max-lines-select',
+        'toggle-details-always-show-see-more',
+        'toggle-hide-ghost-mode',
+        'show-action-tooltips-select',
+        'toggle-hide-original-title',
+        'toggle-mdb-awards',
+        'show-dates-select',
+        'rich-metadata-select',
+        'toggle-hide-next-up-section',
+        'toggle-hide-cast-section',
+        'toggle-hide-similar-section',
+        'toggle-show-watch-providers',
+        'toggle-show-seerr-recommendations',
+        'watch-provider-region-select'
+    ]) {
+        assert.ok(detailsSource.includes(detailsId), `DetailsTab must own the ${detailsId} control`);
+    }
+    assert.ok(
+        detailsSource.includes("storage.getItem('pref:detailsLayout')"),
+        'DetailsTab must compute layout-dependent title-style visibility'
+    );
+    assert.ok(
+        detailsSource.includes('static getActionTooltipsMode()'),
+        'DetailsTab must own the Action Tooltips mode resolver'
+    );
+    const layoutTabSource = read('src/pages/settings/tabs/LayoutTab.js');
+    assert.ok(
+        !layoutTabSource.includes('details-layout-select') &&
+            !layoutTabSource.includes('details-title-style-select') &&
+            !layoutTabSource.includes('episode-layout-select') &&
+            !layoutTabSource.includes('toggle-mdb-awards') &&
+            !layoutTabSource.includes('watch-provider-region-select') &&
+            !layoutTabSource.includes('getActionTooltipsMode'),
+        'LayoutTab must no longer render details-page settings'
+    );
+
     // mount() appends .appearance-deferred-chunk across frames, binds scoped controls, invalidates focus
     const mountBody = sliceBetween(appearanceSource, 'mount(root) {', '_bindListeners(scope, rootContainer) {');
     assert.ok(mountBody.includes('appearance-deferred-chunk'), 'mount() must isolate chunks inside wrapper nodes');

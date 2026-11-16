@@ -3,7 +3,7 @@ export const availableLanguages = [
     {
         "value": "de",
         "label": "Deutsch",
-        "completeness": 96.77
+        "completeness": 96.78
     },
     {
         "value": "en-us",
@@ -23,7 +23,7 @@ export const availableLanguages = [
     {
         "value": "hr",
         "label": "Hrvatski",
-        "completeness": 98.75
+        "completeness": 98.76
     },
     {
         "value": "it",
@@ -63,17 +63,17 @@ export const availableLanguages = [
     {
         "value": "vi",
         "label": "Tiếng Việt",
-        "completeness": 99.26
+        "completeness": 99.27
     },
     {
         "value": "tr",
         "label": "Türkçe",
-        "completeness": 98.75
+        "completeness": 98.76
     },
     {
         "value": "bg-bg",
         "label": "Български (България)",
-        "completeness": 99.26
+        "completeness": 99.27
     },
     {
         "value": "ru",
@@ -88,7 +88,7 @@ export const availableLanguages = [
     {
         "value": "uk",
         "label": "Українська",
-        "completeness": 99.09
+        "completeness": 99.1
     },
     {
         "value": "ar",
@@ -128,11 +128,11 @@ export const availableLanguages = [
     {
         "value": "ja",
         "label": "日本語",
-        "completeness": 98.92
+        "completeness": 98.93
     },
     {
         "value": "en-gb",
         "label": "English - British",
-        "completeness": 6.28
+        "completeness": 6.27
     }
 ];

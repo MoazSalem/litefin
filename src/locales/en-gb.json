@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "Export and restore your app configuration and preferences",
     "SettingsDescControls": "Keyboard bindings, remote shortcuts, and gestures",
     "SettingsDescDebug": "Diagnostic logs, storage usage breakdown, and testing tools",
+    "SettingsDescDetails": "Details page layouts, content, and section visibility",
     "SettingsDescHome": "Hero carousel, section ordering, and row visibility",
     "SettingsDescLayout": "Display density, media cards, poster styles, and scaling",
     "SettingsDescLibraries": "Server media library scanning, refreshes, and metadata",

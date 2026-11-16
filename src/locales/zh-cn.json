@@ -1434,6 +1434,7 @@
     "SettingsDescBackup": "导出和恢复应用配置及首选项",
     "SettingsDescControls": "键盘绑定、遥控器快捷键和手势",
     "SettingsDescDebug": "诊断日志、存储占用明细和测试工具",
+    "SettingsDescDetails": "详情页布局、内容和区块可见性",
     "SettingsDescHome": "焦点轮播、版块排序和行显示设置",
     "SettingsDescLayout": "显示密度、媒体卡片、海报样式和缩放",
     "SettingsDescLibraries": "服务器媒体库扫描、刷新和元数据",
