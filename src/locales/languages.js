@@ -28,7 +28,7 @@ export const availableLanguages = [
     {
         "value": "it",
         "label": "Italiano",
-        "completeness": 97.73
+        "completeness": 97.74
     },
     {
         "value": "hu",
@@ -48,7 +48,7 @@ export const availableLanguages = [
     {
         "value": "pt-br",
         "label": "Português (Brasil)",
-        "completeness": 98.07
+        "completeness": 98.08
     },
     {
         "value": "ro",
@@ -133,6 +133,6 @@ export const availableLanguages = [
     {
         "value": "en-gb",
         "label": "English - British",
-        "completeness": 6.29
+        "completeness": 6.28
     }
 ];

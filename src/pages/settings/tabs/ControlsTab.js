@@ -9,7 +9,7 @@
  */
 
 import { storage } from '../../../utils/StorageService.js';
-import { PlayerSettings } from '../../../utils/PlayerSettings.js';
+
 import { i18n } from '../../../utils/i18n.js';
 import { logger } from '../../../utils/Logger.js';
 
@@ -78,10 +78,7 @@ export class ControlsTab {
         const showProfilesOnResume = storage.getItem('pref:showProfilesOnResume') === 'true';
         const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
 
-        // Read player gesture and pointer settings
-        const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
-        const enableScreenLockEnabled = PlayerSettings.get('enableScreenLock');
-        const hoverTrickplayEnabled = PlayerSettings.get('enableHoverTrickplay');
+        // Read library focus preference
         const focusFirstItemEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
         // Read current physical remote button assignments
@@ -142,39 +139,6 @@ export class ControlsTab {
                     </div>
                 </div>
 
-                <!-- Pointer Emulation Cursor Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnablePlayerCursor">${i18n.t('EnablePlayerCursor') || 'Enable Player Cursor'}</span>
-                        <span class="setting-description" data-i18n="EnablePlayerCursorDescription">${i18n.t('EnablePlayerCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${magicCursorEnabled ? 'active' : ''}" id="toggle-magic-cursor" data-setting="enableMagicCursor" tabindex="0"></button>
-                    </div>
-                </div>
-
-                <!-- Screen Lock in Player Overlay -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableScreenLock">${i18n.t('EnableScreenLock') || 'Playback Screen Lock'}</span>
-                        <span class="setting-description" data-i18n="EnableScreenLockDescription">${i18n.t('EnableScreenLockDescription') || 'Enable a screen and input lock button in the player overlay.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${enableScreenLockEnabled ? 'active' : ''}" id="toggle-enable-screen-lock" data-setting="enableScreenLock" tabindex="0"></button>
-                    </div>
-                </div>
-
-                <!-- Hover Trickplay Preview Frame Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
-                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${hoverTrickplayEnabled ? 'active' : ''}" id="toggle-hover-trickplay" data-setting="enableHoverTrickplay" tabindex="0"></button>
-                    </div>
-                </div>
-                
                 <!-- Smart Library Initial Focus Management Target -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -251,9 +215,7 @@ export class ControlsTab {
         this._unbindListeners();
 
         const root =
-            container ||
-            (this.page && typeof this.page.$ === 'function' ? this.page.element : null) ||
-            document;
+            container || (this.page && typeof this.page.$ === 'function' ? this.page.element : null) || document;
 
         // Toggle Confirm App Exit
         const confirmExitToggle = root.querySelector('#toggle-confirm-exit');
@@ -290,39 +252,6 @@ export class ControlsTab {
                 storage.setItem('pref:focusFirstItemLibrary', nextState.toString());
                 focusFirstItemBtn.classList.toggle('active', nextState);
                 log.info(`Focus First Item in Library set to: ${nextState}`);
-            });
-        }
-
-        // Toggle Switch for Magic Cursor
-        const magicCursorToggle = root.querySelector('#toggle-magic-cursor');
-        if (magicCursorToggle) {
-            this._addListener(magicCursorToggle, 'click', () => {
-                const nextState = !PlayerSettings.get('enableMagicCursor');
-                PlayerSettings.set('enableMagicCursor', nextState);
-                magicCursorToggle.classList.toggle('active', nextState);
-                log.info(`Magic Cursor set to: ${nextState}`);
-            });
-        }
-
-        // Toggle Switch for Playback Screen Lock
-        const enableScreenLockToggle = root.querySelector('#toggle-enable-screen-lock');
-        if (enableScreenLockToggle) {
-            this._addListener(enableScreenLockToggle, 'click', () => {
-                const nextState = !PlayerSettings.get('enableScreenLock');
-                PlayerSettings.set('enableScreenLock', nextState);
-                enableScreenLockToggle.classList.toggle('active', nextState);
-                log.info(`Playback Screen Lock set to: ${nextState}`);
-            });
-        }
-
-        // Toggle Switch for Hover Trickplay
-        const hoverTrickplayToggle = root.querySelector('#toggle-hover-trickplay');
-        if (hoverTrickplayToggle) {
-            this._addListener(hoverTrickplayToggle, 'click', () => {
-                const nextState = !PlayerSettings.get('enableHoverTrickplay');
-                PlayerSettings.set('enableHoverTrickplay', nextState);
-                hoverTrickplayToggle.classList.toggle('active', nextState);
-                log.info(`Hover Trickplay set to: ${nextState}`);
             });
         }
     }

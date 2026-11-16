@@ -48,18 +48,12 @@ test('HeroCarousel: goTo() is a pure class toggle (no preload / BlurHash work)',
     const source = read('src/ui/HeroCarousel.js');
     const goToBody = sliceBetween(source, 'goTo(index) {', '_onItemClick() {');
 
-    assert.ok(
-        !goToBody.includes('_preloadSlide('),
-        'goTo() must not start image preloads during the transition frame'
-    );
+    assert.ok(!goToBody.includes('_preloadSlide('), 'goTo() must not start image preloads during the transition frame');
     assert.ok(
         !goToBody.includes('_decodeBlurhashFill('),
         'goTo() must not synchronously decode BlurHash during the transition frame'
     );
-    assert.ok(
-        goToBody.includes('this._scheduleIdlePreload('),
-        'goTo() must defer the next preload sweep to idle'
-    );
+    assert.ok(goToBody.includes('this._scheduleIdlePreload('), 'goTo() must defer the next preload sweep to idle');
     assert.ok(
         !goToBody.includes('style.visibility') && !goToBody.includes('willChange'),
         'goTo() must strictly toggle classes without visibility or willChange style mutations'
@@ -83,10 +77,7 @@ test('HeroCarousel: slide preloads are deduplicated and idle-scheduled', () => {
         !preloadBody.includes('_decodeBlurhashFill('),
         '_preloadSlide must not decode BlurHash (idle sweep owns that work)'
     );
-    assert.ok(
-        preloadBody.includes('typeof img.decode ==='),
-        'Backdrop commit must use img.decode() before painting'
-    );
+    assert.ok(preloadBody.includes('typeof img.decode ==='), 'Backdrop commit must use img.decode() before painting');
 
     const sweepBody = sliceBetween(source, '_scheduleIdlePreload(delay = 800) {', 'next() {');
     assert.ok(sweepBody.includes('idleGate.runWhenIdle('), 'Preload sweep must run through idleGate');
@@ -94,10 +85,7 @@ test('HeroCarousel: slide preloads are deduplicated and idle-scheduled', () => {
         sweepBody.includes('this._currentIndex - 1') && sweepBody.includes('this._currentIndex + 2'),
         'Preload sweep must cover the sliding previous/next window'
     );
-    assert.ok(
-        sweepBody.includes('this._preloadSlide(i)'),
-        'Preload sweep must preload the window slides'
-    );
+    assert.ok(sweepBody.includes('this._preloadSlide(i)'), 'Preload sweep must preload the window slides');
 
     const destroyBody = sliceBetween(source, 'destroy() {', '_decodeBlurhashFill(itemElement)');
     assert.ok(
@@ -118,10 +106,7 @@ test('HeroCarousel: BlurHash fill decode is deferred during transitions/scroll',
         decodeBody.includes("canvas.dataset.decodeDeferred = '1'"),
         'BlurHash fill must requeue instead of decoding mid-transition'
     );
-    assert.ok(
-        decodeBody.includes('idleGate.runWhenIdle('),
-        'BlurHash fill requeue must go through the idle gate'
-    );
+    assert.ok(decodeBody.includes('idleGate.runWhenIdle('), 'BlurHash fill requeue must go through the idle gate');
 });
 
 // ============================================================================
@@ -169,7 +154,7 @@ test('ScrollController: row/viewport metrics are cached, not read per keypress',
         'Metric cache must invalidate on layout preference changes'
     );
     assert.ok(
-        source.includes('window.addEventListener(\'resize\', () => this.invalidateMetrics());'),
+        source.includes("window.addEventListener('resize', () => this.invalidateMetrics());"),
         'Metric cache must invalidate on viewport resize'
     );
 
@@ -183,10 +168,7 @@ test('ScrollController: row/viewport metrics are cached, not read per keypress',
 test('VirtualCardRow: unchanged sliding windows short-circuit _updateWindow', () => {
     const source = read('src/components/VirtualCardRow.js');
 
-    assert.ok(
-        source.includes('this._renderedRange = null;'),
-        'Rendered range must be tracked from the constructor'
-    );
+    assert.ok(source.includes('this._renderedRange = null;'), 'Rendered range must be tracked from the constructor');
 
     const updateBody = sliceBetween(source, '_updateWindow(centerIndex) {', 'focusClosestToX(documentX) {');
     assert.ok(
@@ -212,10 +194,7 @@ test('LazyLoader: focus handling avoids redundant work on virtual cards', () => 
     );
 
     const focusBody = sliceBetween(source, "eventBus.on('focus:changed', (target) => {", '_checkTextMarquee(');
-    assert.ok(
-        focusBody.includes('target.dataset.virtualIndex !== undefined'),
-        'VirtualCardRow cards must be detected'
-    );
+    assert.ok(focusBody.includes('target.dataset.virtualIndex !== undefined'), 'VirtualCardRow cards must be detected');
     assert.ok(
         focusBody.includes('if (!isVirtualCard) {'),
         'Sibling batch preloading must be skipped for virtual cards'
@@ -229,11 +208,7 @@ test('LazyLoader: focus handling avoids redundant work on virtual cards', () => 
 test('HomePage: deferred batch cache work runs in one deduplicated idle task', () => {
     const source = read('src/pages/HomePage.js');
 
-    const loadBody = sliceBetween(
-        source,
-        'async _loadNextDeferredBatch(',
-        '_scheduleDeferredBatchCacheRefresh() {'
-    );
+    const loadBody = sliceBetween(source, 'async _loadNextDeferredBatch(', '_scheduleDeferredBatchCacheRefresh() {');
     assert.ok(
         !loadBody.includes('this._savePageCache()'),
         '_loadNextDeferredBatch must not serialize the page cache synchronously'
@@ -247,15 +222,8 @@ test('HomePage: deferred batch cache work runs in one deduplicated idle task', (
         '_loadNextDeferredBatch must defer cache work'
     );
 
-    const cacheBody = sliceBetween(
-        source,
-        '_scheduleDeferredBatchCacheRefresh() {',
-        '_setupHomeScrollObserver() {'
-    );
-    assert.ok(
-        cacheBody.includes('if (this._deferredCacheTask) return;'),
-        'Cache refresh must be deduplicated'
-    );
+    const cacheBody = sliceBetween(source, '_scheduleDeferredBatchCacheRefresh() {', '_setupHomeScrollObserver() {');
+    assert.ok(cacheBody.includes('if (this._deferredCacheTask) return;'), 'Cache refresh must be deduplicated');
     assert.ok(cacheBody.includes('idleGate.runWhenIdle('), 'Cache refresh must run through idleGate');
     assert.ok(cacheBody.includes('2000'), 'Cache refresh must require a 2000ms quiet window');
     assert.ok(cacheBody.includes('this._prewarmScrollCache();'), 'Idle task must prewarm the scroll cache');
@@ -271,11 +239,7 @@ test('HomePage: deferred batch cache work runs in one deduplicated idle task', (
 test('HomePage: deferred batch follow-up uses a 350ms idle threshold', () => {
     // Read HomePage source to verify deferred batch follow-up scheduling
     const source = read('src/pages/HomePage.js');
-    const followupBody = sliceBetween(
-        source,
-        '_scheduleDeferredBatchFollowup() {',
-        '_relinkAdjacentSections('
-    );
+    const followupBody = sliceBetween(source, '_scheduleDeferredBatchFollowup() {', '_relinkAdjacentSections(');
 
     // Follow-up prefetch uses snappy 350ms quiet threshold to ensure continuous row loading
     assert.ok(
@@ -283,8 +247,7 @@ test('HomePage: deferred batch follow-up uses a 350ms idle threshold', () => {
         'Follow-up prefetch must require 350ms of quiet'
     );
     assert.ok(
-        followupBody.includes('scrollController.isAnimating') ||
-            followupBody.includes('DEFERRED_BATCH_MIN_SPACING_MS'),
+        followupBody.includes('scrollController.isAnimating') || followupBody.includes('DEFERRED_BATCH_MIN_SPACING_MS'),
         'Follow-up must keep the animation/spacing guard'
     );
 });
@@ -308,7 +271,8 @@ test('HomePage: row image pre-warming is gated behind idleGate and cancelled on 
 
     const destroyBody = sliceBetween(source, 'onDestroyed() {', '_scheduleDeferredBatchCacheRefresh');
     assert.ok(
-        destroyBody.includes('this._rowPrewarmTasks') && destroyBody.includes('idleGate.cancel(this._rowPrewarmTasks[i])'),
+        destroyBody.includes('this._rowPrewarmTasks') &&
+            destroyBody.includes('idleGate.cancel(this._rowPrewarmTasks[i])'),
         'onDestroyed() must cancel every pending row prewarm idle task'
     );
 });
@@ -342,13 +306,20 @@ test('SettingsPage: focus registration is idempotent and cultures update in plac
 
     const refreshBody = sliceBetween(source, '_refreshCultureOptions() {', '_getFontDropdownOptions(');
     assert.ok(refreshBody.includes("this.$('#subtitle-lang-select-btn')"), 'Refresh must target the language button');
-    assert.ok(refreshBody.includes('btn.dataset.options = JSON.stringify(options)'), 'Options must be updated in place');
+    assert.ok(
+        refreshBody.includes('btn.dataset.options = JSON.stringify(options)'),
+        'Options must be updated in place'
+    );
     assert.ok(refreshBody.includes('.btn-label'), 'Selected label must be updated in place');
 });
 
 test('Page: registerFocusSection tracks each section only once', () => {
     const source = read('src/pages/Page.js');
-    const registerBody = sliceBetween(source, 'registerFocusSection(name, container, options = {}) {', 'unregisterFocusSection(name) {');
+    const registerBody = sliceBetween(
+        source,
+        'registerFocusSection(name, container, options = {}) {',
+        'unregisterFocusSection(name) {'
+    );
 
     assert.ok(
         registerBody.includes('this._focusSections.indexOf(name) === -1'),
@@ -434,10 +405,7 @@ test('SpatialNavigator: caches container-relative bounds across D-pad moves and 
     const secondNext = nav.findNext(btn2, candidates, 'down', container);
     assert.equal(secondNext, btn3, 'Cached Down move after scrollTop change must advance to btn3');
     assert.equal(elementRectReads, 0, 'Subsequent D-pad steps must trigger zero per-element layout reads');
-    assert.ok(
-        containerRectReads <= 2,
-        `Expected at most 2 container rect reads per step, got ${containerRectReads}`
-    );
+    assert.ok(containerRectReads <= 2, `Expected at most 2 container rect reads per step, got ${containerRectReads}`);
 
     // Step 3: findClosest must also hit the populated container cache without measuring candidates
     elementRectReads = 0;
@@ -498,7 +466,12 @@ test('SpatialNavigator: memoizes setting-item row focusable counts per findNext 
     let row2Queries = 0;
 
     // Row 1 holds 2 focusables (>1), forcing row2 counts to be evaluated for alignment
-    const row1Focusable = { disabled: false, style: {}, classList: { contains: () => false }, hasAttribute: () => false };
+    const row1Focusable = {
+        disabled: false,
+        style: {},
+        classList: { contains: () => false },
+        hasAttribute: () => false
+    };
     const row1 = {
         querySelectorAll() {
             row1Queries++;
@@ -507,7 +480,12 @@ test('SpatialNavigator: memoizes setting-item row focusable counts per findNext 
     };
 
     // Row 2 holds 3 candidate buttons sharing the same row container
-    const row2Focusable = { disabled: false, style: {}, classList: { contains: () => false }, hasAttribute: () => false };
+    const row2Focusable = {
+        disabled: false,
+        style: {},
+        classList: { contains: () => false },
+        hasAttribute: () => false
+    };
     const row2 = {
         querySelectorAll() {
             row2Queries++;
@@ -590,7 +568,11 @@ test('FocusManager: eliminates getComputedStyle reflows, guards blur(), and forw
         '_move() must pass config.container into SpatialNavigator.findNext'
     );
 
-    const restoreBody = sliceBetween(source, '_restoreFocus(sectionName, fromElement = null, options = {}) {', '_activate() {');
+    const restoreBody = sliceBetween(
+        source,
+        '_restoreFocus(sectionName, fromElement = null, options = {}) {',
+        '_activate() {'
+    );
     assert.ok(
         restoreBody.includes('this._spatial.findClosest(fromElement, focusables, config.container)'),
         '_restoreFocus() must pass config.container into SpatialNavigator.findClosest'
@@ -908,16 +890,58 @@ test('AppearanceTab, DropdownDispatcher & Slider: progressively mount deferred s
         'AppearanceTab.render() must exclude deferred sections from initial innerHTML parse'
     );
 
-    // All four progressive chunk renderers + combined helper must be present
+    // All progressive chunk renderers + combined helper must be present
+    // (the Player OSD section was extracted into tabs/OsdTab.js)
     for (const methodName of [
         '_renderTimeAndScreensaverSections()',
         '_renderThemeSection()',
-        '_renderOsdSection()',
         '_renderExtraAndWolSections()',
         '_renderDeferredSections()'
     ]) {
         assert.ok(appearanceSource.includes(methodName), `AppearanceTab must define ${methodName}`);
     }
+
+    // Extracted OSD tab must own all OSD settings and wire its toggles
+    const osdSource = read('src/pages/settings/tabs/OsdTab.js');
+    for (const osdId of [
+        'osd-layout-select',
+        'osd-buttons-location-select',
+        'osd-gradient-opacity',
+        'toggle-osd-hide-favorite',
+        'osd-focus-mode-select',
+        'toggle-ok-show-osd-only',
+        'toggle-magic-cursor',
+        'toggle-enable-screen-lock',
+        'toggle-hover-trickplay',
+        'osd-hdr-darker-white-toggle',
+        'toggle-osd-show-logo',
+        'osd-logo-size-select',
+        'osd-track-menu-bg-opacity',
+        'osd-button-style-select',
+        'osd-seekbar-progress-color-select'
+    ]) {
+        assert.ok(osdSource.includes(osdId), `OsdTab must own the ${osdId} control`);
+    }
+    assert.ok(
+        osdSource.includes('PlayerSettings.set(settingKey, nextVal)'),
+        'OsdTab must wire PlayerSettings-backed toggle switches'
+    );
+    assert.ok(
+        !appearanceSource.includes('osd-layout-select') && !appearanceSource.includes('osd-button-style-select'),
+        'AppearanceTab must no longer render OSD settings'
+    );
+    const playerTabSource = read('src/pages/settings/tabs/PlayerTab.js');
+    assert.ok(
+        !playerTabSource.includes('osd-focus-mode-select') && !playerTabSource.includes('toggle-ok-show-osd-only'),
+        'PlayerTab must no longer render OSD settings'
+    );
+    const controlsTabSource = read('src/pages/settings/tabs/ControlsTab.js');
+    assert.ok(
+        !controlsTabSource.includes('toggle-magic-cursor') &&
+            !controlsTabSource.includes('toggle-enable-screen-lock') &&
+            !controlsTabSource.includes('toggle-hover-trickplay'),
+        'ControlsTab must no longer render player OSD overlay toggles'
+    );
 
     // mount() appends .appearance-deferred-chunk across frames, binds scoped controls, invalidates focus
     const mountBody = sliceBetween(appearanceSource, 'mount(root) {', '_bindListeners(scope, rootContainer) {');
@@ -1035,8 +1059,12 @@ test('LazyLoader: moves post-scroll marquee/BlurHash work out of 50ms finish win
         'focus:changed must short-circuit .marquee-active DOM queries when no marquee is active'
     );
     assert.ok(
-        initBody.includes('if (!this._isScrolling()) {\n                            this._batchPreloadImages(preloadTarget);') ||
-            initBody.includes('if (!this._isScrolling()) {\r\n                            this._batchPreloadImages(preloadTarget);'),
+        initBody.includes(
+            'if (!this._isScrolling()) {\n                            this._batchPreloadImages(preloadTarget);'
+        ) ||
+            initBody.includes(
+                'if (!this._isScrolling()) {\r\n                            this._batchPreloadImages(preloadTarget);'
+            ),
         'focus:changed rAF preload must skip sibling DOM walks while scrolling is active'
     );
 });

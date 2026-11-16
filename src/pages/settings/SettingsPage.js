@@ -43,6 +43,7 @@ import { SidebarTab } from './tabs/SidebarTab.js';
 import { SubtitlesTab } from './tabs/SubtitlesTab.js';
 import { PlayerTab } from './tabs/PlayerTab.js';
 import { LayoutTab } from './tabs/LayoutTab.js';
+import { OsdTab } from './tabs/OsdTab.js';
 import { AppearanceTab } from './tabs/AppearanceTab.js';
 import { getCustomCollectionsLabel } from './modals/CustomCollectionsModal.js';
 import { AudioFallbackModal } from './modals/AudioFallbackModal.js';
@@ -121,6 +122,7 @@ class SettingsPage extends Page {
         this.subtitlesTab = typeof SubtitlesTab !== 'undefined' ? new SubtitlesTab(this) : null;
         this.playerTab = typeof PlayerTab !== 'undefined' ? new PlayerTab(this) : null;
         this.layoutTab = typeof LayoutTab !== 'undefined' ? new LayoutTab(this) : null;
+        this.osdTab = typeof OsdTab !== 'undefined' ? new OsdTab(this) : null;
         this.appearanceTab = typeof AppearanceTab !== 'undefined' ? new AppearanceTab(this) : null;
         this.themeColorModal = typeof ThemeColorModal !== 'undefined' ? new ThemeColorModal(this) : null;
         this.loaderStyleModal = typeof LoaderStyleModal !== 'undefined' ? new LoaderStyleModal(this) : null;
@@ -275,6 +277,12 @@ class SettingsPage extends Page {
                 label: i18n.t('Sidebar') || 'Sidebar',
                 desc: i18n.t('SettingsDescSidebar') || 'Sidebar display modes, collapsed behavior, and shortcuts',
                 icon: settingsIcons.sidebar
+            },
+            {
+                id: 'osd',
+                label: i18n.t('PlayerOsd') || 'Player OSD',
+                desc: i18n.t('SettingsDescOsd') || 'Player overlay layout, buttons, and styling',
+                icon: settingsIcons.osd
             },
             {
                 id: 'player',
@@ -450,6 +458,7 @@ class SettingsPage extends Page {
         const tabControllers = {
             appearance: this.appearanceTab,
             layout: this.layoutTab,
+            osd: this.osdTab,
             home: this.homeTab,
             sidebar: this.sidebarTab,
             player: this.playerTab,
@@ -475,6 +484,9 @@ class SettingsPage extends Page {
     }
     _renderLayoutTab() {
         return this.layoutTab ? this.layoutTab.render() : '';
+    }
+    _renderOsdTab() {
+        return this.osdTab ? this.osdTab.render() : '';
     }
     _renderHomeTab() {
         return this.homeTab ? this.homeTab.render() : '';
@@ -680,6 +692,7 @@ class SettingsPage extends Page {
         const tabControllers = {
             appearance: this.appearanceTab,
             layout: this.layoutTab,
+            osd: this.osdTab,
             home: this.homeTab,
             sidebar: this.sidebarTab,
             player: this.playerTab,
