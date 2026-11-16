@@ -3,7 +3,7 @@ name: Bug report
 about: Create a report to help us improve Litefin
 title: '[BUG] Bug title'
 labels: bug
-assignees: MoazSalem
+assignees: ''
 ---
 
 **Priority**: (1-10)

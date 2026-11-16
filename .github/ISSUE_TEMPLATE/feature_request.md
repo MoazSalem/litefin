@@ -3,7 +3,7 @@ name: Feature request
 about: Suggest an idea or improvement for Litefin
 title: '[FEAT] Feature title'
 labels: enhancement
-assignees: MoazSalem
+assignees: ''
 ---
 
 **Target Platform(s)**
