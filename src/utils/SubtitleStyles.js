@@ -512,6 +512,15 @@ export function getWindowStyles() {
     const styles = [];
     const posSetting = PlayerSettings.get('subtitleVerticalPosition');
 
+    /* -----------------------------------------------------------------
+       Stacking context and opacity normalization:
+       Elevate the subtitle container overlay above the OSD gradient
+       overlay (z-index: 100) so that shifted subtitles retain full
+       luminance and unattenuated contrast during active playback.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'zIndex', value: '150' });
+    styles.push({ name: 'opacity', value: '1' });
+
     if (posSetting === 'custom') {
         const customPos = PlayerSettings.get('subtitleVerticalPositionCustom') ?? 10;
         styles.push({ name: 'top', value: '' });
@@ -602,6 +611,15 @@ export function getSecondaryTextStyles(isHdr = false) {
 export function getSecondaryWindowStyles() {
     const styles = [];
     const posSetting = PlayerSettings.get('secondarySubtitleVerticalPosition') || 'custom';
+
+    /* -----------------------------------------------------------------
+       Stacking context and opacity normalization:
+       Elevate the secondary subtitle container overlay above the OSD
+       gradient overlay (z-index: 100) so that shifted subtitles retain
+       full luminance and unattenuated contrast during active playback.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'zIndex', value: '150' });
+    styles.push({ name: 'opacity', value: '1' });
 
     /*
      * ========================================================================

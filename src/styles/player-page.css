@@ -599,7 +599,12 @@ html[data-light-music-player="true"] .audio-subtitle {
     left: 10%;
     right: 10%;
     text-align: center;
-    z-index: 40;
+    /*
+     * Elevate subtitle overlay above OSD controls and background gradient (100)
+     * while staying safely below interactive overlay modals (1000+).
+     * Maintains full contrast and luminance without obscuring controls.
+     */
+    z-index: 150;
     pointer-events: none;
 
     /*
@@ -766,6 +771,33 @@ html[data-light-music-player="true"] .audio-subtitle {
 }
 
 /* ==========================================================================
+ * Dynamic Subtitle Shift Luminance & Opacity Protection
+ * ==========================================================================
+ * When on-screen playback controls become active, the OSD container renders
+ * a semi-transparent dark gradient backdrop (z-index: 100) across the bottom.
+ *
+ * To guarantee that shifted text subtitles maintain pristine luminance,
+ * clear white hue, and high contrast against the active playback controls,
+ * the subtitle overlay containers are elevated to z-index: 150 and explicitly
+ * pinned to full 1.0 opacity. This completely prevents the OSD gradient from
+ * dimming or graying out the text.
+ * ========================================================================== */
+.player-page.osd-active .subtitle-overlay,
+.player-page.osd-active .subtitle-overlay.secondary,
+.player-container.osd-active ~ .subtitle-overlay,
+.player-container.osd-active ~ .subtitle-overlay.secondary {
+    z-index: 150 !important;
+    opacity: 1 !important;
+}
+
+.player-page.osd-active .subtitle-overlay .subtitle-line,
+.player-page.osd-active .subtitle-overlay.secondary .subtitle-line,
+.player-container.osd-active ~ .subtitle-overlay .subtitle-line,
+.player-container.osd-active ~ .subtitle-overlay.secondary .subtitle-line {
+    opacity: 1 !important;
+}
+
+/* ==========================================================================
  * MOBILE & TOUCH RESPONSIVE SUBTITLE SCALING
  * Ensures subtitle cue frames and bounding boxes scale naturally on phone
  * and tablet screens without overflowing or obscuring the video viewport.
@@ -866,8 +898,8 @@ html[data-layout-tier="ultra-legacy"] .subtitle-overlay {
     left: 10% !important;
     right: 10% !important;
     width: auto !important;
-    /* Elevate above video (0) and below OSD (100) */
-    z-index: 50 !important;
+    /* Elevate above video (0) and OSD background gradient (100) */
+    z-index: 150 !important;
     pointer-events: none !important;
     text-align: center !important;
     -webkit-transform-origin: bottom center !important;
