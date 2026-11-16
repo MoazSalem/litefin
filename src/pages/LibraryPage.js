@@ -489,6 +489,35 @@ class LibraryPage extends Page {
             this.state.viewType = decodeURIComponent(tabParam);
         }
 
+        // ====================================================================
+        // PERSISTED ROUTE FILTERS REHYDRATION
+        // ====================================================================
+        // When paginating or navigating via deep link with attached query filters,
+        // restore state.filters from the route parameter so active filter subsets
+        // (such as Unplayed, Genres, Parental Ratings, etc.) are preserved
+        // across pages without reverting back to unfiltered defaults.
+        // ====================================================================
+        if (this.params.filters) {
+            try {
+                // Handle both direct JSON strings and URI-encoded query strings
+                let parsedRouteFilters = this.params.filters;
+                if (typeof parsedRouteFilters === 'string') {
+                    try {
+                        parsedRouteFilters = JSON.parse(parsedRouteFilters);
+                    } catch {
+                        parsedRouteFilters = JSON.parse(decodeURIComponent(parsedRouteFilters));
+                    }
+                }
+
+                // Merge deserialized filters into existing page state
+                if (parsedRouteFilters && typeof parsedRouteFilters === 'object') {
+                    this.state.filters = Object.assign(this.state.filters || {}, parsedRouteFilters);
+                }
+            } catch (e) {
+                log.error('Failed to parse route filters parameter', e);
+            }
+        }
+
         if (this.params.page) {
             const pageNum = parseInt(this.params.page, 10);
             if (!isNaN(pageNum) && pageNum > 0) {
@@ -1240,6 +1269,16 @@ class LibraryPage extends Page {
         if (tab) parts.push(`tab:${tab}`);
         if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
         if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
+        // --------------------------------------------------------------------
+        // Filter partition: isolate cached memory snapshots by active filters
+        // so unfiltered library pages and filtered subsets never collide.
+        // --------------------------------------------------------------------
+        const filterStr =
+            this.params.filters ||
+            (this.state?.filters && Object.keys(this.state.filters).length > 0
+                ? JSON.stringify(this.state.filters)
+                : null);
+        if (filterStr) parts.push(`filters:${filterStr}`);
         // Fall back to state.nameStartsWith if route params have not been synced yet
         const char = this.params.char || this.state?.nameStartsWith;
         if (char) parts.push(`char:${char}`);
@@ -2851,7 +2890,9 @@ class LibraryPage extends Page {
     _loadPersistedFilters() {
         // Skip sub-views (genre, studio, tag pages, etc.) to prevent overriding
         // their specific query parameters with the general library filters.
-        if (this._isSubView()) {
+        // Also skip when filters are explicitly supplied by route parameters
+        // (e.g. during pagination or deep link queries) to prevent overwriting.
+        if (this._isSubView() || (this.params.filters && Object.keys(this.state.filters || {}).length > 0)) {
             return;
         }
 
@@ -4929,6 +4970,9 @@ class LibraryPage extends Page {
         if (this.params.char) {
             delete this.params.char;
         }
+        if (this.params.filters) {
+            delete this.params.filters;
+        }
         if (newType && newType !== 'Items') {
             this.params.tab = newType;
         } else {
@@ -6019,8 +6063,13 @@ class LibraryPage extends Page {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
-            if (this.params.genreId || this.params.genre)
-                currentParams.set('genreId', this.params.genreId || this.params.genre);
+            // Preserve Seerr filter selections across pages
+            const activeGenre = this.state.filters?.genre || this.params.genreId || this.params.genre;
+            if (activeGenre) currentParams.set('genreId', activeGenre);
+            const activeLang = this.state.filters?.language || this.params.language;
+            if (activeLang) currentParams.set('language', activeLang);
+            const activeCert = this.state.filters?.certification || this.params.certification;
+            if (activeCert) currentParams.set('certification', activeCert);
             if (this.params.studioId || this.params.studio)
                 currentParams.set('studioId', this.params.studioId || this.params.studio);
             if (this.params.networkId || this.params.network)
@@ -6073,6 +6122,21 @@ class LibraryPage extends Page {
         } else {
             currentParams.delete('tab');
             currentParams.delete('viewType');
+        }
+
+        // ====================================================================
+        // ACTIVE FILTERS PRESERVATION ACROSS PAGES
+        // ====================================================================
+        // When paginating with active filters (e.g. Unplayed, Genres, Ratings),
+        // serialize and transmit state.filters in currentParams so the target
+        // page request preserves all filter constraints rather than reverting
+        // back to unfiltered defaults.
+        // ====================================================================
+        const activeFilters = this.state.filters;
+        if (activeFilters && typeof activeFilters === 'object' && Object.keys(activeFilters).length > 0) {
+            currentParams.set('filters', JSON.stringify(activeFilters));
+        } else {
+            currentParams.delete('filters');
         }
 
         // Apply updated target page
@@ -6163,6 +6227,14 @@ class LibraryPage extends Page {
         this.state.filters = {};
         this.state.nameStartsWith = null;
         this.state.startIndex = 0;
+
+        // Clear active route parameters associated with filters and pagination
+        delete this.params.filters;
+        delete this.params.page;
+        delete this.params.char;
+
+        // Evict cached pages for this library so stale filtered snapshots are not reused
+        state.clearByPrefix(`library:state:${this.state.libraryId}`);
 
         // ------------------------------------------------------------------
         // Persist the clean state to local storage.
@@ -7352,6 +7424,13 @@ class LibraryPage extends Page {
         this.$('#btn-filter-clear').addEventListener('click', () => {
             this.state.filters = {};
 
+            // Clear in-memory route filter and page parameters
+            delete this.params.filters;
+            delete this.params.page;
+
+            // Invalidate cached memory pages for this library so stale pages are purged
+            state.clearByPrefix(`library:state:${this.state.libraryId}`);
+
             // ------------------------------------------------------------------
             // Remove the persisted filter configuration since user cleared all.
             // ------------------------------------------------------------------
@@ -7365,6 +7444,19 @@ class LibraryPage extends Page {
 
         this.$('#btn-filter-apply').addEventListener('click', async () => {
             this.state.startIndex = 0;
+
+            // Reset page parameter on applying new filter set
+            delete this.params.page;
+
+            // Synchronize active filters to route parameters
+            if (this.state.filters && Object.keys(this.state.filters).length > 0) {
+                this.params.filters = JSON.stringify(this.state.filters);
+            } else {
+                delete this.params.filters;
+            }
+
+            // Invalidate cached memory pages for this library so stale snapshots are purged
+            state.clearByPrefix(`library:state:${this.state.libraryId}`);
 
             // ------------------------------------------------------------------
             // Persist the newly selected filters.
