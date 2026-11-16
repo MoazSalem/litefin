@@ -3281,37 +3281,27 @@ class PlayerPage extends Page {
             log.warn('[PlaybackWatchdog] Buffering stalled for 3.5s, checking network health...');
 
             // ----------------------------------------------------------------
-            // 1. Explicit OS/Browser Offline Verification
-            // ----------------------------------------------------------------
-            // Check if the TV browser engine reports that network is truly down.
-            // Notice: We specifically avoid checking WebSocket connectivity here
-            // because HTTP/HTTPS video delivery runs completely out-of-band.
-            const isNavigatorOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-
-            if (isNavigatorOffline) {
-                log.warn('[PlaybackWatchdog] Offline status confirmed during stall. Starting auto-recovery.');
-                this._startAutoRecovery({
-                    isNetworkError: true,
-                    message: 'Playback stalled while offline'
-                });
-                return;
-            }
-
-            // ----------------------------------------------------------------
-            // 2. Real HTTP Connectivity Probe to Jellyfin Server
+            // Real HTTP Connectivity Probe to Jellyfin Server
             // ----------------------------------------------------------------
             // Perform an active, lightweight HTTP ping directly against the Jellyfin
             // server. If the server answers, we know the pipe is open and the stall
             // is merely a standard buffer fetch in progress.
+            // Note: navigator.onLine is deliberately avoided here because embedded
+            // TV browser engines (such as WebOS WAM and Tizen) frequently report false
+            // even while actively connected and streaming over LAN/WAN.
             try {
+                // Initialize abort controller with 2.5s timeout for fast response
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2500);
                 const pingUrl = `${api.serverUrl}/System/Ping`;
-                // Attach configured custom reverse proxy headers (e.g. Cloudflare Service Tokens)
+
+                // Attach configured custom reverse proxy headers if defined
                 const pingHeaders =
                     typeof customHeaders !== 'undefined' && customHeaders && typeof customHeaders.getHeadersForUrl === 'function'
                         ? customHeaders.getHeadersForUrl(pingUrl, api.serverUrl)
                         : {};
+
+                // Execute lightweight GET request directly to server ping endpoint
                 const response = await fetch(pingUrl, {
                     method: 'GET',
                     headers: pingHeaders,
@@ -3320,11 +3310,13 @@ class PlayerPage extends Page {
                 });
                 clearTimeout(timeoutId);
 
+                // Check for successful HTTP status code
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
                 log.info('[PlaybackWatchdog] Server ping succeeded during stall; waiting for stream buffer to resume.');
             } catch (err) {
+                // Handle ping failure or network timeout
                 log.warn('[PlaybackWatchdog] Server ping check failed during stall:', err.message);
                 if (!this._isAutoRecovering && !this._isPaused && !this._isExiting) {
                     this._startAutoRecovery({
@@ -3357,7 +3349,7 @@ class PlayerPage extends Page {
      * ========================================================================
      * @private
      */
-    _handleNetworkOffline() {
+    async _handleNetworkOffline() {
         log.warn('[AutoRecovery] Network offline event detected from window.offline');
         const currentPosTicks = this._player?.getCurrentPositionTicks?.() || this._resumePosition || 0;
 
@@ -3368,11 +3360,50 @@ class PlayerPage extends Page {
             !this._isExiting &&
             (this._hasReportedStart || currentPosTicks > 0)
         ) {
-            log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
-            this._startAutoRecovery({
-                isNetworkError: true,
-                message: 'Network offline'
-            });
+            // ----------------------------------------------------------------
+            // Active Server Probe Prior to Tear-Down
+            // ----------------------------------------------------------------
+            // A window 'offline' event can fire if external WAN connectivity drops,
+            // even while the local LAN connection to a local Jellyfin server is intact.
+            // Ping the server directly to verify if the stream endpoint is truly down.
+            try {
+                // Short 1.5-second timeout for quick probe
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const pingUrl = `${api.serverUrl}/System/Ping`;
+
+                // Retrieve configured custom proxy headers if present
+                const pingHeaders =
+                    typeof customHeaders !== 'undefined' && customHeaders && typeof customHeaders.getHeadersForUrl === 'function'
+                        ? customHeaders.getHeadersForUrl(pingUrl, api.serverUrl)
+                        : {};
+
+                // Execute probe request
+                const res = await fetch(pingUrl, {
+                    method: 'GET',
+                    headers: pingHeaders,
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                clearTimeout(timeoutId);
+
+                // If server is reachable, do not interrupt active playback
+                if (res.ok) {
+                    log.info('[AutoRecovery] Server is reachable despite window.offline event; keeping playback active.');
+                    return;
+                }
+            } catch (e) {
+                // Connection failed - server is genuinely unreachable
+            }
+
+            // Engage auto-recovery if still unrecovered and playing
+            if (!this._isAutoRecovering && !this._isPaused && !this._isExiting) {
+                log.info('[AutoRecovery] Engaging immediate auto-recovery from network loss event');
+                this._startAutoRecovery({
+                    isNetworkError: true,
+                    message: 'Network offline'
+                });
+            }
         }
     }
 
