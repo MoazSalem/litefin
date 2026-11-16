@@ -9,6 +9,10 @@
 
 // Page-scoped styles - loads with this module's chunk instead of the boot bundle
 import '../styles/discover.css';
+// Own the shared details layout (backdrop, hero, meta rows) instead of relying
+// on DetailsPage having loaded it: a direct reload into a Seerr page otherwise
+// renders unstyled until the details chunk is prefetched in idle time.
+import '../styles/details.css';
 
 import Page from './Page.js';
 import DescriptionModal from '../components/DescriptionModal.js';
