@@ -127,6 +127,14 @@ export class TizenAVPlayer {
         // Tracks the actively selected internal Tizen TEXT track index
         this._activeTizenSubtitleIndex = null;
 
+        // Tracks the actively selected internal Tizen AUDIO track index.
+        // Stored in player state to allow re-asserting or unsticking the audio
+        // decoder pipeline when Samsung AVPlay drops or desyncs the audio stream during seek.
+        this._activeTizenAudioIndex = null;
+
+        // Flag indicating whether active audio track re-assertion is pending playback stabilization
+        this._pendingAudioTrackReassert = false;
+
         // Subtitle offset in seconds (applied via AVPlay's native API)
         this._subtitleOffset = 0;
 
@@ -1226,6 +1234,51 @@ export class TizenAVPlayer {
                 this._bufferingComplete = true;
                 this._isNativeBuffering = false;
 
+                // ─────────────────────────────────────────────────────────────
+                // Hardware Stream Descriptors Inspection
+                // ─────────────────────────────────────────────────────────────
+                // Query and log active hardware stream descriptors on buffering complete.
+                // Exposes post-seek pipeline state, dropped audio entries, or index desyncs.
+                try {
+                    const currentStreams = (typeof this._avplay?.getCurrentStreamInfo === 'function')
+                        ? this._avplay.getCurrentStreamInfo()
+                        : (window.webapis?.avplay?.getCurrentStreamInfo ? window.webapis.avplay.getCurrentStreamInfo() : null);
+                    log.info('[onbufferingcomplete] webapis.avplay.getCurrentStreamInfo():', currentStreams);
+
+                    // Auto-detect initial native audio track index if not explicitly selected
+                    if (this._activeTizenAudioIndex === null && Array.isArray(currentStreams)) {
+                        const audioStream = currentStreams.find(
+                            (s) => s && s.type && s.type.toUpperCase() === 'AUDIO'
+                        );
+                        if (audioStream && typeof audioStream.index !== 'undefined') {
+                            this._activeTizenAudioIndex = Number(audioStream.index);
+                            log.info(`[onbufferingcomplete] Auto-detected active native AUDIO track index: ${this._activeTizenAudioIndex}`);
+                        }
+                    }
+                } catch (streamErr) {
+                    log.debug('[onbufferingcomplete] Failed to query getCurrentStreamInfo():', streamErr);
+                }
+
+                // Fall back to first available audio track if still untracked
+                if (this._activeTizenAudioIndex === null && this._avplay && typeof this._avplay.getTotalTrackInfo === 'function') {
+                    try {
+                        const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                        const audioTracks = totalTracks.filter(
+                            (t) => t && t.type && t.type.toUpperCase() === 'AUDIO'
+                        );
+                        if (audioTracks.length > 0 && typeof audioTracks[0].index !== 'undefined') {
+                            this._activeTizenAudioIndex = Number(audioTracks[0].index);
+                            log.info(`[onbufferingcomplete] Defaulted active native AUDIO track index: ${this._activeTizenAudioIndex}`);
+                        }
+                    } catch (_) { }
+                }
+
+                // If audio track re-assertion was deferred pending buffer completion, execute it now
+                if (this._pendingAudioTrackReassert && !this._seekInProgress) {
+                    this._pendingAudioTrackReassert = false;
+                    this._assertActiveAudioTrack();
+                }
+
                 // Track transition point: Buffer is full but clock hasn't started yet.
                 // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
                 // they remain pending and get picked up by oncurrentplaytime.
@@ -1555,6 +1608,8 @@ export class TizenAVPlayer {
                 if (tizenAudioIndex !== null) {
                     try {
                         this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                        // Record active native audio track index in player state
+                        this._activeTizenAudioIndex = tizenAudioIndex;
                         this._pendingAudioIndex = null;
                     } catch (e) {
                         if (e.name === 'InvalidStateError' || e.code === 11) {
@@ -1942,6 +1997,12 @@ export class TizenAVPlayer {
                 // tick causes audio to leak for half a second behind the loading screen.
                 this._emitPlaying();
 
+                // If audio track re-assertion was deferred pending PLAYING state, execute it now
+                if (this._pendingAudioTrackReassert && !this._seekInProgress) {
+                    this._pendingAudioTrackReassert = false;
+                    this._assertActiveAudioTrack();
+                }
+
                 // IMPROVEMENT E: Eager seek on forced path.
                 //
                 // When _forceTizenPlayPassed is true, the safety timeout bypassed
@@ -2121,16 +2182,33 @@ export class TizenAVPlayer {
                     // Exposes exact landing accuracy vs keyframe boundaries and execution duration.
                     log.info(`[SeekTelemetry] target=${requestedMs}ms before=${beforeMs}ms landed=${landedMs}ms delta=${deltaMs}ms (took ${durationMs}ms)`);
 
+                    // ─────────────────────────────────────────────────────────────
+                    // Post-Seek Stream Descriptors Diagnostics
+                    // ─────────────────────────────────────────────────────────────
+                    // Log webapis.avplay.getCurrentStreamInfo() immediately on seek completion.
+                    // Verifies whether native demuxer dropped the audio descriptor, altered track indices,
+                    // or left the audio pipeline stalled after buffer flush.
+                    try {
+                        const currentStreams = (typeof this._avplay?.getCurrentStreamInfo === 'function')
+                            ? this._avplay.getCurrentStreamInfo()
+                            : (window.webapis?.avplay?.getCurrentStreamInfo ? window.webapis.avplay.getCurrentStreamInfo() : null);
+                        log.info('[SeekTelemetry] webapis.avplay.getCurrentStreamInfo():', currentStreams);
+                    } catch (streamErr) {
+                        log.warn('[SeekTelemetry] Failed to query getCurrentStreamInfo() post-seek:', streamErr);
+                    }
+
                     // Update authoritative presentation time immediately upon hardware seek landing
                     const actualMs = (typeof landedMs === 'number' && !isNaN(landedMs) && landedMs >= 0)
                         ? landedMs
                         : requestedMs;
                     this._currentTimeSec = actualMs / 1000;
 
-                    // Re-assert active subtitle track only if no further seek is queued or actively running.
+                    // Re-assert active subtitle and audio tracks only if no further seek is queued or actively running.
                     // Doing so while another seek is pending causes illegal concurrent AVPlay API invocations.
                     if (this._queuedSeekPositionMs === null && !this._seekInProgress) {
                         this._assertActiveSubtitleTrack();
+                        // Re-assert and unstick active audio track once seekTo succeeds and AVPlay reaches READY or PLAYING
+                        this._assertActiveAudioTrack();
                     }
 
                     if (onSuccess) onSuccess(landedMs);
@@ -2323,6 +2401,121 @@ export class TizenAVPlayer {
             log.debug('Post-seek subtitle track re-asserted:', this._activeTizenSubtitleIndex);
         } catch (e) {
             log.warn('Post-seek subtitle re-assertion failed:', e);
+        }
+    }
+
+    /**
+     * Re-assert active native AUDIO track after a seek completes.
+     *
+     * On Samsung Tizen AVPlay, demuxer buffer flushes during seekTo() frequently result in:
+     * 1. The AUDIO stream descriptor disappearing completely from webapis.avplay.getCurrentStreamInfo().
+     * 2. The active audio track index silently resetting to track 0 (default/alternate language).
+     * 3. The audio stream remaining listed with its original index, but the native decoding
+     *    pipeline freezing into a silent/stalled state.
+     *
+     * Once AVPlay lands in READY or PLAYING state:
+     * - If the audio track is missing or switched, re-assert setSelectTrack('AUDIO', targetIndex).
+     * - If already on that index, briefly toggle via an alternate audio track (if available)
+     *   or re-apply the track selection to kick the hardware decoder pipeline back to life.
+     *
+     * @private
+     */
+    _assertActiveAudioTrack() {
+        // Validate player readiness and active hardware instance
+        if (!this._avplay || !this._isPrepared) return;
+
+        // Ensure we have a recorded active native audio track index
+        if (this._activeTizenAudioIndex === null || this._activeTizenAudioIndex === undefined) return;
+
+        // Avoid touching track selection while subsequent seeks are pending or queued
+        if (this._seekInProgress || this._queuedSeekPositionMs !== null || this._queuedSeekTimerId !== null) return;
+
+        // Verify native AVPlay state — must be in READY, PLAYING, or PAUSED
+        let avplayState = 'UNKNOWN';
+        try {
+            avplayState = this._avplay.getState();
+        } catch (_) { }
+
+        // Gated on READY or PLAYING (or PAUSED) state
+        if (avplayState !== 'READY' && avplayState !== 'PLAYING' && avplayState !== 'PAUSED') {
+            log.debug(`[AudioTrackAssert] Deferred — AVPlay state is '${avplayState}', not READY or PLAYING`);
+            this._pendingAudioTrackReassert = true;
+            return;
+        }
+
+        const targetIndex = Number(this._activeTizenAudioIndex);
+
+        try {
+            // Retrieve current stream info from native AVPlay hardware
+            let currentStreams = null;
+            if (typeof this._avplay.getCurrentStreamInfo === 'function') {
+                try {
+                    currentStreams = this._avplay.getCurrentStreamInfo();
+                } catch (streamErr) {
+                    log.debug('[AudioTrackAssert] getCurrentStreamInfo query failed:', streamErr);
+                }
+            }
+
+            // Locate active audio stream descriptor in the returned hardware array
+            let currentAudioStream = null;
+            if (Array.isArray(currentStreams)) {
+                currentAudioStream = currentStreams.find(
+                    (s) => s && s.type && s.type.toUpperCase() === 'AUDIO'
+                );
+            }
+
+            // Extract the active audio track index reported by AVPlay
+            const currentAudioIndex = currentAudioStream && typeof currentAudioStream.index !== 'undefined'
+                ? Number(currentAudioStream.index)
+                : null;
+
+            log.info(`[AudioTrackAssert] Target index=${targetIndex}, current reported index=${currentAudioIndex}, state=${avplayState}`);
+
+            // Query total available tracks to determine if an alternative track exists for toggling
+            let totalTracks = [];
+            try {
+                if (typeof this._avplay.getTotalTrackInfo === 'function') {
+                    totalTracks = this._avplay.getTotalTrackInfo() || [];
+                }
+            } catch (_) { }
+
+            // Filter down to available AUDIO descriptors
+            const audioTracks = totalTracks.filter(
+                (t) => t && t.type && t.type.toUpperCase() === 'AUDIO'
+            );
+
+            // If AVPlay still reports the target index, the decoder pipeline may be stalled:
+            // Briefly toggle via an alternate audio track or re-apply the track to kick the decoder
+            if (currentAudioIndex === targetIndex) {
+                const altTrack = audioTracks.find((t) => Number(t.index) !== targetIndex);
+                if (altTrack) {
+                    log.info(`[AudioTrackAssert] Audio already on index ${targetIndex} — briefly toggling via track ${altTrack.index} to unstall decoder pipeline`);
+                    try {
+                        this._avplay.setSelectTrack('AUDIO', Number(altTrack.index));
+                    } catch (toggleErr) {
+                        log.debug('[AudioTrackAssert] Temporary track toggle step failed:', toggleErr);
+                    }
+                } else {
+                    log.info(`[AudioTrackAssert] Audio already on index ${targetIndex} (single track) — re-applying track selection`);
+                }
+                this._avplay.setSelectTrack('AUDIO', targetIndex);
+            } else {
+                // Audio track is missing from stream info or switched to another index: re-assert selection
+                log.info(`[AudioTrackAssert] Audio desynced or missing (current=${currentAudioIndex}) — re-asserting AUDIO track ${targetIndex}`);
+                this._avplay.setSelectTrack('AUDIO', targetIndex);
+            }
+
+            this._activeTizenAudioIndex = targetIndex;
+            this._pendingAudioTrackReassert = false;
+            log.info(`[AudioTrackAssert] Successfully re-asserted AUDIO track index ${targetIndex}`);
+        } catch (e) {
+            // Handle state transition errors (e.g. HLS streams requiring PLAYING state)
+            if (e.name === 'InvalidStateError' || e.code === 11) {
+                log.debug(`[AudioTrackAssert] setSelectTrack failed with InvalidStateError in state '${avplayState}', deferring to PLAYING state`);
+                this._pendingAudioTrackReassert = true;
+            } else {
+                log.warn('[AudioTrackAssert] Failed to re-assert AUDIO track:', e);
+            }
         }
     }
 
@@ -2603,6 +2796,8 @@ export class TizenAVPlayer {
      */
     async _stopInternal() {
         this._activeTizenSubtitleIndex = null;
+        this._activeTizenAudioIndex = null;
+        this._pendingAudioTrackReassert = false;
 
         // ── Cancel all pending timeouts BEFORE touching AVPlay. ──────────────
         //
@@ -3289,6 +3484,10 @@ export class TizenAVPlayer {
                 log.debug(`Audio track Stream ${streamIndex} (list index ${listIndex}) deferred — seekInProgress=${this._seekInProgress}, state='${avplayState}'`);
                 this._pendingAudioIndex = streamIndex;
                 this._currentAudioStreamIndex = listIndex;
+                const deferredTizenIndex = this._findTizenAudioIndex(streamIndex);
+                if (deferredTizenIndex !== null) {
+                    this._activeTizenAudioIndex = deferredTizenIndex;
+                }
                 return;
             }
 
@@ -3297,6 +3496,7 @@ export class TizenAVPlayer {
             if (tizenAudioIndex !== null) {
                 this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                 this._currentAudioStreamIndex = listIndex;
+                this._activeTizenAudioIndex = tizenAudioIndex;
                 log.info(`TizenAVPlayer: Selected AUDIO list index ${listIndex} (Stream ${streamIndex}) → native Tizen index ${tizenAudioIndex}`);
             } else {
                 log.warn(`TizenAVPlayer: Could not find Tizen audio track for list index ${listIndex} (Stream ${streamIndex})`);
@@ -3838,6 +4038,14 @@ export class TizenAVPlayer {
      */
     getCurrentAudioStreamIndex() {
         return this._currentAudioStreamIndex;
+    }
+
+    /**
+     * Get active native Tizen AUDIO track index
+     * @returns {number|null}
+     */
+    getActiveTizenAudioIndex() {
+        return this._activeTizenAudioIndex;
     }
 
     /**

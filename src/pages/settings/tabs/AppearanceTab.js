@@ -135,53 +135,53 @@ export class AppearanceTab {
                 <p class="content-subtitle" data-i18n="DisplayTabDescription">${i18n.t('DisplayTabDescription') || 'Customize themes, accent colors, icons, interface scaling, and display behavior.'}</p>
 
                 ${this._item(
-                    i18n.t('LabelPreferredDisplayLanguage'),
-                    i18n.t('AppLanguageDescription'),
-                    this._drop('app-language-select', uiLanguages, storage.getItem('app_language') || 'en-us')
-                )}
+            i18n.t('LabelPreferredDisplayLanguage'),
+            i18n.t('AppLanguageDescription'),
+            this._drop('app-language-select', uiLanguages, storage.getItem('app_language') || 'en-us')
+        )}
 
                 ${this._item(
-                    i18n.t('FavoriteLanguages') || 'Favorite Languages',
-                    i18n.t('FavoriteLanguagesDescription') || 'Limit language dropdowns and media tracks across the app to your favorite languages.',
-                    `<button class="setting-action-btn select-btn" id="btn-manage-favorite-languages" tabindex="0" data-focusable="true"><span class="btn-label" id="favorite-languages-count-label">${favLabel}</span></button>`
-                )}
+            i18n.t('FavoriteLanguages') || 'Favorite Languages',
+            i18n.t('FavoriteLanguagesDescription') || 'Limit language dropdowns and media tracks across the app to your favorite languages.',
+            `<button class="setting-action-btn select-btn" id="btn-manage-favorite-languages" tabindex="0" data-focusable="true"><span class="btn-label" id="favorite-languages-count-label">${favLabel}</span></button>`
+        )}
 
                 ${this._item(
-                    i18n.t('DisplayScale') || 'Display Scale',
-                    i18n.t('DisplayScaleDescription') || 'Adjust overall interface scaling. "Auto" dynamically fits the layout to 1080p canvas proportions.',
-                    this._drop('display-scale-select', [{ value: 'auto', label: i18n.t('DisplayScaleAuto') || 'Auto (Fit 1080p)' }, { value: '0.67', label: '67%' }, { value: '0.75', label: '75%' }, { value: '0.8', label: '80%' }, { value: '0.85', label: '85%' }, { value: '0.9', label: '90%' }, { value: '0.95', label: '95%' }, { value: '1', label: '100% (Native / TV)' }, { value: '1.05', label: '105%' }, { value: '1.1', label: '110%' }, { value: '1.15', label: '115%' }, { value: '1.2', label: '120%' }], layoutManager.getDisplayScale().toString())
-                )}
+            i18n.t('DisplayScale') || 'Display Scale',
+            i18n.t('DisplayScaleDescription') || 'Adjust overall interface scaling. "Auto" dynamically fits the layout to 1080p canvas proportions.',
+            this._drop('display-scale-select', [{ value: 'auto', label: i18n.t('DisplayScaleAuto') || 'Auto (Fit 1080p)' }, { value: '0.67', label: '67%' }, { value: '0.75', label: '75%' }, { value: '0.8', label: '80%' }, { value: '0.85', label: '85%' }, { value: '0.9', label: '90%' }, { value: '0.95', label: '95%' }, { value: '1', label: '100% (Native / TV)' }, { value: '1.05', label: '105%' }, { value: '1.1', label: '110%' }, { value: '1.15', label: '115%' }, { value: '1.2', label: '120%' }], layoutManager.getDisplayScale().toString())
+        )}
 
                 ${platformInfo.isAndroid ? this._item(
-                    i18n.t('MobileFullscreen') || 'Fullscreen Mode',
-                    i18n.t('MobileFullscreenDescription') || 'Hide status and navigation bars on mobile devices for an edge-to-edge layout.',
-                    `<button class="toggle-switch ${androidAdapter.isMobileFullscreenEnabled() ? 'active' : ''}" id="toggle-mobile-fullscreen" tabindex="0" aria-label="${i18n.t('MobileFullscreen') || 'Fullscreen Mode'}"></button>`,
-                    { id: 'mobile-fullscreen-setting-item' }
-                ) : ''}
+            i18n.t('MobileFullscreen') || 'Fullscreen Mode',
+            i18n.t('MobileFullscreenDescription') || 'Hide status and navigation bars on mobile devices for an edge-to-edge layout.',
+            `<button class="toggle-switch ${androidAdapter.isMobileFullscreenEnabled() ? 'active' : ''}" id="toggle-mobile-fullscreen" tabindex="0" aria-label="${i18n.t('MobileFullscreen') || 'Fullscreen Mode'}"></button>`,
+            { id: 'mobile-fullscreen-setting-item' }
+        ) : ''}
 
                 ${this._item(
-                    i18n.t('TextScale') || 'Text scale',
-                    i18n.t('TextScaleDescription') || 'Adjust the size of all text and UI elements proportionally',
-                    this._drop('text-scale-select', [{ value: '0.8', label: '80%' }, { value: '0.85', label: '85%' }, { value: '0.9', label: '90%' }, { value: '0.95', label: '95%' }, { value: '1', label: 'Normal (100%)' }, { value: '1.05', label: '105%' }, { value: '1.1', label: '110%' }, { value: '1.15', label: '115%' }, { value: '1.2', label: '120%' }, { value: '1.25', label: '125%' }, { value: '1.3', label: '130%' }, { value: '1.35', label: '135%' }, { value: '1.4', label: '140%' }], layoutManager.getTextScale().toString())
-                )}
+            i18n.t('TextScale') || 'Text scale',
+            i18n.t('TextScaleDescription') || 'Adjust the size of all text and UI elements proportionally',
+            this._drop('text-scale-select', [{ value: '0.8', label: '80%' }, { value: '0.85', label: '85%' }, { value: '0.9', label: '90%' }, { value: '0.95', label: '95%' }, { value: '1', label: 'Normal (100%)' }, { value: '1.05', label: '105%' }, { value: '1.1', label: '110%' }, { value: '1.15', label: '115%' }, { value: '1.2', label: '120%' }, { value: '1.25', label: '125%' }, { value: '1.3', label: '130%' }, { value: '1.35', label: '135%' }, { value: '1.4', label: '140%' }], layoutManager.getTextScale().toString())
+        )}
 
                 ${this._item(
-                    i18n.t('LayoutDirection'),
-                    i18n.t('LayoutDirectionDescription'),
-                    this._drop('layout-direction-select', [{ value: 'auto', label: i18n.t('DirectionAuto', ['Auto']) }, { value: 'ltr', label: i18n.t('DirectionLTR', ['Left-to-Right']) }, { value: 'rtl', label: i18n.t('DirectionRTL', ['Right-to-Left']) }], storage.getItem('layout_direction') || 'auto')
-                )}
+            i18n.t('LayoutDirection'),
+            i18n.t('LayoutDirectionDescription'),
+            this._drop('layout-direction-select', [{ value: 'auto', label: i18n.t('DirectionAuto', ['Auto']) }, { value: 'ltr', label: i18n.t('DirectionLTR', ['Left-to-Right']) }, { value: 'rtl', label: i18n.t('DirectionRTL', ['Right-to-Left']) }], storage.getItem('layout_direction') || 'auto')
+        )}
 
                 ${this._item(
-                    i18n.t('AppFont'),
-                    i18n.t('AppFontDescription'),
-                    this._drop('ui-font-select', [{ value: 'poppins', label: i18n.t('ModernPoppins') }, { value: 'system', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') }, { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' }, { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') }, { value: 'roboto', label: i18n.t('FontRoboto') }, { value: 'google', label: i18n.t('FontGoogleSans') }, { value: 'typewriter', label: i18n.t('Typewriter') }, { value: 'print', label: i18n.t('Print') }, { value: 'console', label: i18n.t('Console') }, { value: 'cursive', label: i18n.t('Cursive') }, { value: 'casual', label: i18n.t('Casual') }, { value: 'smallcaps', label: i18n.t('SmallCaps') }, { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' }, { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }, { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' }, { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }, { value: 'inter', label: i18n.t('FontInter') || 'Inter' }, { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }, { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }, { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' }, { value: 'zen-kaku-gothic-new', label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New' }, { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' }, { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }, { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }], layoutManager.getUiFont())
-                )}
+            i18n.t('AppFont'),
+            i18n.t('AppFontDescription'),
+            this._drop('ui-font-select', [{ value: 'poppins', label: i18n.t('ModernPoppins') }, { value: 'system', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') }, { value: 'fallback-font', label: i18n.t('JellyfinFallbackFont') || 'Jellyfin Fallback Font' }, { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') }, { value: 'roboto', label: i18n.t('FontRoboto') }, { value: 'google', label: i18n.t('FontGoogleSans') }, { value: 'typewriter', label: i18n.t('Typewriter') }, { value: 'print', label: i18n.t('Print') }, { value: 'console', label: i18n.t('Console') }, { value: 'cursive', label: i18n.t('Cursive') }, { value: 'casual', label: i18n.t('Casual') }, { value: 'smallcaps', label: i18n.t('SmallCaps') }, { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' }, { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }, { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' }, { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }, { value: 'inter', label: i18n.t('FontInter') || 'Inter' }, { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }, { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }, { value: 'poiret-one', label: i18n.t('FontPoiretOne') || 'Poiret One' }, { value: 'zen-kaku-gothic-new', label: i18n.t('FontZenKakuGothicNew') || 'Zen Kaku Gothic New' }, { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' }, { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }, { value: 'manrope', label: i18n.t('FontManrope') || 'Manrope' }], layoutManager.getUiFont())
+        )}
 
                 ${this._item(
-                    i18n.t('JellyfinFallbackFontSelection') || 'Jellyfin Fallback Font File',
-                    i18n.t('JellyfinFallbackFontSelectionDescription') || 'Select which font file on the server to use as the fallback font',
-                    this._drop('jellyfin-fallback-font-select', [], storage.getItem('pref:jellyfinFallbackFont') || '')
-                )}
+            i18n.t('JellyfinFallbackFontSelection') || 'Jellyfin Fallback Font File',
+            i18n.t('JellyfinFallbackFontSelectionDescription') || 'Select which font file on the server to use as the fallback font',
+            this._drop('jellyfin-fallback-font-select', [], storage.getItem('pref:jellyfinFallbackFont') || '')
+        )}
 
                 ${this._item('Icon Style', 'Choose a visual style theme for icons across the app.', this._drop('icon-style-select', [{ value: 'default', label: 'Default' }, { value: 'material3', label: 'Material 3' }], storage.getItem('pref:iconStyle') || 'default'))}
                 ${this._item('Icon Variant Preference', 'Select whether icons should be outlined, filled, or change dynamically based on focus state.', this._drop('icon-variant-select', iconVariantOptions, activeIconVariant, false))}
@@ -351,9 +351,9 @@ export class AppearanceTab {
      */
     _renderDeferredSections() {
         return (
-            this._renderTimeAndScreensaverSections() +
             this._renderThemeSection() +
             this._renderOsdSection() +
+            this._renderTimeAndScreensaverSections() +
             this._renderExtraAndWolSections()
         );
     }
@@ -378,9 +378,9 @@ export class AppearanceTab {
         const deferredWrapper = container.querySelector('#appearance-deferred-sections');
         if (deferredWrapper && !deferredWrapper.hasChildNodes()) {
             const chunkRenderers = [
-                () => this._renderTimeAndScreensaverSections(),
                 () => this._renderThemeSection(),
                 () => this._renderOsdSection(),
+                () => this._renderTimeAndScreensaverSections(),
                 () => this._renderExtraAndWolSections()
             ];
             let chunkIndex = 0;
