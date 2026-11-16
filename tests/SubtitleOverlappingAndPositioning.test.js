@@ -330,6 +330,25 @@ test('PlayerPage: template includes #subtitle-top-overlay alongside #subtitle-ov
         /_renderPrimarySubtitles\(data,\s*isHdr\)/,
         'PlayerPage must implement _renderPrimarySubtitles'
     );
+
+    // Must implement _renderSecondarySubtitles for secondary stream cues
+    assert.match(
+        playerPageContent,
+        /_renderSecondarySubtitles\(data,\s*isHdr\)/,
+        'PlayerPage must implement _renderSecondarySubtitles'
+    );
+});
+
+test('PlayerPage: _renderSecondarySubtitles routes to #secondary-subtitle-overlay with isSecondary=true', () => {
+    // Read raw PlayerPage source code from file system
+    const playerPageContent = readFileSync(new URL('../src/pages/PlayerPage.js', import.meta.url), 'utf8');
+
+    // Verify _renderSecondarySubtitles targets secondary overlay and invokes _renderCuesIntoOverlay with isSecondary=true
+    assert.match(
+        playerPageContent,
+        /_renderSecondarySubtitles\(data,\s*isHdr\)\s*\{[\s\S]*?secondary-subtitle-overlay[\s\S]*?_renderCuesIntoOverlay\([^,]+,\s*cues,\s*isHdr,\s*true\)/,
+        '_renderSecondarySubtitles must target secondary-subtitle-overlay and pass isSecondary=true'
+    );
 });
 
 test('SubtitleManager: when subtitleOverlappingCues is false, skips overlapping cues during active cue', () => {

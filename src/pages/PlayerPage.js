@@ -3892,6 +3892,41 @@ class PlayerPage extends Page {
         }
     }
 
+    /**
+     * Renders active secondary subtitle cues into the secondary subtitle overlay.
+     * Inherits visual styles from the primary subtitle with secondary size overrides
+     * and stacks concurrent cues if multiple lines are active.
+     *
+     * @param {Object} data - Cue payload from SubtitleManager
+     * @param {boolean} isHdr - Media HDR status for opacity selection
+     * @private
+     */
+    _renderSecondarySubtitles(data, isHdr) {
+        // Resolve target secondary overlay element
+        const overlay = document.getElementById('secondary-subtitle-overlay');
+        if (!overlay) return;
+
+        // Extract cue array or construct single cue item
+        let cues = [];
+        if (data) {
+            if (Array.isArray(data.cues) && data.cues.length > 0) {
+                // Multi-cue array from tick interval collector
+                cues = data.cues;
+            } else if (data.text && typeof data.text === 'string' && data.text.trim().length > 0) {
+                // Fallback for direct text payload or legacy cue event
+                cues = [{
+                    text: data.text,
+                    position: data.position || 'top',
+                    duration: data.duration,
+                    endTicks: data.endTicks
+                }];
+            }
+        }
+
+        // Delegate to shared overlay cue rendering with isSecondary enabled
+        this._renderCuesIntoOverlay(overlay, cues, isHdr, true);
+    }
+
     _onSubtitleChange(data) {
         const bottomOverlay = document.getElementById('subtitle-overlay');
         const topOverlay = document.getElementById('subtitle-top-overlay');
