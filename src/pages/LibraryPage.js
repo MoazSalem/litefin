@@ -17,6 +17,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { animeMarkerService } from '../utils/AnimeMarkerService.js';
 import { imageService } from '../utils/ImageService.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -466,6 +467,26 @@ class LibraryPage extends Page {
         this._letterOffsetCache = new Map();
         this._letterOffsetCache.set('#', 0);
         this.state.libraryId = this.params.id;
+
+        // Auto-refresh library cards when series anime markers resolve in background
+        this._markerUnsub = animeMarkerService.onMarkersLoaded(() => {
+            if (this._isDestroyed) return;
+            const hasEpisodes =
+                this.state.viewType === 'Episodes' ||
+                this.state.items?.some((i) => i.Type === 'Episode');
+            if (hasEpisodes) {
+                CardRenderer.clearCache();
+                const grid = this.$('#library-grid');
+                if (grid && this.state.items?.length > 0) {
+                    const columns = this.state._gridColumns || 4;
+                    const currentRow =
+                        this._lastFocusItemIndex != null
+                            ? Math.floor(this._lastFocusItemIndex / columns)
+                            : (this._currentStartRow || 0);
+                    this._syncVirtualGrid(currentRow, this._lastFocusItemIndex);
+                }
+            }
+        });
 
         // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion, 'seerr' for Seerr discovery)
         const isVirtualLibrary = this.state.libraryId === 'all';
@@ -1890,7 +1911,8 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds,SortName',
+                // Include MediaSources, MediaStreams, Genres, Tags, SeriesId, and Path for accurate anime and audio badge evaluation
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb',
                 EnableTotalRecordCount: true
@@ -2562,8 +2584,9 @@ class LibraryPage extends Page {
                 this._updatePaginationUI();
                 return;
             } else if (viewType === 'Episodes') {
-                // Flattened episodes view
+                // Flattened episodes view: ensure SeriesId, MediaSources, and MediaStreams are requested
                 params.IncludeItemTypes = 'Episode';
+                params.Fields = 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId,SeriesName';
                 result = await api.getItems(params);
             } else if (viewType === 'Favorites') {
                 params.Filters = 'IsFavorite';
@@ -2626,6 +2649,15 @@ class LibraryPage extends Page {
             if (this.state.viewType === capturedViewType) {
                 this.state.items = result?.Items || [];
                 this.state.totalRecordCount = result?.TotalRecordCount || 0;
+
+                // Preload series anime markers for any episode items so badges render synchronously
+                const episodeItems = (this.state.items || []).filter((item) => item.Type === 'Episode' && item.SeriesId);
+                if (episodeItems.length > 0) {
+                    const uniqueSeriesIds = [...new Set(episodeItems.map((ep) => ep.SeriesId))];
+                    await Promise.all(
+                        uniqueSeriesIds.map((seriesId) => animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null))
+                    );
+                }
 
                 // Enrich individual playlist/collection items with Primary images from their contents
                 const collectionType = this.state.libraryInfo?.CollectionType;
@@ -5640,6 +5672,15 @@ class LibraryPage extends Page {
                 }
 
                 if (nextItems && nextItems.length > 0) {
+                    // Preload series anime markers for any newly fetched episode items
+                    const eps = nextItems.filter((i) => i.Type === 'Episode' && i.SeriesId);
+                    if (eps.length > 0) {
+                        const uniqueIds = [...new Set(eps.map((e) => e.SeriesId))];
+                        await Promise.all(
+                            uniqueIds.map((sId) => animeMarkerService.fetchSeriesMarkers(sId).catch(() => null))
+                        );
+                    }
+
                     this.state.items = this.state.items.concat(nextItems);
 
                     const collectionType = this.state.libraryInfo?.CollectionType;
@@ -7879,6 +7920,12 @@ class LibraryPage extends Page {
         if (this._preWarmedUrls) {
             this._preWarmedUrls.clear();
             this._preWarmedUrls = null;
+        }
+
+        // Unsubscribe from series marker load events
+        if (this._markerUnsub) {
+            this._markerUnsub();
+            this._markerUnsub = null;
         }
 
         super.onDestroyed?.();

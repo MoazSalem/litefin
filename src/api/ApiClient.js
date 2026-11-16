@@ -1422,8 +1422,8 @@ export class ApiClient {
             // Fetch items up to the user-selected row item limit
             Limit: defaultLimit,
             Recursive: true,
-            // Include Tags so game ROM items can be identified with platform badges and progress bar suppression
-            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
+            // Include SeriesId, MediaSources, and MediaStreams so anime marker and audio classification work accurately for Continue Watching
+            Fields: 'SeriesId,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -1710,7 +1710,8 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
+            // Include SeriesId, MediaSources, and MediaStreams for anime markers, filler resolution, and audio track badges
+            Fields: 'SeriesId,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -2033,7 +2034,8 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData',
+            // Include SeriesId, MediaSources, MediaStreams, Tags, and Genres for accurate anime marker and audio classification
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData,SeriesId,Tags,Genres',
             IsVirtualUnaired: false,
             IsMissing: false,
             Limit: 100,

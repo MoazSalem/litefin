@@ -326,19 +326,35 @@ html[data-media-rows-family="modern"][dir="rtl"] .favorite-badge {
     right: 22px;
 }
 
+html[data-media-rows-family="modern"][dir="rtl"] .card-anime-pills {
+    left: auto;
+    right: 22px;
+}
+
 html[data-media-rows-family="modern"][dir="rtl"] .version-badge ~ .favorite-badge,
-html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge ~ .favorite-badge {
+html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge ~ .favorite-badge,
+html[data-media-rows-family="modern"][dir="rtl"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"][dir="rtl"] .favorite-badge ~ .card-anime-pills {
     left: auto;
     right: 74px;
+}
+
+html[data-media-rows-family="modern"][dir="rtl"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"][dir="rtl"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: auto;
+    right: 126px;
 }
 
 /* RTL: Expanding layout expanded badges positioned above text */
 html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .version-badge,
 html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .media-source-count-badge,
 html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.landscape .card-anime-pills,
 html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .version-badge,
 html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .media-source-count-badge,
-html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .favorite-badge {
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .favorite-badge,
+html[data-layout-media-rows="expanding"][dir="rtl"] .media-card.square .card-anime-pills {
     left: auto;
     right: 30px;
 }

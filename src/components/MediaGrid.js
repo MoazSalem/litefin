@@ -39,6 +39,9 @@ class MediaGrid extends Component {
         // Callbacks
         this.onSeeMore = config.onSeeMore || null; // Optional override
         this.onClick = config.onClick || null; // Optional override for click handling
+
+        // Optional anime series markers map for episode cards
+        this.seriesMarkers = config.seriesMarkers || null;
     }
 
     render() {
@@ -254,7 +257,8 @@ class MediaGrid extends Component {
             isLandscape: this.isLandscape,
             type: this.type,
             contextType: this.contextType,
-            isGrid: true
+            isGrid: true,
+            seriesMarkers: this.seriesMarkers
         });
     }
 }

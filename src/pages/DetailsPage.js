@@ -56,13 +56,9 @@ import { storage } from '../utils/StorageService.js';
 import { languageManager } from '../utils/LanguageManager.js';
 import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
-import { detailsIcons } from '../utils/Icons.js';
-import {
-    escapeHtml,
-    getOverviewClampClass,
-    shouldAlwaysShowOverviewButton,
-    getOverviewButtonText
-} from '../utils/Utils.js';
+import { detailsIcons, settingsIcons } from '../utils/Icons.js';
+import { escapeHtml, getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
+import { animeMarkerService } from '../utils/AnimeMarkerService.js';
 
 const log = logger.create('DetailsPage');
 
@@ -75,6 +71,7 @@ class DetailsPage extends Page {
         this._nextUp = null;
         this._seasons = null;
         this._episodes = null;
+        this._seriesMarkers = null;
         this._people = null;
 
         this._similar = null;
@@ -513,6 +510,24 @@ class DetailsPage extends Page {
                 }
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
+
+            // ----------------------------------------------------------------
+            // Subscribe to background anime companion marker resolution
+            // ----------------------------------------------------------------
+            // Ensures episode badges (Filler, Mixed, Audio tracks) update automatically
+            // in the active view as soon as companion markers finish loading over the network
+            // ----------------------------------------------------------------
+            this._markerUnsub = animeMarkerService.onMarkersLoaded((loadedSeriesId, markers) => {
+                if (this._isDestroyed) return;
+                const currentSeriesId = this._item?.Type === 'Series'
+                    ? this._itemId
+                    : (this._item?.SeriesId || this._item?.ParentId || this._parentSeries?.Id);
+                if (!currentSeriesId) return;
+                if (animeMarkerService.normalizeId(currentSeriesId) === animeMarkerService.normalizeId(loadedSeriesId)) {
+                    this._seriesMarkers = markers;
+                    this._updateEpisodeBadges();
+                }
+            });
 
             // Translate static UI labels
             i18n.translateDOM(this.el);
@@ -1031,6 +1046,7 @@ class DetailsPage extends Page {
         if (providersContainer) providersContainer.classList.add('hidden');
         this.setLoading(true);
         this._hasEnteredEpisodesGrid = false;
+        this._seriesMarkers = null;
 
         try {
             // ────────────────────────────────────────────────────────────────────────
@@ -1045,6 +1061,7 @@ class DetailsPage extends Page {
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
             const requestedFields = [
+                'SeriesId',
                 'MediaStreams',
                 'MediaSources',
                 'Overview',
@@ -1715,6 +1732,29 @@ class DetailsPage extends Page {
     }
 
     async _loadSecondaryContent() {
+        // Resolve target series identifier for anime content markers and audio classifications
+        const seriesId = this._item.Type === 'Series'
+            ? this._itemId
+            : (this._item.SeriesId || this._item.ParentId);
+
+        // ---------------------------------------------------------------------
+        // Anime Markers & Content Badges Query (Opt-In Feature)
+        // ---------------------------------------------------------------------
+        // Check user setting prior to fetching companion metadata (disabled by default)
+        // ---------------------------------------------------------------------
+        if (seriesId && storage.getItem('pref:showAnimeMarkers') === 'true') {
+            // First check memory cache synchronously so initial renders have markers immediately
+            this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
+
+            // Fetch series markers in background and update DOM when resolved
+            animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
+                if (markers) {
+                    this._seriesMarkers = markers;
+                    this._updateEpisodeBadges();
+                }
+            }).catch(() => {});
+        }
+
         // Load additional data based on type
         if (this._item.Type === 'Series') {
             /*
@@ -4006,9 +4046,25 @@ class DetailsPage extends Page {
                     endsAtText = i18n.t('EndsAtValue', [timeString]);
                 }
 
+                // -------------------------------------------------------------
+                // Resolve Anime Content & Audio Badges for Next Up Row
+                // -------------------------------------------------------------
+                // Evaluates markers only if the user preference is enabled (off by default)
+                // -------------------------------------------------------------
+                const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
+                const pills = showAnimeMarkers
+                    ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, { series: this._item })
+                    : [];
+                const animePillsHtml = pills.length > 0
+                    ? animeMarkerService.renderPillsHtml(pills, { compact: true })
+                    : '';
+
+                const targetSeriesId = ep.SeriesId || this._item?.SeriesId || (this._item?.Type === 'Series' ? this._item.Id : this._item?.Id);
+                const seriesIdAttr = targetSeriesId ? animeMarkerService.normalizeId(targetSeriesId) : '';
+
                 html += `
                     <div class="episode-row">
-                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" data-series-id="${seriesIdAttr}" tabindex="0">
                             <div class="episode-row-thumb">
                                 <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
                                 ${playedBadgeHtml}
@@ -4021,6 +4077,7 @@ class DetailsPage extends Page {
                                     ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                     ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                     ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                    ${animePillsHtml}
                                 </div>
                                 <div class="episode-row-overview">${ep.Overview || ''}</div>
                             </div>
@@ -4111,6 +4168,15 @@ class DetailsPage extends Page {
         const cached = state.get(cacheKey);
         if (cached) {
             this._episodes = cached;
+            // Only query anime markers if user setting is explicitly enabled
+            if (!this._seriesMarkers && seriesId && storage.getItem('pref:showAnimeMarkers') === 'true') {
+                animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
+                    if (markers) {
+                        this._seriesMarkers = markers;
+                        this._renderEpisodes();
+                    }
+                }).catch(() => {});
+            }
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
                 if (!this._nextUp || this._nextUp.length === 0) {
@@ -4122,7 +4188,23 @@ class DetailsPage extends Page {
         }
 
         try {
-            const response = await api.getEpisodes(seriesId, { SeasonId: seasonId });
+            // Check memory cache synchronously prior to async network invocation
+            if (!this._seriesMarkers && seriesId) {
+                this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
+            }
+
+            // -----------------------------------------------------------------
+            // Fetch Episodes & Optional Anime Marker Metadata Concurrently
+            // -----------------------------------------------------------------
+            // Queries companion anime classifications only if user opted in
+            // -----------------------------------------------------------------
+            const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
+            const [response, markers] = await Promise.all([
+                api.getEpisodes(seriesId, { SeasonId: seasonId }),
+                (seriesId && showAnimeMarkers)
+                    ? animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null)
+                    : Promise.resolve(null)
+            ]);
             this._episodes = response.Items || [];
 
             // Reconcile episodes list with authoritative client state
@@ -4130,6 +4212,13 @@ class DetailsPage extends Page {
                 for (const ep of this._episodes) {
                     this._reconcileItemWithLastStopped(ep);
                 }
+            }
+
+            // Store resolved markers in page instance state
+            if (markers) {
+                this._seriesMarkers = markers;
+            } else if (!this._seriesMarkers && seriesId) {
+                this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
             }
 
             state.set(cacheKey, this._episodes);
@@ -4209,9 +4298,25 @@ class DetailsPage extends Page {
                         endsAtText = i18n.t('EndsAtValue', [timeString]);
                     }
 
+                    // ---------------------------------------------------------
+                    // Extract Content Markers (Filler, Mixed, Recap) & Audio Track Pills
+                    // ---------------------------------------------------------
+                    // Omitted when the anime markers preference is disabled
+                    // ---------------------------------------------------------
+                    const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
+                    const animePills = showAnimeMarkers
+                        ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, { series: this._item })
+                        : [];
+                    const animePillsHtml = animePills.length > 0
+                        ? animeMarkerService.renderPillsHtml(animePills)
+                        : '';
+
+                    const targetSeriesId = ep.SeriesId || this._item?.SeriesId || (this._item?.Type === 'Series' ? this._item.Id : this._item?.Id);
+                    const seriesIdAttr = targetSeriesId ? animeMarkerService.normalizeId(targetSeriesId) : '';
+
                     html += `
                         <div class="episode-row">
-                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" data-series-id="${seriesIdAttr}" tabindex="0">
                                 <div class="episode-row-thumb">
                                     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
                                     ${playedBadgeHtml}
@@ -4224,6 +4329,7 @@ class DetailsPage extends Page {
                                         ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                         ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                         ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                        ${animePillsHtml}
                                     </div>
                                     <p class="episode-row-overview">${ep.Overview || ''}</p>
                                 </div>
@@ -4301,6 +4407,7 @@ class DetailsPage extends Page {
                     limit: 60,
                     moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                     isLandscape: true,
+                    seriesMarkers: this._seriesMarkers,
                     onClick: (card) => {
                         const stateKey = `details:lastFocusedItem:${this._itemId}`;
                         if (card.dataset.itemId) {
@@ -4366,6 +4473,134 @@ class DetailsPage extends Page {
                             </div>
                         </button>
                     `;
+                }
+            });
+        }
+    }
+
+    /**
+     * Updates anime marker badges (Filler, Mixed, Recap, Audio) on rendered episode rows
+     * and Next Up cards in the active DOM once companion markers finish loading.
+     */
+    _updateEpisodeBadges() {
+        if (!this._seriesMarkers) return;
+
+        // Skip badge mounting if user setting is disabled
+        if (storage.getItem('pref:showAnimeMarkers') !== 'true') return;
+
+        // Resolve parent series object (supporting Series, Season, and nested view modes)
+        const seriesObj = this._parentSeries || (this._item?.Type === 'Series' ? this._item : null);
+
+        // 1. Update Next Up row badges if present (supporting list view and horizontal card row)
+        if (this._nextUp && Array.isArray(this._nextUp)) {
+            this._nextUp.forEach((ep) => {
+                const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                    series: seriesObj || this._item,
+                    season: this._item?.Type === 'Season' ? this._item : null
+                });
+
+                // A. Handle list layout (.episode-row-card)
+                const row = this.$(`.episode-row-card[data-episode-id="${ep.Id}"]`);
+                if (row) {
+                    const meta = row.querySelector('.episode-row-meta');
+                    if (meta) {
+                        const existingPills = meta.querySelector('.anime-pills-row');
+                        if (pills.length > 0) {
+                            const newHtml = animeMarkerService.renderPillsHtml(pills, { compact: true });
+                            if (existingPills) {
+                                existingPills.outerHTML = newHtml;
+                            } else {
+                                meta.insertAdjacentHTML('beforeend', newHtml);
+                            }
+                        } else if (existingPills) {
+                            if (typeof existingPills.remove === 'function') {
+                                existingPills.remove();
+                            } else if (existingPills.parentNode) {
+                                existingPills.parentNode.removeChild(existingPills);
+                            }
+                        }
+                    }
+                }
+
+                // B. Handle card layout (.media-card thumbnail)
+                const card = this.$(`.media-card[data-item-id="${ep.Id}"], .media-card[data-episode-id="${ep.Id}"]`);
+                if (card) {
+                    const cardImage = card.querySelector('.card-image') || card;
+                    const existingPills = card.querySelector('.card-anime-pills');
+                    if (pills.length > 0) {
+                        const newHtml = animeMarkerService.renderPillsHtml(pills, {
+                            compact: true,
+                            className: 'card-anime-pills'
+                        });
+                        if (existingPills) {
+                            existingPills.outerHTML = newHtml;
+                        } else {
+                            cardImage.insertAdjacentHTML('beforeend', newHtml);
+                        }
+                    } else if (existingPills) {
+                        if (typeof existingPills.remove === 'function') {
+                            existingPills.remove();
+                        } else if (existingPills.parentNode) {
+                            existingPills.parentNode.removeChild(existingPills);
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Update Season episode rows in vertical list if present
+        if (this._episodes && Array.isArray(this._episodes)) {
+            this._episodes.forEach((ep) => {
+                const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                    series: seriesObj || this._item,
+                    season: this._item?.Type === 'Season' ? this._item : null
+                });
+
+                // A. Handle vertical list layout
+                const row = this.$(`.episode-row-card[data-episode-id="${ep.Id}"]`);
+                if (row) {
+                    const meta = row.querySelector('.episode-row-meta');
+                    if (meta) {
+                        const existingPills = meta.querySelector('.anime-pills-row');
+                        if (pills.length > 0) {
+                            const newHtml = animeMarkerService.renderPillsHtml(pills);
+                            if (existingPills) {
+                                existingPills.outerHTML = newHtml;
+                            } else {
+                                meta.insertAdjacentHTML('beforeend', newHtml);
+                            }
+                        } else if (existingPills) {
+                            if (typeof existingPills.remove === 'function') {
+                                existingPills.remove();
+                            } else if (existingPills.parentNode) {
+                                existingPills.parentNode.removeChild(existingPills);
+                            }
+                        }
+                    }
+                }
+
+                // B. Handle card layout if season renders horizontal cards
+                const card = this.$(`.media-card[data-item-id="${ep.Id}"], .media-card[data-episode-id="${ep.Id}"]`);
+                if (card && card !== row) {
+                    const cardImage = card.querySelector('.card-image') || card;
+                    const existingPills = card.querySelector('.card-anime-pills');
+                    if (pills.length > 0) {
+                        const newHtml = animeMarkerService.renderPillsHtml(pills, {
+                            compact: true,
+                            className: 'card-anime-pills'
+                        });
+                        if (existingPills) {
+                            existingPills.outerHTML = newHtml;
+                        } else {
+                            cardImage.insertAdjacentHTML('beforeend', newHtml);
+                        }
+                    } else if (existingPills) {
+                        if (typeof existingPills.remove === 'function') {
+                            existingPills.remove();
+                        } else if (existingPills.parentNode) {
+                            existingPills.parentNode.removeChild(existingPills);
+                        }
+                    }
                 }
             });
         }
@@ -4786,10 +5021,12 @@ class DetailsPage extends Page {
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
+            // and supplying preloaded series markers for badge generation
             // -------------------------------------------------------------
             renderCard: (ep) =>
                 this._renderMediaCard(ep, true, 'episode', {
-                    isCurrentEpisode: ep.Id === this._itemId
+                    isCurrentEpisode: ep.Id === this._itemId,
+                    seriesMarkers: this._seriesMarkers
                 }),
             focusSectionName: 'more-from-season-section',
             currentIndex: currentEpisodeIndex
@@ -7461,6 +7698,12 @@ class DetailsPage extends Page {
         if (this._onRemoteUserDataChanged) {
             eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
             this._onRemoteUserDataChanged = null;
+        }
+
+        // Clean up anime marker update subscription
+        if (this._markerUnsub) {
+            this._markerUnsub();
+            this._markerUnsub = null;
         }
 
         const currentPath = router.getCurrentPath?.() || '';

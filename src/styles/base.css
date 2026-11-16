@@ -1419,10 +1419,21 @@ body {
     box-sizing: border-box;
 }
 
-/* Sibling Offset: Shift Favorite Badge when Version Count is present */
+/* Sibling Offset: Shift Favorite Badge and Anime Badges when preceding bottom-left badges are present */
 .version-badge ~ .favorite-badge,
 .media-source-count-badge ~ .favorite-badge {
     left: 60px;
+}
+
+.version-badge ~ .card-anime-pills,
+.media-source-count-badge ~ .card-anime-pills,
+.favorite-badge ~ .card-anime-pills {
+    left: 60px;
+}
+
+.version-badge ~ .favorite-badge ~ .card-anime-pills,
+.media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 108px;
 }
 
 /* Watched Badge (Bottom Right) */
@@ -1446,11 +1457,15 @@ body {
 .card-progress-container ~ .version-badge,
 .card-progress-container ~ .media-source-count-badge,
 .card-progress-container ~ .favorite-badge,
+.card-progress-container ~ .card-anime-pills,
+.card-progress-container ~ .anime-pills-row.card-anime-pills,
 .media-card.has-progress .played-badge,
 .media-card.has-progress .version-badge,
 .media-card.has-progress .media-source-count-badge,
-.media-card.has-progress .favorite-badge {
-    bottom: 18px;
+.media-card.has-progress .favorite-badge,
+.media-card.has-progress .card-anime-pills,
+.media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 18px !important;
 }
 
 .video-badge {
@@ -1553,6 +1568,173 @@ body {
 .game-card-badge .icon-outline,
 .media-fallback-game-icon .icon-outline {
     display: block !important;
+}
+
+/* ==========================================================================
+   Anime Marker & Audio Classification Badges
+   ==========================================================================
+   Capsule pills representing episode content (Filler, Mixed, Recap) and
+   audio tracks (Subbed, Dubbed, Subbed/Dubbed).
+   
+   Geometry & Rendering Rules:
+   - Full capsule pill curves enforced via 9999px border-radius with !important
+     and -webkit-border-radius to guarantee rounded capsules across all engines.
+   - High-contrast, dark-tinted backgrounds for card thumbnails so text is
+     sharp, legible, and never washes out over light or noisy anime artwork.
+   - Zero box-shadows and zero backdrop-filter blurs to maintain 60fps
+     smooth scrolling on TV chipsets and low-power hardware.
+   ========================================================================== */
+
+/* Container row anchoring anime badges */
+.anime-pills-row {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 8;
+    pointer-events: none;
+}
+
+/* Card thumbnail overlay positioning */
+.anime-pills-row.card-anime-pills {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+}
+
+/* When placed inside list view title rows or card info, render inline beside metadata */
+.card-title-row .anime-pills-row,
+.card-info .anime-pills-row {
+    position: static !important;
+    max-width: none !important;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* Base capsule pill typography, borders, and geometry */
+.anime-pill,
+.anime-pills-row .anime-pill,
+.card-anime-pills .anime-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 12px;
+    border-radius: 9999px !important;
+    -webkit-border-radius: 9999px !important;
+    font-size: 1.1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.25px;
+    white-space: nowrap;
+    border-width: 1px;
+    border-style: solid;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-sizing: border-box;
+}
+
+/* Compact pill sizing for card thumbnails and dense grids */
+.anime-pills-row.compact .anime-pill {
+    padding: 2px 10px;
+    border-radius: 9999px !important;
+    -webkit-border-radius: 9999px !important;
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+/* On card thumbnails, apply opaque dark backing so text stands out over any background */
+.card-anime-pills .anime-pill {
+    background-color: rgba(14, 14, 18, 0.92) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Pill Color Themes (Standard Details View & Inline Episode Meta Rows)
+   -------------------------------------------------------------------------- */
+
+/* Filler content category (Orange tint) */
+.anime-pill-filler {
+    color: #ffaa33;
+    background-color: rgba(255, 170, 51, 0.22);
+    border-color: rgba(255, 170, 51, 0.75);
+}
+
+/* Mixed Canon/Filler category (Amber/Yellow tint) */
+.anime-pill-mixed {
+    color: #ffdb4d;
+    background-color: rgba(255, 219, 77, 0.22);
+    border-color: rgba(255, 219, 77, 0.75);
+}
+
+/* Recap episode category (Purple tint) */
+.anime-pill-recap {
+    color: #e09cf5;
+    background-color: rgba(224, 156, 245, 0.22);
+    border-color: rgba(224, 156, 245, 0.75);
+}
+
+/* Subbed audio track (Original Japanese only - Cyan tint) */
+.anime-pill-subbed {
+    color: #66d4ff;
+    background-color: rgba(102, 212, 255, 0.22);
+    border-color: rgba(102, 212, 255, 0.75);
+}
+
+/* Dubbed audio track (Foreign language dub only - Coral tint) */
+.anime-pill-dubbed {
+    color: #ff8c8c;
+    background-color: rgba(255, 140, 140, 0.22);
+    border-color: rgba(255, 140, 140, 0.75);
+}
+
+/* Subbed/Dubbed dual audio tracks (Violet / Indigo tint) */
+.anime-pill-dual {
+    color: #ccaeff;
+    background-color: rgba(204, 174, 255, 0.24);
+    border-color: rgba(204, 174, 255, 0.75);
+}
+
+/* --------------------------------------------------------------------------
+   Card Overlay High-Contrast Overrides
+   Dark-tinted backing prevents light anime drawings or white sleeves from
+   washing out badge text on episode card thumbnails.
+   -------------------------------------------------------------------------- */
+
+.card-anime-pills .anime-pill-filler {
+    color: #ffaa33;
+    border-color: rgba(255, 170, 51, 0.85);
+    background-color: rgba(26, 18, 12, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-mixed {
+    color: #ffdb4d;
+    border-color: rgba(255, 219, 77, 0.85);
+    background-color: rgba(26, 24, 12, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-recap {
+    color: #e09cf5;
+    border-color: rgba(224, 156, 245, 0.85);
+    background-color: rgba(26, 14, 28, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-subbed {
+    color: #66d4ff;
+    border-color: rgba(102, 212, 255, 0.85);
+    background-color: rgba(12, 22, 28, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-dubbed {
+    color: #ff8c8c;
+    border-color: rgba(255, 140, 140, 0.85);
+    background-color: rgba(28, 14, 16, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-dual {
+    color: #ccaeff;
+    border-color: rgba(204, 174, 255, 0.85);
+    background-color: rgba(22, 16, 32, 0.94) !important;
 }
 
 /* Game fallback cover with central gamepad icon */

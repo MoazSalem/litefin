@@ -768,14 +768,15 @@ html[data-media-rows-family="modern"] .quality-badge {
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Bottom badges: Watched (right), Versions (left), Favorite (left) */
+/* Bottom badges: Watched (right), Versions (left), Favorite (left), Anime & Audio pills (left) */
 html[data-layout-media-rows="modern"] .favorite-badge,
 html[data-layout-media-rows="expanded"] .favorite-badge,
 html[data-layout-media-rows="modern-posters"] .favorite-badge,
 html[data-layout-media-rows="expanding"] .favorite-badge,
 html[data-media-rows-family="modern"] .played-badge,
 html[data-media-rows-family="modern"] .version-badge,
-html[data-media-rows-family="modern"] .media-source-count-badge {
+html[data-media-rows-family="modern"] .media-source-count-badge,
+html[data-media-rows-family="modern"] .card-anime-pills {
     position: absolute;
     bottom: 22px;
     z-index: 8;
@@ -936,43 +937,78 @@ html[data-media-rows-family="modern"] .favorite-badge {
     box-sizing: border-box;
 }
 
-/* Sibling Offset: Shift Favorite badge when Version Count badge is present at bottom left */
+/* Bottom Left: Anime and Audio metadata badges */
+html[data-media-rows-family="modern"] .card-anime-pills {
+    bottom: 22px;
+    left: 22px;
+    right: auto;
+}
+
+/* Sibling Offset: Shift badges when Version Count or Favorite badge is present at bottom left */
 html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge,
 html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge {
     left: 74px;
+}
+
+html[data-media-rows-family="modern"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .favorite-badge ~ .card-anime-pills {
+    left: 74px;
+}
+
+html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 126px;
 }
 
 /* =========================================================================
    Progress Bar Avoidance: Elevate Bottom Badges
    =========================================================================
    When a card has an active progress bar floating at bottom: 20px (height: 8px),
-   elevate all bottom badges (Watched, Version Count, Favorite) to bottom: 38px.
+   elevate all bottom badges (Watched, Version Count, Favorite, Anime & Audio) to bottom: 38px.
    This provides a clean 10px breathing gap above the progress track.
    ========================================================================= */
 html[data-layout-media-rows="modern"] .card-progress-container ~ .favorite-badge,
+html[data-layout-media-rows="modern"] .card-progress-container ~ .card-anime-pills,
 html[data-layout-media-rows="modern"] .media-card.has-progress .played-badge,
 html[data-layout-media-rows="modern"] .media-card.has-progress .version-badge,
 html[data-layout-media-rows="modern"] .media-card.has-progress .media-source-count-badge,
 html[data-layout-media-rows="modern"] .media-card.has-progress .favorite-badge,
+html[data-layout-media-rows="modern"] .media-card.has-progress .card-anime-pills,
 html[data-layout-media-rows="expanded"] .card-progress-container ~ .favorite-badge,
+html[data-layout-media-rows="expanded"] .card-progress-container ~ .card-anime-pills,
 html[data-layout-media-rows="expanded"] .media-card.has-progress .played-badge,
 html[data-layout-media-rows="expanded"] .media-card.has-progress .version-badge,
 html[data-layout-media-rows="expanded"] .media-card.has-progress .media-source-count-badge,
 html[data-layout-media-rows="expanded"] .media-card.has-progress .favorite-badge,
+html[data-layout-media-rows="expanded"] .media-card.has-progress .card-anime-pills,
 html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .favorite-badge,
+html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .card-anime-pills,
 html[data-layout-media-rows="modern-posters"] .media-card.has-progress .played-badge,
 html[data-layout-media-rows="modern-posters"] .media-card.has-progress .version-badge,
 html[data-layout-media-rows="modern-posters"] .media-card.has-progress .media-source-count-badge,
 html[data-layout-media-rows="modern-posters"] .media-card.has-progress .favorite-badge,
+html[data-layout-media-rows="modern-posters"] .media-card.has-progress .card-anime-pills,
 html[data-layout-media-rows="expanding"] .card-progress-container ~ .favorite-badge,
+html[data-layout-media-rows="expanding"] .card-progress-container ~ .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-card.has-progress .played-badge,
 html[data-layout-media-rows="expanding"] .media-card.has-progress .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.has-progress .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-card.has-progress .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-card.has-progress .card-anime-pills,
 html[data-media-rows-family="modern"] .card-progress-container ~ .played-badge,
 html[data-media-rows-family="modern"] .card-progress-container ~ .version-badge,
-html[data-media-rows-family="modern"] .card-progress-container ~ .media-source-count-badge {
-    bottom: 38px;
+html[data-media-rows-family="modern"] .card-progress-container ~ .media-source-count-badge,
+html[data-media-rows-family="modern"] .card-progress-container ~ .favorite-badge,
+html[data-media-rows-family="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .anime-pills-row.card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .played-badge,
+html[data-media-rows-family="modern"] .media-card.has-progress .version-badge,
+html[data-media-rows-family="modern"] .media-card.has-progress .media-source-count-badge,
+html[data-media-rows-family="modern"] .media-card.has-progress .favorite-badge,
+html[data-media-rows-family="modern"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 38px !important;
 }
 
 /* =========================================================================
@@ -989,13 +1025,15 @@ html[data-media-rows-family="modern"] .card-progress-container ~ .media-source-c
    - Elevation with active progress bar: bottom: 122px
    ========================================================================= */
 
-/* Left Badges: Version count and Favorite badge positioned above text */
+/* Left Badges: Version count, Favorite badge, and Anime pills positioned above text */
 html[data-layout-media-rows="expanding"] .media-card.landscape .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.landscape .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-card.landscape .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-card.square .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.square .media-source-count-badge,
-html[data-layout-media-rows="expanding"] .media-card.square .favorite-badge {
+html[data-layout-media-rows="expanding"] .media-card.square .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-card.square .card-anime-pills {
     bottom: 112px;
     left: 30px;
     right: auto;
@@ -1022,10 +1060,12 @@ html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .ver
 html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .favorite-badge,
 html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .played-badge,
+html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-card.square.has-progress .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.square.has-progress .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-card.square.has-progress .favorite-badge,
-html[data-layout-media-rows="expanding"] .media-card.square.has-progress .played-badge {
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .played-badge,
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .card-anime-pills {
     bottom: 122px;
 }
 
@@ -1041,12 +1081,15 @@ html[data-layout-media-rows="expanding"] .media-card.square.has-progress .played
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .version-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .version-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .media-source-count-badge,
-html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .favorite-badge {
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .card-anime-pills {
     -webkit-transform: translate(8px, -90px) scale(1.05);
     transform: translate(8px, -90px) scale(1.05);
 }
@@ -1061,12 +1104,15 @@ html[data-layout-media-rows="expanding"] .media-card.has-expansion:hover .played
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .version-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .version-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .media-source-count-badge,
 html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .card-anime-pills,
 html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:hover .version-badge,
 html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:hover .media-source-count-badge,
-html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:hover .favorite-badge {
+html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:hover .favorite-badge,
+html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:hover .card-anime-pills {
     -webkit-transform: translate(8px, -84px) scale(1.05);
     transform: translate(8px, -84px) scale(1.05);
 }
@@ -1083,15 +1129,19 @@ html[data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion:focus .card-anime-pills,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.focused .card-anime-pills,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion:focus:hover .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.focused:hover .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion:focus:hover .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.focused:hover .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion:focus:hover .favorite-badge,
-html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.focused:hover .favorite-badge {
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.focused:hover .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion:focus:hover .card-anime-pills,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.focused:hover .card-anime-pills {
     -webkit-transform: translate(8px, -90px) !important;
     transform: translate(8px, -90px) !important;
 }
@@ -1107,15 +1157,19 @@ html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .medi
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress:focus .card-anime-pills,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-row:not(:hover) .media-card.has-expansion.has-progress.focused .card-anime-pills,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:focus:hover .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress.focused:hover .version-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:focus:hover .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress.focused:hover .media-source-count-badge,
 html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:focus:hover .favorite-badge,
-html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress.focused:hover .favorite-badge {
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress.focused:hover .favorite-badge,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress:focus:hover .card-anime-pills,
+html[data-disable-card-scaling="true"][data-layout-media-rows="expanding"] .media-card.has-expansion.has-progress.focused:hover .card-anime-pills {
     -webkit-transform: translate(8px, -84px) !important;
     transform: translate(8px, -84px) !important;
 }
