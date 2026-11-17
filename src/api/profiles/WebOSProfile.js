@@ -271,23 +271,27 @@ export function getDeviceCapabilities() {
     const dts =
         dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : codecs.dts === true || webosVersion < 5;
 
-    const manualRes = PlayerSettings.get('maxResolution');
-    if (manualRes && manualRes !== 'auto') {
-        switch (manualRes) {
-            case '720p':
-            case '1080p':
-                uhd = false;
-                uhd8K = false;
-                break;
-            case '2160p':
-                uhd = true;
-                uhd8K = false;
-                break;
-            case '4320p':
-                uhd = true;
-                uhd8K = true;
-                break;
-        }
+    const manualRes = BaseProfile.getMaxResolution();
+    if (manualRes) {
+        uhd = manualRes.width >= 3840;
+        uhd8K = manualRes.width >= 7680;
+    }
+
+    // ------------------------------------------------------------------------
+    // Largest video the server may send (see the size limit in buildJellyfinProfile)
+    // ------------------------------------------------------------------------
+    // A manual Max resolution always applies. In auto mode the limit comes from
+    // the panel's uhd / uhd8K flags, and only once webOS has reported them:
+    // before that a 4K panel looks like 1080p, and a limit would block 4K.
+    // screenWidth / screenHeight are not used: on many TVs they report the
+    // 1080p UI size rather than the panel.
+    let maxVideoSize = manualRes;
+    if (!maxVideoSize && info && info.uhd !== undefined) {
+        maxVideoSize = uhd8K
+            ? { width: 7680, height: 4320 }
+            : uhd
+              ? { width: 3840, height: 2160 }
+              : { width: 1920, height: 1080 };
     }
 
     const caps = {
@@ -298,6 +302,8 @@ export function getDeviceCapabilities() {
         screenHeight: screenHeightHw || (uhd8K ? 4320 : uhd ? 2160 : 1080),
         uhd,
         uhd8K,
+        maxVideoWidth: maxVideoSize ? maxVideoSize.width : null,
+        maxVideoHeight: maxVideoSize ? maxVideoSize.height : null,
         hdr10,
         hdr10Plus: false,
         hlg: hdr10,
@@ -356,10 +362,47 @@ function _buildMinimalProfile(caps) {
                 Protocol: 'http'
             }
         ],
-        CodecProfiles: [],
+        // The size limit still applies: Force Transcode is what users pick when a
+        // 4K transcode fails on a 1080p panel
+        CodecProfiles: _buildVideoSizeLimitProfiles(caps),
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),
         ResponseProfiles: []
     };
+}
+
+/**
+ * Codec profile that limits the video size to caps.maxVideoWidth x caps.maxVideoHeight.
+ *
+ * The server only scales a transcode down when it has to cut the bitrate. A 4K
+ * file whose bitrate is already under MaxStreamingBitrate is otherwise
+ * transcoded at full size, which a 1080p panel can't decode (playback error).
+ * A Video codec profile with no Codec applies to every codec: the server uses
+ * Width / Height as MaxWidth / MaxHeight for transcodes, and transcodes larger
+ * sources instead of direct-playing them.
+ * @param {Object} caps - Result of getDeviceCapabilities()
+ * @returns {Array} One codec profile, or none when there is no known limit
+ */
+function _buildVideoSizeLimitProfiles(caps) {
+    if (!caps.maxVideoWidth || !caps.maxVideoHeight) return [];
+    return [
+        {
+            Type: 'Video',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'Width',
+                    Value: String(caps.maxVideoWidth),
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'Height',
+                    Value: String(caps.maxVideoHeight),
+                    IsRequired: false
+                }
+            ]
+        }
+    ];
 }
 
 export function buildJellyfinProfile(options = {}) {
@@ -1111,6 +1154,9 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
+    // Video size limit (see _buildVideoSizeLimitProfiles)
+    codecProfiles.push(..._buildVideoSizeLimitProfiles(caps));
 
     if (enableHEVC) {
         codecProfiles.push({
