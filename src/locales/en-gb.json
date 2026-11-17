@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Black",
     "OsdThumbInverted": "Theme Inverted",
     "OsdThumbWhite": "White",
+    "OsdTimeBoth": "Total & Remaining",
     "OsdTimeDisplayDescription": "Choose whether to show the total duration or remaining time on the player seek bar.",
     "OsdTimeRemaining": "Remaining Time",
     "OsdTimeTotal": "Total Duration",

@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Nero",
     "OsdThumbInverted": "Tema invertito",
     "OsdThumbWhite": "Bianco",
+    "OsdTimeBoth": "Totale e rimanente",
     "OsdTimeDisplayDescription": "Scegli se mostrare la durata totale o il tempo rimanente sulla barra di ricerca del lettore.",
     "OsdTimeRemaining": "Tempo rimanente",
     "OsdTimeTotal": "Durata totale",

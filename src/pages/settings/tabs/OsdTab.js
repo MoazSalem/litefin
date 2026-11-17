@@ -247,7 +247,8 @@ export class OsdTab {
                         'osd-time-display-select',
                         [
                             { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
-                            { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                            { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' },
+                            { value: 'both', label: i18n.t('OsdTimeBoth') || 'Total & Remaining' }
                         ],
                         PlayerSettings.get('osdTimeDisplayMode') || 'total'
                     )

@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "สีดำ",
     "OsdThumbInverted": "สีกลับของธีม",
     "OsdThumbWhite": "สีขาว",
+    "OsdTimeBoth": "รวมและคงเหลือ",
     "OsdTimeDisplayDescription": "เลือกว่าต้องการแสดงความยาวทั้งหมดหรือเวลาที่เหลือบนแถบเลื่อนเวลาของเครื่องเล่น",
     "OsdTimeRemaining": "เวลาที่เหลือ",
     "OsdTimeTotal": "ความยาวทั้งหมด",

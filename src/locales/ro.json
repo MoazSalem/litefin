@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Negru",
     "OsdThumbInverted": "Tema inversată",
     "OsdThumbWhite": "Alb",
+    "OsdTimeBoth": "Total și rămas",
     "OsdTimeDisplayDescription": "Alegeți dacă să afișați durata totală sau timpul rămas pe bara de derulare a playerului.",
     "OsdTimeRemaining": "Timp rămas",
     "OsdTimeTotal": "Durată totală",

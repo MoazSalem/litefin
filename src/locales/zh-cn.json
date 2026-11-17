@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "黑色",
     "OsdThumbInverted": "反转主题色",
     "OsdThumbWhite": "白色",
+    "OsdTimeBoth": "总时长和剩余时间",
     "OsdTimeDisplayDescription": "选择是在播放器进度条上显示总时长还是剩余时间。",
     "OsdTimeRemaining": "剩余时间",
     "OsdTimeTotal": "总时长",

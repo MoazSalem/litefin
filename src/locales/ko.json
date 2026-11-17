@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "검은색",
     "OsdThumbInverted": "테마 반전",
     "OsdThumbWhite": "흰색",
+    "OsdTimeBoth": "전체 및 남은 시간",
     "OsdTimeDisplayDescription": "재생 바에 총 재생 시간 또는 남은 시간을 표시할지 선택합니다.",
     "OsdTimeRemaining": "남은 시간",
     "OsdTimeTotal": "총 재생 시간",

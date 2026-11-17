@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Siyah",
     "OsdThumbInverted": "Tema Ters Çevrilmiş",
     "OsdThumbWhite": "Beyaz",
+    "OsdTimeBoth": "Toplam ve kalan",
     "OsdTimeDisplayDescription": "Oynatıcı arama çubuğunda toplam sürenin mi yoksa kalan sürenin mi gösterileceğini seçin.",
     "OsdTimeRemaining": "Kalan süre",
     "OsdTimeTotal": "Toplam süre",

@@ -230,6 +230,10 @@ html[dir="rtl"]:not([data-sidebar-family="modern"]) body:not(.sidebar-mode-hidde
     margin-right: 2.4em;
 }
 
+[dir="rtl"] .player-osd .osd-ends-at.osd-remaining-companion {
+    margin-right: 0.6em;
+}
+
 [dir="rtl"] .time-slider-container {
     direction: ltr; /* Timelines always progress left-to-right */
 }

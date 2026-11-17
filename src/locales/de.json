@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Schwarz",
     "OsdThumbInverted": "Thema invertiert",
     "OsdThumbWhite": "Weiß",
+    "OsdTimeBoth": "Gesamt & Verbleibend",
     "OsdTimeDisplayDescription": "Wähle, ob die Gesamtdauer oder die verbleibende Zeit in der Fortschrittsleiste angezeigt werden soll.",
     "OsdTimeRemaining": "Verbleibende Zeit",
     "OsdTimeTotal": "Gesamtdauer",

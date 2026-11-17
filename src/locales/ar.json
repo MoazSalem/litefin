@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "أسود",
     "OsdThumbInverted": "معكوس الثيم",
     "OsdThumbWhite": "أبيض",
+    "OsdTimeBoth": "الإجمالي والمتبقي",
     "OsdTimeDisplayDescription": "اختر ما إذا كنت تريد عرض المدة الإجمالية أو الوقت المتبقي على شريط البحث الخاص بالمشغل.",
     "OsdTimeRemaining": "الوقت المتبقي",
     "OsdTimeTotal": "المدة الإجمالية",

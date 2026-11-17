@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Черен",
     "OsdThumbInverted": "Обърнат акцент на темата",
     "OsdThumbWhite": "Бял",
+    "OsdTimeBoth": "Общо и оставащо",
     "OsdTimeDisplayDescription": "Избери дали върху лентата за превъртане да се показва общата продължителност или оставащото време.",
     "OsdTimeRemaining": "Оставащо време",
     "OsdTimeTotal": "Обща продължителност",

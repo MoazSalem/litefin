@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Черный",
     "OsdThumbInverted": "Инверсия темы",
     "OsdThumbWhite": "Белый",
+    "OsdTimeBoth": "Всего и осталось",
     "OsdTimeDisplayDescription": "Выберите, показывать ли общую длительность или оставшееся время на полосе поиска плеера.",
     "OsdTimeRemaining": "Осталось времени",
     "OsdTimeTotal": "Общая длительность",

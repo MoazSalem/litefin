@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Czarny",
     "OsdThumbInverted": "Odwrócony motyw",
     "OsdThumbWhite": "Biały",
+    "OsdTimeBoth": "Całkowity i pozostały",
     "OsdTimeDisplayDescription": "Wybierz, czy na pasku postępu ma być wyświetlany całkowity czas trwania, czy pozostały czas.",
     "OsdTimeRemaining": "Pozostały czas",
     "OsdTimeTotal": "Całkowity czas",

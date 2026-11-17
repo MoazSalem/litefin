@@ -432,6 +432,13 @@ html[data-osd-progress-color="theme-inverted"] {
     opacity: 0.9;
 }
 
+/* Remaining-duration companion shown beside "Ends At" in 'both' time display mode.
+   Sits closer to Ends At and is dimmed so the two values stay distinguishable. */
+.player-osd .osd-ends-at.osd-remaining-companion {
+    margin-left: 0.6em;
+    opacity: 0.75;
+}
+
 /* ============================================================================
    VOLUME & MUTE CONTROLS (DESKTOP & WEB)
    ============================================================================ */

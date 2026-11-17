@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Чорний",
     "OsdThumbInverted": "Інверсія теми",
     "OsdThumbWhite": "Білий",
+    "OsdTimeBoth": "Загальний і залишок",
     "OsdTimeDisplayDescription": "Оберіть, показувати загальну тривалість чи залишок часу на смузі перемотування програвача.",
     "OsdTimeRemaining": "Залишок часу",
     "OsdTimeTotal": "Загальна тривалість",

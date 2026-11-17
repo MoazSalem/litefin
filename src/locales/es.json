@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Negro",
     "OsdThumbInverted": "Tema invertido",
     "OsdThumbWhite": "Blanco",
+    "OsdTimeBoth": "Total y restante",
     "OsdTimeDisplayDescription": "Elige si mostrar la duración total o el tiempo restante en la barra de búsqueda del reproductor.",
     "OsdTimeRemaining": "Tiempo restante",
     "OsdTimeTotal": "Duración total",

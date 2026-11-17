@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "ブラック",
     "OsdThumbInverted": "テーマ反転",
     "OsdThumbWhite": "ホワイト",
+    "OsdTimeBoth": "合計と残り時間",
     "OsdTimeDisplayDescription": "再生バーに合計時間か残り時間のどちらを表示するかを選択します。",
     "OsdTimeRemaining": "残り時間",
     "OsdTimeTotal": "合計時間",

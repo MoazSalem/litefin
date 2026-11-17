@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Svart",
     "OsdThumbInverted": "Tema Inverterad",
     "OsdThumbWhite": "Vit",
+    "OsdTimeBoth": "Totalt & återstående",
     "OsdTimeDisplayDescription": "Välj om den totala längden eller den återstående tiden ska visas på spelarens sökfält.",
     "OsdTimeRemaining": "Återstående tid",
     "OsdTimeTotal": "Total längd",

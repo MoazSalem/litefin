@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "ব্ল্যাক",
     "OsdThumbInverted": "থিম ইনভার্টেড",
     "OsdThumbWhite": "হোয়াইট",
+    "OsdTimeBoth": "মোট ও অবশিষ্ট",
     "OsdTimeDisplayDescription": "প্লেয়ার সিক বারে মোট দৈর্ঘ্য নাকি অবশিষ্ট সময় দেখানো হবে তা চয়ন করুন।",
     "OsdTimeRemaining": "অবশিষ্টাংশ সময়",
     "OsdTimeTotal": "মোট দৈর্ঘ্য",

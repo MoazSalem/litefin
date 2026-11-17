@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Fekete",
     "OsdThumbInverted": "Fordított téma",
     "OsdThumbWhite": "Fehér",
+    "OsdTimeBoth": "Teljes és hátralévő",
     "OsdTimeDisplayDescription": "A keresősáv a teljes időt vagy a hátralévő időt mutassa.",
     "OsdTimeRemaining": "Hátralévő idő",
     "OsdTimeTotal": "Teljes idő",

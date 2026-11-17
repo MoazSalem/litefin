@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "ब्लैक",
     "OsdThumbInverted": "थीम इनवर्टेड",
     "OsdThumbWhite": "व्हाइट",
+    "OsdTimeBoth": "कुल और शेष",
     "OsdTimeDisplayDescription": "चुनें कि प्लेयर सीक बार पर कुल अवधि दिखाई जाए या शेष समय।",
     "OsdTimeRemaining": "शेष समय",
     "OsdTimeTotal": "कुल अवधि",

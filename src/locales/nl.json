@@ -1133,6 +1133,7 @@
     "OsdThumbBlack": "Zwart",
     "OsdThumbInverted": "Thema Geïnverteerd",
     "OsdThumbWhite": "Wit",
+    "OsdTimeBoth": "Totaal & resterend",
     "OsdTimeDisplayDescription": "Kies of de totale duur of de resterende tijd op de zoekbalk van de speler moet worden getoond.",
     "OsdTimeRemaining": "Resterende tijd",
     "OsdTimeTotal": "Totale duur",

@@ -580,6 +580,8 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${osdIcons.skipNext}</button>
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
+                        <!-- Remaining-duration companion shown beside "Ends At" in 'both' time display mode -->
+                        <div class="osd-ends-at osd-remaining-companion hidden" id="osdRemainingTime"></div>
                         <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
                             ${PlayerSettings.get('enableScreenLock') ? `
@@ -676,6 +678,7 @@ export default class OSDController extends Component {
         this._osdBottomEl = this._osdEl.querySelector('.osd-bottom');
         this._osdSliderRowEl = this._osdEl.querySelector('.osd-slider-row');
         this._osdEndsAtEl = this._osdEl.querySelector('#osdEndsAt');
+        this._osdRemainingTimeEl = this._osdEl.querySelector('#osdRemainingTime');
         this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
@@ -4697,6 +4700,27 @@ export default class OSDController extends Component {
             const endStr = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
             if (endsAtEl.textContent !== endStr) {
                 endsAtEl.textContent = endStr;
+            }
+        }
+
+        /*
+         * "Total & Remaining" mode: the seek bar keeps showing the total duration
+         * (its unchanged default), while the remaining value is paired next to the
+         * Ends At indicator so both are visible at once. The companion follows the
+         * Ends At visibility (including the Hide Ends At preference) to avoid an
+         * orphan value in the controls row.
+         */
+        const companionEl = this._osdRemainingTimeEl;
+        if (companionEl) {
+            const showBoth = timeDisplayMode === 'both' && !hideEndsAt && duration > 0;
+            if (showBoth) {
+                const companionStr = '-' + this._formatTime(duration - current, forceHours);
+                if (companionEl.textContent !== companionStr) {
+                    companionEl.textContent = companionStr;
+                }
+                companionEl.classList.remove('hidden');
+            } else if (!companionEl.classList.contains('hidden')) {
+                companionEl.classList.add('hidden');
             }
         }
     }
