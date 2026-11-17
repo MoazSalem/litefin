@@ -1373,9 +1373,12 @@ export class WebOSPlayer {
      * the `dvh1` tag directly to the native media engine, which then opens
      * the DoVi path before the first segment is decoded.
      *
-     * A canPlayType guard ensures we fall back to raw video.src if Chromium
-     * would reject the codec string (e.g. on a dev browser), preventing a
-     * silent load failure.
+     * canPlayType is not a reliable capability signal for dvh1: LG's Chromium
+     * answers '' even on Dolby Vision-capable sets (e.g. an LG C2 on webOS 24),
+     * which would permanently disable the hint. On a real webOS runtime we use
+     * the hint anyway and let the <source> error handler retry with raw src if
+     * the TV rejects it. The probe still guards dev browsers, where no native
+     * media engine sits behind the hint and a rejection would fail silently.
      *
      * @private
      */
@@ -1423,7 +1426,9 @@ export class WebOSPlayer {
             // (dvh1 / dvhe are ISO BMFF-defined tags). video/x-matroska with
             // dvh1 would be rejected by Chromium's codec validation.
             const dvHint = 'video/mp4; codecs="dvh1"';
-            const canPlayDv = canPlayTypeCached(dvHint) !== '';
+            /* webOS Chromium reports '' for dvh1 even on DV hardware (LG C2,
+             * webOS 24), so the probe must not gate the hint on real TVs. */
+            const canPlayDv = platformInfo.isWebOS || canPlayTypeCached(dvHint) !== '';
 
             if (canPlayDv) {
                 log.info('WebOSPlayer: DoVi content detected — using dvh1 codec hint to activate DV decoder pipeline');
