@@ -1681,8 +1681,9 @@ body {
     border-color: rgba(224, 156, 245, 0.75);
 }
 
-/* Canon episode category (Green tint) */
-.anime-pill-canon {
+/* Canon episode category (Green tint for Manga Canon and Anime Canon) */
+.anime-pill-canon,
+.anime-pill-anime-canon {
     color: #4cd964;
     background-color: rgba(76, 217, 100, 0.22);
     border-color: rgba(76, 217, 100, 0.75);
@@ -1733,7 +1734,8 @@ body {
     background-color: rgba(26, 14, 28, 0.94) !important;
 }
 
-.card-anime-pills .anime-pill-canon {
+.card-anime-pills .anime-pill-canon,
+.card-anime-pills .anime-pill-anime-canon {
     color: #4cd964;
     border-color: rgba(76, 217, 100, 0.85);
     background-color: rgba(12, 28, 16, 0.94) !important;

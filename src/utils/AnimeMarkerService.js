@@ -676,7 +676,13 @@ class AnimeMarkerService {
                     type: 'mixed',
                     label: getLabel('BadgeMixed', 'Mixed Canon/Filler')
                 });
-            } else if (includeCanon && (kindStr === 'mangacanon' || kindStr === 'animecanon' || kindStr === 'manga_canon' || kindStr === 'anime_canon' || marker.kind === 0 || marker.kind === 1)) {
+            } else if (kindStr === 'animecanon' || kindStr === 'anime_canon' || marker.kind === 1) {
+                pills.push({
+                    id: 'anime-canon',
+                    type: 'anime-canon',
+                    label: getLabel('BadgeAnimeCanon', 'Anime Canon')
+                });
+            } else if (kindStr === 'mangacanon' || kindStr === 'manga_canon' || kindStr === 'canon' || marker.kind === 0) {
                 pills.push({
                     id: 'canon',
                     type: 'canon',

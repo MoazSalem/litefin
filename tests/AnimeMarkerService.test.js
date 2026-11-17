@@ -105,11 +105,13 @@ test('AnimeMarkerService: getEpisodePills generates correct badge combinations f
     assert.equal(mixedRecapPills[1].id, 'recap');
     assert.equal(mixedRecapPills[2].id, 'subbed');
 
-    // 5b. Numeric enum support (3 = Filler, 2 = Mixed)
+    // 5b. Numeric enum support (3 = Filler, 2 = Mixed, 1 = Anime Canon, 0 = Manga Canon)
     const markersNumeric = {
         matched: true,
         episodes: {
-            ep5: { kind: 3, recap: 1 }
+            ep5: { kind: 3, recap: 1 },
+            [animeMarkerService.normalizeId('epAnimeCanon')]: { kind: 1, recap: false },
+            [animeMarkerService.normalizeId('epMangaCanon')]: { kind: 0, recap: false }
         }
     };
     const numericEp = {
@@ -122,6 +124,30 @@ test('AnimeMarkerService: getEpisodePills generates correct badge combinations f
     assert.equal(numericPills[0].id, 'filler');
     assert.equal(numericPills[1].id, 'recap');
     assert.equal(numericPills[2].id, 'subbed');
+
+    // Anime Canon verification
+    const animeCanonEp = {
+        Id: 'epAnimeCanon',
+        Genres: ['Anime'],
+        MediaStreams: [{ Type: 'Audio', Language: 'jpn' }]
+    };
+    const animeCanonPills = animeMarkerService.getEpisodePills(animeCanonEp, markersNumeric);
+    assert.equal(animeCanonPills.length, 2);
+    assert.equal(animeCanonPills[0].id, 'anime-canon');
+    assert.equal(animeCanonPills[0].label, 'Anime Canon');
+    assert.equal(animeCanonPills[1].id, 'subbed');
+
+    // Manga Canon verification
+    const mangaCanonEp = {
+        Id: 'epMangaCanon',
+        Genres: ['Anime'],
+        MediaStreams: [{ Type: 'Audio', Language: 'jpn' }]
+    };
+    const mangaCanonPills = animeMarkerService.getEpisodePills(mangaCanonEp, markersNumeric);
+    assert.equal(mangaCanonPills.length, 2);
+    assert.equal(mangaCanonPills[0].id, 'canon');
+    assert.equal(mangaCanonPills[0].label, 'Canon');
+    assert.equal(mangaCanonPills[1].id, 'subbed');
 
     // 5c. Automatically resolves from cache if seriesMarkers is omitted
     animeMarkerService._seriesCache.set('seriesnaruto', {
@@ -294,7 +320,7 @@ test('AnimeMarkerService: One Piece anime series correctly resolves filler and s
     assert.equal(pills[1].id, 'subbed');
     assert.equal(pills[1].label, 'Subbed');
 
-    // Canon episode should receive only audio pill
+    // Canon episode receives both Canon content pill and audio pill
     const canonEpWithoutSeriesId = {
         Id: canonEpisodeId,
         Name: 'Canon Episode',
@@ -302,8 +328,11 @@ test('AnimeMarkerService: One Piece anime series correctly resolves filler and s
     };
 
     const canonPills = animeMarkerService.getEpisodePills(canonEpWithoutSeriesId, null, { series: seasonContext });
-    assert.equal(canonPills.length, 1, 'One Piece canon episode must receive 1 subbed pill');
-    assert.equal(canonPills[0].id, 'subbed');
+    assert.equal(canonPills.length, 2, 'One Piece canon episode must receive Canon pill and subbed pill');
+    assert.equal(canonPills[0].id, 'canon');
+    assert.equal(canonPills[0].label, 'Canon');
+    assert.equal(canonPills[1].id, 'subbed');
+    assert.equal(canonPills[1].label, 'Subbed');
 });
 
 test('AnimeMarkerService: inherits season audio verdict when individual episode streams are omitted', () => {
@@ -336,9 +365,11 @@ test('AnimeMarkerService: inherits season audio verdict when individual episode 
     };
 
     const pills = animeMarkerService.getEpisodePills(ep);
-    assert.equal(pills.length, 1, 'Episode must inherit Subbed pill from season verdict');
-    assert.equal(pills[0].id, 'subbed');
-    assert.equal(pills[0].label, 'Subbed');
+    assert.equal(pills.length, 2, 'Episode must receive Canon pill and inherit Subbed pill from season verdict');
+    assert.equal(pills[0].id, 'canon');
+    assert.equal(pills[0].label, 'Canon');
+    assert.equal(pills[1].id, 'subbed');
+    assert.equal(pills[1].label, 'Subbed');
 });
 
 test('AnimeMarkerService: getEpisodeMarker resolves markers by IndexNumber when GUID lookup fails', () => {
