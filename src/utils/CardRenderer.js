@@ -9,6 +9,7 @@
 
 import { api } from '../api/index.js';
 import { escapeHtml } from './Utils.js';
+import { seerrCardState } from '../api/seerrNormalize.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
@@ -659,7 +660,10 @@ class CardRenderer {
         const markerCount = seriesMarkers?.episodes ? Object.keys(seriesMarkers.episodes).length : '0';
         const isAnimeFlag = seriesMarkers ? (seriesMarkers.matched || seriesMarkers.isAnime ? '1' : '0') : '0';
         const itemCacheKey = `${itemId}:${markerCount}:${isAnimeFlag}`;
-        const cached = CardRenderer._htmlCache.get(itemCacheKey);
+        // A card with a running Seerr download must not be served from (or stored in)
+        // the HTML cache, otherwise the spinner would outlive the download.
+        const hasSeerrDownloads = Array.isArray(item._downloads) && item._downloads.length > 0;
+        const cached = hasSeerrDownloads ? undefined : CardRenderer._htmlCache.get(itemCacheKey);
         if (cached !== undefined) return cached;
 
         let imageUrl = '';
@@ -1184,8 +1188,7 @@ class CardRenderer {
         // playback percentage from server UserData.
         // --------------------------------------------------------------------
         const hasPlaybackTicks = Boolean(item?.UserData?.PlaybackPositionTicks && item?.RunTimeTicks);
-        const hasPlayedPercentage =
-            item?.UserData?.PlayedPercentage != null && item.UserData.PlayedPercentage > 0;
+        const hasPlayedPercentage = item?.UserData?.PlayedPercentage != null && item.UserData.PlayedPercentage > 0;
 
         if (
             !hideProgressBar &&
@@ -1307,19 +1310,17 @@ class CardRenderer {
             }
         }
 
-        if (item._seerrStatus !== undefined && item._seerrStatus !== null) {
-            const isRequested =
-                item._seerrStatus === 2 ||
-                item._seerrStatus === 3 ||
-                (item._requestId && item._seerrStatus !== 5 && item._seerrStatus !== 4);
-            const isPartial = item._seerrStatus === 4;
-            const isAvailable = item._seerrStatus === 5;
-
-            if (isRequested) {
+        // Top-right status icon; the rules live in seerrCardState
+        const seerrState = seerrCardState(item);
+        if (seerrState) {
+            if (seerrState === 'downloading') {
+                // Mirrors Seerr's mini status badge: a spinner replaces the clock while downloading
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested seerr-card-icon--downloading" title="${escapeHtml(i18n.t('SeerrStatusDownloading'))}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8"></path></svg></div>`;
+            } else if (seerrState === 'requested') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
-            } else if (isPartial) {
+            } else if (seerrState === 'partial') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
-            } else if (isAvailable) {
+            } else if (seerrState === 'available') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--available" title="Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"></path></svg></div>`;
             }
         }
@@ -1876,7 +1877,7 @@ class CardRenderer {
         `;
 
         // Cache the output for reuse during this render context
-        CardRenderer._htmlCache.set(itemCacheKey, html);
+        if (!hasSeerrDownloads) CardRenderer._htmlCache.set(itemCacheKey, html);
         return html;
     }
 

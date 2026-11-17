@@ -9,6 +9,10 @@
 
 // Page-scoped styles - loads with this module's chunk instead of the boot bundle
 import '../styles/discover.css';
+// Own the shared details layout (backdrop, hero, meta rows) instead of relying
+// on DetailsPage having loaded it: a direct reload into a Seerr page otherwise
+// renders unstyled until the details chunk is prefetched in idle time.
+import '../styles/details.css';
 
 import Page from './Page.js';
 import DescriptionModal from '../components/DescriptionModal.js';
@@ -17,7 +21,15 @@ import { RichMetadataTable } from '../components/RichMetadataTable.js';
 import { api } from '../api/ApiClient.js';
 import { seerr } from '../api/seerrClient.js';
 import { renderWatchProviders, watchProviderRegion } from '../utils/WatchProviders.js';
-import { SEERR_STATUS, seerrStatusKey } from '../api/seerrNormalize.js';
+import {
+    SEERR_STATUS,
+    seerrStatusKey,
+    hasUnrequestedSeerrSeasons,
+    getSeerrRequestActions,
+    seerrDownloadPollDelay,
+    describeSeerrDownloadBadge
+} from '../api/seerrNormalize.js';
+import SeerrDownloadPoller from '../utils/SeerrDownloadPoller.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { toast } from '../ui/Toast.js';
@@ -219,27 +231,17 @@ class SeerrDetailsPage extends Page {
 
         this.setLoading(true);
         try {
-            this._item = await seerr.details(mediaType, tmdbId);
+            // Always fresh: the response cache (5 min, also filled by Discover card
+            // enrichment) can hold an outdated download list, which rendered stale
+            // blocks until the first poll replaced them 15 s later.
+            this._item = await seerr.details(mediaType, tmdbId, { fresh: true });
             if (this._item) {
                 this._item._mediaType = mediaType;
             }
             if (mediaType === 'tv') {
-                try {
-                    // Query season-level statuses for this series
-                    const seasons = await seerr.tvSeasons(tmdbId);
-
-                    // A season is requestable if it is NOT already available, pending, or processing.
-                    // This allows partially available, unknown, or unrequested seasons to be requested.
-                    this._hasUnrequestedSeasons = seasons.some(
-                        (s) =>
-                            s.status !== SEERR_STATUS.AVAILABLE &&
-                            s.status !== SEERR_STATUS.PENDING &&
-                            s.status !== SEERR_STATUS.PROCESSING
-                    );
-                } catch (e) {
-                    // Fallback to allowing request if season check fails
-                    this._hasUnrequestedSeasons = true;
-                }
+                // Fall back to allowing a request if the season check fails
+                const unrequested = await this._loadUnrequestedSeasons();
+                this._hasUnrequestedSeasons = unrequested === null ? true : unrequested;
             }
             try {
                 this._isWatchlisted = await seerr.isWatchlisted(mediaType, tmdbId);
@@ -249,6 +251,7 @@ class SeerrDetailsPage extends Page {
             this._renderDetails();
             this._bindActions();
             this._setupTooltipListener();
+            this._setupDownloadPolling();
             this._registerFocus();
             if (
                 this._item._seerrStatus === SEERR_STATUS.AVAILABLE ||
@@ -308,7 +311,6 @@ class SeerrDetailsPage extends Page {
         const runtime = runtimeMinutes
             ? `${Math.floor(runtimeMinutes / 60) ? `${Math.floor(runtimeMinutes / 60)}h ` : ''}${runtimeMinutes % 60}m`
             : '';
-        const statusKey = seerrStatusKey(item._seerrStatus);
         const formatCompactCurrency = (val) => {
             if (typeof val !== 'number' || val <= 0) return '';
             if (val >= 1e9) return `$${(val / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
@@ -340,9 +342,7 @@ class SeerrDetailsPage extends Page {
                 : '';
 
         const secondaryMeta = [
-            statusKey
-                ? `<span class="meta-item meta-badge seerr-details-status">${escapeHtml(i18n.t(statusKey))}</span>`
-                : '',
+            this._statusBadgeMarkup(),
             seasonsLabel
                 ? `<span class="meta-item seerr-meta-card seerr-seasons-badge">${escapeHtml(seasonsLabel)}</span>`
                 : '',
@@ -661,26 +661,31 @@ class SeerrDetailsPage extends Page {
 
     async _refreshTvSeasonState() {
         if (this._item._mediaType === 'tv') {
-            try {
-                // Refresh season statuses from Seerr
-                const seasons = await seerr.tvSeasons(this._item._tmdbId);
-
-                // Check if any season is not already available or requested
-                this._hasUnrequestedSeasons = seasons.some(
-                    (s) =>
-                        s.status !== SEERR_STATUS.AVAILABLE &&
-                        s.status !== SEERR_STATUS.PENDING &&
-                        s.status !== SEERR_STATUS.PROCESSING
-                );
-            } catch (e) {
-                // Log warning if refresh fails
-                log.warn('Failed to refresh TV seasons status', e);
-            }
+            // Keep the previous answer when the refresh fails
+            const unrequested = await this._loadUnrequestedSeasons();
+            if (unrequested !== null) this._hasUnrequestedSeasons = unrequested;
         }
         this._updateRequestButton();
         this._renderStatus();
         this._registerFocus();
         focusManager.invalidateCache('seerr-details-actions');
+        // A request was created or cancelled: restart polling from the new state
+        this._pendingActionUpdate = false;
+        if (this._downloadPoller) this._downloadPoller.schedule();
+    }
+
+    /**
+     * Asks Seerr whether any season of this series can still be requested.
+     * @returns {Promise<boolean|null>} null when the season lookup failed
+     * @private
+     */
+    async _loadUnrequestedSeasons() {
+        try {
+            return hasUnrequestedSeerrSeasons(await seerr.tvSeasons(this._item._tmdbId));
+        } catch (err) {
+            log.warn('Failed to load TV season statuses', err);
+            return null;
+        }
     }
 
     _bindActions() {
@@ -715,6 +720,7 @@ class SeerrDetailsPage extends Page {
                 await seerr.cancelRequest(this._item._requestId);
                 this._item._seerrStatus = SEERR_STATUS.NOT_REQUESTED;
                 this._item._requestId = null;
+                this._item._downloads = [];
                 await this._refreshTvSeasonState();
                 const reqBtn = this.$('.seerr-request-btn:not(.hidden)');
                 if (reqBtn) focusManager.focusElement(reqBtn);
@@ -1249,68 +1255,46 @@ class SeerrDetailsPage extends Page {
         else if (hasRichMeta) this.setActiveSection('details-rich-meta');
     }
 
+    /**
+     * @returns {{requestable: boolean, canCancel: boolean, labelKey: string}}
+     * @private
+     */
+    _getRequestActions() {
+        return getSeerrRequestActions(this._item, {
+            hasUnrequestedSeasons: this._hasUnrequestedSeasons,
+            isAdmin: this._isSeerrAdmin
+        });
+    }
+
     _updateRequestButton() {
         const button = this.$('.seerr-request-btn');
         const cancelBtn = this.$('.seerr-cancel-request-btn');
         if (!button) return;
 
-        const isTv = this._item._mediaType === 'tv';
-        let requestable;
+        const { requestable, canCancel, labelKey } = this._getRequestActions();
 
-        if (isTv) {
-            // For TV shows, allow requesting missing seasons as long as the series is not
-            // completely available, and there are seasons that haven't been requested or are partial.
-            requestable = this._item._seerrStatus !== SEERR_STATUS.AVAILABLE && this._hasUnrequestedSeasons !== false;
-        } else {
-            // For movies, only unrequested, unknown, or deleted items can be requested
-            requestable =
-                this._item._seerrStatus === SEERR_STATUS.NOT_REQUESTED ||
-                this._item._seerrStatus === SEERR_STATUS.UNKNOWN ||
-                this._item._seerrStatus === SEERR_STATUS.DELETED;
-        }
-
-        // Toggle request button visibility and focus accessibility
+        // Toggle request button visibility and focus accessibility. Writes are
+        // skipped when nothing changed, so a background poll leaves the DOM alone.
+        const setTabIndex = (el, value) => {
+            if (el.tabIndex !== value) el.tabIndex = value;
+        };
         button.classList.toggle('hidden', !requestable);
-        button.tabIndex = requestable ? 0 : -1;
+        setTabIndex(button, requestable ? 0 : -1);
 
-        // ----------------------------------------------------------------
-        // Cancel button visibility:
-        //   PENDING  → any user can cancel (just a queue entry, no admin
-        //              approval involved yet — Seerr allows this for all)
-        //   Anything past PENDING (PROCESSING, PARTIALLY_AVAILABLE, etc.) →
-        //              admin-approved work has started; only Seerr admins
-        //              can retract it at this point.
-        // ----------------------------------------------------------------
-        const hasRequest = !!(this._item._requestId && this._item._seerrStatus !== SEERR_STATUS.AVAILABLE);
-        const isPending = this._item._seerrStatus === SEERR_STATUS.PENDING;
-        const canCancel = hasRequest && (isPending || this._isSeerrAdmin);
         if (cancelBtn) {
             cancelBtn.classList.toggle('hidden', !canCancel);
-            cancelBtn.tabIndex = canCancel ? 0 : -1;
+            setTabIndex(cancelBtn, canCancel ? 0 : -1);
         }
 
-        // Button label reflects the state of the series:
-        //   PARTIALLY_AVAILABLE → "Request More" (some content is available, more can be added)
-        //   PENDING / PROCESSING → "View Request" (content is queued/downloading, nothing available yet;
-        //                          the modal still lets the user add more seasons if needed)
-        //   Default             → "Request"
+        // "Request" / "Request More" / "View Request" (see getSeerrRequestActions)
         const span = button.querySelector('span');
-        let labelKey = 'SeerrRequest';
-        if (isTv) {
-            if (this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE) {
-                labelKey = 'SeerrRequestMore';
-            } else if (
-                this._item._seerrStatus === SEERR_STATUS.PENDING ||
-                this._item._seerrStatus === SEERR_STATUS.PROCESSING
-            ) {
-                labelKey = 'SeerrViewRequest';
-            }
-        }
         const labelText = i18n.t(labelKey);
-        if (span) {
+        if (span && span.textContent !== labelText) {
             span.textContent = labelText;
         }
-        button.setAttribute('data-tooltip', labelText);
+        if (button.getAttribute('data-tooltip') !== labelText) {
+            button.setAttribute('data-tooltip', labelText);
+        }
 
         // Re-evaluate focus layout for action buttons
         focusManager.invalidateCache('seerr-details-actions');
@@ -1409,17 +1393,227 @@ class SeerrDetailsPage extends Page {
         this._tooltipTimers.push(setTimeout(updateInitial, 400));
     }
 
-    _renderStatus() {
-        const statusKey = seerrStatusKey(this._item._seerrStatus);
-        const row = this.$('.secondary-meta-row') || this.$('.details-meta-row');
-        const oldStatus = this.$('.seerr-details-status');
-        if (oldStatus) oldStatus.remove();
-        if (!row || !statusKey) return;
+    // ========================================================================
+    // Status Badge & Download Progress
+    // ========================================================================
 
-        const status = document.createElement('span');
-        status.className = 'meta-item meta-badge seerr-details-status';
-        status.textContent = i18n.t(statusKey);
-        row.insertBefore(status, row.firstChild);
+    /**
+     * Builds the status badge. While Seerr reports a running download the badge
+     * mirrors Seerr's own (progress fill, S1E3 / S1 tag, spinner) and appends
+     * the ETA of that download: "Downloading S17 · in 2 h 55 min".
+     * @returns {string}
+     * @private
+     */
+    _statusBadgeMarkup() {
+        const download = describeSeerrDownloadBadge(this._item);
+        if (!download) {
+            const statusKey = seerrStatusKey(this._item._seerrStatus);
+            return statusKey
+                ? `<span class="meta-item meta-badge seerr-details-status">${escapeHtml(i18n.t(statusKey))}</span>`
+                : '';
+        }
+
+        const eta = this._etaText(download.eta);
+        const label = [i18n.t('SeerrStatusDownloading'), download.episodeTag].filter(Boolean).join(' ');
+
+        return `<span class="meta-item meta-badge seerr-details-status is-downloading">
+                <span class="seerr-status-fill" style="width: ${download.percent}%;"></span>
+                <span class="seerr-status-label">${escapeHtml(label)}${eta ? ` · ${escapeHtml(eta)}` : ''}</span>
+                <span class="seerr-status-spinner"></span>
+            </span>`;
+    }
+
+    /**
+     * Brings the status badge in line with the current item. A refresh with the
+     * same kind of badge only patches the changed text and fill width, so the
+     * spinner keeps turning and nothing reflows or flickers every poll.
+     * @private
+     */
+    _renderStatus() {
+        const row = this.$('.secondary-meta-row') || this.$('.details-meta-row');
+        const markup = this._statusBadgeMarkup();
+        const holder = document.createElement('div');
+        holder.innerHTML = markup;
+        const next = holder.firstElementChild;
+        const existing = this.$$('.seerr-details-status');
+
+        if (next && existing.length === 1 && existing[0].className === next.className) {
+            this._patchStatusBadge(existing[0], next);
+            return;
+        }
+
+        // Kind of badge changed (or a stray duplicate exists): replace all of them
+        Array.prototype.forEach.call(existing, (el) => el.remove());
+        if (row && next) row.insertBefore(next, row.firstChild);
+    }
+
+    /**
+     * Copies text and fill width from a freshly built badge onto the mounted one,
+     * touching the DOM only where a value actually differs.
+     * @param {HTMLElement} current
+     * @param {HTMLElement} next
+     * @private
+     */
+    _patchStatusBadge(current, next) {
+        const nextLabel = next.querySelector('.seerr-status-label');
+        if (!nextLabel) {
+            if (current.textContent !== next.textContent) current.textContent = next.textContent;
+            return;
+        }
+
+        const label = current.querySelector('.seerr-status-label');
+        if (label && label.textContent !== nextLabel.textContent) label.textContent = nextLabel.textContent;
+
+        const fill = current.querySelector('.seerr-status-fill');
+        const nextFill = next.querySelector('.seerr-status-fill');
+        if (fill && nextFill && fill.style.width !== nextFill.style.width) fill.style.width = nextFill.style.width;
+    }
+
+    /**
+     * @param {{hours: number, minutes: number}|null} eta - From describeSeerrDownloadBadge
+     * @returns {string} "in 2 h 55 min", or '' when Seerr has no estimate
+     * @private
+     */
+    _etaText(eta) {
+        if (!eta) return '';
+        return eta.hours > 0
+            ? i18n.t('SeerrDownloadInHoursMinutes', [eta.hours, eta.minutes])
+            : i18n.t('SeerrDownloadInMinutes', [eta.minutes]);
+    }
+
+    // ------------------------------------------------------------------------
+    // Polling
+    //
+    // Hard rule: a poll refresh must never change focus. It only rewrites text
+    // and widths on non-focusable nodes, never clears caches that drive focus
+    // restoration, and defers hiding a button for as long as it holds focus.
+    // ------------------------------------------------------------------------
+
+    /**
+     * Starts the download poller and the deferred button update it relies on.
+     * @private
+     */
+    _setupDownloadPolling() {
+        this._pendingActionUpdate = false;
+
+        // Apply a deferred button update once focus has left the affected button
+        this.on('focus:changed', (focusedEl) => {
+            if (this._pendingActionUpdate) this._applyPolledActionState(focusedEl);
+        });
+
+        this._downloadPoller = new SeerrDownloadPoller({
+            fetch: () => seerr.details(this._mediaType, this._item._tmdbId, { fresh: true }),
+            getDelay: () => seerrDownloadPollDelay(this._item),
+            isPaused: () => this._isDownloadPollPaused(),
+            onUpdate: (fresh, isStale) => this._applyPolledState(fresh, isStale),
+            onError: (err) => log.warn('Seerr download progress refresh failed', err)
+        });
+        this._downloadPoller.schedule();
+    }
+
+    /**
+     * True while a refresh must not touch the page: hidden app, another page
+     * on top, or a modal holding a focus trap.
+     * @returns {boolean}
+     * @private
+     */
+    _isDownloadPollPaused() {
+        if (typeof document !== 'undefined' && document.hidden) return true;
+        // The router may hand out a lazy-loading proxy that wraps this instance
+        // (App.js `_realInstance`), so compare against both.
+        const current = router.getCurrentPage();
+        if (!current || (current !== this && current._realInstance !== this)) return true;
+        if (!this.el || !document.body.contains(this.el)) return true;
+        return focusManager.isTrapped();
+    }
+
+    /**
+     * Merges a fresh details response into the page without re-rendering it.
+     *
+     * Hard rule: a refresh must never change focus. It only patches text and
+     * widths on non-focusable nodes and defers hiding a button that holds focus.
+     * @param {Object} fresh - Item returned by seerr.details
+     * @param {Function} isStale - True once the poller was rescheduled or stopped
+     * @private
+     */
+    async _applyPolledState(fresh, isStale) {
+        const previousStatus = this._item._seerrStatus;
+
+        this._item._seerrStatus = fresh._seerrStatus;
+        this._item._downloads = fresh._downloads || [];
+        this._item._requestId = fresh._requestId || null;
+        if (fresh._jellyfinMediaId) this._item._jellyfinMediaId = fresh._jellyfinMediaId;
+
+        this._guardFocus(() => this._renderStatus());
+
+        const statusChanged = previousStatus !== this._item._seerrStatus;
+        if (statusChanged && this._item._mediaType === 'tv') {
+            // Served from the response cache the fresh details call just filled
+            const unrequested = await this._loadUnrequestedSeasons();
+            if (isStale()) return;
+            if (unrequested !== null) this._hasUnrequestedSeasons = unrequested;
+        }
+
+        this._guardFocus(() => this._applyPolledActionState());
+
+        const isPlayable =
+            this._item._seerrStatus === SEERR_STATUS.AVAILABLE ||
+            this._item._seerrStatus === SEERR_STATUS.PARTIALLY_AVAILABLE;
+        if (isPlayable && !this._jellyfinMediaId) {
+            // Only ever reveals the play buttons; it does not move focus
+            void this._checkJellyfinMediaAvailability(this._mediaType, this._item._tmdbId);
+        }
+    }
+
+    /**
+     * Safety net around a synchronous refresh step: nothing in it may move
+     * focus. Kept synchronous on purpose, so focus the user moves themselves
+     * (between awaits) is never mistaken for a regression and reverted.
+     * @param {Function} update
+     * @private
+     */
+    _guardFocus(update) {
+        const focusedBefore = document.activeElement;
+        update();
+        if (focusedBefore && document.activeElement !== focusedBefore && document.body.contains(focusedBefore)) {
+            log.warn('Download refresh changed focus unexpectedly, restoring');
+            try {
+                focusedBefore.focus({ preventScroll: true });
+            } catch (_) {}
+        }
+    }
+
+    /**
+     * Applies request/cancel button visibility after a poll. Hiding a button
+     * that currently holds focus would drop focus, so that update waits until
+     * the user has moved away (see the focus:changed handler).
+     * @param {HTMLElement} [focusedEl] - Newly focused element, when called from focus:changed
+     * @private
+     */
+    _applyPolledActionState(focusedEl) {
+        if (!this._item) return;
+        const active = focusedEl || document.activeElement;
+        const requestBtn = this.$('.seerr-request-btn');
+        const cancelBtn = this.$('.seerr-cancel-request-btn');
+        const next = this._getRequestActions();
+
+        const wouldHideFocused =
+            (active && active === requestBtn && !next.requestable) ||
+            (active && active === cancelBtn && !next.canCancel);
+        if (wouldHideFocused) {
+            this._pendingActionUpdate = true;
+            return;
+        }
+
+        const wasRequestable = !!requestBtn && !requestBtn.classList.contains('hidden');
+        const couldCancel = !!cancelBtn && !cancelBtn.classList.contains('hidden');
+
+        this._pendingActionUpdate = false;
+        this._updateRequestButton();
+        // Section wiring only needs a refresh when the set of visible buttons changed
+        if (wasRequestable !== next.requestable || couldCancel !== next.canCancel) {
+            this._registerFocus();
+        }
     }
 
     _renderRatings(ratings) {
@@ -1482,6 +1676,11 @@ class SeerrDetailsPage extends Page {
     }
 
     destroy() {
+        if (this._downloadPoller) {
+            this._downloadPoller.stop();
+            this._downloadPoller = null;
+        }
+
         if (this._tooltipTimers) {
             this._tooltipTimers.forEach((t) => clearTimeout(t));
             this._tooltipTimers = null;
