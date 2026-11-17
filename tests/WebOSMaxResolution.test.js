@@ -125,6 +125,27 @@ test('webOS: Force Transcode without a known limit sends no size condition', () 
     assert.deepStrictEqual(profile.CodecProfiles, []);
 });
 
+test('BaseProfile.isVideoSizeLimitProfile: remux mode keeps only the size limit of the webOS profile', () => {
+    // Remux mode drops codec restrictions but must keep the size limit
+    const profile = buildProfile({ deviceInfo: { uhd: false }, maxResolution: '1920x1080' });
+    const kept = profile.CodecProfiles.filter((p) => BaseProfile.isVideoSizeLimitProfile(p));
+    assert.strictEqual(kept.length, 1);
+    assert.deepStrictEqual(getSizeLimit({ CodecProfiles: kept }), { width: 1920, height: 1080 });
+    assert.ok(profile.CodecProfiles.length > kept.length, 'other codec profiles are not size limits');
+});
+
+test('BaseProfile.isVideoSizeLimitProfile: codec, container and other conditions are not size limits', () => {
+    const width = { Condition: 'LessThanEqual', Property: 'Width', Value: '1920' };
+    const bitDepth = { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8' };
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'Video', Conditions: [width] }), true);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'Video', Codec: 'h264', Conditions: [width] }), false);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'Video', Container: 'ts', Conditions: [width] }), false);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'Video', Conditions: [width, bitDepth] }), false);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'Video', Conditions: [] }), false);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile({ Type: 'VideoAudio', Conditions: [width] }), false);
+    assert.strictEqual(BaseProfile.isVideoSizeLimitProfile(null), false);
+});
+
 test('webOS auto: no size limit when deviceInfo does not say whether the panel is UHD', () => {
     const profile = buildProfile({ deviceInfo: { modelName: 'LG TV' } });
     assert.strictEqual(getSizeLimit(profile), null);

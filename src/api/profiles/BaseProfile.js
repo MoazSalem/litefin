@@ -39,6 +39,26 @@ export class BaseProfile {
     }
 
     /**
+     * Whether a codec profile is a video size limit: a Video profile for every
+     * codec and container whose conditions are only Width / Height limits.
+     * Playback modes that drop codec restrictions keep it, because a video
+     * larger than the panel can decode fails in every mode.
+     * @param {Object} codecProfile - Entry of DeviceProfile.CodecProfiles
+     * @returns {boolean}
+     */
+    static isVideoSizeLimitProfile(codecProfile) {
+        return Boolean(
+            codecProfile &&
+            codecProfile.Type === 'Video' &&
+            !codecProfile.Codec &&
+            !codecProfile.Container &&
+            Array.isArray(codecProfile.Conditions) &&
+            codecProfile.Conditions.length > 0 &&
+            codecProfile.Conditions.every((c) => c.Property === 'Width' || c.Property === 'Height')
+        );
+    }
+
+    /**
      * Build the standard subtitle profiles array based on the subtitleBurnIn setting.
      * @returns {Array} List of subtitle profiles
      */
