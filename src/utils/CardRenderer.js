@@ -108,9 +108,14 @@ class CardRenderer {
         // --------------------------------------------------------------------
         // User Preference Guard: Anime & Audio Classification Badges
         // --------------------------------------------------------------------
-        // Feature is disabled by default; check if explicitly enabled by user.
+        // Features are disabled by default; check if either content or audio badges are enabled.
         // --------------------------------------------------------------------
-        if (storage.getItem('pref:showAnimeMarkers') !== 'true') return;
+        const showContent = storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+            (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+        const showAudio = storage.getItem('pref:showAudioBadges') === 'true' ||
+            (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+
+        if (!showContent && !showAudio) return;
 
         cards.forEach((card) => {
             const itemId = card.getAttribute('data-item-id');
@@ -137,8 +142,11 @@ class CardRenderer {
             // Fast guard: ensure item is verified as anime
             if (!animeMarkerService.isAnime(item, parsedData)) return;
 
-            // Resolve all applicable episode badges (content and audio classifications)
-            const pills = animeMarkerService.getEpisodePills(item, parsedData);
+            // Resolve all applicable episode badges according to active user preferences
+            const pills = animeMarkerService.getEpisodePills(item, parsedData, {
+                showContentBadges: showContent,
+                showAudioBadges: showAudio
+            });
 
             // Locate existing anime pill container if already mounted
             let pillsRow =
@@ -216,8 +224,12 @@ class CardRenderer {
             swapEpisodeTitles: storage.getItem('pref:swapEpisodeTitles') === 'true',
             showFavoriteBadges: storage.getItem('pref:showFavoriteBadges') === 'true',
             showQualityBadges: storage.getItem('pref:showQualityBadges') === 'true',
-            // Anime and audio classification badges (disabled by default)
-            showAnimeMarkers: storage.getItem('pref:showAnimeMarkers') === 'true'
+            // Anime content badges (Filler/Mixed/Recap) - disabled by default
+            showAnimeContentBadges: storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+                (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true'),
+            // Audio classification badges (Subbed/Dubbed) - disabled by default
+            showAudioBadges: storage.getItem('pref:showAudioBadges') === 'true' ||
+                (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true')
         };
         // Each of these shapes the markup the HTML cache keeps, so all of them are
         // part of its key: a changed setting rebuilds the cards once
@@ -556,12 +568,16 @@ class CardRenderer {
         if (!item) return '';
 
         // --------------------------------------------------------------------
-        // Evaluate User Setting: Anime Content & Audio Classification Badges
+        // Evaluate User Settings: Anime Content Badges & Audio Badges
         // --------------------------------------------------------------------
-        // Setting is disabled by default; require explicit opt-in via layout settings.
+        // Both settings default to disabled; check explicit user preferences.
         // --------------------------------------------------------------------
-        const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
-        if (!showAnimeMarkers) return '';
+        const showContent = storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+            (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+        const showAudio = storage.getItem('pref:showAudioBadges') === 'true' ||
+            (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+
+        if (!showContent && !showAudio) return '';
 
         // Badges are relevant for episodes and movies
         if (item.Type !== 'Episode' && item.Type !== 'Movie') {
@@ -583,7 +599,11 @@ class CardRenderer {
             return '';
         }
 
-        const pills = animeMarkerService.getEpisodePills(item, seriesMarkers, options);
+        const pills = animeMarkerService.getEpisodePills(item, seriesMarkers, {
+            ...options,
+            showContentBadges: showContent,
+            showAudioBadges: showAudio
+        });
         if (!pills || pills.length === 0) return '';
 
         return animeMarkerService.renderPillsHtml(pills, {

@@ -649,11 +649,20 @@ class AnimeMarkerService {
             return translated && translated !== key ? translated : fallback;
         };
 
-        // 1. Resolve content markers (Filler / Mixed / Recap)
+        const showContent = options.showContentBadges !== false;
+        const showAudio = options.showAudioBadges !== false;
+        const includeCanon = Boolean(options.includeCanon);
+
+        // Resolve episode classification marker from preloaded series marker dataset
         const marker = seriesMarkers ? this.getEpisodeMarker(seriesMarkers, episode.Id, episode) : null;
 
-        if (marker) {
-            // Check kind (Filler vs Mixed) supporting lowercase strings and numeric enum values
+        // --------------------------------------------------------------------
+        // 1. Resolve content markers (Filler / Mixed / Recap / Canon)
+        // --------------------------------------------------------------------
+        // Evaluated only when content badge rendering is enabled by settings.
+        // --------------------------------------------------------------------
+        if (showContent && marker) {
+            // Check kind (Filler vs Mixed vs Canon) supporting strings and numeric enum values
             const kindStr = String(marker.kind || '').toLowerCase();
             if (kindStr === 'filler' || marker.kind === 3) {
                 pills.push({
@@ -667,6 +676,12 @@ class AnimeMarkerService {
                     type: 'mixed',
                     label: getLabel('BadgeMixed', 'Mixed Canon/Filler')
                 });
+            } else if (includeCanon && (kindStr === 'mangacanon' || kindStr === 'animecanon' || kindStr === 'manga_canon' || kindStr === 'anime_canon' || marker.kind === 0 || marker.kind === 1)) {
+                pills.push({
+                    id: 'canon',
+                    type: 'canon',
+                    label: getLabel('BadgeCanon', 'Canon')
+                });
             }
 
             // Check recap flag supporting boolean and string variants
@@ -679,23 +694,116 @@ class AnimeMarkerService {
             }
         }
 
-        // 2. Resolve audio classification directly from stream metadata or episode marker
-        let audioVerdict = AudioClassifier.classify(episode) || marker?.audio;
+        // --------------------------------------------------------------------
+        // 2. Resolve audio classification (Subbed / Dubbed / Dual)
+        // --------------------------------------------------------------------
+        // Evaluated only when audio badge rendering is enabled by settings.
+        // --------------------------------------------------------------------
+        if (showAudio) {
+            let audioVerdict = AudioClassifier.classify(episode) || (marker ? marker.audio : null);
 
-        // Fallback: If episode has no direct audio verdict, inherit from season verdict
-        if (!audioVerdict && seriesMarkers?.seasons) {
-            const seasonId = episode.SeasonId || (options?.season?.Id ? options.season.Id : null);
-            if (seasonId) {
-                const normSeasonId = this.normalizeId(seasonId);
-                audioVerdict = seriesMarkers.seasons[normSeasonId] || null;
-            }
-            // If still unresolvable, check if seasons have a uniform audio verdict across the series
-            if (!audioVerdict) {
-                const seasonAudioValues = Object.values(seriesMarkers.seasons).filter(Boolean);
-                if (seasonAudioValues.length > 0 && seasonAudioValues.every((v) => v === seasonAudioValues[0])) {
-                    audioVerdict = seasonAudioValues[0];
+            // Fallback: If episode has no direct audio verdict, inherit from season verdict
+            if (!audioVerdict && seriesMarkers?.seasons) {
+                const seasonId = episode.SeasonId || (options?.season?.Id ? options.season.Id : null);
+                if (seasonId) {
+                    const normSeasonId = this.normalizeId(seasonId);
+                    audioVerdict = seriesMarkers.seasons[normSeasonId] || null;
+                }
+                // If still unresolvable, check if seasons have a uniform audio verdict across the series
+                if (!audioVerdict) {
+                    const seasonAudioValues = Object.values(seriesMarkers.seasons).filter(Boolean);
+                    if (seasonAudioValues.length > 0 && seasonAudioValues.every((v) => v === seasonAudioValues[0])) {
+                        audioVerdict = seasonAudioValues[0];
+                    }
                 }
             }
+
+            if (audioVerdict === 'Subbed') {
+                pills.push({
+                    id: 'subbed',
+                    type: 'subbed',
+                    label: getLabel('BadgeSubbed', 'Subbed')
+                });
+            } else if (audioVerdict === 'Dubbed') {
+                pills.push({
+                    id: 'dubbed',
+                    type: 'dubbed',
+                    label: getLabel('BadgeDubbed', 'Dubbed')
+                });
+            } else if (audioVerdict === 'Subbed/Dubbed') {
+                pills.push({
+                    id: 'dual',
+                    type: 'dual',
+                    label: getLabel('BadgeSubbedDubbed', 'Subbed/Dubbed')
+                });
+            }
+        }
+
+        return pills;
+    }
+
+    /**
+     * Resolves all applicable badges (content and/or audio) for any media item:
+     * Episode, Series, Season, or Movie.
+     *
+     * @param {Object} item - Media item model
+     * @param {Object} [seriesMarkers] - Preloaded anime markers
+     * @param {Object} [options] - Configuration flags (showContentBadges, showAudioBadges, includeCanon)
+     * @returns {Array<{ id: string, type: string, label: string }>} Resolved pills
+     */
+    getItemPills(item, seriesMarkers = null, options = {}) {
+        if (!item) return [];
+
+        // For episodes, delegate to getEpisodePills
+        if (item.Type === 'Episode') {
+            return this.getEpisodePills(item, seriesMarkers, options);
+        }
+
+        // Verify anime status before computing badges
+        if (!this.isAnime(item, seriesMarkers, options)) {
+            return [];
+        }
+
+        const showAudio = options.showAudioBadges !== false;
+        if (!showAudio) {
+            return [];
+        }
+
+        const pills = [];
+        const getLabel = (key, fallback) => {
+            const translated = i18n.t(key);
+            return translated && translated !== key ? translated : fallback;
+        };
+
+        let audioVerdict = null;
+
+        // Series: aggregate season audio verdicts
+        if (item.Type === 'Series') {
+            const targetMarkers = seriesMarkers || this.getCachedSeriesMarkers(item.Id);
+            if (targetMarkers?.seasons) {
+                const seasonAudioValues = Object.values(targetMarkers.seasons).filter(Boolean);
+                if (seasonAudioValues.length > 0) {
+                    const hasSub = seasonAudioValues.some((v) => v.includes('Sub'));
+                    const hasDub = seasonAudioValues.some((v) => v.includes('Dub'));
+                    if (hasSub && hasDub) {
+                        audioVerdict = 'Subbed/Dubbed';
+                    } else if (hasSub) {
+                        audioVerdict = 'Subbed';
+                    } else if (hasDub) {
+                        audioVerdict = 'Dubbed';
+                    }
+                }
+            }
+        } else if (item.Type === 'Season') {
+            // Season: check specific season audio entry
+            const targetMarkers = seriesMarkers || (item.SeriesId ? this.getCachedSeriesMarkers(item.SeriesId) : null);
+            if (targetMarkers?.seasons && item.Id) {
+                const normSeasonId = this.normalizeId(item.Id);
+                audioVerdict = targetMarkers.seasons[normSeasonId] || null;
+            }
+        } else if (item.Type === 'Movie') {
+            // Movies: inspect direct media streams via AudioClassifier
+            audioVerdict = AudioClassifier.classify(item);
         }
 
         if (audioVerdict === 'Subbed') {

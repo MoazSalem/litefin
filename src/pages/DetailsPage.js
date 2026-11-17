@@ -525,6 +525,7 @@ class DetailsPage extends Page {
                 if (!currentSeriesId) return;
                 if (animeMarkerService.normalizeId(currentSeriesId) === animeMarkerService.normalizeId(loadedSeriesId)) {
                     this._seriesMarkers = markers;
+                    this._updateHeroAnimeBadges();
                     this._updateEpisodeBadges();
                 }
             });
@@ -1740,9 +1741,12 @@ class DetailsPage extends Page {
         // ---------------------------------------------------------------------
         // Anime Markers & Content Badges Query (Opt-In Feature)
         // ---------------------------------------------------------------------
-        // Check user setting prior to fetching companion metadata (disabled by default)
+        // Check details page user settings prior to fetching companion metadata
         // ---------------------------------------------------------------------
-        if (seriesId && storage.getItem('pref:showAnimeMarkers') === 'true') {
+        const showDetailsContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showDetailsAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        if (seriesId && (showDetailsContent || showDetailsAudio)) {
             // First check memory cache synchronously so initial renders have markers immediately
             this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
 
@@ -1750,6 +1754,7 @@ class DetailsPage extends Page {
             animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
                 if (markers) {
                     this._seriesMarkers = markers;
+                    this._updateHeroAnimeBadges();
                     this._updateEpisodeBadges();
                 }
             }).catch(() => {});
@@ -3150,6 +3155,79 @@ class DetailsPage extends Page {
         return `<div class="details-tech-row">${pills.join('')}</div>`;
     }
 
+    /**
+     * Renders anime content and audio classification badges for the details hero header.
+     * Evaluates user preferences 'pref:detailsShowAnimeContentBadges' and 'pref:detailsShowAudioBadges'.
+     *
+     * @returns {string} HTML markup for the hero anime badges container
+     */
+    _renderHeroAnimeBadges() {
+        // Read user toggles for details page badges
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        // Return hidden container if both toggles are inactive
+        if (!showContent && !showAudio) {
+            return '<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills" style="display: none;"></span>';
+        }
+
+        // Query applicable pills for current details item (Episode, Series, Season, or Movie)
+        const pills = animeMarkerService.getItemPills(this._item, this._seriesMarkers, {
+            showContentBadges: showContent,
+            showAudioBadges: showAudio,
+            includeCanon: true
+        });
+
+        // Generate capsule HTML markup
+        const pillsHtml = pills.length > 0
+            ? animeMarkerService.renderPillsHtml(pills, { compact: false })
+            : '';
+
+        // Maintain mounted container element for dynamic background updates
+        const displayStyle = pills.length > 0 ? '' : 'style="display: none;"';
+        return `<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills" ${displayStyle}>${pillsHtml}</span>`;
+    }
+
+    /**
+     * Updates the hero header anime badges container in the active DOM once markers finish resolving.
+     */
+    _updateHeroAnimeBadges() {
+        const container = this.$('#details-hero-anime-pills');
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        // Suppress display if user has disabled both settings
+        if (!showContent && !showAudio) {
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        // Resolve pills with updated marker cache
+        const pills = animeMarkerService.getItemPills(this._item, this._seriesMarkers, {
+            showContentBadges: showContent,
+            showAudioBadges: showAudio,
+            includeCanon: true
+        });
+
+        // Patch live DOM element
+        if (container) {
+            if (pills.length > 0) {
+                container.innerHTML = animeMarkerService.renderPillsHtml(pills, { compact: false });
+                container.style.display = '';
+            } else {
+                container.textContent = '';
+                container.style.display = 'none';
+            }
+        } else if (pills.length > 0) {
+            // Fallback insertion into metadata row if container was not previously rendered
+            const metaRow = this.$('.details-meta-row');
+            if (metaRow) {
+                const pillsHtml = animeMarkerService.renderPillsHtml(pills, { compact: false });
+                metaRow.insertAdjacentHTML('beforeend', `<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills">${pillsHtml}</span>`);
+            }
+        }
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -3367,10 +3445,14 @@ class DetailsPage extends Page {
             techHtml = this._renderTechnicalDetails();
         }
 
+        // Render anime content and audio classification badges for hero header
+        const heroAnimeBadgesHtml = this._renderHeroAnimeBadges();
+
         // Finish appending standard metadata row and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
+                ${heroAnimeBadgesHtml}
             </div>
             ${techHtml}
         `;
@@ -4050,11 +4132,16 @@ class DetailsPage extends Page {
                 // -------------------------------------------------------------
                 // Resolve Anime Content & Audio Badges for Next Up Row
                 // -------------------------------------------------------------
-                // Evaluates markers only if the user preference is enabled (off by default)
+                // Evaluates user settings for details page content & audio badges
                 // -------------------------------------------------------------
-                const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
-                const pills = showAnimeMarkers
-                    ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, { series: this._item })
+                const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+                const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+                const pills = (showContent || showAudio)
+                    ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                        series: this._item,
+                        showContentBadges: showContent,
+                        showAudioBadges: showAudio
+                    })
                     : [];
                 const animePillsHtml = pills.length > 0
                     ? animeMarkerService.renderPillsHtml(pills, { compact: true })
@@ -4169,11 +4256,16 @@ class DetailsPage extends Page {
         const cached = state.get(cacheKey);
         if (cached) {
             this._episodes = cached;
-            // Only query anime markers if user setting is explicitly enabled
-            if (!this._seriesMarkers && seriesId && storage.getItem('pref:showAnimeMarkers') === 'true') {
+            // Query anime markers if user has enabled details content or audio badges
+            const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+            const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+            const shouldFetch = showContent || showAudio;
+
+            if (!this._seriesMarkers && seriesId && shouldFetch) {
                 animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
                     if (markers) {
                         this._seriesMarkers = markers;
+                        this._updateHeroAnimeBadges();
                         this._renderEpisodes();
                     }
                 }).catch(() => {});
@@ -4199,10 +4291,13 @@ class DetailsPage extends Page {
             // -----------------------------------------------------------------
             // Queries companion anime classifications only if user opted in
             // -----------------------------------------------------------------
-            const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
+            const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+            const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+            const shouldFetch = showContent || showAudio;
+
             const [response, markers] = await Promise.all([
                 api.getEpisodes(seriesId, { SeasonId: seasonId }),
-                (seriesId && showAnimeMarkers)
+                (seriesId && shouldFetch)
                     ? animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null)
                     : Promise.resolve(null)
             ]);
@@ -4302,11 +4397,16 @@ class DetailsPage extends Page {
                     // ---------------------------------------------------------
                     // Extract Content Markers (Filler, Mixed, Recap) & Audio Track Pills
                     // ---------------------------------------------------------
-                    // Omitted when the anime markers preference is disabled
+                    // Evaluated according to details page content and audio settings
                     // ---------------------------------------------------------
-                    const showAnimeMarkers = storage.getItem('pref:showAnimeMarkers') === 'true';
-                    const animePills = showAnimeMarkers
-                        ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, { series: this._item })
+                    const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+                    const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+                    const animePills = (showContent || showAudio)
+                        ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                            series: this._item,
+                            showContentBadges: showContent,
+                            showAudioBadges: showAudio
+                        })
                         : [];
                     const animePillsHtml = animePills.length > 0
                         ? animeMarkerService.renderPillsHtml(animePills)
@@ -4484,10 +4584,15 @@ class DetailsPage extends Page {
      * and Next Up cards in the active DOM once companion markers finish loading.
      */
     _updateEpisodeBadges() {
+        // First synchronize hero header badges
+        this._updateHeroAnimeBadges();
+
         if (!this._seriesMarkers) return;
 
-        // Skip badge mounting if user setting is disabled
-        if (storage.getItem('pref:showAnimeMarkers') !== 'true') return;
+        // Skip badge mounting if user settings are disabled
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+        if (!showContent && !showAudio) return;
 
         // Resolve parent series object (supporting Series, Season, and nested view modes)
         const seriesObj = this._parentSeries || (this._item?.Type === 'Series' ? this._item : null);
@@ -4497,7 +4602,9 @@ class DetailsPage extends Page {
             this._nextUp.forEach((ep) => {
                 const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
                     series: seriesObj || this._item,
-                    season: this._item?.Type === 'Season' ? this._item : null
+                    season: this._item?.Type === 'Season' ? this._item : null,
+                    showContentBadges: showContent,
+                    showAudioBadges: showAudio
                 });
 
                 // A. Handle list layout (.episode-row-card)
@@ -4554,7 +4661,9 @@ class DetailsPage extends Page {
             this._episodes.forEach((ep) => {
                 const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
                     series: seriesObj || this._item,
-                    season: this._item?.Type === 'Season' ? this._item : null
+                    season: this._item?.Type === 'Season' ? this._item : null,
+                    showContentBadges: showContent,
+                    showAudioBadges: showAudio
                 });
 
                 // A. Handle vertical list layout

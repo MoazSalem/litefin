@@ -350,3 +350,107 @@ test('ApiClient: getEpisodes default fields include SeriesId, Tags, and Genres',
         api.get = originalGet;
     }
 });
+
+test('CardRenderer: split toggles independently enable/disable content vs audio badges', async () => {
+    const { animeMarkerService } = await import('../src/utils/AnimeMarkerService.js');
+
+    const episode = {
+        Id: 'ep-split-test',
+        Type: 'Episode',
+        Genres: ['Anime'],
+        MediaStreams: [
+            { Type: 'Audio', Language: 'jpn' }
+        ]
+    };
+
+    const seriesMarkers = {
+        matched: true,
+        episodes: {
+            'epsplittest': { kind: 'Filler', recap: false }
+        }
+    };
+
+    // Scenario 1: Only content badges enabled (Filler on, Subbed/Dubbed off)
+    storage.setItem('pref:showAnimeContentBadges', 'true');
+    storage.setItem('pref:showAudioBadges', 'false');
+    storage.removeItem('pref:showAnimeMarkers');
+
+    let badgeHtml = CardRenderer.getAnimeBadgeHtml(episode, { seriesMarkers });
+    assert.ok(badgeHtml.includes('anime-pill-filler'), 'Filler pill must be present');
+    assert.ok(!badgeHtml.includes('anime-pill-subbed'), 'Subbed pill must NOT be present when audio badges are off');
+
+    // Scenario 2: Only audio badges enabled (Filler off, Subbed/Dubbed on)
+    storage.setItem('pref:showAnimeContentBadges', 'false');
+    storage.setItem('pref:showAudioBadges', 'true');
+
+    badgeHtml = CardRenderer.getAnimeBadgeHtml(episode, { seriesMarkers });
+    assert.ok(!badgeHtml.includes('anime-pill-filler'), 'Filler pill must NOT be present when content badges are off');
+    assert.ok(badgeHtml.includes('anime-pill-subbed'), 'Subbed pill must be present');
+
+    // Scenario 3: Both off
+    storage.setItem('pref:showAnimeContentBadges', 'false');
+    storage.setItem('pref:showAudioBadges', 'false');
+
+    badgeHtml = CardRenderer.getAnimeBadgeHtml(episode, { seriesMarkers });
+    assert.equal(badgeHtml, '', 'No badges when both are disabled');
+});
+
+test('AnimeMarkerService: getItemPills resolves appropriate pills for Details page items', async () => {
+    const { animeMarkerService } = await import('../src/utils/AnimeMarkerService.js');
+
+    // 1. Episode Details with canon inclusion
+    const canonEp = {
+        Id: 'ep-canon-1',
+        Type: 'Episode',
+        Genres: ['Anime'],
+        MediaStreams: [{ Type: 'Audio', Language: 'jpn' }]
+    };
+    const markers = {
+        matched: true,
+        episodes: {
+            'epcanon1': { kind: 'MangaCanon', recap: false }
+        },
+        seasons: {
+            's1': 'Subbed'
+        }
+    };
+
+    const epPills = animeMarkerService.getItemPills(canonEp, markers, {
+        showContentBadges: true,
+        showAudioBadges: true,
+        includeCanon: true
+    });
+    assert.ok(epPills.some((p) => p.id === 'canon' && p.label === 'Canon'), 'Canon pill must be included for episode details');
+    assert.ok(epPills.some((p) => p.id === 'subbed'), 'Subbed pill must be included');
+
+    // 2. Series Details: resolves audio verdict
+    const seriesItem = {
+        Id: 'series-123',
+        Type: 'Series',
+        Genres: ['Anime']
+    };
+    const seriesPills = animeMarkerService.getItemPills(seriesItem, markers, {
+        showContentBadges: true,
+        showAudioBadges: true
+    });
+    assert.equal(seriesPills.length, 1);
+    assert.equal(seriesPills[0].id, 'subbed');
+
+    // 3. Movie Details: resolves audio verdict via media streams
+    const animeMovie = {
+        Id: 'movie-ghibli',
+        Type: 'Movie',
+        Genres: ['Anime'],
+        MediaStreams: [
+            { Type: 'Audio', Language: 'jpn' },
+            { Type: 'Audio', Language: 'eng' }
+        ]
+    };
+    const moviePills = animeMarkerService.getItemPills(animeMovie, null, {
+        showContentBadges: true,
+        showAudioBadges: true
+    });
+    assert.equal(moviePills.length, 1);
+    assert.equal(moviePills[0].id, 'dual');
+    assert.equal(moviePills[0].label, 'Subbed/Dubbed');
+});
