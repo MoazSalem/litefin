@@ -175,6 +175,11 @@ export class OsdTab {
                     this._playerToggle('toggle-osd-hide-unfocused-progress', 'osdHideUnfocusedProgress', false)
                 )}
                 ${this._item(
+                    i18n.t('LabelOsdHideEndsAt') || 'Hide Ends At',
+                    i18n.t('OsdHideEndsAtDescription') || "Hide the 'Ends at' time from the player OSD.",
+                    this._playerToggle('toggle-osd-hide-ends-at', 'osdHideEndsAt', false)
+                )}
+                ${this._item(
                     i18n.t('EnablePlayerCursor') || 'Enable Player Cursor',
                     i18n.t('EnablePlayerCursorDescription') ||
                         'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).',

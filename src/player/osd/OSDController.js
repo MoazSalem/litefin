@@ -4673,12 +4673,23 @@ export default class OSDController extends Component {
             this._osdTotalTimeEl.textContent = totalStr;
         }
 
+        // Honor the "Hide Ends At" preference. Applied before the heavy-update
+        // guard so the visibility stays correct even during rapid seeks, and on
+        // the next tick after the setting is changed mid-playback.
+        const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
+        const hideEndsAt = PlayerSettings.get('osdHideEndsAt') === true;
+        if (endsAtEl) {
+            const desiredDisplay = hideEndsAt ? 'none' : '';
+            if (endsAtEl.style.display !== desiredDisplay) {
+                endsAtEl.style.display = desiredDisplay;
+            }
+        }
+
         // Heavy updates (localization/extra elements)
         if (skipHeavy) return;
 
-        // Update "Ends at" time
-        const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
-        if (endsAtEl && duration > 0) {
+        // Update "Ends at" time (only when it is meant to be visible)
+        if (endsAtEl && !hideEndsAt && duration > 0) {
             const remaining = duration - current;
             // Use timeManager.now() so offline Tizen/WebOS TVs accurately reflect local time
             const endTime = new Date(timeManager.now().getTime() + (remaining / 10000));

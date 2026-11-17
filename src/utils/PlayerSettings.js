@@ -831,6 +831,18 @@ const DEFAULTS = {
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total',
 
+    /*
+     * Hide the "Ends at" time from the player OSD
+     * -------------------------------------------------------------------------
+     * When enabled, the 'Ends at' indicator shown alongside the seek bar is
+     * hidden entirely. Disabled by default so the estimated end time remains
+     * visible to all users unless they opt out.
+     *
+     *   false (default) — Show the 'Ends at' time in the player OSD.
+     *   true            — Hide the 'Ends at' time from the player OSD.
+     */
+    osdHideEndsAt: false,
+
     // =========================================================================
     // SEGMENT SKIP SETTINGS
     // Controls what happens when playback enters a detected media segment.
