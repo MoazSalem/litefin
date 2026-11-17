@@ -135,6 +135,31 @@ test('webOS 24: dvh1 hint is used even when canPlayType("dvh1") returns ""', asy
     }
 });
 
+test('webOS 24: hint carries DV profile and level when Jellyfin reports them', async () => {
+    canPlayAnswer = () => '';
+    platformInfo._platform = 'webos';
+    try {
+        const player = createPlayer();
+        const mediaSource = {
+            Container: 'mkv',
+            MediaStreams: [{ Index: 0, Type: 'Video', Codec: 'hevc', VideoRangeType: 'DOVIWithHDR10', DvProfile: 8, DvLevel: 10 }]
+        };
+        const playing = player.play({ url, playMethod: 'DirectPlay', mediaSource });
+        await flush();
+
+        const video = player._videoElement;
+        const source = video.firstChild;
+        assert.strictEqual(source?.tagName, 'SOURCE', 'the Dolby Vision hint path was not taken');
+        assert.strictEqual(source.type, 'video/mp4; codecs="dvh1.08.10"');
+
+        video.fire('canplay');
+        await playing;
+    } finally {
+        platformInfo._platform = originalPlatform;
+        canPlayAnswer = () => '';
+    }
+});
+
 test('webOS 24: a TV rejecting the hint still retries with raw src', async () => {
     canPlayAnswer = () => '';
     platformInfo._platform = 'webos';
