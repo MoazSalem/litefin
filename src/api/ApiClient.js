@@ -1422,8 +1422,10 @@ export class ApiClient {
             // Fetch items up to the user-selected row item limit
             Limit: defaultLimit,
             Recursive: true,
-            // Include SeriesId, MediaSources, and MediaStreams so anime marker and audio classification work accurately for Continue Watching
-            Fields: 'SeriesId,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams',
+            // Request comprehensive metadata fields for card presentation.
+            // Includes SeriesPrimaryImageTag for fallback posters when episodes lack dedicated thumbnails.
+            // Includes MediaSources and MediaStreams for anime markers and audio badges.
+            Fields: 'SeriesId,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -1710,8 +1712,10 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            // Include SeriesId, MediaSources, and MediaStreams for anime markers, filler resolution, and audio track badges
-            Fields: 'SeriesId,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData',
+            // Request essential item metadata for next-up episode presentation.
+            // Includes SeriesPrimaryImageTag so landscape cards can fall back to the series poster if needed.
+            // Includes MediaSources, MediaStreams, and tags for audio/video badges and spoiler handling.
+            Fields: 'SeriesId,SeriesPrimaryImageTag,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };

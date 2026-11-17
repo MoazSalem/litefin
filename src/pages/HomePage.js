@@ -931,7 +931,11 @@ class HomePage extends Page {
                     // this period must not be surfaced in the merged dashboard row.
                     const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                     const daysLimit = isNaN(maxDays) ? 365 : maxDays;
-                    const mergedParams = { limit: homeRowLimit };
+                    // Include SeriesPrimaryImageTag and backdrop image tags so landscape cards have complete artwork metadata
+                    const mergedParams = {
+                        limit: homeRowLimit,
+                        fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    };
 
                     // Retrieve configured mark as watched threshold fraction and percentage
                     const thresholdFraction = PlayerSettings.getWatchedThresholdFraction();
@@ -3930,6 +3934,14 @@ class HomePage extends Page {
                         maxHeight,
                         quality,
                         tag: item.ImageTags.Primary
+                    });
+                } else if (item.SeriesId) {
+                    // Fallback to parent series primary poster if no episode or landscape thumbnail exists
+                    url = api.getImageUrl(item.SeriesId, 'Primary', {
+                        maxWidth,
+                        maxHeight,
+                        quality,
+                        ...(item.SeriesPrimaryImageTag ? { tag: item.SeriesPrimaryImageTag } : {})
                     });
                 }
             } else {

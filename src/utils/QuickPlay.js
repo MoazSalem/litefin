@@ -155,7 +155,8 @@ async function resolveSeries(series) {
             Limit: 1,
             Filters: 'IsUnplayed',
             SortBy: 'ParentIndexNumber,IndexNumber',
-            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+            // Include SeriesPrimaryImageTag for complete artwork resolution across all card layouts
+            Fields: 'SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
         });
     } else {
         nextUp = await api.getNextUp({ SeriesId: series.Id, Limit: 1 });

@@ -864,46 +864,122 @@ class CardRenderer {
             const params = imageService.getParams('card-backdrop', contextType);
 
             if (item.Type === 'Episode') {
-                // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
+                /*
+                 * ====================================================================
+                 * Episode Image Resolution Strategy (Landscape Media Rows)
+                 * ====================================================================
+                 * Handles artwork lookup for episode cards rendered in widescreen 16:9
+                 * horizontal rows (such as Continue Watching, Next Up, and latest items).
+                 *
+                 * Artwork Selection Hierarchy:
+                 * 1. Episode Primary Screenshot (skipped when spoiler prevention is on)
+                 * 2. Series Landscape Thumb (16:9 widescreen logo artwork)
+                 * 3. Season Landscape Thumb (Parent season artwork)
+                 * 4. Episode Backdrop (item-level background art)
+                 * 5. Season Backdrop (Parent season backdrop)
+                 * 6. Series Backdrop (Show-level background art)
+                 * 7. Series Primary Poster (spoiler-free preferred poster artwork)
+                 * 8. Episode Primary Screenshot (fallback when no series art is found)
+                 * 9. Ultimate Fallback: Series Primary Poster (center-cropped via CSS)
+                 * ====================================================================
+                 */
+
+                // Retrieve user spoiler prevention preference (default: hide episode thumbnails)
                 const preferEpisodeImages = prefs.preferEpisodeImages;
                 const isSpoilerFree = !preferEpisodeImages && ['nextUp', 'upcoming', 'resume'].includes(contextType);
 
-                // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
-                // If spoiler free, skip Primary logic unless nothing else exists
-                if (!isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
+                // Availability checks across all possible artwork tiers
+                const hasEpisodePrimary = Boolean(item.ImageTags && item.ImageTags.Primary);
+                const hasSeriesThumb = Boolean(item.SeriesThumbImageTag && item.SeriesId);
+                const hasParentThumb = Boolean(item.ParentThumbItemId && item.ParentThumbImageTag);
+
+                // Ensure backdrop image arrays are populated before generating URLs to prevent 404 network errors
+                const hasBackdrop = Boolean(item.BackdropImageTags && item.BackdropImageTags.length > 0);
+                const hasParentBackdrop = Boolean(
+                    (item.ParentBackdropItemId || item.SeriesId) &&
+                    item.ParentBackdropImageTags &&
+                    item.ParentBackdropImageTags.length > 0
+                );
+                const hasSeriesBackdrop = Boolean(
+                    item.SeriesId &&
+                    item.SeriesBackdropImageTags &&
+                    item.SeriesBackdropImageTags.length > 0
+                );
+
+                // Check for available series-level primary poster
+                const hasSeriesPrimary = Boolean(item.SeriesId && item.SeriesPrimaryImageTag);
+
+                // Priority 1: When spoiler prevention is inactive, prefer episode thumbnail still
+                if (!isSpoilerFree && hasEpisodePrimary) {
                     imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
                     });
-                } else if (item.SeriesThumbImageTag && item.SeriesId) {
+                }
+                // Priority 2: Dedicated widescreen 16:9 series thumbnail
+                else if (hasSeriesThumb) {
                     imageUrl = _imgUrl(item.SeriesId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.SeriesThumbImageTag
                     });
-                } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+                }
+                // Priority 3: Dedicated season widescreen 16:9 thumbnail
+                else if (hasParentThumb) {
                     imageUrl = _imgUrl(item.ParentThumbItemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ParentThumbImageTag
                     });
-                } else if (item.ParentBackdropItemId) {
-                    imageUrl = _imgUrl(item.ParentBackdropItemId, 'Backdrop', {
+                }
+                // Priority 4: High-resolution widescreen backdrops (Episode level)
+                else if (hasBackdrop) {
+                    imageUrl = _imgUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.BackdropImageTags[0]
                     });
-                } else if (item.SeriesId) {
+                }
+                // Priority 5: Parent season backdrop (verified tag existence avoids broken requests)
+                else if (hasParentBackdrop) {
+                    imageUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ParentBackdropImageTags[0]
+                    });
+                }
+                // Priority 6: Parent series backdrop (verified tag existence avoids broken requests)
+                else if (hasSeriesBackdrop) {
                     imageUrl = _imgUrl(item.SeriesId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.SeriesBackdropImageTags[0]
                     });
-                } else if (isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
-                    // Fallback to primary if forced but nothing else found
+                }
+                // Priority 7: Spoiler-free mode prefers Series Primary Poster over revealing screenshots
+                else if (isSpoilerFree && hasSeriesPrimary) {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.SeriesPrimaryImageTag
+                    });
+                }
+                // Priority 8: Episode primary screenshot fallback if spoiler-free had no show artwork
+                else if (hasEpisodePrimary) {
                     imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
+                    });
+                }
+                // Priority 9: Ultimate Fallback — Parent Series Primary Poster
+                // Cropped horizontally with object-fit: cover in CSS to fill landscape card bounds
+                else if (item.SeriesId) {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        ...(item.SeriesPrimaryImageTag ? { tag: item.SeriesPrimaryImageTag } : {})
                     });
                 }
             } else if (type === 'library') {

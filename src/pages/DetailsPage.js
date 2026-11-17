@@ -3928,7 +3928,8 @@ class DetailsPage extends Page {
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    // Include SeriesPrimaryImageTag for reliable fallback to the series poster if thumbnails are missing.
+                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
@@ -5693,7 +5694,8 @@ class DetailsPage extends Page {
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
                                 SortBy: 'ParentIndexNumber,IndexNumber',
-                                Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                                // Include SeriesPrimaryImageTag for complete artwork fallback chains
+                                Fields: 'SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {
                             // On Jellyfin, query next up directly using SeriesId parameter.

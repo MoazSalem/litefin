@@ -323,7 +323,8 @@ class AndroidLauncherManager {
 
             const mergedParams = {
                 limit: 10,
-                fields: 'Overview,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+                // Include SeriesPrimaryImageTag for Android TV home channel preview tiles
+                fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
                 watchedThreshold: watchedThresholdPct
             };
 
@@ -382,7 +383,7 @@ class AndroidLauncherManager {
                 const [resumeRes, nextUpRes] = await Promise.all([
                     api.getResumeItems({
                         Limit: 5,
-                        Fields: 'Overview,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
+                        Fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
                         ImageTypeLimit: 1,
                         EnableImageTypes: 'Primary,Backdrop,Thumb',
                         EnableTotalRecordCount: false
@@ -390,7 +391,7 @@ class AndroidLauncherManager {
                     (async () => {
                         const params = {
                             Limit: 5,
-                            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
+                            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
                             ImageTypeLimit: 1,
                             EnableImageTypes: 'Primary,Backdrop,Thumb',
                             EnableTotalRecordCount: false
