@@ -8,9 +8,44 @@
  * ============================================================================
  */
 
-const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w300';
-const TMDB_POSTER_DETAIL_BASE = 'https://image.tmdb.org/t/p/w500';
-const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
+const TMDB_IMAGE_ORIGIN = 'https://image.tmdb.org/';
+let resolveImageBase = () => null;
+
+/**
+ * Registers the function that decides where TMDB images are served from. It
+ * is called every time a URL is built and returns the Litefin server plugin's
+ * Seerr image proxy (e.g. `${serverUrl}/Litefin/Seerr/Image`), or a falsy
+ * value to load images straight from TMDB.
+ * @param {(() => string|null)|null} fn
+ */
+export function setTmdbImageResolver(fn) {
+    resolveImageBase = typeof fn === 'function' ? fn : () => null;
+}
+
+/**
+ * Rewrites a complete TMDB image URL onto the current image base. Any other
+ * value (non-TMDB URLs, empty strings, no proxy available) is returned unchanged.
+ * Prefer tmdbUrl() when building a URL from a size and a path.
+ * @param {string} url
+ * @returns {string}
+ */
+export function tmdbImage(url) {
+    if (typeof url !== 'string' || !url.startsWith(TMDB_IMAGE_ORIGIN)) return url;
+    const base = resolveImageBase();
+    return base ? base.replace(/\/+$/, '') + '/' + url.slice(TMDB_IMAGE_ORIGIN.length) : url;
+}
+
+/**
+ * Builds a TMDB image URL for a size and a file path, routed through the image
+ * proxy when one is available.
+ * @param {string} size - e.g. 'w300' or 'w780_filter(duotone,ffffff,bababa)'
+ * @param {string} path - TMDB file path, with or without the leading slash
+ * @returns {string} The URL, or '' when there is no path
+ */
+export function tmdbUrl(size, path) {
+    if (!path || typeof path !== 'string') return '';
+    return tmdbImage(`${TMDB_IMAGE_ORIGIN}t/p/${size}${path.charAt(0) === '/' ? '' : '/'}${path}`);
+}
 
 /**
  * Jellyseerr MediaStatus values. 0 does not exist server-side — it is our
@@ -386,17 +421,9 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
         ProductionYear: extractYear(isTv ? result.firstAirDate : result.releaseDate),
         Overview: result.overview || '',
         // Read by CardRenderer to bypass Jellyfin URL building
-        _imageUrl: result.posterPath
-            ? `${TMDB_POSTER_BASE}${result.posterPath}`
-            : result.profilePath
-              ? `${TMDB_POSTER_BASE}${result.profilePath}`
-              : '',
-        _detailImageUrl: result.posterPath
-            ? `${TMDB_POSTER_DETAIL_BASE}${result.posterPath}`
-            : result.profilePath
-              ? `${TMDB_POSTER_DETAIL_BASE}${result.profilePath}`
-              : '',
-        _backdropUrl: result.backdropPath ? `${TMDB_BACKDROP_BASE}${result.backdropPath}` : '',
+        _imageUrl: tmdbUrl('w300', result.posterPath || result.profilePath),
+        _detailImageUrl: tmdbUrl('w500', result.posterPath || result.profilePath),
+        _backdropUrl: tmdbUrl('w1280', result.backdropPath),
         WatchProviders: Array.isArray(result.watchProviders) ? result.watchProviders : [],
         _seerrStatus: (result.mediaInfo && result.mediaInfo.status) || SEERR_STATUS.NOT_REQUESTED,
         _downloads: extractSeerrDownloads(result.mediaInfo),
@@ -559,7 +586,7 @@ export function normalizeSeerrItem(result, fallbackMediaType = null) {
                 Name: c.name,
                 Role: c.character || '',
                 Type: 'Person',
-                _imageUrl: c.profilePath ? `${TMDB_POSTER_BASE}${c.profilePath}` : ''
+                _imageUrl: tmdbUrl('w300', c.profilePath)
             }));
         })(),
         Tags: (() => {
