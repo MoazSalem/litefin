@@ -72,3 +72,19 @@ test('Hardware Transparency: index.html critical inline style covers data-theme-
         'index.html inline style must include html.player-active[data-theme-mode]'
     );
 });
+
+test('Hardware Transparency: PlayerPage calls tizenAdapter.resetCompositorLayer() on destroy', () => {
+    const playerPageSrc = fs.readFileSync(path.resolve('src/pages/PlayerPage.js'), 'utf8');
+
+    assert.match(
+        playerPageSrc,
+        /import\s*\{[^}]*tizenAdapter[^}]*\}\s*from\s*['"]\.\.\/tizen\/TizenAdapter\.js['"]/,
+        'PlayerPage must import tizenAdapter'
+    );
+
+    assert.match(
+        playerPageSrc,
+        /tizenAdapter\.resetCompositorLayer\(\)/,
+        'PlayerPage.destroy() must invoke tizenAdapter.resetCompositorLayer()'
+    );
+});

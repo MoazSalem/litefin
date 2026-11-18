@@ -47,6 +47,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { androidAdapter } from '../android/AndroidAdapter.js';
+import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { osdIcons } from '../utils/Icons.js';
@@ -6280,6 +6281,21 @@ class PlayerPage extends Page {
         // Disable Tizen AVPlayer transparency mode and clear state classes
         document.body.classList.remove('player-active', 'lyrics-active');
         document.documentElement.classList.remove('player-active');
+
+        // ---------------------------------------------------------------------
+        // Kick WAM compositor layer on Tizen to exit video overlay punch-through
+        // ---------------------------------------------------------------------
+        // Dropping .player-active removes CSS transparency, but older Samsung
+        // Web Application Manager (WAM) compositors can remain locked in video
+        // overlay plane mode unless forced to re-evaluate the layer stack.
+        // ---------------------------------------------------------------------
+        try {
+            if (tizenAdapter && typeof tizenAdapter.resetCompositorLayer === 'function') {
+                tizenAdapter.resetCompositorLayer();
+            }
+        } catch (_) {
+            // Non-fatal if platform lacks Tizen compositor hooks
+        }
 
         // ---------------------------------------------------------------------
         // Restore Android Window & Fullscreen Configuration
