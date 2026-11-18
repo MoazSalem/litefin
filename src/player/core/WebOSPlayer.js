@@ -1425,7 +1425,16 @@ export class WebOSPlayer {
             // WebOS Chromium validates codec tags against MP4 codec strings
             // (dvh1 / dvhe are ISO BMFF-defined tags). video/x-matroska with
             // dvh1 would be rejected by Chromium's codec validation.
-            const dvHint = 'video/mp4; codecs="dvh1"';
+            // LG C2 / webOS 24 rejects the bare 'dvh1' tag (canPlayType '' and a
+            // <source> error) but accepts the RFC 6381 form with profile and
+            // level, e.g. 'dvh1.08.10' -> "probably". Use it when Jellyfin
+            // reports both; otherwise keep the bare tag.
+            const dvProfile = videoStream?.DvProfile;
+            const dvLevel = videoStream?.DvLevel;
+            const dvCodec = dvProfile != null && dvLevel != null
+                ? `dvh1.${String(dvProfile).padStart(2, '0')}.${String(dvLevel).padStart(2, '0')}`
+                : 'dvh1';
+            const dvHint = `video/mp4; codecs="${dvCodec}"`;
             /* webOS Chromium reports '' for dvh1 even on DV hardware (LG C2,
              * webOS 24), so the probe must not gate the hint on real TVs. */
             const canPlayDv = platformInfo.isWebOS || canPlayTypeCached(dvHint) !== '';
