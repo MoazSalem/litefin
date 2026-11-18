@@ -934,7 +934,9 @@ class HomePage extends Page {
                     // Include SeriesPrimaryImageTag and backdrop image tags so landscape cards have complete artwork metadata
                     const mergedParams = {
                         limit: homeRowLimit,
-                        fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                        // Append rating fields when card rating badges are enabled, so the merged
+                        // continue/next-up row already carries scores without an extra round-trip.
+                        fields: `Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CommunityRating,CriticRating' : ''}`
                     };
 
                     // Retrieve configured mark as watched threshold fraction and percentage
@@ -2276,7 +2278,9 @@ class HomePage extends Page {
         try {
             const batchMap = await api.getBatchLatest(libraryIds, {
                 limit: homeRowLimit,
-                fields: 'BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag',
+                // Append rating fields when card rating badges are enabled, so the
+                // pre-fetched latest rows already carry the scores they need to render.
+                fields: `BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CommunityRating,CriticRating' : ''}`,
                 ...(hidePlayed ? { isPlayed: false } : {})
             });
 

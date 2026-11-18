@@ -40,6 +40,24 @@ const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware 
 const LITEFIN_COMPANION_PLUGIN_ID = 'f5c68360ca474648b47c3da5f112aa8f';
 
 /**
+ * Returns a comma-separated string of rating fields to append to API requests
+ * when the card ratings feature is active. Returns an empty string when the
+ * preference is off so no extra bandwidth is ever wasted.
+ *
+ * Both CommunityRating (Jellyfin score) and CriticRating (Rotten Tomatoes %)
+ * are requested together because the user may switch sources in settings at
+ * any time without triggering a fresh API call — the data must already be
+ * in the payload.
+ *
+ * @returns {string} Comma-prefixed fields to splice into a Fields param, or ''
+ */
+function getRatingFields() {
+    return storage.getItem('pref:cardRatingsEnabled') === 'true'
+        ? ',CommunityRating,CriticRating'
+        : '';
+}
+
+/**
  * Natural aspect ratios (height / width) for Jellyfin image types.
  * Used to derive a bounded `maxHeight` whenever a caller only supplies
  * `maxWidth`, so the server never streams an unbounded source texture that
@@ -1386,8 +1404,10 @@ export class ApiClient {
         const defaults = {
             // Default item count per library row configured via user settings
             Limit: defaultLimit,
-            // Request tags, backdrop, and series metadata needed for home card representation
-            Fields: 'BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag',
+            // Request tags, backdrop, and series metadata needed for home card representation.
+            // Rating fields (CommunityRating/CriticRating) are appended when the card rating
+            // badge feature is enabled so the badge has the data it needs to render.
+            Fields: `BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag${getRatingFields()}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -1425,7 +1445,8 @@ export class ApiClient {
             // Request comprehensive metadata fields for card presentation.
             // Includes SeriesPrimaryImageTag for fallback posters when episodes lack dedicated thumbnails.
             // Includes MediaSources and MediaStreams for anime markers and audio badges.
-            Fields: 'SeriesId,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams',
+            // Rating fields are appended when the card rating badge feature is enabled.
+            Fields: `SeriesId,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams${getRatingFields()}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -1715,7 +1736,8 @@ export class ApiClient {
             // Request essential item metadata for next-up episode presentation.
             // Includes SeriesPrimaryImageTag so landscape cards can fall back to the series poster if needed.
             // Includes MediaSources, MediaStreams, and tags for audio/video badges and spoiler handling.
-            Fields: 'SeriesId,SeriesPrimaryImageTag,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData',
+            // CommunityRating is always included; CriticRating is appended when card rating badges are on.
+            Fields: `SeriesId,SeriesPrimaryImageTag,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CriticRating' : ''}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -2019,9 +2041,13 @@ export class ApiClient {
     }
 
     async getSimilar(itemId, params = {}) {
+        const ratingFields = getRatingFields();
         const defaults = {
             UserId: this._userId,
-            Limit: 12
+            Limit: 12,
+            // Request rating fields when the card rating badge feature is enabled,
+            // so the similar-items row can render badges consistently.
+            ...(ratingFields ? { Fields: ratingFields.replace(/^,/, '') } : {})
         };
 
         return this.get(`/Items/${itemId}/Similar`, { ...defaults, ...params });

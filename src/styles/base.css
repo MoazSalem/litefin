@@ -190,6 +190,7 @@ html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .meta-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .episode-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .quality-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .card-rating-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .seerr-type-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-rich-meta,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .action-btn-tooltip-text,
@@ -264,6 +265,7 @@ html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .count-badge
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .episode-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .quality-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .card-rating-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .seerr-type-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-rich-meta,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .action-btn-tooltip-text,
@@ -1788,7 +1790,8 @@ html[data-badge-style="tinted"] .quality-badge,
 html[data-badge-style="tinted"] .game-card-badge,
 html[data-badge-style="tinted"] .version-badge,
 html[data-badge-style="tinted"] .media-source-count-badge,
-html[data-badge-style="tinted"] .favorite-badge {
+html[data-badge-style="tinted"] .favorite-badge,
+html[data-badge-style="tinted"] .card-rating-badge {
     background-color: var(--jf-accent);
     color: var(--jf-accent-content-color);
     border: none;
@@ -1805,7 +1808,8 @@ html[data-badge-style="dark"] .quality-badge,
 html[data-badge-style="dark"] .game-card-badge,
 html[data-badge-style="dark"] .version-badge,
 html[data-badge-style="dark"] .media-source-count-badge,
-html[data-badge-style="dark"] .favorite-badge {
+html[data-badge-style="dark"] .favorite-badge,
+html[data-badge-style="dark"] .card-rating-badge {
     background-color: rgba(0, 0, 0, 0.65);
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.15);

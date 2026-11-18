@@ -224,6 +224,10 @@ class CardRenderer {
             swapEpisodeTitles: storage.getItem('pref:swapEpisodeTitles') === 'true',
             showFavoriteBadges: storage.getItem('pref:showFavoriteBadges') === 'true',
             showQualityBadges: storage.getItem('pref:showQualityBadges') === 'true',
+            // On-artwork rating badge (disabled by default; the source list grows with MDBList later)
+            cardRatingsEnabled: storage.getItem('pref:cardRatingsEnabled') === 'true',
+            cardRatingSource: storage.getItem('pref:cardRatingSource') || 'community',
+            cardRatingIcon: storage.getItem('pref:cardRatingIcon') || 'star',
             // Anime content badges (Filler/Mixed/Recap) - disabled by default
             showAnimeContentBadges: storage.getItem('pref:showAnimeContentBadges') === 'true' ||
                 (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true'),
@@ -553,6 +557,83 @@ class CardRenderer {
             }
         }
         return '';
+    }
+
+    /**
+     * ========================================================================
+     * On-Artwork Rating Badge Eligibility
+     * ========================================================================
+     * Items without a conventional score (live TV, discovery placeholders,
+     * people, genre/studio cards) are excluded so card artwork stays clean
+     * and no misleading rating is ever displayed.
+     * ========================================================================
+     * @param {Object} item - Jellyfin media item
+     * @returns {boolean} True when the item can carry a rating badge
+     */
+    static isRatingEligible(item) {
+        if (!item || !item.Id) return false;
+        if (item._isGenreCard || item._isStudioCard || item._isNetworkCard || item._hideCardLabels) return false;
+        if (item.Type === 'TvChannel' || item.Type === 'Program') return false;
+
+        const type = item.Type || (item.MediaType === 'Video' ? 'Video' : '');
+        return (
+            type === 'Movie' ||
+            type === 'Series' ||
+            type === 'Episode' ||
+            type === 'Season' ||
+            type === 'Video' ||
+            type === 'MusicVideo' ||
+            type === 'BoxSet'
+        );
+    }
+
+    /**
+     * Generate the on-artwork rating badge HTML for a media card.
+     *
+     * Synchronous sources only (Jellyfin CommunityRating / CriticRating).
+     * MDBList providers are resolved asynchronously in a later phase and will
+     * patch this same placeholder in place, so the emitted markup is kept
+     * stable and CardRenderer._htmlCache remains valid when a score arrives.
+     *
+     * @param {Object} item - Jellyfin media item
+     * @param {Object} [options={}] - Render options
+     * @returns {string} Badge markup string or empty string
+     */
+    static getCardRatingBadgeHtml(item, options = {}) {
+        const prefs = CardRenderer._getPrefs();
+        if (!prefs.cardRatingsEnabled) return '';
+        // List view already renders .card-meta-score inside the meta row.
+        if (options.showMeta) return '';
+        if (!CardRenderer.isRatingEligible(item)) return '';
+        if (!shouldShowScore(item)) return '';
+
+        const source = prefs.cardRatingSource === 'critic' ? 'critic' : 'community';
+        const iconMode = prefs.cardRatingIcon || 'star';
+        const raw = source === 'critic' ? item.CriticRating : item.CommunityRating;
+        const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '';
+
+        const text = source === 'critic' ? `${Math.round(value)}%` : value.toFixed(1);
+        const tooltip =
+            source === 'critic'
+                ? `${i18n.t('CardRatingCritic')}: ${text}`
+                : `${i18n.t('CardRatingCommunity')}: ${text}`;
+
+        // 'none' omits the glyph entirely; 'source' picks the provider icon
+        // (tomato for critic, star for community); 'star' is the free default.
+        let iconHtml = '';
+        if (iconMode !== 'none') {
+            iconHtml =
+                source === 'critic' && iconMode === 'source'
+                    ? detailsIcons.rottenTomatoesFresh
+                    : detailsIcons.ratingStar;
+        }
+
+        return `
+            <div class="card-rating-badge card-rating-badge--${source}" data-rating-for="${item.Id}" data-rating-source="${source}" data-rating-state="ready" title="${escapeHtml(tooltip)}">
+                ${iconHtml}<span class="card-rating-value">${text}</span>
+            </div>
+        `;
     }
 
     /**
@@ -1889,6 +1970,7 @@ class CardRenderer {
 
         const gameBadgeHtml = CardRenderer.getGameBadgeHtml(item);
         const animeBadgeHtml = CardRenderer.getAnimeBadgeHtml(item, options);
+        const ratingBadgeHtml = CardRenderer.getCardRatingBadgeHtml(item, options);
 
         /*
          * ====================================================================
@@ -1917,6 +1999,32 @@ class CardRenderer {
             ${seerrTypeBadgeHtml}
             ${seerrBadgeHtml}
             ${animeBadgeHtml}
+            ${ratingBadgeHtml}
+        `;
+
+        /*
+         * On artwork, corner badges are grouped in flex rows. Fixed offsets
+         * cannot clear neighbours whose text width varies (SxxExx, quality),
+         * so the wrappers let each badge take its natural width and keep the
+         * rating beside its neighbour. The list view above keeps the original
+         * flat badgeContainer markup.
+         */
+        const hasTopLeftBadge = !!(rankBadgeHtml || episodeBadgeHtml);
+        const topLeftGroupHtml = hasTopLeftBadge
+            ? `<div class="card-top-left-badges">${rankBadgeHtml}${episodeBadgeHtml}${ratingBadgeHtml}</div>`
+            : ratingBadgeHtml;
+        const hasTopRightBadge = !!(unplayedCountBadgeHtml || qualityBadgeHtml || gameBadgeHtml || seerrBadgeHtml);
+        const topRightGroupHtml = hasTopRightBadge
+            ? `<div class="card-top-right-badges">${unplayedCountBadgeHtml}${qualityBadgeHtml}${gameBadgeHtml}${seerrBadgeHtml}</div>`
+            : '';
+        const artworkBadgeContainer = `
+            ${versionCountBadgeHtml}
+            ${favoriteBadgeHtml}
+            ${playedBadgeHtml}
+            ${seerrTypeBadgeHtml}
+            ${animeBadgeHtml}
+            ${topLeftGroupHtml}
+            ${topRightGroupHtml}
         `;
 
         const seriesIdAttr = item.SeriesId ? animeMarkerService.normalizeId(item.SeriesId) : '';
@@ -1927,7 +2035,7 @@ class CardRenderer {
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
-                    ${!options.showMeta ? badgeContainer : ''}
+                    ${!options.showMeta ? artworkBadgeContainer : ''}
                     ${
                         showInside
                             ? `

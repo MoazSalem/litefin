@@ -184,6 +184,8 @@ export function getSettingsDropdownMap() {
         'rating-type-select': { key: 'pref:ratingType', type: 'local' },
         'rating-source-select': { key: 'pref:ratingSource', type: 'local' },
         'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
+        'card-rating-source-select': { key: 'pref:cardRatingSource', type: 'local' },
+        'card-rating-icon-select': { key: 'pref:cardRatingIcon', type: 'local' },
         'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
         'show-action-tooltips-select': { key: 'pref:showActionTooltips', type: 'local' },
         'details-overview-max-lines-select': { key: 'pref:detailsOverviewMaxLines', type: 'local' },

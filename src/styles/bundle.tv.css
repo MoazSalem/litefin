@@ -27,6 +27,7 @@
 @import './base.css';
 @import './layout.css';
 @import './components.css';
+@import './card-ratings.css';
 
 /* Application shell and shared structural styles */
 @import './sidebar.css';

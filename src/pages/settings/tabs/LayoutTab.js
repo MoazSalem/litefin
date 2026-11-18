@@ -9,6 +9,8 @@
  */
 
 import { storage } from '../../../utils/StorageService.js';
+import { state } from '../../../core/StateManager.js';
+import CardRenderer from '../../../utils/CardRenderer.js';
 import { layoutManager } from '../../../ui/LayoutManager.js';
 import { PlayerSettings } from '../../../utils/PlayerSettings.js';
 import { i18n } from '../../../utils/i18n.js';
@@ -273,6 +275,36 @@ export class LayoutTab {
                     )}</div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label"><span class="setting-name" data-i18n="LabelCardRatings">${i18n.t('LabelCardRatings')}</span><span class="setting-description" data-i18n="CardRatingsDescription">${i18n.t('CardRatingsDescription')}</span></div>
+                    <div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:cardRatingsEnabled') === 'true' ? 'active' : ''}" id="toggle-card-ratings" data-storage="pref:cardRatingsEnabled" tabindex="0" role="switch"></button></div>
+                </div>
+
+                <div class="setting-item" id="card-rating-source-item">
+                    <div class="setting-label"><span class="setting-name" data-i18n="LabelCardRatingSource">${i18n.t('LabelCardRatingSource')}</span><span class="setting-description" data-i18n="CardRatingSourceDescription">${i18n.t('CardRatingSourceDescription')}</span></div>
+                    <div class="setting-control">${this._drop(
+                        'card-rating-source-select',
+                        [
+                            { value: 'community', label: i18n.t('OptionCardRatingCommunity') },
+                            { value: 'critic', label: i18n.t('OptionCardRatingCritic') }
+                        ],
+                        storage.getItem('pref:cardRatingSource') || 'community'
+                    )}</div>
+                </div>
+
+                <div class="setting-item" id="card-rating-icon-item">
+                    <div class="setting-label"><span class="setting-name" data-i18n="LabelCardRatingIcon">${i18n.t('LabelCardRatingIcon')}</span><span class="setting-description" data-i18n="CardRatingIconDescription">${i18n.t('CardRatingIconDescription')}</span></div>
+                    <div class="setting-control">${this._drop(
+                        'card-rating-icon-select',
+                        [
+                            { value: 'star', label: i18n.t('OptionCardRatingIconStar') },
+                            { value: 'source', label: i18n.t('OptionCardRatingIconSource') },
+                            { value: 'none', label: i18n.t('OptionCardRatingIconNone') }
+                        ],
+                        storage.getItem('pref:cardRatingIcon') || 'star'
+                    )}</div>
+                </div>
+
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="HideEpisodeCounts">${i18n.t('HideEpisodeCounts') || 'Hide Episode Counts'}</span><span class="setting-description" data-i18n="HideEpisodeCountsDescription">${i18n.t('HideEpisodeCountsDescription') || 'Hide the unplayed episode count badge on series cards.'}</span></div><div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:hideEpisodeCounts') === 'true' ? 'active' : ''}" id="toggle-hide-episode-counts" data-storage="pref:hideEpisodeCounts" tabindex="0"></button></div></div>
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="HideProgressBar">${i18n.t('HideProgressBar') || 'Hide Progress Bar'}</span><span class="setting-description" data-i18n="HideProgressBarDescription">${i18n.t('HideProgressBarDescription') || 'Hide playback progress indicators on media cards.'}</span></div><div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:hideProgressBar') === 'true' ? 'active' : ''}" id="toggle-hide-progress-bar" data-storage="pref:hideProgressBar" tabindex="0"></button></div></div>
                 <div class="setting-item"><div class="setting-label"><span class="setting-name" data-i18n="ShowMediaSourceCounts">${i18n.t('ShowMediaSourceCounts') || 'Show Version Counts'}</span><span class="setting-description" data-i18n="ShowMediaSourceCountsDescription">${i18n.t('ShowMediaSourceCountsDescription') || 'Display a badge showing the number of available video versions.'}</span></div><div class="setting-control"><button class="toggle-switch ${storage.getItem('pref:showMediaSourceCounts') !== 'false' ? 'active' : ''}" id="toggle-show-media-source-counts" data-storage="pref:showMediaSourceCounts" data-default="true" tabindex="0"></button></div></div>
@@ -311,6 +343,29 @@ export class LayoutTab {
                 log.info(`Layout storage setting changed: ${storageKey} = ${nextVal}`);
             });
         });
+
+        // Keep the card-rating sub-options in sync with their master toggle.
+        const cardRatingToggle = container.querySelector('#toggle-card-ratings');
+        const cardRatingSubItems = [
+            container.querySelector('#card-rating-source-item'),
+            container.querySelector('#card-rating-icon-item')
+        ];
+        if (cardRatingToggle && cardRatingSubItems.some(Boolean)) {
+            const syncCardRatingOptions = () => {
+                const enabled = cardRatingToggle.classList.contains('active');
+                cardRatingSubItems.forEach((el) => {
+                    if (el) el.style.display = enabled ? '' : 'none';
+                });
+            };
+            this._listen(cardRatingToggle, 'click', () => {
+                syncCardRatingOptions();
+                // Drop the card HTML snapshot and cached home rows so the new
+                // setting takes effect immediately on returning to /home.
+                CardRenderer.clearCache();
+                state.delete('home:pageCache');
+            });
+            syncCardRatingOptions();
+        }
 
         // Wire generic data-setting toggle switches (PlayerSettings)
         const playerToggles = container.querySelectorAll('.toggle-switch[data-setting]');

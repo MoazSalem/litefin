@@ -926,6 +926,16 @@ class DetailsPage extends Page {
                 requestedFields.push('People');
             }
 
+            // When the card rating badge feature is on, the Similar and other secondary
+            // card rows on this page also display rating badges — but those rows fetch
+            // their own items. The primary item detail itself already carries
+            // CommunityRating/CriticRating by default from the server when it's stored;
+            // requesting them explicitly here is harmless and ensures they're present
+            // even on servers that strip unrequested fields.
+            if (storage.getItem('pref:cardRatingsEnabled') === 'true') {
+                requestedFields.push('CommunityRating', 'CriticRating');
+            }
+
             // 2. Query fresh item details directly from server
             const item = await api.getItem(this._itemId, {
                 Fields: requestedFields.join(',')
@@ -1103,6 +1113,16 @@ class DetailsPage extends Page {
                 if (!requestedFields.includes('People')) {
                     requestedFields.push('People');
                 }
+            }
+
+            // When the card rating badge feature is on, the Similar and other secondary
+            // card rows on this page also display rating badges — but those rows fetch
+            // their own items. The primary item detail itself already carries
+            // CommunityRating/CriticRating by default from the server when it's stored;
+            // requesting them explicitly here is harmless and ensures they're present
+            // even on servers that strip unrequested fields.
+            if (storage.getItem('pref:cardRatingsEnabled') === 'true') {
+                requestedFields.push('CommunityRating', 'CriticRating');
             }
 
             const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
@@ -2141,7 +2161,9 @@ class DetailsPage extends Page {
             const response = await api.getItems({
                 ParentId: this._itemId,
                 Recursive: false,
-                Fields: 'ProductionYear,PrimaryImageAspectRatio',
+                // Append rating fields when card rating badges are enabled, so collection
+                // grid cards can render the on-artwork rating badge without a re-fetch.
+                Fields: `ProductionYear,PrimaryImageAspectRatio${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CommunityRating,CriticRating' : ''}`,
                 SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 300
@@ -4011,7 +4033,8 @@ class DetailsPage extends Page {
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
                     // Include SeriesPrimaryImageTag for reliable fallback to the series poster if thumbnails are missing.
-                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    // CriticRating is appended when card rating badges are enabled.
+                    Fields: `Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CriticRating' : ''}`
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.

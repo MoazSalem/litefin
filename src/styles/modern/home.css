@@ -873,8 +873,10 @@ html[data-media-rows-family="modern"] .media-card:focus .count-badge,
 html[data-media-rows-family="modern"] .media-card:focus .played-badge,
 html[data-media-rows-family="modern"] .media-card:focus .episode-badge,
 html[data-media-rows-family="modern"] .media-card:focus .card-rank-badge,
+html[data-media-rows-family="modern"] .media-card:focus .card-rating-badge,
 html[data-media-rows-family="modern"] .media-card.focused .card-rank-badge,
-html[data-media-rows-family="modern"] .media-card:hover .card-rank-badge {
+html[data-media-rows-family="modern"] .media-card:hover .card-rank-badge,
+html[data-media-rows-family="modern"] .media-card:hover .card-rating-badge {
     transform: scale(1.05);
 }
 
