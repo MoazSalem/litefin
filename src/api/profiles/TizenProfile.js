@@ -77,23 +77,10 @@ export function getDeviceCapabilities() {
         deviceId = BaseProfile.getFallbackDeviceId('litefin_tizen_');
     }
 
-    const manualRes = PlayerSettings.get('maxResolution');
-    if (manualRes && manualRes !== 'auto') {
-        switch (manualRes) {
-            case '720p':
-            case '1080p':
-                uhd = false;
-                uhd8K = false;
-                break;
-            case '2160p':
-                uhd = true;
-                uhd8K = false;
-                break;
-            case '4320p':
-                uhd = true;
-                uhd8K = true;
-                break;
-        }
+    const manualRes = BaseProfile.getMaxResolution();
+    if (manualRes) {
+        uhd = manualRes.width >= 3840;
+        uhd8K = manualRes.width >= 7680;
     }
 
     const video = document.createElement('video');

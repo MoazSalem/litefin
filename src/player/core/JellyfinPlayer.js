@@ -20,6 +20,7 @@ import { ExoVideoPlayer } from './ExoVideoPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
+import { BaseProfile } from '../../api/profiles/BaseProfile.js';
 import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
@@ -4864,8 +4865,12 @@ export class JellyfinPlayer extends EventEmitter {
                 requestBody.AllowVideoStreamCopy = true;
                 requestBody.AllowAudioStreamCopy = true;
 
-                // Clear ALL codec limits to prevent "VideoBitDepthNotSupported" etc which block generic remux
-                requestBody.DeviceProfile.CodecProfiles = [];
+                // Clear codec limits to prevent "VideoBitDepthNotSupported" etc which block generic remux.
+                // The video size limit stays: a video larger than the panel can decode (4K on a
+                // 1080p panel) fails as a remux too, so the server must scale it down instead.
+                requestBody.DeviceProfile.CodecProfiles = (requestBody.DeviceProfile.CodecProfiles || []).filter(
+                    (p) => BaseProfile.isVideoSizeLimitProfile(p)
+                );
                 requestBody.DeviceProfile.ContainerProfiles = [];
                 requestBody.DeviceProfile.DirectPlayProfiles = [];
 
