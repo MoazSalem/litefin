@@ -435,7 +435,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         pendingPrepareCbs.shift().onPrepared();
         assert.equal(playCalls, 1, 'onPrepared must start avplay.play()');
         await new Promise((resolve) => setTimeout(resolve, 450));
-        assert.equal(listenerResets, 1);
+        assert.equal(listenerResets, 2, 'Listener must be released on candidate retry and on final teardown');
         assert.equal(stopCalls, 2, 'One stop for the rejected candidate, one on final teardown');
         assert.equal(closeCalls, 2, 'One close for the rejected candidate, one on final teardown');
         assert.equal(tvAdapter.isWarmupActive(), false);
@@ -443,7 +443,9 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
             'open',
             'setDisplayRect',
             'prepareAsync',
+            'setListener',
             'stop',
+            'setDisplayRect',
             'close',
             'open',
             'setDisplayRect',
@@ -452,6 +454,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
             'play',
             'setListener',
             'stop',
+            'setDisplayRect',
             'close'
         ]);
         assert.equal(
@@ -466,7 +469,24 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         );
         assert.equal(mockDocEl.classList.contains('player-active'), false, 'player-active must be cleared on html');
         assert.equal(mockBody.classList.contains('player-active'), false, 'player-active must be cleared on body');
+        assert.deepEqual(
+            displayRects,
+            [
+                [0, 0, 1920, 1080],
+                [0, 0, 0, 0],
+                [0, 0, 1920, 1080],
+                [0, 0, 0, 0]
+            ],
+            'setDisplayRect(0, 0, 0, 0) must be called on candidate retry and on final teardown to release WAM video plane'
+        );
         assert.equal(audioClosed, 1);
+
+        // 2b. Compositor layer reset: resetCompositorLayer() drops player-active and triggers GPU layer recalculation
+        mockDocEl.classList.add('player-active');
+        mockBody.classList.add('player-active');
+        tvAdapter.resetCompositorLayer();
+        assert.equal(mockDocEl.classList.contains('player-active'), false);
+        assert.equal(mockBody.classList.contains('player-active'), false);
 
         // 3. Idempotency guard: second call must not reopen AVPlay or duplicate DOM probe
         assert.equal(tvAdapter.warmupCompositor(), true);

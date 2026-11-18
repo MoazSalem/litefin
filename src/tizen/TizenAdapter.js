@@ -297,31 +297,8 @@ class TizenAdapter {
         this._warmupActive = false;
 
         if (wasActive) {
-            // Release native AVPlay state cleanly before returning control to TizenAVPlayer
-            const avplay = this._getAvplay();
-            if (avplay) {
-                try {
-                    if (typeof avplay.setListener === 'function') {
-                        avplay.setListener(null);
-                    }
-                } catch (_) {
-                    // Ignore listener cleanup errors during abort
-                }
-                try {
-                    if (typeof avplay.stop === 'function') {
-                        avplay.stop();
-                    }
-                } catch (_) {
-                    // Ignore stop errors if still preparing
-                }
-                try {
-                    if (typeof avplay.close === 'function') {
-                        avplay.close();
-                    }
-                } catch (_) {
-                    // Ignore close errors if already NONE
-                }
-            }
+            // Cleanly release native AVPlay state before returning control to TizenAVPlayer
+            this._releaseAvplaySession(this._getAvplay());
         }
 
         this._teardownWarmupLayers();
@@ -715,6 +692,117 @@ class TizenAdapter {
     }
 
     /**
+     * Cleanly sequences the release of a native AVPlay session.
+     *
+     * Older Tizen firmwares (2.4/3.0/4.0) lock the WAM compositor in video overlay
+     * mode if stop() and close() are fired concurrently without releasing listener
+     * handles or resetting the display rectangle. This helper guarantees:
+     *   1. Listener is cleared to release C++ hardware decoder references.
+     *   2. stop() is only called if state is not NONE or IDLE.
+     *   3. setDisplayRect(0, 0, 0, 0) collapses the hardware overlay plane.
+     *   4. close() returns the native state machine to NONE cleanly.
+     *
+     * @param {Object} avplay - Native webapis.avplay instance
+     * @private
+     */
+    _releaseAvplaySession(avplay) {
+        if (!avplay) return;
+
+        // ---------------------------------------------------------------------
+        // 1. Release native listener callbacks before stopping the demuxer
+        // ---------------------------------------------------------------------
+        try {
+            if (typeof avplay.setListener === 'function') {
+                avplay.setListener(null);
+            }
+        } catch (_) {
+            // Safe ignore if listener was not registered or already released
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. Halt media clock and playback pipeline if actively engaged
+        // ---------------------------------------------------------------------
+        try {
+            let state = 'UNKNOWN';
+            try {
+                if (typeof avplay.getState === 'function') {
+                    state = avplay.getState();
+                }
+            } catch (_) {
+                state = 'UNKNOWN';
+            }
+            // Attempt stop unless state is already confirmed to be IDLE
+            if (state !== 'IDLE' && typeof avplay.stop === 'function') {
+                avplay.stop();
+            }
+        } catch (_) {
+            // Ignore stop errors if player is already transitioning
+        }
+
+        // ---------------------------------------------------------------------
+        // 3. Reset hardware display rect to zero so WAM disengages video plane
+        // ---------------------------------------------------------------------
+        try {
+            if (typeof avplay.setDisplayRect === 'function') {
+                avplay.setDisplayRect(0, 0, 0, 0);
+            }
+        } catch (_) {
+            // Ignore display rect errors if hardware plane is already detached
+        }
+
+        // ---------------------------------------------------------------------
+        // 4. Force native close to return hardware state machine to NONE
+        // ---------------------------------------------------------------------
+        try {
+            if (typeof avplay.close === 'function') {
+                avplay.close();
+            }
+        } catch (_) {
+            // Safe ignore if already closed
+        }
+    }
+
+    /**
+     * Forces the WAM compositor on Samsung Tizen to drop hardware video overlay
+     * punch-through planes and re-evaluate the DOM rendering tree for full 60Hz UI.
+     *
+     * When AVPlay renders on Tizen, WAM allocates a dedicated hardware plane
+     * and switches the compositing tree into video overlay mode. When returning to
+     * UI routes, toggling a hardware-accelerated transform forces WAM to release
+     * the punch-through layer and resume 60Hz UI compositing immediately.
+     */
+    resetCompositorLayer() {
+        if (typeof document === 'undefined' || !document.body) {
+            return;
+        }
+
+        try {
+            // Drop any lingering transparency classes from document root and body
+            if (document.documentElement) {
+                document.documentElement.classList.remove('player-active');
+            }
+            document.body.classList.remove('player-active');
+
+            // Momentarily engage hardware layer to force WAM compositor recalculation
+            document.body.style.transform = 'translateZ(0)';
+            void document.body.offsetHeight;
+
+            // Schedule style clearance on subsequent animation frame
+            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(() => {
+                    if (document.body) {
+                        document.body.style.transform = '';
+                    }
+                });
+            } else {
+                document.body.style.transform = '';
+            }
+        } catch (_) {
+            // Non-fatal if styling fails in mock or headless environments
+        }
+    }
+
+    /**
      * Removes the full-screen warmup layers, drops player-active and restores
      * the splash background. Idempotent — safe to call from abortWarmup(),
      * _finishWarmup() and hideWarmupBehindApp().
@@ -724,24 +812,44 @@ class TizenAdapter {
         this._teardownWarmupVideoLayer();
 
         /*
-         * Remove the full-screen 1920x1080 AVPlay plane entirely. The element is
-         * owned by the warmup cycle; TizenAVPlayer mounts its own
-         * application/avplayer host before opening a real stream, so nothing
-         * dormant is left behind in the DOM.
+         * Remove the full-screen 1920x1080 AVPlay plane entirely. Both reference
+         * pointer and DOM ID lookup are checked to ensure no orphaned plugin node
+         * remains attached.
          */
-        if (this._compositorWarmupProbe) {
-            const probe = this._compositorWarmupProbe;
-            this._compositorWarmupProbe = null;
+        const existingProbe =
+            typeof document !== 'undefined' && typeof document.getElementById === 'function'
+                ? document.getElementById('litefin-avplay-warmup')
+                : null;
+        const probe = this._compositorWarmupProbe || existingProbe;
+        this._compositorWarmupProbe = null;
+
+        // Cleanly unmount the active probe node if attached to DOM
+        if (probe) {
             try {
-                if (probe.parentNode) probe.parentNode.removeChild(probe);
+                if (probe.parentNode) {
+                    probe.parentNode.removeChild(probe);
+                }
+            } catch (_) {
+                // Ignore detached-node removal
+            }
+        }
+
+        // Safety pass: unmount secondary probe handle if separate element existed
+        if (existingProbe && existingProbe !== probe && existingProbe.parentNode) {
+            try {
+                existingProbe.parentNode.removeChild(existingProbe);
             } catch (_) {
                 // Ignore detached-node removal
             }
         }
         this._warmupDockedBehindUi = false;
 
+        // Restore solid UI background on document element and body
         this._applyWarmupPlayerActive(false);
         this._restoreWarmupSplash();
+
+        // Kick the WAM compositor to release the hardware overlay plane
+        this.resetCompositorLayer();
     }
 
     /**
@@ -1082,19 +1190,8 @@ class TizenAdapter {
         // trigger another retry for the same candidate.
         this._warmupAttempt += 1;
 
-        const avplay = this._getAvplay();
-        if (avplay) {
-            try {
-                if (typeof avplay.stop === 'function') avplay.stop();
-            } catch (_) {
-                // Ignore stop errors if still preparing
-            }
-            try {
-                if (typeof avplay.close === 'function') avplay.close();
-            } catch (_) {
-                // Ignore close errors if already NONE
-            }
-        }
+        // Cleanly release hardware session and zero out display rectangle
+        this._releaseAvplaySession(this._getAvplay());
 
         this._warmupCandidateIndex += 1;
         log.warn(`AVPlay warmup ${reason} — trying next URL candidate`);
@@ -1122,27 +1219,12 @@ class TizenAdapter {
         const wasDocked = this._warmupDockedBehindUi;
         this._warmupActive = false;
 
+        // Release native AVPlay hardware decoder, listener, and display bounds
         if (wasActive) {
-            const avplay = this._getAvplay();
-            if (avplay) {
-                try {
-                    if (typeof avplay.setListener === 'function') avplay.setListener(null);
-                } catch (_) {
-                    // Safe ignore on firmwares without an active listener
-                }
-                try {
-                    if (typeof avplay.stop === 'function') avplay.stop();
-                } catch (_) {
-                    // Safe ignore if prepare failed before entering READY/PLAYING
-                }
-                try {
-                    if (typeof avplay.close === 'function') avplay.close();
-                } catch (_) {
-                    // Safe ignore if already NONE
-                }
-            }
+            this._releaseAvplaySession(this._getAvplay());
         }
 
+        // Unmount warmup DOM planes and reset the WAM compositor layer
         this._teardownWarmupLayers();
 
         if (wasActive) {
