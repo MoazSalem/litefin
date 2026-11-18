@@ -111,3 +111,82 @@ test('TizenAVPlayer: audio track re-assertion behavior in simulated environment'
     assert.ok(setSelectTrackCalls.some(c => c.type === 'AUDIO' && c.index === 1), 'Track 1 must be re-applied');
     assert.equal(player.getActiveTizenAudioIndex(), 1);
 });
+
+test('TizenAVPlayer: cleanup routines cleanly sequence stop/close, reset display rect, detach DOM object, and trigger compositor reset', async () => {
+    let stopCalls = 0;
+    let closeCalls = 0;
+    let setListenerCalls = 0;
+    const setDisplayRectCalls = [];
+    let layerResets = 0;
+
+    const mockAvplay = {
+        getState: () => 'PLAYING',
+        setListener: (val) => {
+            if (val === null) setListenerCalls++;
+        },
+        stop: () => {
+            stopCalls++;
+        },
+        setDisplayRect: (...args) => {
+            setDisplayRectCalls.push(args);
+        },
+        close: () => {
+            closeCalls++;
+        }
+    };
+
+    const mockObj = {
+        id: 'litefin-avplayer-host',
+        parentNode: {
+            removeChild: (node) => {
+                if (node === mockObj) mockObj.parentNode = null;
+            }
+        }
+    };
+
+    const { TizenAVPlayer } = await import('../src/player/core/TizenAVPlayer.js');
+    const player = new TizenAVPlayer({ container: {} });
+    player._avplay = mockAvplay;
+    player._avplayObjectEl = mockObj;
+
+    const { tizenAdapter } = await import('../src/tizen/TizenAdapter.js');
+    const origReset = tizenAdapter.resetCompositorLayer;
+    tizenAdapter.resetCompositorLayer = () => {
+        layerResets++;
+    };
+
+    try {
+        await player.stop();
+
+        assert.equal(setListenerCalls, 1, 'setListener(null) must be called to release VRAM references');
+        assert.equal(stopCalls, 1, 'stop() must be called');
+        assert.deepEqual(setDisplayRectCalls, [[0, 0, 0, 0]], 'setDisplayRect(0, 0, 0, 0) must be called to release video overlay');
+        assert.equal(closeCalls, 1, 'close() must be called');
+        assert.equal(mockObj.parentNode, null, 'Host node must be unmounted from parent');
+        assert.equal(layerResets, 1, 'resetCompositorLayer must be triggered');
+
+        // Verify destroy() also cleans up even if stop() throws
+        const failingAvplay = {
+            getState: () => 'PLAYING',
+            setListener: () => {},
+            stop: () => {
+                throw new Error('STOP_FAILED');
+            },
+            setDisplayRect: (...args) => {
+                setDisplayRectCalls.push(args);
+            },
+            close: () => {
+                closeCalls++;
+            }
+        };
+
+        const player2 = new TizenAVPlayer({ container: {} });
+        player2._avplay = failingAvplay;
+        player2.destroy();
+
+        assert.equal(closeCalls, 2, 'close() must still be called in destroy() when stop() throws');
+        assert.deepEqual(setDisplayRectCalls[setDisplayRectCalls.length - 1], [0, 0, 0, 0]);
+    } finally {
+        tizenAdapter.resetCompositorLayer = origReset;
+    }
+});

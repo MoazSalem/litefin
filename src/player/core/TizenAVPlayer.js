@@ -635,6 +635,7 @@ export class TizenAVPlayer {
     /**
      * Removes the AVPlay hardware plane host once the native session is fully
      * closed, so no dormant plugin node is left on screen for the next page.
+     * Also triggers a WAM compositor layer reset to restore full 60Hz UI.
      * @private
      */
     _removeAvPlayerObject() {
@@ -644,11 +645,46 @@ export class TizenAVPlayer {
                 ? document.getElementById(AVPLAY_OBJECT_ID)
                 : null);
         this._avplayObjectEl = null;
-        if (!el) return;
+
+        // ---------------------------------------------------------------------
+        // 1. Cleanly unmount registered AVPlayer host node from DOM tree
+        // ---------------------------------------------------------------------
+        if (el) {
+            try {
+                if (el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            } catch (err) {
+                log.debug('TizenAVPlayer: AVPlayer hardware plane host removal skipped:', err.message || err);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. Safety pass: verify no orphaned application/avplayer nodes linger
+        // ---------------------------------------------------------------------
         try {
-            if (el.parentNode) el.parentNode.removeChild(el);
-        } catch (err) {
-            log.debug('TizenAVPlayer: AVPlayer hardware plane host removal skipped:', err.message || err);
+            if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+                const lingering = document.querySelectorAll(`object[type="application/avplayer"], #${AVPLAY_OBJECT_ID}`);
+                for (let i = 0; i < lingering.length; i++) {
+                    const node = lingering[i];
+                    if (node && node.parentNode) {
+                        node.parentNode.removeChild(node);
+                    }
+                }
+            }
+        } catch (_) {
+            // Non-fatal on mock or restricted DOM environments
+        }
+
+        // ---------------------------------------------------------------------
+        // 3. Force WAM compositor to exit hardware overlay mode and restore 60Hz UI
+        // ---------------------------------------------------------------------
+        try {
+            if (tizenAdapter && typeof tizenAdapter.resetCompositorLayer === 'function') {
+                tizenAdapter.resetCompositorLayer();
+            }
+        } catch (_) {
+            // Ignore compositor reset failures
         }
     }
 
@@ -2882,7 +2918,7 @@ export class TizenAVPlayer {
 
             // 1. Attempt stop
             try {
-                const state = this._avplay.getState();
+                const state = typeof this._avplay.getState === 'function' ? this._avplay.getState() : 'NONE';
                 if (state !== 'NONE' && state !== 'IDLE') {
                     this._avplay.stop();
                 }
@@ -2890,7 +2926,19 @@ export class TizenAVPlayer {
                 log.debug('AVPlay stop failed (possibly already idle):', e.message || e);
             }
 
-            // 2. Force close (True Reset to NONE state).
+            // 2. Collapse hardware video display rectangle so WAM releases overlay plane
+            try {
+                if (typeof this._avplay.setDisplayRect === 'function') {
+                    this._avplay.setDisplayRect(0, 0, 0, 0);
+                }
+            } catch (e) {
+                log.debug('AVPlay setDisplayRect(0, 0, 0, 0) failed:', e.message || e);
+            }
+
+            // Yield a brief macrotask tick to allow native state machine to transition out of PLAYING
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // 3. Force close (True Reset to NONE state).
             // This is critical for episode-to-episode transitions to clear
             // stale buffers and decoder state.
             try {
@@ -4003,15 +4051,90 @@ export class TizenAVPlayer {
         this._suspendedPositionMs = 0;
         this._wasPlayingBeforeSuspend = false;
 
+        // ---------------------------------------------------------------------
+        // Cancel all pending timeouts and timers before touching AVPlay
+        // ---------------------------------------------------------------------
+        if (this._subtitleConfirmTimerId !== null) {
+            clearTimeout(this._subtitleConfirmTimerId);
+            this._subtitleConfirmTimerId = null;
+        }
+        if (this._suppressWaitingTimeout) {
+            clearTimeout(this._suppressWaitingTimeout);
+            this._suppressWaitingTimeout = null;
+        }
+        if (this._readyTrackTimeoutId) {
+            clearTimeout(this._readyTrackTimeoutId);
+            this._readyTrackTimeoutId = null;
+        }
+        if (this._initialBufferTimeoutId) {
+            clearTimeout(this._initialBufferTimeoutId);
+            this._initialBufferTimeoutId = null;
+        }
+        if (this._seekBufferTimeoutId !== null) {
+            clearTimeout(this._seekBufferTimeoutId);
+            this._seekBufferTimeoutId = null;
+        }
+        this._clearDirectSeekVerification();
+        if (this._seekSafetyTimeoutId !== null) {
+            clearTimeout(this._seekSafetyTimeoutId);
+            this._seekSafetyTimeoutId = null;
+        }
+        if (this._bufferingDeadlockTimeoutId) {
+            clearTimeout(this._bufferingDeadlockTimeoutId);
+            this._bufferingDeadlockTimeoutId = null;
+        }
+        if (this._queuedSeekTimerId !== null) {
+            clearTimeout(this._queuedSeekTimerId);
+            this._queuedSeekTimerId = null;
+        }
+        if (this._deferredSeekTimerId !== null) {
+            clearTimeout(this._deferredSeekTimerId);
+            this._deferredSeekTimerId = null;
+        }
+
+        // ---------------------------------------------------------------------
+        // Cleanly sequence native decoder release
+        // ---------------------------------------------------------------------
         if (this._avplay) {
+            // 1. Release listener before stop/close so VRAM references are freed
             try {
-                this._avplay.stop();
-                this._avplay.close();
-            } catch (e) {
-                // Ignore cleanup errors
+                if (typeof this._avplay.setListener === 'function') {
+                    this._avplay.setListener(null);
+                }
+            } catch (_) {
+                // Ignore listener cleanup errors during destroy
+            }
+
+            // 2. Halt media pipeline if actively playing, paused, or prepared
+            try {
+                const state = typeof this._avplay.getState === 'function' ? this._avplay.getState() : 'NONE';
+                if (state !== 'NONE' && state !== 'IDLE' && typeof this._avplay.stop === 'function') {
+                    this._avplay.stop();
+                }
+            } catch (_) {
+                // Ignore stop errors during destroy
+            }
+
+            // 3. Reset hardware display rect to zero so WAM disengages video plane
+            try {
+                if (typeof this._avplay.setDisplayRect === 'function') {
+                    this._avplay.setDisplayRect(0, 0, 0, 0);
+                }
+            } catch (_) {
+                // Ignore display rect errors during destroy
+            }
+
+            // 4. Force native close to return hardware state machine to NONE
+            try {
+                if (typeof this._avplay.close === 'function') {
+                    this._avplay.close();
+                }
+            } catch (_) {
+                // Ignore close errors during destroy
             }
         }
 
+        // Unmount hardware plane host and trigger WAM compositor reset
         this._removeAvPlayerObject();
         this._avplay = null;
         this._currentSrc = null;
