@@ -572,3 +572,53 @@ test('HeroCarousel: dismisses BlurHash and aborts canvas draw when backdrop is a
         carousel.destroy();
     }
 });
+
+test('HeroCarousel: loads active slide logo immediately on goTo() without idle deferral and pre-warms next upcoming slide', async () => {
+    createdImages.length = 0;
+    scheduledRafs.length = 0;
+    storageMap.clear();
+    storageMap.set('pref:heroCarouselIndicatorStyle', 'dots');
+    storageMap.set('pref:heroCarouselStyle', 'immersive-performance');
+
+    const items = [0, 1, 2, 3].map((i) => ({ Id: `item-${i}`, Name: `Item ${i}` }));
+    // Pass large initial delay so background stack preloader does NOT run during this test
+    const carousel = new HeroCarousel({ items, initialPreloadDelay: 60000, preloadIntervalMs: 60000 });
+    const { container, logos, logoContainers } = buildCarouselFixture(4);
+
+    try {
+        carousel.init(container);
+
+        // Initially on mount, only slide 0 was preloaded; slides 1..3 have data-src and no src
+        assert.equal(carousel._preloadedSlides[0], true, 'Slide 0 must be marked preloaded on mount');
+        assert.equal(carousel._preloadedSlides[1], undefined, 'Slide 1 must not be preloaded on mount with 60s delay');
+        assert.equal(logos[1].src, '', 'Slide 1 logo must not have src assigned yet');
+        assert.equal(logoContainers[1].style.height, undefined, 'Slide 1 logo container height must not be set yet');
+
+        // Navigate to slide 1
+        carousel.goTo(1);
+
+        // Slide 1 must be preloaded immediately on goTo(1) without waiting for idle
+        assert.equal(carousel._preloadedSlides[1], true, 'Slide 1 must be marked preloaded immediately on goTo(1)');
+        assert.equal(logos[1].src, 'http://test/logo-1.png', 'Slide 1 logo src must be assigned immediately');
+        assert.equal(logos[1].getDecodeCount(), 1, 'Slide 1 logo.decode() must be called immediately');
+
+        // Resolve decode microtasks
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Slide 1 container height must be applied immediately since it is the active slide
+        assert.equal(logoContainers[1].style.height, '100px', 'Slide 1 logo height must be applied on active navigation');
+
+        // Slide 2 is the next upcoming slide; verify it has not preloaded yet synchronously
+        assert.equal(carousel._preloadedSlides[2], undefined, 'Slide 2 must not be preloaded synchronously on goTo(1)');
+
+        // Advance past the 200ms macrotask window for pre-warming the upcoming slide
+        await new Promise((r) => setTimeout(r, 230));
+
+        // Slide 2 must now be preloaded in advance
+        assert.equal(carousel._preloadedSlides[2], true, 'Slide 2 must be preloaded in background after 200ms macrotask');
+        assert.equal(logos[2].src, 'http://test/logo-2.png', 'Slide 2 logo src must be initiated ahead of time');
+    } finally {
+        carousel.destroy();
+    }
+});

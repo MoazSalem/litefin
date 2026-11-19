@@ -48,7 +48,8 @@ class HeroCarousel {
         this._preloadIdleId = null;
 
         // Configurable preload intervals allowing snappy test cycles while keeping TV production safe
-        this._initialPreloadDelay = options.initialPreloadDelay !== undefined ? options.initialPreloadDelay : 3000;
+        // Lower default delay to 1200ms ensures slide preloading starts promptly post-splash
+        this._initialPreloadDelay = options.initialPreloadDelay !== undefined ? options.initialPreloadDelay : 1200;
         this._preloadIntervalMs = options.preloadIntervalMs !== undefined ? options.preloadIntervalMs : 400;
 
         // Progressive queue for background slide preloading (1 slide every 400ms)
@@ -56,6 +57,9 @@ class HeroCarousel {
         this._preloadQueueTimer = null;
         this._preloadQueueIdleTask = null;
         this._deferredLogoHeights = Object.create(null);
+
+        // Timer identifier for warming next upcoming slide on active navigation
+        this._upcomingPreloadTimerId = null;
 
         // ---------------------------------------------------------------------
         // Idle preload & retained off-DOM bitmap bookkeeping
@@ -81,6 +85,8 @@ class HeroCarousel {
         this._slideItems = null;
         this._dotItems = null;
         this._slideBackdrops = null;
+        this._slideBackdropImages = null;
+        this._slideBlurhashCanvases = null;
         this._slideLogos = null;
         this._slideLogoContainers = null;
 
@@ -465,6 +471,16 @@ class HeroCarousel {
         this._slideItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-item'));
         this._dotItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-dot'));
         this._slideBackdrops = this._slideItems.map((slide) => slide.querySelector('.hero-backdrop'));
+        this._slideBackdropImages = this._slideBackdrops.map((backdrop) =>
+            backdrop && typeof backdrop.querySelector === 'function'
+                ? backdrop.querySelector('.hero-backdrop-img')
+                : null
+        );
+        this._slideBlurhashCanvases = this._slideItems.map((slide) =>
+            slide && typeof slide.querySelector === 'function'
+                ? slide.querySelector('.hero-blurhash-canvas')
+                : null
+        );
         this._slideLogos = this._slideItems.map((slide) => slide.querySelector('.hero-logo'));
         this._slideLogoContainers = this._slideLogos.map((img) =>
             img && typeof img.closest === 'function' ? img.closest('.hero-logo-container') : null
@@ -961,8 +977,8 @@ class HeroCarousel {
                     this._preloadSlide(index);
                     this._scheduleStackPreload(index + 1, this._preloadIntervalMs || 400);
                 },
-                interval >= 1000 ? 3000 : 100,
-                0
+                interval >= 1000 ? 1000 : 100,
+                interval >= 1000 ? 2500 : 800
             );
         }, interval);
     }
@@ -1003,6 +1019,10 @@ class HeroCarousel {
         this._cancelStackPreload();
         this._cancelPreloadQueue();
         this._cancelWarmSlideGpuCache();
+        if (this._upcomingPreloadTimerId) {
+            clearTimeout(this._upcomingPreloadTimerId);
+            this._upcomingPreloadTimerId = null;
+        }
         if (this._postScrollAutoStartTimerId) {
             clearTimeout(this._postScrollAutoStartTimerId);
             this._postScrollAutoStartTimerId = null;
@@ -1033,6 +1053,8 @@ class HeroCarousel {
         this._slideItems = null;
         this._dotItems = null;
         this._slideBackdrops = null;
+        this._slideBackdropImages = null;
+        this._slideBlurhashCanvases = null;
         this._slideLogos = null;
         this._slideLogoContainers = null;
         this._container = null;
@@ -1224,7 +1246,9 @@ class HeroCarousel {
 
         // Helper to gently fade out Slide 0's BlurHash overlay once decoded
         const fadeBlurhashCanvas = (immediate = false) => {
-            const canvas = typeof item.querySelector === 'function' ? item.querySelector('.hero-blurhash-canvas') : null;
+            const canvas = this._slideBlurhashCanvases
+                ? this._slideBlurhashCanvases[index]
+                : (typeof item.querySelector === 'function' ? item.querySelector('.hero-blurhash-canvas') : null);
             if (!canvas) return;
             canvas.dataset.dismissed = 'true';
             if (immediate) {
@@ -1242,7 +1266,8 @@ class HeroCarousel {
         if (backdrop && backdrop.dataset && backdrop.dataset.backdrop && !this._decodedBackdrops[index]) {
             const url = backdrop.dataset.backdrop;
             const existingImg =
-                typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null;
+                (this._slideBackdropImages && this._slideBackdropImages[index]) ||
+                (typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null);
 
             /*
              * Creates/decodes the slide's backdrop <img> off-DOM, retains a reference
@@ -1579,7 +1604,7 @@ class HeroCarousel {
                     this._decodeBlurhashFill(slides[this._currentIndex]);
                 }
             }
-        }, delay, 0);
+        }, delay, 2500);
     }
 
     /**
@@ -1831,7 +1856,9 @@ class HeroCarousel {
         if (!backdrop) return;
 
         let img = this._decodedBackdrops ? this._decodedBackdrops[index] : null;
-        if (!img && typeof backdrop.querySelector === 'function') {
+        if (!img && this._slideBackdropImages && this._slideBackdropImages[index]) {
+            img = this._slideBackdropImages[index];
+        } else if (!img && typeof backdrop.querySelector === 'function') {
             img = backdrop.querySelector('.hero-backdrop-img');
         }
 
@@ -1857,6 +1884,122 @@ class HeroCarousel {
         }
 
         this._mountBackdropImage(backdrop, img);
+    }
+
+    /**
+     * Attaches and begins loading the logo for a slide if still deferred,
+     * adjusting its container height as soon as dimensions are resolved.
+     *
+     * @param {number} index - Slide index
+     * @private
+     */
+    _attachSlideLogo(index) {
+        const logo = this._slideLogos ? this._slideLogos[index] : null;
+        if (!logo) return;
+
+        this._retainImage(logo);
+
+        const container =
+            this._slideLogoContainers && this._slideLogoContainers[index]
+                ? this._slideLogoContainers[index]
+                : (typeof logo.closest === 'function' ? logo.closest('.hero-logo-container') : null);
+
+        // Deduplicate preload flag for this slide so background queues do not re-request
+        this._preloadedSlides[index] = true;
+
+        // If the logo has already loaded (e.g. from background preload), adjust height immediately
+        if (logo.complete && logo.naturalWidth > 0) {
+            if (container) {
+                const aspect = logo.naturalWidth / logo.naturalHeight || 1;
+                const isCompact = this._isCompact !== null ? this._isCompact : true;
+                const maxW = 400;
+                const maxHeight = isCompact ? 110 : 130;
+                const minHeight = isCompact ? 50 : 60;
+                const targetHeight = maxW / aspect;
+                const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                const heightCss = `${containerHeight}px`;
+                if (container.style.height !== heightCss) {
+                    container.style.height = heightCss;
+                }
+            }
+            return;
+        }
+
+        // If still deferred on data-src, initiate load immediately for active slide
+        if (logo.dataset && logo.dataset.src && !logo.src) {
+            const url = logo.dataset.src;
+            const adjustLogoHeight = () => {
+                if (container && logo.naturalWidth > 0 && logo.naturalHeight > 0) {
+                    const aspect = logo.naturalWidth / logo.naturalHeight || 1;
+                    const isCompact = this._isCompact !== null ? this._isCompact : true;
+                    const maxW = 400;
+                    const maxHeight = isCompact ? 110 : 130;
+                    const minHeight = isCompact ? 50 : 60;
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                    const heightCss = `${containerHeight}px`;
+                    if (container.style.height !== heightCss) {
+                        container.style.height = heightCss;
+                    }
+                }
+            };
+
+            const applyLogo = (effectiveUrl) => {
+                if ('decoding' in logo) {
+                    logo.decoding = 'async';
+                }
+                const hasLogoDecode = typeof logo.decode === 'function';
+                if (!hasLogoDecode) {
+                    logo.onload = adjustLogoHeight;
+                }
+                logo.src = effectiveUrl;
+                if (hasLogoDecode) {
+                    logo.decode().then(adjustLogoHeight).catch(() => {
+                        if (logo.complete && logo.naturalWidth > 0) {
+                            adjustLogoHeight();
+                        }
+                    });
+                } else if (logo.complete) {
+                    adjustLogoHeight();
+                }
+            };
+
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(url);
+                if (cached) {
+                    applyLogo(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(url)
+                        .then(applyLogo)
+                        .catch(() => applyLogo(url));
+                }
+            } else {
+                applyLogo(url);
+            }
+        }
+    }
+
+    /**
+     * Pre-warms the next upcoming slide in sequence 200ms after a transition begins,
+     * ensuring off-DOM backdrop and logo textures are ready before the next slide switch.
+     *
+     * @param {number} nextIndex - Next slide index to warm
+     * @private
+     */
+    _scheduleUpcomingPreload(nextIndex) {
+        if (this._upcomingPreloadTimerId) {
+            clearTimeout(this._upcomingPreloadTimerId);
+            this._upcomingPreloadTimerId = null;
+        }
+        if (this._items.length <= 1 || this._preloadedSlides[nextIndex]) return;
+
+        this._upcomingPreloadTimerId = setTimeout(() => {
+            this._upcomingPreloadTimerId = null;
+            if (this._container) {
+                this._preloadSlide(nextIndex);
+            }
+        }, 200);
     }
 
     /**
@@ -1923,6 +2066,9 @@ class HeroCarousel {
         // Swap in the pre-decoded <img> for the incoming slide before activating it
         this._attachBackdrop(index);
 
+        // Ensure incoming active slide has its logo attached and loading immediately
+        this._attachSlideLogo(index);
+
         prevItem.classList.remove('active');
         dots[prevIndex].classList.remove('active');
 
@@ -1933,6 +2079,10 @@ class HeroCarousel {
 
         // Cancel previous neighbor preload queue
         this._cancelPreloadQueue();
+
+        // Pre-warm the next upcoming slide in sequence after a 200ms settle window
+        const nextUpcoming = (index + 1) % this._items.length;
+        this._scheduleUpcomingPreload(nextUpcoming);
 
         // Timestamp the synchronous portion only: everything after this point is
         // timer/rAF work, so a long task attributed to a later mark is deferred
