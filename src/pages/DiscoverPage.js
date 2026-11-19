@@ -250,8 +250,9 @@ class DiscoverPage extends Page {
         const cache = state.get('discover:pageCache');
         if (!cache || !cache.rows || typeof cache.rows !== 'object') return null;
 
-        // Never serve cache from a different user or server instance
-        if (cache.serverUrl !== api._serverUrl || cache.userId !== api._userId) {
+        // Never serve cache from a different user, server instance, or interface language
+        const currentLang = i18n?.currentLang || storage.getItem('app_language') || 'en-us';
+        if (cache.serverUrl !== api._serverUrl || cache.userId !== api._userId || cache.lang !== currentLang) {
             state.delete('discover:pageCache');
             return null;
         }
@@ -318,12 +319,14 @@ class DiscoverPage extends Page {
 
         if (Object.keys(rows).length === 0) return;
 
-        // Save serialized state in StateManager
+        // Save serialized state in StateManager partitioned by active language
+        const currentLang = i18n?.currentLang || storage.getItem('app_language') || 'en-us';
         state.set('discover:pageCache', {
             rows,
             nextRowIndexToLoad: this._nextRowIndexToLoad,
             serverUrl: api._serverUrl,
             userId: api._userId,
+            lang: currentLang,
             timestamp: Date.now()
         });
 

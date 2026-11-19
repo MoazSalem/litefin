@@ -188,6 +188,62 @@ export class SeerrClient {
     }
 
     /**
+     * Resolves the active user interface language formatted for TMDB/Seerr metadata queries.
+     * Normalizes language codes to ISO 639-1 / BCP-47 strings suitable for TMDB (e.g. 'de', 'es', 'pt-BR', 'zh-CN').
+     *
+     * @returns {string} Standardized language tag for upstream media localization
+     * @private
+     */
+    _getPreferredLanguage() {
+        // Retrieve raw language tag from active internationalization instance or persistent storage
+        const rawLang =
+            i18n?.currentLang ||
+            storage.getItem('app_language') ||
+            (typeof navigator !== 'undefined' ? navigator.language : null) ||
+            'en-us';
+
+        if (!rawLang || typeof rawLang !== 'string') {
+            return 'en';
+        }
+
+        // Deconstruct language identifier into primary language code and regional subtag
+        const parts = rawLang.trim().split(/[-_]/);
+        if (parts.length >= 2) {
+            // Reconstruct as standard BCP-47 tag with uppercase country subtag (e.g., pt-BR, zh-CN, en-US)
+            return `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+        }
+
+        // Return lowercase 2-letter primary language code (e.g., de, fr, es, ar, ja)
+        return parts[0].toLowerCase();
+    }
+
+    /**
+     * Appends the active language query parameter to an API path when not explicitly present.
+     *
+     * @param {string} path - Target API route
+     * @param {string|null} [overrideLanguage] - Optional explicit language code
+     * @returns {string} Enriched path containing the language parameter
+     * @private
+     */
+    _withLanguage(path, overrideLanguage = null) {
+        if (!path || typeof path !== 'string') return path;
+
+        // If route already specifies an explicit language parameter, leave it unmodified
+        if (/[?&]language=/i.test(path)) {
+            return path;
+        }
+
+        const lang = overrideLanguage || this._getPreferredLanguage();
+        if (!lang) {
+            return path;
+        }
+
+        // Append query separator based on existing parameter structure
+        const separator = path.includes('?') ? '&' : '?';
+        return `${path}${separator}language=${encodeURIComponent(lang)}`;
+    }
+
+    /**
      * Makes an authenticated call through the Litefin server plugin.
      * @param {string} path - Path after /Litefin/Seerr
      * @param {Object} [options] - Request method, body, and `fresh` to bypass the cached GET response
@@ -209,7 +265,8 @@ export class SeerrClient {
             }
 
             const now = Date.now();
-            const cacheKey = `${api._userId || 'anon'}:${path}`;
+            const lang = this._getPreferredLanguage();
+            const cacheKey = `${api._userId || 'anon'}:${lang}:${path}`;
             // options.fresh skips the cache read only (live download polling). It must
             // never clear caches: wiping discover:pageCache would rebuild Discover on
             // back navigation and lose the restored focus.
@@ -251,100 +308,178 @@ export class SeerrClient {
         return results;
     }
 
-    async discoverTrending() {
-        return this._normalizeList(await this._request('/Discover/Trending'));
+    /**
+     * Retrieves currently trending media from Seerr, localized to active application language.
+     *
+     * @param {number} [page=1] - Requested pagination index
+     * @param {string|null} [language=null] - Explicit language code override
+     * @returns {Promise<Array<Object>>} Normalized list of trending titles
+     */
+    async discoverTrending(page = 1, language = null) {
+        // Construct localized endpoint path for trending content
+        const path = this._withLanguage('/Discover/Trending', language);
+        return this._normalizeList(await this._request(path));
     }
 
+    /**
+     * Queries discovered movies filtered by genre, studio, keywords, or sorting,
+     * decorated with localized metadata matching the user's active UI locale.
+     *
+     * @param {number} [page=1] - Requested pagination index
+     * @param {Object|number|string} [options={}] - Filter and sort configuration
+     * @returns {Promise<Array<Object>>} Normalized list of movie cards
+     */
     async discoverMovies(page = 1, options = {}) {
         let queryParams = `page=${page}`;
+
+        // Support shorthand invocation where options is directly a genre identifier
         if (typeof options === 'number' || typeof options === 'string') {
             queryParams += `&genre=${options}`;
         } else if (options && typeof options === 'object') {
+            // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
+
+            // Append explicit language override if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
+
+            // Append age rating and certification country filters
             if (options.certification) {
                 const country = options.certificationCountry || 'US';
                 queryParams += `&certificationCountry=${encodeURIComponent(country)}&certification=${encodeURIComponent(options.certification)}`;
             }
+
+            // Append keyword and studio constraints
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.studio) queryParams += `&studio=${options.studio}`;
+
+            // Append TMDB sort expression
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
-        return this._normalizeList(await this._request(`/Discover/Movies?${queryParams}`));
+
+        // Ensure path receives user's active preferred language tag
+        const optLang = typeof options === 'object' && options ? options.language : null;
+        const targetPath = this._withLanguage(`/Discover/Movies?${queryParams}`, optLang);
+        return this._normalizeList(await this._request(targetPath));
     }
 
+    /**
+     * Queries discovered television series filtered by genre, network, keywords, or sorting,
+     * decorated with localized metadata matching the user's active UI locale.
+     *
+     * @param {number} [page=1] - Requested pagination index
+     * @param {Object|number|string} [options={}] - Filter and sort configuration
+     * @returns {Promise<Array<Object>>} Normalized list of TV series cards
+     */
     async discoverTv(page = 1, options = {}) {
         let queryParams = `page=${page}`;
+
+        // Support shorthand invocation where options is directly a genre identifier
         if (typeof options === 'number' || typeof options === 'string') {
             queryParams += `&genre=${options}`;
         } else if (options && typeof options === 'object') {
+            // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
+
+            // Append explicit language override if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
+
+            // Append age rating and certification country filters
             if (options.certification) {
                 const country = options.certificationCountry || 'US';
                 queryParams += `&certificationCountry=${encodeURIComponent(country)}&certification=${encodeURIComponent(options.certification)}`;
             }
+
+            // Append keyword and network constraints
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.network) queryParams += `&network=${options.network}`;
+
+            // Append TMDB sort expression
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
-        return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
+
+        // Ensure path receives user's active preferred language tag
+        const optLang = typeof options === 'object' && options ? options.language : null;
+        const targetPath = this._withLanguage(`/Discover/Tv?${queryParams}`, optLang);
+        return this._normalizeList(await this._request(targetPath));
     }
 
     async moviesByGenre(genreId, page = 1, sortBy = null, language = null) {
+        // Forward genre search with localized language tag
         return this.discoverMovies(page, { genre: genreId, sortBy, language });
     }
 
     async tvByGenre(genreId, page = 1, sortBy = null, language = null) {
+        // Forward TV genre search with localized language tag
         return this.discoverTv(page, { genre: genreId, sortBy, language });
     }
 
-    async moviesByKeyword(keywordId, page = 1, sortBy = null) {
-        return this.discoverMovies(page, { keywords: keywordId, sortBy });
+    async moviesByKeyword(keywordId, page = 1, sortBy = null, language = null) {
+        // Forward movie keyword discovery with localized language tag
+        return this.discoverMovies(page, { keywords: keywordId, sortBy, language });
     }
 
-    async tvByKeyword(keywordId, page = 1, sortBy = null) {
-        return this.discoverTv(page, { keywords: keywordId, sortBy });
+    async tvByKeyword(keywordId, page = 1, sortBy = null, language = null) {
+        // Forward TV series keyword discovery with localized language tag
+        return this.discoverTv(page, { keywords: keywordId, sortBy, language });
     }
 
-    async moviesByStudio(studioId, page = 1) {
-        return this._normalizeList(await this._request(`/Discover/Movies/Studio/${studioId}?page=${page}`));
+    async moviesByStudio(studioId, page = 1, language = null) {
+        // Request movies by production studio, normalized with preferred language
+        const path = this._withLanguage(`/Discover/Movies/Studio/${studioId}?page=${page}`, language);
+        return this._normalizeList(await this._request(path));
     }
 
-    async tvByNetwork(networkId, page = 1) {
-        return this._normalizeList(await this._request(`/Discover/Tv/Network/${networkId}?page=${page}`));
+    async tvByNetwork(networkId, page = 1, language = null) {
+        // Request television series by network, normalized with preferred language
+        const path = this._withLanguage(`/Discover/Tv/Network/${networkId}?page=${page}`, language);
+        return this._normalizeList(await this._request(path));
     }
 
     /**
-     * @param {string} query
-     * @param {number} [page=1]
-     * @returns {Promise<Array<Object>>}
+     * Searches the Seerr catalogue with automatic query localization.
+     *
+     * @param {string} query - Keyword search term
+     * @param {number} [page=1] - Requested pagination index
+     * @param {string|null} [language=null] - Optional language code override
+     * @returns {Promise<Array<Object>>} Normalized search results
      */
-    async search(query, page = 1) {
-        const path = `/Search?query=${encodeURIComponent(query)}&page=${page}`;
+    async search(query, page = 1, language = null) {
+        // Formulate search query route enriched with localization tag
+        const rawPath = `/Search?query=${encodeURIComponent(query)}&page=${page}`;
+        const path = this._withLanguage(rawPath, language);
         return this._normalizeList(await this._request(path), true);
     }
 
     /**
-     * Gets the full details used by the Seerr details page.
-     * @param {string} mediaType
-     * @param {number} tmdbId
+     * Gets the full details used by the Seerr details page with localized text.
+     *
+     * @param {string} mediaType - Media type string ('movie' or 'tv')
+     * @param {number} tmdbId - The TMDB identifier
      * @param {Object} [options]
      * @param {boolean} [options.fresh] - Bypass the response cache (download progress polling)
-     * @returns {Promise<Object>}
+     * @param {string|null} [options.language] - Optional explicit language code override
+     * @returns {Promise<Object>} Normalized detail item with status badges
      */
     async details(mediaType, tmdbId, options = {}) {
+        // Resolve target endpoint controller segment
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
-        const result = await this._request(`/${type}/${tmdbId}`, options.fresh ? { fresh: true } : {});
+        const rawPath = `/${type}/${tmdbId}`;
+
+        // Ensure detail route requests translated overview, title, and tagline
+        const path = this._withLanguage(rawPath, options.language);
+        const result = await this._request(path, options.fresh ? { fresh: true } : {});
         const item = normalizeSeerrItem(result, mediaType);
         if (!item) throw new Error('SeerrInvalidResponse');
         return decorateStatusBadge(item);
     }
 
-    async similar(mediaType, tmdbId, page = 1) {
+    async similar(mediaType, tmdbId, page = 1, language = null) {
+        // Resolve media controller segment
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
         try {
-            const raw = await this._request(`/${type}/${tmdbId}/similar?page=${page}`);
+            // Formulate localized path for similar media suggestions
+            const path = this._withLanguage(`/${type}/${tmdbId}/similar?page=${page}`, language);
+            const raw = await this._request(path);
             const list = this._resultsOf(raw);
             return list
                 .filter((r) => r && r.mediaType !== 'person')
@@ -357,18 +492,20 @@ export class SeerrClient {
         }
     }
 
-    async recommendations(mediaType, tmdbId, page = 1) {
+    async recommendations(mediaType, tmdbId, page = 1, language = null) {
         // Resolve target entity route segment based on media type
         const type = mediaType === 'tv' ? 'Tv' : 'Movie';
 
         try {
-            // Attempt primary route casing first
+            // Formulate localized route paths respecting upstream casing conventions
             let raw;
+            const primaryPath = this._withLanguage(`/${type}/${tmdbId}/recommendations?page=${page}`, language);
             try {
-                raw = await this._request(`/${type}/${tmdbId}/recommendations?page=${page}`);
+                raw = await this._request(primaryPath);
             } catch (primaryErr) {
                 // Route casing fallback for strict reverse proxy environments
-                raw = await this._request(`/${type}/${tmdbId}/Recommendations?page=${page}`);
+                const fallbackPath = this._withLanguage(`/${type}/${tmdbId}/Recommendations?page=${page}`, language);
+                raw = await this._request(fallbackPath);
             }
 
             // Extract results list from raw response payload
@@ -387,9 +524,11 @@ export class SeerrClient {
         }
     }
 
-    async collection(collectionId) {
+    async collection(collectionId, language = null) {
         try {
-            const raw = await this._request(`/Collection/${collectionId}`);
+            // Request collection bundle with localized part descriptions
+            const path = this._withLanguage(`/Collection/${collectionId}`, language);
+            const raw = await this._request(path);
             const list = this._resultsOf(raw?.parts || raw?.results || raw);
             const title = raw?.name || raw?.title || '';
             const items = list
@@ -413,14 +552,17 @@ export class SeerrClient {
      * Normalizes and decorates each credit item with availability badges.
      *
      * @param {number} personId - The TMDB person identifier.
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Object>} Normalized person details and appearances.
      */
-    async person(personId) {
+    async person(personId, language = null) {
         try {
-            // Request person entity and combined credits in parallel
+            // Request person entity and combined credits in parallel with localized biographies
+            const personPath = this._withLanguage(`/Person/${personId}`, language);
+            const creditsPath = this._withLanguage(`/Person/${personId}/combined_credits`, language);
             const [rawPersonRes, creditsRes] = await Promise.allSettled([
-                this._request(`/Person/${personId}`),
-                this._request(`/Person/${personId}/combined_credits`)
+                this._request(personPath),
+                this._request(creditsPath)
             ]);
 
             const raw = rawPersonRes.status === 'fulfilled' ? rawPersonRes.value || {} : {};
@@ -500,12 +642,15 @@ export class SeerrClient {
     }
 
     /**
-     * Gets requestable seasons of a series.
-     * @param {number} tmdbId
+     * Gets requestable seasons of a series with localized season titles.
+     * @param {number} tmdbId - The TMDB series identifier
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Array<{seasonNumber: number, name: string, episodeCount: number, status: number}>>}
      */
-    async tvSeasons(tmdbId) {
-        const detail = await this._request(`/Tv/${tmdbId}`);
+    async tvSeasons(tmdbId, language = null) {
+        // Query TV series details with localized metadata
+        const path = this._withLanguage(`/Tv/${tmdbId}`, language);
+        const detail = await this._request(path);
         const seasons = (detail && detail.seasons) || [];
         const seasonStatuses = {};
 
@@ -828,17 +973,22 @@ export class SeerrClient {
     }
 
     /**
-     * Gets upcoming movies from Seerr.
+     * Gets upcoming movies from Seerr with localized titles and descriptions.
      * @param {number} [page=1]
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Array<Object>>}
      */
-    async upcomingMovies(page = 1) {
+    async upcomingMovies(page = 1, language = null) {
         let payload = null;
         try {
             try {
-                payload = await this._request(`/Discover/Movies/Upcoming?page=${page}`);
+                // Attempt upper-case route with preferred language
+                const primaryPath = this._withLanguage(`/Discover/Movies/Upcoming?page=${page}`, language);
+                payload = await this._request(primaryPath);
             } catch (err) {
-                payload = await this._request(`/discover/movies/upcoming?page=${page}`);
+                // Fallback to lower-case route if upper-case failed
+                const fallbackPath = this._withLanguage(`/discover/movies/upcoming?page=${page}`, language);
+                payload = await this._request(fallbackPath);
             }
         } catch (err) {
             log.warn('Failed to retrieve Seerr upcoming movies, returning empty collection', err);
@@ -848,17 +998,22 @@ export class SeerrClient {
     }
 
     /**
-     * Gets upcoming TV series from Seerr.
+     * Gets upcoming TV series from Seerr with localized titles and descriptions.
      * @param {number} [page=1]
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Array<Object>>}
      */
-    async upcomingTv(page = 1) {
+    async upcomingTv(page = 1, language = null) {
         let payload = null;
         try {
             try {
-                payload = await this._request(`/Discover/Tv/Upcoming?page=${page}`);
+                // Attempt upper-case route with preferred language
+                const primaryPath = this._withLanguage(`/Discover/Tv/Upcoming?page=${page}`, language);
+                payload = await this._request(primaryPath);
             } catch (err) {
-                payload = await this._request(`/discover/tv/upcoming?page=${page}`);
+                // Fallback to lower-case route if upper-case failed
+                const fallbackPath = this._withLanguage(`/discover/tv/upcoming?page=${page}`, language);
+                payload = await this._request(fallbackPath);
             }
         } catch (err) {
             log.warn('Failed to retrieve Seerr upcoming TV series, returning empty collection', err);
@@ -868,16 +1023,21 @@ export class SeerrClient {
     }
 
     /**
-     * Gets movie genre slider items from Seerr.
+     * Gets movie genre slider items from Seerr with localized genre names.
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Array<Object>>}
      */
-    async genreSliderMovies() {
+    async genreSliderMovies(language = null) {
         let payload = null;
         try {
-            payload = await this._request('/Discover/GenreSlider/Movie');
+            // Attempt upper-case genre slider route with preferred language
+            const primaryPath = this._withLanguage('/Discover/GenreSlider/Movie', language);
+            payload = await this._request(primaryPath);
         } catch (err) {
             try {
-                payload = await this._request('/discover/genreslider/movie');
+                // Fallback to lower-case genre slider route
+                const fallbackPath = this._withLanguage('/discover/genreslider/movie', language);
+                payload = await this._request(fallbackPath);
             } catch (err2) {
                 payload = null;
             }
@@ -887,16 +1047,21 @@ export class SeerrClient {
     }
 
     /**
-     * Gets TV genre slider items from Seerr.
+     * Gets TV genre slider items from Seerr with localized genre names.
+     * @param {string|null} [language=null] - Optional explicit language code override
      * @returns {Promise<Array<Object>>}
      */
-    async genreSliderTv() {
+    async genreSliderTv(language = null) {
         let payload = null;
         try {
-            payload = await this._request('/Discover/GenreSlider/Tv');
+            // Attempt upper-case TV genre slider route with preferred language
+            const primaryPath = this._withLanguage('/Discover/GenreSlider/Tv', language);
+            payload = await this._request(primaryPath);
         } catch (err) {
             try {
-                payload = await this._request('/discover/genreslider/tv');
+                // Fallback to lower-case TV genre slider route
+                const fallbackPath = this._withLanguage('/discover/genreslider/tv', language);
+                payload = await this._request(fallbackPath);
             } catch (err2) {
                 payload = null;
             }
