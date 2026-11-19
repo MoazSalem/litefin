@@ -760,15 +760,78 @@ class HeroCarousel {
                 heroBackdrop.dataset.backdrop;
             if (!url) return;
 
-            // Decode blurhash at low resolution asynchronously, from an idle task.
-            // Home boot also mounts many rows; decoding every hero canvas inline
-            // would compete with the first D-pad navigation frame.
+            // -----------------------------------------------------------------
+            // Helper: Dismiss BlurHash canvas cleanly and prevent late redraws
+            // -----------------------------------------------------------------
+            const dismissCanvas = (immediate = false) => {
+                canvas.dataset.dismissed = 'true';
+                if (immediate) {
+                    if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                    return;
+                }
+                canvas.style.opacity = '0';
+                setTimeout(() => {
+                    if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                }, 500);
+            };
+
+            // -----------------------------------------------------------------
+            // If the backdrop image already decoded from cache, dismiss at once
+            // -----------------------------------------------------------------
+            if (existingImg && existingImg.complete && existingImg.naturalWidth > 0) {
+                dismissCanvas(true);
+                return;
+            }
+
+            // -----------------------------------------------------------------
+            // Hook load events so the placeholder fades as soon as bitmap paints
+            // -----------------------------------------------------------------
+            if (existingImg) {
+                existingImg.addEventListener('load', () => dismissCanvas(false), { once: true });
+                existingImg.addEventListener('error', () => dismissCanvas(true), { once: true });
+            } else {
+                const img = new Image();
+                img.onload = () => {
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(() => dismissCanvas(false));
+                    } else {
+                        dismissCanvas(false);
+                    }
+                };
+                img.onerror = () => dismissCanvas(true);
+                img.src = url;
+            }
+
+            // -----------------------------------------------------------------
+            // Decode blurhash at low resolution asynchronously, from an idle task
+            // -----------------------------------------------------------------
             idleGate.runWhenIdle(
                 () => {
+                    // Abort if the real backdrop image already loaded or canvas faded
+                    const backdropImg = heroBackdrop.querySelector('.hero-backdrop-img');
+                    const isBackdropLoaded =
+                        (backdropImg && backdropImg.complete && backdropImg.naturalWidth > 0) ||
+                        (this._decodedBackdrops && this._decodedBackdrops[0]);
+                    if (canvas.dataset.dismissed === 'true' || canvas.style.opacity === '0' || isBackdropLoaded) {
+                        dismissCanvas(true);
+                        return;
+                    }
+
                     import('../utils/BlurHashDecoder.js')
                         .then(({ default: BlurHashDecoder }) => {
+                            // Secondary check: verify canvas state after dynamic import resolves
+                            if (canvas.dataset.dismissed === 'true' || canvas.style.opacity === '0' || !canvas.isConnected) {
+                                dismissCanvas(true);
+                                return;
+                            }
                             const pixels = BlurHashDecoder.decode(hash, 64, 36);
-                            if (pixels && canvas && canvas.isConnected) {
+                            if (
+                                pixels &&
+                                canvas &&
+                                canvas.isConnected &&
+                                canvas.style.opacity !== '0' &&
+                                canvas.dataset.dismissed !== 'true'
+                            ) {
                                 canvas.width = 64;
                                 canvas.height = 36;
                                 const ctx = canvas.getContext('2d');
@@ -782,25 +845,6 @@ class HeroCarousel {
                 1200,
                 0
             );
-
-            // Note: _preloadSlide(0) decodes the live Slide 0 backdrop <img> and
-            // fades this blurhash canvas cleanly; avoid creating a duplicate Image().
-            if (!existingImg) {
-                const img = new Image();
-                img.onload = () => {
-                    requestAnimationFrame(() => {
-                        canvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                        }, 500);
-                    });
-                };
-                img.onerror = () => {
-                    // If loading fails, remove canvas so it doesn't block underlying display
-                    if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                };
-                img.src = url;
-            }
         });
 
         // ────────────────────────────────────────────────────────────────────
@@ -1182,6 +1226,7 @@ class HeroCarousel {
         const fadeBlurhashCanvas = (immediate = false) => {
             const canvas = typeof item.querySelector === 'function' ? item.querySelector('.hero-blurhash-canvas') : null;
             if (!canvas) return;
+            canvas.dataset.dismissed = 'true';
             if (immediate) {
                 if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
                 return;
@@ -1217,18 +1262,27 @@ class HeroCarousel {
                 const commitBackdrop = () => {
                     if (applied) return;
 
-                    // If user is actively scrolling or navigating, defer DOM/style mutations
-                    // so late-arriving image decodes never cause jank during row navigation.
-                    const isScrolling =
-                        (scrollController && scrollController.isAnimating) ||
-                        (typeof window !== 'undefined' &&
-                            window.__scrollController &&
-                            window.__scrollController.isAnimating);
-                    const isUserActive =
-                        !idleGate.isBootLocked() && idleGate.isUserActive(1500);
-                    if (isScrolling || isUserActive) {
-                        idleGate.runWhenIdle(commitBackdrop, 1500, 0);
-                        return;
+                    // -----------------------------------------------------------------
+                    // Active slide check: visible hero backdrop must mount immediately
+                    // -----------------------------------------------------------------
+                    // If this slide is the one currently in view, mount its backdrop
+                    // and dismiss the blurhash placeholder without waiting for user idle.
+                    // Stacking or background warming for inactive slides (1..N) pauses
+                    // while the user is actively scrolling rows.
+                    // -----------------------------------------------------------------
+                    const isActiveSlide = index === this._currentIndex;
+                    if (!isActiveSlide) {
+                        const isScrolling =
+                            (scrollController && scrollController.isAnimating) ||
+                            (typeof window !== 'undefined' &&
+                                window.__scrollController &&
+                                window.__scrollController.isAnimating);
+                        const isUserActive =
+                            !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                        if (isScrolling || isUserActive) {
+                            idleGate.runWhenIdle(commitBackdrop, 1500, 3000);
+                            return;
+                        }
                     }
 
                     applied = true;
@@ -1247,6 +1301,11 @@ class HeroCarousel {
                     fadeBlurhashCanvas(false);
                 };
 
+                // -----------------------------------------------------------------
+                // Decoding and load handler setup:
+                // Only bind img.onload if img.decode is not available so that
+                // decode() has full priority without racing or dispatching early.
+                // -----------------------------------------------------------------
                 const hasDecode = typeof img.decode === 'function';
                 if (!hasDecode) {
                     img.onload = commitBackdrop;
@@ -1290,13 +1349,21 @@ class HeroCarousel {
                     img.src = effectiveUrl;
                 }
 
+                // -----------------------------------------------------------------
                 // Decode off the critical transition path so bitmap pixels are warm
+                // -----------------------------------------------------------------
                 if (hasDecode) {
-                    img.decode().then(commitBackdrop).catch(() => {
-                        if (img.complete && img.naturalWidth > 0) {
-                            commitBackdrop();
-                        }
-                    });
+                    img.decode()
+                        .then(commitBackdrop)
+                        .catch(() => {
+                            // If decode rejected or aborted on older TV WebKit, verify
+                            // whether the bitmap completed anyway or wire up onload.
+                            if (img.complete && img.naturalWidth > 0) {
+                                commitBackdrop();
+                            } else {
+                                img.onload = commitBackdrop;
+                            }
+                        });
                 } else if (img.complete && img.naturalWidth > 0) {
                     commitBackdrop();
                 }
@@ -1352,17 +1419,26 @@ class HeroCarousel {
             const finalizeLogo = () => {
                 if (logoDone) return;
 
-                // Defer logo height adjustments and layout queries while the user is actively scrolling
-                const isScrolling =
-                    (scrollController && scrollController.isAnimating) ||
-                    (typeof window !== 'undefined' &&
-                        window.__scrollController &&
-                        window.__scrollController.isAnimating);
-                const isUserActive =
-                    !idleGate.isBootLocked() && idleGate.isUserActive(1500);
-                if (isScrolling || isUserActive) {
-                    idleGate.runWhenIdle(finalizeLogo, 1500, 0);
-                    return;
+                // -----------------------------------------------------------------
+                // Active slide check: visible header layout must adjust immediately
+                // -----------------------------------------------------------------
+                // The active slide logo height should calculate as soon as its image
+                // loads so layout jumps are avoided. Inactive slides (1..N) defer
+                // adjustments while the user is actively scrolling rows.
+                // -----------------------------------------------------------------
+                const isActiveSlide = index === this._currentIndex;
+                if (!isActiveSlide) {
+                    const isScrolling =
+                        (scrollController && scrollController.isAnimating) ||
+                        (typeof window !== 'undefined' &&
+                            window.__scrollController &&
+                            window.__scrollController.isAnimating);
+                    const isUserActive =
+                        !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                    if (isScrolling || isUserActive) {
+                        idleGate.runWhenIdle(finalizeLogo, 1500, 3000);
+                        return;
+                    }
                 }
 
                 logoDone = true;

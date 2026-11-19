@@ -432,7 +432,9 @@ test('HeroCarousel: defers commitBackdrop and finalizeLogo while scrollControlle
     const { scrollController } = await import('../src/ui/ScrollController.js');
     const { idleGate } = await import('../src/utils/IdleGate.js');
 
-    // Simulate boot completed so idleGate activity checks engage
+    // -------------------------------------------------------------------------
+    // Simulate boot completion so idleGate user activity checks engage
+    // -------------------------------------------------------------------------
     idleGate.setBootComplete();
 
     const items = [0, 1].map((i) => ({ Id: `defer-item-${i}`, Name: `Defer Item ${i}` }));
@@ -440,23 +442,133 @@ test('HeroCarousel: defers commitBackdrop and finalizeLogo while scrollControlle
     const { container, logoContainers } = buildCarouselFixture(2);
 
     try {
-        // Set scrolling state to true before preloading slide 1
+        // ---------------------------------------------------------------------
+        // Set scrolling animation flag to true before initial mount and preload
+        // ---------------------------------------------------------------------
         scrollController._verticalScrollAnimationId = 123;
         carousel.init(container);
 
-        // Preload slide 1 while scrolling is animating
+        // ---------------------------------------------------------------------
+        // Active Slide 0 must commit backdrop immediately without deferring behind
+        // scrolling, ensuring backdrops render promptly on Tizen 5.5 without stalls
+        // ---------------------------------------------------------------------
+        assert.ok(carousel._decodedBackdrops[0], 'Active Slide 0 backdrop must commit immediately on boot');
+
+        // ---------------------------------------------------------------------
+        // Trigger preloading for stacked inactive Slide 1 while scrolling is animating
+        // ---------------------------------------------------------------------
         carousel._preloadSlide(1);
         await Promise.resolve();
         await Promise.resolve();
 
-        // While scrolling, logo adjustments must NOT have committed
+        // ---------------------------------------------------------------------
+        // Inactive slide 1 logo commit must defer during active scroll
+        // ---------------------------------------------------------------------
         assert.equal(logoContainers[1].style.height, undefined, 'Logo height adjustment must defer while scrolling');
 
-        // Settle scrolling animation
+        // ---------------------------------------------------------------------
+        // Clean up scrolling animation state
+        // ---------------------------------------------------------------------
         scrollController._verticalScrollAnimationId = null;
         assert.equal(scrollController.isAnimating, false);
     } finally {
         scrollController._verticalScrollAnimationId = null;
+        carousel.destroy();
+    }
+});
+
+test('HeroCarousel: commits Slide 0 backdrop immediately on mount without pre-rendered img (Tizen 5.5) even during user activity', async () => {
+    const { scrollController } = await import('../src/ui/ScrollController.js');
+    const { idleGate } = await import('../src/utils/IdleGate.js');
+
+    // -------------------------------------------------------------------------
+    // Simulate boot completion and active user interaction on remote control
+    // -------------------------------------------------------------------------
+    idleGate.setBootComplete();
+    idleGate.markActivity();
+
+    const items = [0, 1].map((i) => ({ Id: `tizen55-item-${i}`, Name: `Tizen Item ${i}` }));
+    const carousel = new HeroCarousel({ items });
+    const { container, backdrops } = buildCarouselFixture(2);
+
+    // -------------------------------------------------------------------------
+    // Simulate Tizen 5.5 environment: native image interception is disabled,
+    // so Slide 0 is rendered with no initial <img> element in the DOM tree.
+    // -------------------------------------------------------------------------
+    while (backdrops[0].children.length > 0) {
+        backdrops[0].removeChild(backdrops[0].children[0]);
+    }
+    assert.equal(backdrops[0].children.length, 0, 'Initial DOM must have no <img> (Tizen 5.5 simulation)');
+
+    try {
+        // ---------------------------------------------------------------------
+        // Simulate user scrolling rows at the exact moment carousel initializes
+        // ---------------------------------------------------------------------
+        scrollController._verticalScrollAnimationId = 456;
+        carousel.init(container);
+
+        // ---------------------------------------------------------------------
+        // Resolve microtasks for decode() promise
+        // ---------------------------------------------------------------------
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // ---------------------------------------------------------------------
+        // Active Slide 0 MUST mount its backdrop immediately despite user activity,
+        // preventing the Tizen 5.5 blank hero bug caused by unbounded idle deferral.
+        // ---------------------------------------------------------------------
+        assert.equal(
+            backdrops[0].children.length,
+            1,
+            'Slide 0 backdrop must be mounted immediately on Tizen 5.5 despite user activity'
+        );
+        assert.equal(
+            backdrops[0].children[0].className,
+            'hero-backdrop-img',
+            'Mounted element must be the backdrop <img>'
+        );
+    } finally {
+        scrollController._verticalScrollAnimationId = null;
+        carousel.destroy();
+    }
+});
+
+test('HeroCarousel: dismisses BlurHash and aborts canvas draw when backdrop is already loaded', async () => {
+    const { idleGate } = await import('../src/utils/IdleGate.js');
+
+    // -------------------------------------------------------------------------
+    // Setup boot state for carousel initialization
+    // -------------------------------------------------------------------------
+    idleGate.setBootComplete();
+
+    const items = [0].map((i) => ({ Id: `blurhash-item-${i}`, Name: `Blurhash Item ${i}` }));
+    const carousel = new HeroCarousel({ items });
+    const { container, backdrops } = buildCarouselFixture(1);
+
+    // -------------------------------------------------------------------------
+    // Wire mock BlurHash canvas directly inside Slide 0 backdrop
+    // -------------------------------------------------------------------------
+    const canvas = createMockNode(['hero-blurhash-canvas'], { blurhash: 'LEHV6n002y-t56RRt5-s10%g10@W' });
+    canvas._closestContainer = backdrops[0];
+    canvas.getContext = () => ({
+        createImageData: () => ({ data: new Uint8ClampedArray(64 * 36 * 4) }),
+        putImageData: () => {}
+    });
+    backdrops[0].appendChild(canvas);
+    container.childrenAllBySelector.set('.hero-blurhash-canvas', [canvas]);
+
+    try {
+        // ---------------------------------------------------------------------
+        // Initialize carousel: existing pre-rendered <img> is complete with width
+        // ---------------------------------------------------------------------
+        carousel.init(container);
+
+        // ---------------------------------------------------------------------
+        // BlurHash placeholder must be marked dismissed immediately so that
+        // late idle decoder callbacks never paint over the loaded backdrop.
+        // ---------------------------------------------------------------------
+        assert.equal(canvas.dataset.dismissed, 'true', 'Blurhash canvas must be marked dismissed immediately');
+    } finally {
         carousel.destroy();
     }
 });
