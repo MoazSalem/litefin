@@ -76,10 +76,14 @@ export class PerformanceTab {
         const queueEpisodeLimit = PlayerSettings.get('playQueueEpisodeLimit') || 50;
         /*
          * Tizen-only boot warmup toggle. The warmup is a hardware hack (it opens
-         * a real AVPlay session behind the splash), so it is user-disableable.
-         * Default is enabled; the whole row is only rendered on Samsung Tizen.
+         * a real AVPlay session behind the splash), so it is user-toggleable.
+         * Default is disabled; the whole row is only rendered on Samsung Tizen.
+         *
+         * Keeping this disabled out of the box prevents redundant background
+         * media clock initialization and video plane allocation on displays
+         * that boot swiftly without requiring the extra decoder workload.
          */
-        const avplayBootWarmupEnabled = storage.getItem('pref:avplayBootWarmup') !== 'false';
+        const avplayBootWarmupEnabled = storage.getItem('pref:avplayBootWarmup') === 'true';
         const avplayBootWarmupSetting = platformInfo.isTizen
             ? `
                 <div class="setting-item">
@@ -298,16 +302,22 @@ ${avplayBootWarmupSetting}
         // Toggle AVPlay boot warmup (Tizen only; row is absent on other targets)
         const avplayBootWarmupToggle = root.querySelector('#toggle-avplay-boot-warmup');
         if (avplayBootWarmupToggle) {
+            // Register click handler to toggle warmup state on user interaction
             this._addListener(avplayBootWarmupToggle, 'click', () => {
-                const isEnabled = storage.getItem('pref:avplayBootWarmup') !== 'false';
+                // Read current state; defaults to disabled when unset
+                const isEnabled = storage.getItem('pref:avplayBootWarmup') === 'true';
+                // Flip the boolean switch state for the preference
                 const nextState = !isEnabled;
+                // Persist the updated configuration string into storage
                 storage.setItem('pref:avplayBootWarmup', String(nextState));
+                // Update the visual toggle switch element state in the DOM
                 avplayBootWarmupToggle.classList.toggle('active', nextState);
                 // Disabling while a warmup cycle is still running must release the
                 // native AVPlay session so real playback can open cleanly.
                 if (!nextState && tizenAdapter && typeof tizenAdapter.abortWarmup === 'function') {
                     tizenAdapter.abortWarmup();
                 }
+                // Log the state transition for diagnostic tracing
                 log.info(`AVPlay boot warmup preference set to: ${nextState}`);
             });
         }

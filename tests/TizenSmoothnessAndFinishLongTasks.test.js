@@ -389,6 +389,9 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(mockBody._children.length, 0, 'Non-Tizen target must not mount warmup nodes');
 
         // 2. Tizen path: file:// toURI() candidate first -> 1920x1080 prepareAsync -> play -> 200ms -> stop+close
+        // Explicitly enable the warmup preference for testing the warmup execution pipeline
+        const { storage } = await import('../src/utils/StorageService.js');
+        storage.setItem('pref:avplayBootWarmup', 'true');
         const tvAdapter = new TizenAdapter();
         tvAdapter._isTizen = true;
         assert.equal(tvAdapter.warmupCompositor(), true);
@@ -577,8 +580,7 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         globalThis.window.webapis.avplay.prepareAsync = prevPrepare;
 
         // 8. Preference gate: Settings > Performance > AVPlay Boot Warmup = off
-        //    must skip the native cycle entirely (default is enabled).
-        const { storage } = await import('../src/utils/StorageService.js');
+        //    must skip the native cycle entirely (default is disabled).
         storage.setItem('pref:avplayBootWarmup', 'false');
         const disabledAdapter = new TizenAdapter();
         disabledAdapter._isTizen = true;
@@ -589,16 +591,30 @@ test('TizenAdapter.warmupCompositor: real native AVPlayManager prepareAsync/play
         assert.equal(openedUrls.length, opensBeforeDisabled, 'Disabled warmup must never call avplay.open');
         assert.equal(stateReads, readsBeforeDisabled, 'Disabled warmup must not touch AVPlay at all');
         assert.equal(mockBody._children.length, 0, 'Disabled warmup must not mount any warmup layers');
+
+        // Verify unset preference defaults to disabled
         storage.removeItem('pref:avplayBootWarmup');
+        const unsetAdapter = new TizenAdapter();
+        unsetAdapter._isTizen = true;
+        assert.equal(
+            unsetAdapter.warmupCompositor(),
+            false,
+            'Warmup must stay disabled by default when the preference is unset'
+        );
+
+        // Verify explicit opt-in works as expected
+        storage.setItem('pref:avplayBootWarmup', 'true');
         const reenabledAdapter = new TizenAdapter();
         reenabledAdapter._isTizen = true;
         assert.equal(
             reenabledAdapter.warmupCompositor(),
             true,
-            'Warmup must stay enabled by default when the preference is unset'
+            'Warmup must run when explicitly enabled in preferences'
         );
         reenabledAdapter.abortWarmup();
     } finally {
+        const { storage } = await import('../src/utils/StorageService.js');
+        storage.removeItem('pref:avplayBootWarmup');
         tizenAdapter.abortWarmup();
         tizenAdapter._compositorWarmed = false;
         tizenAdapter._isTizen = false;
@@ -669,6 +685,9 @@ test('TizenAdapter.hideWarmupBehindApp: App.hideSplash docks the native plane in
     };
 
     try {
+        // Explicitly enable AVPlay warmup for the duration of this cold-boot hand-off test
+        const { storage } = await import('../src/utils/StorageService.js');
+        storage.setItem('pref:avplayBootWarmup', 'true');
         const adapter = new TizenAdapter();
         adapter._isTizen = true;
         assert.equal(adapter.warmupCompositor(), true);
@@ -773,6 +792,8 @@ test('TizenAdapter.hideWarmupBehindApp: App.hideSplash docks the native plane in
             'TizenAVPlayer.play() must still abort the warmup before opening a real stream'
         );
     } finally {
+        const { storage } = await import('../src/utils/StorageService.js');
+        storage.removeItem('pref:avplayBootWarmup');
         delete globalThis.window.webapis;
         delete globalThis.tizen;
         globalThis.window.location = origLocation;
@@ -782,10 +803,10 @@ test('TizenAdapter.hideWarmupBehindApp: App.hideSplash docks the native plane in
 });
 
 // ============================================================================
-// 2c. Performance Tab — AVPlay Boot Warmup Opt-Out
+// 2c. Performance Tab — AVPlay Boot Warmup Opt-In
 // ============================================================================
 
-test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-only, and enabled by default', () => {
+test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-only, and disabled by default', () => {
     const src = readSrc('src/pages/settings/tabs/PerformanceTab.js');
 
     assert.match(
@@ -795,8 +816,8 @@ test('Performance settings: AVPlay boot warmup toggle is the first row, Tizen-on
     );
     assert.match(
         src,
-        /storage\.getItem\('pref:avplayBootWarmup'\) !== 'false'/,
-        'Warmup must default to enabled (only an explicit false disables it)'
+        /storage\.getItem\('pref:avplayBootWarmup'\) === 'true'/,
+        'Warmup must default to disabled (only an explicit true enables it)'
     );
     assert.match(src, /id="toggle-avplay-boot-warmup"/, 'Performance tab must own the warmup toggle');
     assert.match(
