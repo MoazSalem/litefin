@@ -320,13 +320,26 @@ test('CardRenderer & Styles: CSS rules ensure badges are elevated above progress
         'modern/home.css must elevate .card-anime-pills and .anime-pills-row.card-anime-pills with bottom: 38px !important;'
     );
 
-    // 2. Check base.css elevates badges when card has progress
+    // 2. Check base.css elevates badges when card has progress in both classic and modern layouts
     const baseCss = fs.readFileSync(path.resolve(__dirname, '../src/styles/base.css'), 'utf-8');
     assert.ok(
         baseCss.includes('.card-anime-pills') &&
         baseCss.includes('.anime-pills-row.card-anime-pills') &&
         baseCss.includes('bottom: 18px !important;'),
         'base.css must elevate .card-anime-pills and .anime-pills-row.card-anime-pills with bottom: 18px !important;'
+    );
+    assert.ok(
+        baseCss.includes('html[data-media-rows-family="modern"] .card-anime-pills') &&
+        baseCss.includes('bottom: 38px !important;'),
+        'base.css must include modern media row family positioning and bottom: 38px !important for boot prewarm'
+    );
+
+    // 3. Check home.css includes modern positioning so HomePage has badges styled synchronously
+    const homeCss = fs.readFileSync(path.resolve(__dirname, '../src/styles/home.css'), 'utf-8');
+    assert.ok(
+        homeCss.includes('html[data-media-rows-family="modern"] .card-anime-pills') &&
+        homeCss.includes('bottom: 38px !important;'),
+        'home.css must include modern media rows badge positioning for initial home page render'
     );
 });
 

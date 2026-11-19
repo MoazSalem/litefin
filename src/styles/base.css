@@ -1470,6 +1470,63 @@ body {
     bottom: 18px !important;
 }
 
+/* --------------------------------------------------------------------------
+ * Modern Media Rows Family Placement
+ * --------------------------------------------------------------------------
+ * Included in core stylesheet to guarantee instant layout resolution during
+ * initial boot before asynchronous modern interface layer chunks finish loading.
+ * -------------------------------------------------------------------------- */
+
+/* Default resting position in modern media row layouts */
+html[data-media-rows-family="modern"] .card-anime-pills {
+    bottom: 22px;
+    left: 22px;
+    right: auto;
+}
+
+/* Sibling horizontal offset when version or favorite badges precede bottom-left */
+html[data-media-rows-family="modern"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .favorite-badge ~ .card-anime-pills {
+    left: 74px;
+}
+
+/* Dual sibling offset when both version and favorite badges are present */
+html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 126px;
+}
+
+/* Elevate badges above floating progress track (bottom: 20px, height: 8px) with 10px buffer */
+html[data-layout-media-rows="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanded"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanded"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .anime-pills-row.card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 38px !important;
+}
+
+/* Expanding layout: badges elevate above inside text on landscape and square cards */
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square .card-anime-pills {
+    bottom: 112px;
+    left: 30px;
+    right: auto;
+}
+
+/* Expanding layout elevation when active playback progress bar is present */
+html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .card-anime-pills {
+    bottom: 122px;
+}
+
 .video-badge {
     position: absolute;
     top: 50%;

@@ -554,3 +554,61 @@ html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
     line-height: 40px;
     text-align: center;
 }
+
+/* =========================================================================
+ * Media Card Anime Badges (Home Screen Row Integration)
+ * =========================================================================
+ * Loaded synchronously with home.css so initial home page paints never
+ * suffer from missing pill styling or progress bar overlapping before the
+ * asynchronous modern interface bundle chunk finishes downloading.
+ * ========================================================================= */
+
+/* Resting position for modern media cards */
+html[data-media-rows-family="modern"] .card-anime-pills {
+    bottom: 22px;
+    left: 22px;
+    right: auto;
+}
+
+/* Sibling offset when preceded by version count or favorite badge */
+html[data-media-rows-family="modern"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .favorite-badge ~ .card-anime-pills {
+    left: 74px;
+}
+
+/* Dual offset when preceded by both version count and favorite heart */
+html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 126px;
+}
+
+/* Progress bar clearance: elevate badge above floating progress track (bottom: 20px) */
+html[data-layout-media-rows="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanded"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanded"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .anime-pills-row.card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 38px !important;
+}
+
+/* Expanding layout: elevate above inside text block on landscape and square cards */
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square .card-anime-pills {
+    bottom: 112px;
+    left: 30px;
+    right: auto;
+}
+
+/* Expanding layout progress elevation */
+html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .card-anime-pills {
+    bottom: 122px;
+}
