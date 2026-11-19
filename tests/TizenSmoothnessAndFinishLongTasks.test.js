@@ -1514,17 +1514,31 @@ test('ScrollController: easing smoothScrollTo suppresses sub-0.5px tail deltas a
 // 5. Part 5 — HeroCarousel Pass-1 GPU Warmup, HomePage Batching & BlurHash Deferral
 // ============================================================================
 
-test('HeroCarousel Pass-1 optimization: single RenderSurface mask on immersive-performance and 2-rAF GPU warmup', async () => {
+test('HeroCarousel Pass-1 optimization: TV-safe single masks across .hero-item and .hero-backdrop and 2-rAF GPU warmup', async () => {
     const css = readSrc('src/styles/hero-carousel.css');
+    // -------------------------------------------------------------------------
+    // Universal bottom fade mask on .hero-item:
+    // Guarantees reliable alpha falloff into the row cards across all themes
+    // without triggering multi-mask composite bugs on legacy TV engines.
+    // -------------------------------------------------------------------------
     assert.match(
         css,
-        /\.hero-carousel-container\.immersive-performance\s+\.hero-item\s*\{[^}]*-webkit-mask-image:\s*none\s*;[^}]*mask-image:\s*none\s*;/,
-        'immersive-performance .hero-item must drop its stacked mask so only one RenderSurface exists'
+        /\.hero-carousel-container\.immersive-performance:not\(\.compact\)\s+\.hero-item\s*\{[^}]*-webkit-mask-image:/,
+        'immersive-performance .hero-item must have vertical bottom fade mask'
     );
+    // -------------------------------------------------------------------------
+    // Single horizontal feather mask on .hero-backdrop:
+    // Must NOT use -webkit-mask-composite: source-in which wipes alpha to 0 on
+    // Chromium 69 (Tizen 5.5).
+    // -------------------------------------------------------------------------
     assert.match(
         css,
-        /\.hero-carousel-container\.immersive-performance\s+\.hero-backdrop\s*\{[^}]*-webkit-mask-composite:\s*source-in\s*;[^}]*mask-composite:\s*intersect\s*;/,
-        'immersive-performance .hero-backdrop must intersect horizontal and vertical gradients on a single mask layer'
+        /\.hero-carousel-container\.immersive-performance\s+\.hero-backdrop\s*\{[^}]*-webkit-mask-image:\s*linear-gradient\(\s*to right,/,
+        'immersive-performance .hero-backdrop must use horizontal linear-gradient feather mask'
+    );
+    assert.ok(
+        !css.includes('-webkit-mask-composite: source-in;'),
+        'hero-carousel.css must NOT declare -webkit-mask-composite: source-in; (breaks Tizen 5.5)'
     );
     assert.match(
         css,
