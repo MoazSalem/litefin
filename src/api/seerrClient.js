@@ -367,7 +367,7 @@ export class SeerrClient {
             // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
 
-            // Append explicit language override if supplied in options
+            // Append the TMDB original-language filter (e.g. "ja|ko") if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
 
             // Append age rating and certification country filters
@@ -384,10 +384,11 @@ export class SeerrClient {
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
 
-        // Ensure path receives user's active preferred language tag
-        const optLang = typeof options === 'object' && options ? options.language : null;
-        const targetPath = this._withLanguage(`/Discover/Movies?${queryParams}`, optLang);
-        return this._normalizeList(await this._request(targetPath));
+        // No UI language here: on /discover/movies|tv Seerr reads `language` as the TMDB
+        // original-language filter, so appending e.g. "en-US" returned no results at all and
+        // "de" silently limited results to German productions. Titles are localized by Seerr
+        // from the user's locale; only an explicit original-language filter is sent.
+        return this._normalizeList(await this._request(`/Discover/Movies?${queryParams}`));
     }
 
     /**
@@ -408,7 +409,7 @@ export class SeerrClient {
             // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
 
-            // Append explicit language override if supplied in options
+            // Append the TMDB original-language filter (e.g. "ja|ko") if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
 
             // Append age rating and certification country filters
@@ -425,10 +426,11 @@ export class SeerrClient {
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
 
-        // Ensure path receives user's active preferred language tag
-        const optLang = typeof options === 'object' && options ? options.language : null;
-        const targetPath = this._withLanguage(`/Discover/Tv?${queryParams}`, optLang);
-        return this._normalizeList(await this._request(targetPath));
+        // No UI language here: on /discover/movies|tv Seerr reads `language` as the TMDB
+        // original-language filter, so appending e.g. "en-US" returned no results at all and
+        // "de" silently limited results to German productions. Titles are localized by Seerr
+        // from the user's locale; only an explicit original-language filter is sent.
+        return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
     }
 
     async moviesByGenre(genreId, page = 1, sortBy = null, language = null) {
