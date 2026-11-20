@@ -749,8 +749,9 @@ class SeerrDetailsPage extends Page {
                 this._updateWatchlistButton();
                 toast.show(i18n.t(this._isWatchlisted ? 'SeerrAddedToWatchlist' : 'SeerrRemovedFromWatchlist'));
 
-                // 3. Clear cache and invalidate Discover page so returning to it reflects watchlist updates
-                seerr.clearCache();
+                // 3. Clear cached responses and invalidate Discover page so returning to it reflects
+                // watchlist updates. Seerr availability did not change, so keep the status cache.
+                seerr.clearResponseCache();
             } catch (err) {
                 log.warn('Unable to update Seerr watchlist', err);
                 toast.show(i18n.t('SeerrWatchlistFailed'));

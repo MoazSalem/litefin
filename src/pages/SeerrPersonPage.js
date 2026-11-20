@@ -16,6 +16,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { seerr } from '../api/seerrClient.js';
+import { tmdbUrl } from '../api/seerrNormalize.js';
 import DescriptionModal from '../components/DescriptionModal.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
@@ -23,6 +24,17 @@ import { getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButto
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SeerrPersonPage');
+
+/**
+ * Recovers the TMDB file path ("/abc.jpg") from an image URL built by tmdbUrl,
+ * whether it points at TMDB or at the server plugin's image proxy.
+ * @param {string} url
+ * @returns {string} The path, or '' when the URL is not a TMDB image
+ */
+function tmdbPathOf(url) {
+    const match = typeof url === 'string' ? url.match(/\/t\/p\/[^/]+(\/[^/?#]+)$/) : null;
+    return match ? match[1] : '';
+}
 
 class SeerrPersonPage extends Page {
     constructor() {
@@ -218,9 +230,8 @@ class SeerrPersonPage extends Page {
             ? firstWithBackdrop.backdropPath || firstWithBackdrop.backdrop_path
             : null;
 
-        const backdropUrl = backdropPath
-            ? `https://image.tmdb.org/t/p/w1280${backdropPath}`
-            : this._person?._imageUrl || '';
+        // _person._imageUrl is already routed through the image proxy by seerrClient
+        const backdropUrl = backdropPath ? tmdbUrl('w1280', backdropPath) : this._person?._imageUrl || '';
 
         if (backdropUrl) {
             BackdropManager.applyBackdrop(backdropEl, backdropUrl, '');
@@ -246,7 +257,7 @@ class SeerrPersonPage extends Page {
 
             const profile = p.profilePath || p.profile_path || p.ProfilePath;
             if (profile) {
-                const posterUrl = `https://image.tmdb.org/t/p/w500${profile}`;
+                const posterUrl = tmdbUrl('w500', profile);
                 posterContainer.innerHTML = '';
 
                 const img = new Image();
@@ -616,11 +627,7 @@ class SeerrPersonPage extends Page {
                 '';
             const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
             const role = item.Role || item._roleName || item.character || '';
-            const poster =
-                item.posterPath ||
-                item.poster_path ||
-                item.PosterPath ||
-                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^/]+/, '') : '');
+            const poster = item.posterPath || item.poster_path || item.PosterPath || tmdbPathOf(item._imageUrl);
 
             return {
                 Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
@@ -631,8 +638,8 @@ class SeerrPersonPage extends Page {
                 _tmdbId: item._tmdbId || item.id || item.Id,
                 Role: role,
                 _roleName: role,
-                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : item._imageUrl || '',
-                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : item._detailImageUrl || '',
+                _imageUrl: poster ? tmdbUrl('w342', poster) : item._imageUrl || '',
+                _detailImageUrl: poster ? tmdbUrl('w500', poster) : item._detailImageUrl || '',
                 _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
                 _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
             };
@@ -663,11 +670,7 @@ class SeerrPersonPage extends Page {
                 '';
             const releaseYear = releaseDateStr ? releaseDateStr.substring(0, 4) : '';
             const job = item.Role || item._roleName || item.job || item.department || '';
-            const poster =
-                item.posterPath ||
-                item.poster_path ||
-                item.PosterPath ||
-                (item._imageUrl ? item._imageUrl.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/[^/]+/, '') : '');
+            const poster = item.posterPath || item.poster_path || item.PosterPath || tmdbPathOf(item._imageUrl);
 
             return {
                 Id: item.id || item.Id || `tmdb-${itemMediaType}-${item.id || item._tmdbId}`,
@@ -679,8 +682,8 @@ class SeerrPersonPage extends Page {
                 _isCrew: true,
                 Role: job,
                 _roleName: job,
-                _imageUrl: poster ? `https://image.tmdb.org/t/p/w342${poster}` : item._imageUrl || '',
-                _detailImageUrl: poster ? `https://image.tmdb.org/t/p/w500${poster}` : item._detailImageUrl || '',
+                _imageUrl: poster ? tmdbUrl('w342', poster) : item._imageUrl || '',
+                _detailImageUrl: poster ? tmdbUrl('w500', poster) : item._detailImageUrl || '',
                 _seerrStatus: item.mediaInfo?.status || item._seerrStatus || 0,
                 _rating: item.voteAverage || item.vote_average || item.CommunityRating || 0
             };

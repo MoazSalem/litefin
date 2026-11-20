@@ -145,6 +145,7 @@ Litefin pairs with dedicated server-side plugins to unlock advanced capabilities
 ### 1. Litefin Server Plugin ([Jellyfin](https://github.com/MoazSalem/litefin-plugin) / [Emby](https://github.com/MoazSalem/litefin-plugin-emby))
 Extends your server with features that require elevated or backend network access:
 - **Seerr Discovery & Requests**: Proxies Jellyseerr / Overseerr requests without exposing API keys to client devices.
+- **Seerr Images**: Serves Seerr's cached TMDB artwork (posters, backdrops, logos) so clients without internet access still show images. Older plugins that don't offer it fall back to loading images from TMDB.
 - **Where to Watch (Streaming Availability)**: Queries TMDB streaming provider catalogs (Netflix, Prime, Disney+, etc.) grouped by subscription and rental.
 - **MDBList Ratings Aggregation**: Enriches media items with multi-source ratings (Rotten Tomatoes, IMDb, Metacritic, Trakt, Letterboxd).
 

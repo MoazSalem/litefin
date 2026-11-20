@@ -14,7 +14,7 @@ import { storage } from '../utils/StorageService.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
 import { eventBus } from '../core/EventBus.js';
-import { normalizeSeerrItem, seerrStatusKey, SEERR_STATUS } from './seerrNormalize.js';
+import { normalizeSeerrItem, seerrStatusKey, SEERR_STATUS, setTmdbImageResolver, tmdbUrl } from './seerrNormalize.js';
 import { buildGenreSliderItems, buildStudioItems, buildNetworkItems } from '../utils/seerrGenres.js';
 
 const log = logger.create('SeerrClient');
@@ -38,6 +38,26 @@ export class SeerrClient {
         this._clearedLegacyCredentials = false;
         this._cache = new Map();
         this._cacheTtlMs = 5 * 60 * 1000;
+
+        /*
+         * The image base is resolved each time a URL is built rather than copied
+         * once, so it always matches the current status and server. A status
+         * cached for another server never routes images to that server's proxy.
+         */
+        setTmdbImageResolver(() => {
+            const s = this._currentStatus();
+            return s && s.imageProxy && api.serverUrl ? `${api.serverUrl}/Litefin/Seerr/Image` : null;
+        });
+    }
+
+    /**
+     * Returns the cached status only when it was probed against the current server.
+     * @returns {Object|null}
+     * @private
+     */
+    _currentStatus() {
+        const s = this._status;
+        return s && s.serverUrl === api.serverUrl ? s : null;
     }
 
     /**
@@ -93,7 +113,7 @@ export class SeerrClient {
             }
         }
 
-        if (this._status && !force) return this._status;
+        if (!force && this._currentStatus()) return this._status;
 
         // In-flight deduplication: return active shared probe promise
         if (!force && this._statusPromise) {
@@ -106,8 +126,8 @@ export class SeerrClient {
                 const sessionCached = sessionStorage.getItem('seerr:session_status');
                 if (sessionCached) {
                     const parsed = JSON.parse(sessionCached);
-                    // Only honor cached status if Seerr was previously verified as available
-                    if (parsed && parsed.available) {
+                    // Only honor cached status if Seerr was previously verified as available on this server
+                    if (parsed && parsed.available && parsed.serverUrl === api.serverUrl) {
                         this._status = parsed;
                         return this._status;
                     }
@@ -128,7 +148,7 @@ export class SeerrClient {
 
             // If companion server plugin is confirmed not present, return early
             if (!isLitefinAvailable) {
-                this._status = { configured: false, available: false };
+                this._status = { configured: false, available: false, serverUrl: api.serverUrl };
                 return this._status;
             }
 
@@ -143,7 +163,10 @@ export class SeerrClient {
 
                 this._status = {
                     configured: !!payload?.configured,
-                    available: !!payload?.available
+                    available: !!payload?.available,
+                    // Newer server plugins serve Seerr's TMDB image cache (airgapped clients)
+                    imageProxy: !!payload?.imageProxy,
+                    serverUrl: api.serverUrl
                 };
 
                 // When payload is received successfully, mark companion plugin as active
@@ -253,6 +276,11 @@ export class SeerrClient {
     async _request(path, options = {}) {
         const method = options.method || 'GET';
         log.debug(`${method} ${path}`);
+
+        // Pages opened directly (deep links, launch targets) may not have probed
+        // yet, and the probe decides whether image URLs go through the proxy.
+        // Cheap once cached; status() uses api.get directly, so it never recurses.
+        await this.status();
 
         try {
             if (method === 'POST') {
@@ -627,7 +655,7 @@ export class SeerrClient {
                 placeOfBirth: raw.placeOfBirth || raw.place_of_birth || raw.PlaceOfBirth || '',
                 knownForDepartment: raw.knownForDepartment || raw.known_for_department || raw.KnownForDepartment || '',
                 profilePath: profile,
-                _imageUrl: profile ? `https://image.tmdb.org/t/p/h632${profile}` : '',
+                _imageUrl: tmdbUrl('h632', profile),
                 appearances: appearances,
                 combinedCredits: {
                     cast: cast,

@@ -5,6 +5,7 @@
  */
 
 import { watchProviderCountryNames } from './WatchProviderCountryNames.js';
+import { tmdbUrl } from '../api/seerrNormalize.js';
 
 function escapeHtml(value) {
     return String(value)
@@ -75,7 +76,7 @@ export function renderWatchProviders(providers, region, translate, language) {
                 // Only TMDB image paths are accepted, never arbitrary URLs or markup.
                 const logo =
                     typeof entry.logoPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(entry.logoPath)
-                        ? `<img src="https://image.tmdb.org/t/p/w92${entry.logoPath}" alt="" width="40" height="40">`
+                        ? `<img src="${escapeHtml(tmdbUrl('w92', entry.logoPath))}" alt="" width="40" height="40">`
                         : '';
                 const content = `${logo}<span>${escapeHtml(entry.name)}</span>`;
                 return `<li class="watch-provider">${content}</li>`;

@@ -136,6 +136,7 @@ The player includes 23 modular interactive overlays managed by `OSDController.js
     - Full catalogue search with toggle between Jellyfin library items and Seerr discovery items.
     - Interactive Request Modal (`SeerrRequestModal.js`): request movies, series, or select individual seasons with "Request As" proxy support.
     - Status indicators (Requested, Pending, Available) with direct "Watch in Jellyfin" jump links.
+    - Artwork loads through the Litefin server plugin when it offers Seerr images (`/Litefin/Seerr/Image`), so TVs that can reach Jellyfin but not the internet still show posters and backdrops; otherwise it loads from TMDB.
 - **Intro Skipper**:
     - Automatic skip button overlays for TV show intros and recap segments based on server marker data.
     - Configurable auto-skip rules or manual button presses with auto-hiding triggers.
@@ -153,7 +154,7 @@ The player includes 23 modular interactive overlays managed by `OSDController.js
     - Other apps can open a title by launching Litefin through `luna://com.webos.applicationManager/launch` with `{ "id": "org.litefin.app", "params": { "tmdbId": 603, "mediaType": "movie" } }` (`mediaType` is `movie` or `tv`; an optional `title` helps find the item on servers that ignore the TMDB id filter).
     - Opens the library item's details page when the library has that TMDB id, otherwise the Seerr details page to request it; works at launch and while Litefin runs, with Back leading to Home.
 - **Server Plugin Ecosystem ([Jellyfin](https://github.com/MoazSalem/litefin-plugin) / [Emby](https://github.com/MoazSalem/litefin-plugin-emby))**:
-    - Server-side counterpart proxying Seerr requests, caching TMDB streaming provider catalogs, and serving the Litefin Client plugin (`Litefin.Client.Plugin`).
+    - Server-side counterpart proxying Seerr requests and images, caching TMDB streaming provider catalogs, and serving the Litefin Client plugin (`Litefin.Client.Plugin`).
 
 ---
 
