@@ -11,8 +11,8 @@ import test from 'node:test';
  *   1. Router.setHistory seeds the navigation history stack properly.
  *   2. Router.getHistory returns a snapshot of the current history stack.
  *   3. Smart Hub deep linking into a Movie seeds ['/home'] so Back returns to /home.
- *   4. Smart Hub deep linking into an Episode with seriesId seeds
- *      ['/home', '/details/${seriesId}'] so Back walks episode -> series -> home.
+ *   4. Smart Hub deep linking into a resolved Episode also seeds only
+ *      ['/home'], so Back returns straight to /home.
  *   5. Router.navigate to identical path triggers re-route without loop.
  * ============================================================================
  */
@@ -149,7 +149,7 @@ test('Smart Hub Movie deep link seeds /home and returns to /home on back', () =>
     router.register('/details/:id', class DetailsPage {});
     router.init();
 
-    // Emulate SmartHubManager._navigateToItem for a movie
+    // Emulate SmartHubManager._openPending for a movie
     const movieActionData = { id: 'movie-abc', type: 'movie' };
     const breadcrumbs = ['/home'];
     router.setHistory(breadcrumbs);
@@ -170,41 +170,28 @@ test('Smart Hub Movie deep link seeds /home and returns to /home on back', () =>
     assert.equal(router.canGoBack(), false);
 });
 
-test('Smart Hub Episode deep link seeds /home and series details into history hierarchy', () => {
+test('Smart Hub Episode deep link seeds only /home and returns to /home on back', () => {
     const { router } = createRouterInstance();
 
     router.register('/home', class HomePage {});
     router.register('/details/:id', class DetailsPage {});
     router.init();
 
-    // Emulate SmartHubManager._navigateToItem for an episode with seriesid
-    const episodeActionData = {
-        id: 'episode-999',
-        type: 'episode',
-        seriesid: 'series-888'
-    };
-
-    const breadcrumbs = ['/home'];
-    if (episodeActionData.type === 'episode' && episodeActionData.seriesid) {
-        breadcrumbs.push(`/details/${episodeActionData.seriesid}`);
-    }
-    router.setHistory(breadcrumbs);
-    router.navigate(`/details/${episodeActionData.id}`);
+    // Emulate SmartHubManager._openPending for a series tile resolved to an episode
+    const episodeTarget = { id: 'episode-999', type: 'episode' };
+    router.setHistory(['/home']);
+    router.navigate(`/details/${episodeTarget.id}`);
 
     assert.equal(router.getCurrentPath(), '/details/episode-999');
     assert.deepEqual(
         [...router.getHistory().map((e) => String(e.path))],
-        ['/home', '/details/series-888', '/details/episode-999']
+        ['/home', '/details/episode-999']
     );
 
-    // First Back: goes to series details
-    assert.equal(router.back(), true);
-    assert.equal(router.getCurrentPath(), '/details/series-888');
-
-    // Second Back: goes to homepage
+    // First Back: goes straight to the homepage
     assert.equal(router.back(), true);
     assert.equal(router.getCurrentPath(), '/home');
 
-    // Third Back: at root of history
+    // Second Back: at root of history
     assert.equal(router.canGoBack(), false);
 });

@@ -1,0 +1,179 @@
+/**
+ * ============================================================================
+ * Litefin - Abyss Theme
+ * ============================================================================
+ * "Bioluminescence at Depth": an inshore-to-pressure blue-green canvas lit
+ * by a single lure glow anchored low and to the left — deliberately off
+ * the spine of the layout — with faint surface light breaking from the
+ * top-right and plankton motes drifting near the crown. Glass surfaces
+ * carry a cold current-blur tint; buttons and focus states follow the
+ * accent color (default: bioluminescent teal).
+ * ============================================================================
+ */
+
+[data-theme-mode="abyss"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so the glow bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(2, 6, 10, 0.9);
+
+    --jf-text-primary: #eff7f6;
+    --jf-text-secondary: rgba(218, 240, 238, 0.74);
+    --jf-text-tertiary: rgba(196, 224, 224, 0.52);
+    --jf-text-disabled: rgba(196, 224, 224, 0.26);
+
+    --jf-success: #7fd7a5;
+    --jf-warning: #e5c06a;
+    --jf-error: #ef7d6c;
+    --jf-info: #6fc8d8;
+
+    /* Cold current-blur translucent glass chrome */
+    --jf-input-bg: rgba(140, 220, 215, 0.06);
+    --jf-input-border: rgba(140, 220, 215, 0.18);
+    --jf-button-bg: rgba(140, 220, 215, 0.1);
+    --jf-button-hover: rgba(140, 220, 215, 0.2);
+    --jf-switch-bg: rgba(140, 220, 215, 0.16);
+    --jf-switch-handle: var(--jf-accent-content-color, #03101c);
+
+    /* Pressure shadows: tall, dim, very heavy */
+    --jf-shadow-sm: 0 2px 4px rgba(0, 2, 4, 0.55);
+    --jf-shadow-md: 0 4px 16px rgba(0, 2, 4, 0.66);
+    --jf-shadow-lg: 0 14px 48px rgba(0, 2, 4, 0.78);
+
+    --jf-scrollbar: rgba(230, 244, 242, 0.15);
+    --jf-scrollbar-hover: rgba(230, 244, 242, 0.3);
+
+    --jf-button-border-focus: #eff7f6;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(140, 220, 215, 0.09);
+    --jf-action-btn-border: rgba(140, 220, 215, 0.19);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #03101c);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Inshore baseline painted on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="abyss"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="abyss"] body {
+    /* body must stay transparent so the deep-sea layer shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * ABYSSAL ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders:
+ *   1. The lure glow: bioluminescent light anchored at the bottom-left,
+ *      with a tighter hot core inside it.
+ *   2. God rays: surface light breaking diagonally from the top-right.
+ *   3. Plankton motes: faint drifting specks near the crown.
+ *   4. The pressure base: inshore blue-green zenith sinking into ink.
+ */
+[data-theme-mode="abyss"] body::before,
+html[data-theme-mode="abyss"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Lure glow: off-center bioluminescent bloom, bottom-left */
+        radial-gradient(42% 40% at 22% 108%,
+                rgba(62, 224, 214, 0.2) 0%,
+                rgba(62, 224, 214, 0.07) 40%,
+                transparent 68%),
+        /* Lure core: the hot point itself */
+        radial-gradient(15% 13% at 23% 105%,
+                rgba(110, 242, 232, 0.26) 0%,
+                transparent 72%),
+        /* God rays: wide surface wash breaking from the top-right */
+        linear-gradient(225deg,
+                rgba(150, 230, 225, 0.07) 0%,
+                rgba(150, 230, 225, 0.03) 20%,
+                transparent 46%),
+        /* God rays: a second, narrower shaft angled slightly apart */
+        linear-gradient(210deg,
+                rgba(180, 240, 232, 0.05) 0%,
+                transparent 30%),
+        /* Plankton motes: faint drifting life near the crown */
+        radial-gradient(0.7% 1.2% at 52% 16%,
+                rgba(180, 244, 238, 0.35) 0%,
+                transparent 100%),
+        radial-gradient(0.55% 0.9% at 66% 9%,
+                rgba(180, 244, 238, 0.28) 0%,
+                transparent 100%),
+        radial-gradient(0.8% 1.3% at 30% 27%,
+                rgba(160, 236, 230, 0.22) 0%,
+                transparent 100%),
+        radial-gradient(0.5% 0.85% at 78% 31%,
+                rgba(180, 244, 238, 0.2) 0%,
+                transparent 100%),
+        /* Pressure base: cold blue-green horizon sinking into ink */
+        linear-gradient(to bottom,
+                #0b1b29 0%,
+                #04101a 52%,
+                #020a12 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="abyss"] .page {
+    /* Reset the opaque page paint so the deep-sea layer shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the abyss layer during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="abyss"],
+[data-theme-mode="abyss"] body.player-active,
+html.player-active[data-theme-mode="abyss"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="abyss"] body.player-active::before,
+html.player-active[data-theme-mode="abyss"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="abyss"] body.player-active .page,
+html.player-active[data-theme-mode="abyss"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}

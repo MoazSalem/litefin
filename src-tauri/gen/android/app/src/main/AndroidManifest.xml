@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- Local network & nearby devices access permissions (Android 13+ / 17+ / Samsung One UI 9) -->
+    <!-- Required for local IP socket connections, SSDP/UDP discovery, and LAN streaming -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.ACCESS_LOCAL_NETWORK"
+        tools:targetApi="37" />
 
     <!-- Android TV Home Screen Channels & Play Next permissions -->
     <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
@@ -14,6 +25,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
+        android:name=".LitefinApplication"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/banner"
@@ -21,6 +33,7 @@
         android:theme="@style/Theme.litefin"
         android:networkSecurityConfig="@xml/network_security_config"
         android:hardwareAccelerated="true"
+        android:largeHeap="true"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"

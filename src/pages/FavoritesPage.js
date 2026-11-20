@@ -209,7 +209,7 @@ class FavoritesPage extends Page {
             // --- Books / Games section --- (Games ingested via JellyEmu are typed as Book items with Tags; positioned under episodes)
             if (books && books.TotalRecordCount > 0) {
                 const hasGames = books.Items.some((item) => CardRenderer.isGame(item));
-                const title = hasGames ? (i18n.t('Games') || 'Games') : (i18n.t('Books') || 'Books');
+                const title = hasGames ? i18n.t('Games') || 'Games' : i18n.t('Books') || 'Books';
                 sectionsData.push({ id: 'fav-book', title, items: books.Items, type: 'poster' });
             }
             if (channels.TotalRecordCount > 0)
@@ -337,7 +337,6 @@ class FavoritesPage extends Page {
         const rowEl = temp.firstElementChild;
         container.appendChild(rowEl);
 
-        const itemsContainer = rowEl.querySelector('.row-items');
         const trackContainer = rowEl.querySelector('.row-items-track');
 
         let virtualRow = null;

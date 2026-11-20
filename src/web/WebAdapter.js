@@ -15,6 +15,9 @@
 import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { gamepadManager } from '../utils/GamepadManager.js';
+import { mouseRowScroller } from '../ui/MouseRowScroller.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 // Initialize dedicated logger for Web adapter events
 const log = logger.create('WebAdapter');
@@ -92,11 +95,26 @@ class WebAdapter {
         // Register global physical keyboard handler
         this._setupKeyHandler();
 
+        // Initialize gamepad and controller navigation subsystem (Xbox, DualShock/DualSense, 8BitDo)
+        gamepadManager.init({
+            onActivity: () => this.reportInput(),
+            onFullscreen: () => this.toggleFullscreen()
+        });
+
         // Register pointer, mouse, touch, and wheel listeners to report user activity
         document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
         document.addEventListener('wheel', () => this.reportInput(), { passive: true });
+
+        // ====================================================================
+        // Mouse & Trackpad Horizontal Row Scroller
+        // ====================================================================
+        // Initialize mouse wheel / trackpad horizontal scrolling of media rows
+        // when the module is present in the runtime environment.
+        if (typeof mouseRowScroller !== 'undefined' && typeof mouseRowScroller.init === 'function') {
+            mouseRowScroller.init();
+        }
 
         // Synchronize HTML5 fullscreen changes with web client state
         document.addEventListener('fullscreenchange', () => {
@@ -163,10 +181,11 @@ class WebAdapter {
                 return;
             }
 
-            // Identify whether user is actively typing inside an input or textarea
+            // Identify whether user is actively typing inside an editable input or textarea
             const activeElem = document.activeElement;
             const isTextInput =
                 Boolean(activeElem) &&
+                !activeElem.readOnly &&
                 (activeElem.tagName === 'TEXTAREA' ||
                     activeElem.isContentEditable ||
                     (activeElem.tagName === 'INPUT' &&
@@ -193,9 +212,15 @@ class WebAdapter {
                     return;
                 }
 
-                // Let all other keys (letters, digits, backspace, enter, arrows, etc.)
-                // pass through to native text input handling without interference.
-                return;
+                // Allow Up and Down arrow keys in single-line inputs to navigate vertically
+                // across form controls rather than trapping focus.
+                if (activeElem.tagName === 'INPUT' && (keyCode === WEB_KEYS.UP || keyCode === WEB_KEYS.DOWN)) {
+                    // Fall through to directional event emissions below
+                } else {
+                    // Let all other keys (letters, digits, backspace, left/right caret movement)
+                    // pass through to native text input handling without interference.
+                    return;
+                }
             }
 
             // Detect if video player is currently active in view
@@ -206,13 +231,7 @@ class WebAdapter {
             // -----------------------------------------------------------------
             // Prevent default browser scrolling when browsing outside form inputs
             if (!isTextInput) {
-                const navKeys = [
-                    WEB_KEYS.LEFT,
-                    WEB_KEYS.RIGHT,
-                    WEB_KEYS.UP,
-                    WEB_KEYS.DOWN,
-                    WEB_KEYS.ENTER
-                ];
+                const navKeys = [WEB_KEYS.LEFT, WEB_KEYS.RIGHT, WEB_KEYS.UP, WEB_KEYS.DOWN, WEB_KEYS.ENTER];
 
                 // Suppress browser page scroll on Space bar when player is rendering
                 if (isPlayerActive && keyCode === WEB_KEYS.SPACE) {
@@ -265,6 +284,66 @@ class WebAdapter {
                         e.preventDefault();
                         this.toggleFullscreen();
                         return;
+
+                    /*
+                     * =================================================================
+                     * Escape / Esc Fullscreen Dismissal Override
+                     * =================================================================
+                     * When player is actively rendering in fullscreen mode, pressing
+                     * Escape disables fullscreen back to windowed mode without exiting
+                     * the player or navigating backward.
+                     *
+                     * Exception: If a selection modal (subtitles, audio, settings) is
+                     * currently open, let Escape pass through to back handler to dismiss
+                     * the menu popup first.
+                     * =================================================================
+                     */
+                    case 'Escape':
+                    case 'Esc':
+                        if (this.isFullscreen()) {
+                            // If a modal or menu popup is active, let back close the modal first
+                            if (
+                                document.querySelector(
+                                    '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                                )
+                            ) {
+                                break;
+                            }
+                            e.preventDefault();
+                            this.toggleFullscreen();
+                            return;
+                        }
+                        break;
+
+                    // Volume increase shortcut (ArrowUp)
+                    case 'ArrowUp':
+                    case 'Up':
+                        // Only intercept when no modal popup or selection menu is open in view
+                        if (
+                            !document.querySelector(
+                                '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                            )
+                        ) {
+                            e.preventDefault();
+                            eventBus.emit('remote:volumeup');
+                            return;
+                        }
+                        break;
+
+                    // Volume decrease shortcut (ArrowDown)
+                    case 'ArrowDown':
+                    case 'Down':
+                        // Only intercept when no modal popup or selection menu is open in view
+                        if (
+                            !document.querySelector(
+                                '.track-menu.visible, .settings-menu.visible, .modal.visible, .osd-menu.visible'
+                            )
+                        ) {
+                            e.preventDefault();
+                            eventBus.emit('remote:volumedown');
+                            return;
+                        }
+                        break;
 
                     default:
                         break;
@@ -425,28 +504,12 @@ class WebAdapter {
      * ========================================================================
      * Device Information Discovery
      * ========================================================================
-     * Identifies the web browser brand and platform from user agent tokens.
+     * Identifies the web browser brand using centralized platformInfo
+     * with graceful fallback for isolated test VM runners.
      * @private
      */
     _loadDeviceInfo() {
-        if (typeof navigator === 'undefined') {
-            this._deviceName = 'Litefin Web';
-            return;
-        }
-
-        const ua = navigator.userAgent;
-        let browserName = 'Browser';
-
-        if (/Edg\//i.test(ua)) {
-            browserName = 'Edge';
-        } else if (/Chrome\//i.test(ua)) {
-            browserName = 'Chrome';
-        } else if (/Firefox\//i.test(ua)) {
-            browserName = 'Firefox';
-        } else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) {
-            browserName = 'Safari';
-        }
-
+        const browserName = typeof platformInfo !== 'undefined' ? platformInfo.browserName : 'Browser';
         this._deviceName = `Litefin Web (${browserName})`;
         log.info(`Detected web platform: ${this._deviceName}`);
     }

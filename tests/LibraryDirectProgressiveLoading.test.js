@@ -18,7 +18,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 
 test('LibraryPage & SettingsPage: Page size limit defaults to 50 items', () => {
-    const settingsSource = readFileSync(new URL('../src/pages/SettingsPage.js', import.meta.url), 'utf8');
+    const settingsSource = readFileSync(new URL('../src/pages/settings/SettingsPage.js', import.meta.url), 'utf8');
     const librarySource = readFileSync(new URL('../src/pages/LibraryPage.js', import.meta.url), 'utf8');
     const liveTvSource = readFileSync(new URL('../src/pages/LiveTvPage.js', import.meta.url), 'utf8');
 

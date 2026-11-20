@@ -291,3 +291,29 @@ test('Android Launcher: Program builder formats episodes and timing accurately',
     assert.equal(program.isResume, true);
     assert.equal(program.type, 'episode');
 });
+
+test('Android Launcher: Cold boot trailing hashchange does not cause duplicate page recreation', () => {
+    let pageInstantiations = 0;
+    class MockDetailsPage {
+        constructor() {
+            pageInstantiations++;
+        }
+        init() {}
+        destroy() {}
+    }
+
+    const { router } = createTestContext();
+    router.register('/details/:id', MockDetailsPage);
+
+    // Simulate native cold boot deep link: location.hash set before router.init()
+    router.navigate('/details/test-ep-123');
+
+    // router.init() executes initial route change
+    router.init();
+    assert.equal(pageInstantiations, 1, 'Initial route setup should instantiate DetailsPage once');
+
+    // Simulate browser dispatching queued hashchange event on next tick with identical path
+    router._onHashChange();
+    assert.equal(pageInstantiations, 1, 'Trailing hashchange for identical path should be ignored without duplicate instantiation');
+});
+

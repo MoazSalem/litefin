@@ -10,6 +10,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/livetv.css';
+
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';

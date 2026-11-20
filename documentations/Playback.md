@@ -75,6 +75,10 @@ The OSD subsystem (`src/player/osd/`) provides 19 modular menus managed by `OSDC
 | Repeat Mode             | `RepeatModeMenu.js`        | Repeat off/all/one               |
 | Base Menu               | `BaseMenu.js`              | Abstract base for OSD menus      |
 
+### Play Queue & Shuffle
+
+`PlayQueue` (`src/core/PlayQueue.js`) is an app-lifetime singleton, and shuffle and repeat mode are user preferences that survive `clear()` and `init()`. Shuffle stays on for the whole session that asked for it (Shuffle button, OSD toggle, remote `SetShuffleQueue`), including Up Next and autoplay. The `player:play` handler in `App.js` turns it off for any play that does not carry `isShufflePlay`, so Play, Continue Watching, Next Up, slideshow and remote play start in order. Repeat mode is left alone.
+
 ### Transcoding & Negotiation
 
 The **Device Profile** system (`src/api/DeviceProfile.js` and `src/api/profiles/`) negotiates capabilities with the Jellyfin server. It provides specific profiles for:

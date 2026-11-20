@@ -23,6 +23,9 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/pin-dialog.css';
+
 import { focusManager } from './FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { pinManager } from '../utils/PinManager.js';

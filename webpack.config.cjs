@@ -25,9 +25,163 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+
+// ============================================================================
+// Comment & Legal-Notice Stripping
+// ============================================================================
+// Every build tier ships with ALL comments removed - source annotations in
+// first-party modules, legal banner comments importing with "!" in
+// third-party code, and the per-chunk *.js.LICENSE.txt sidecar files Terser
+// normally emits. This is a deliberate licensing tradeoff: the upstream
+// projects remain MIT/BSD/Apache licensed and their full license texts are
+// available at their source repositories (see package.json dependencies);
+// they are just no longer duplicated into every distribution package.
+// Tradeoff chosen for storage-constrained Smart TV flash memory.
+//
+// Note: copied plain-script vendor/worker files (webOSTV.js, libpgs.worker.js,
+// subtitles-octopus-worker.js, ...) need no special handling - in webpack 5
+// TerserPlugin's processAssets pass also walks CopyPlugin-emitted assets.
+//
+// Minimizer configuration shared by the tier configs. Fresh plugin instances
+// per call - webpack does not support sharing plugin instances between
+// concurrently-applied configurations.
+// ============================================================================
+
+/**
+ * Builds the [JavaScript, CSS] minimizer pair used by every tier config.
+ * - TerserPlugin replaces webpack's implicit default ('...' entry) so the
+ *   options are explicit: no comment survives and no *.js.LICENSE.txt
+ *   sidecars are emitted. Compression parameters mirror webpack's built-in
+ *   TerserPlugin defaults exactly so output stays byte-comparable with the
+ *   previous configuration; only the comment-facing options differ.
+ * - CssMinimizerPlugin runs the cssnano 'default' preset with ALL comments
+ *   discarded, matching the css-minify-loader pipeline legacy/ultra-legacy
+ *   already use for inlined CSS.
+ *
+ * @returns {Array} minimizer plugin list (fresh instances)
+ */
+/**
+ * Safe cssnano preset configuration for extracted and inlined stylesheets.
+ * Discards comments and compresses whitespace while disabling destructive
+ * transforms that drop fallbacks or break parsing on legacy web runtimes.
+ */
+const safeCssnanoMinimizerPreset = [
+    'default',
+    {
+        discardComments: { removeAll: true },
+        normalizeWhitespace: true,
+        mergeRules: false,
+        discardOverridden: false,
+        discardDuplicates: false,
+        calc: false,
+        colormin: false,
+        minifySelectors: false,
+        mergeLonghand: false,
+        reduceInitial: false,
+        zindex: false
+    }
+];
+
+function getMinimizers() {
+    return [
+        new TerserPlugin({
+            // Keep legal comments in the bundle itself; never emit sidecar files
+            extractComments: false,
+            terserOptions: {
+                compress: { passes: 2 },
+                mangle: { safari10: false },
+                format: { comments: false, safari10: false }
+            }
+        }),
+        new CssMinimizerPlugin({
+            minimizerOptions: {
+                preset: safeCssnanoMinimizerPreset
+            }
+        })
+    ];
+}
+
+/**
+ * Initial-chunk splitting for the TV tiers.
+ *
+ * The old TV-tier policy was total consolidation (splitChunks:false) so that
+ * a single self-contained main.js was read from package storage. As main.js
+ * grew past 2 MB that policy outlived its usefulness: a 2 MB script pays a
+ * full V8 parse ahead of first paint, and per-script compile-buffer sizing
+ * (V8's AST/bytecode zones) is friendlier to ~700-800 KB units.
+ *
+ * Policy:
+ * - chunks: 'initial'          Only boot chunks are split; the dynamically
+ *                              imported page/player chunks stay fully
+ *                              self-contained exactly as before.
+ * - minSize: 400000            Never emit a small chunk - a <400 KB fragment
+ *                              would cost another file read for trivial gain.
+ * - maxSize: 800000            Cap every initial script near ~700-800 KB so
+ *                              V8 keeps each compile cache/AST zone small.
+ * - maxInitialRequests: 3      The boot parity contract for the TV package:
+ *                              the entry chunk plus at most 2 split partners
+ *                              are ~2.4 MB, i.e. a 2.2 MB main busts into
+ *                              exactly three ~700 KB scripts.
+ *
+ * The extra initial chunks are loaded by the webpack bootstrap inside the
+ * entry chunk (runtimeChunk stays false) through the same script-injection
+ * machinery the async page chunks already use - proven working on file://
+ * package storage on Tizen/webOS.
+ *
+ * @returns {Object} splitChunks options shared by every TV tier config
+ */
+function getTvInitialSplitChunks() {
+    return {
+        chunks: 'initial',
+        minSize: 400000,
+        maxSize: 800000,
+        maxInitialRequests: 3
+    };
+}
 
 // ============================================================================
 // Shared plugins factory
+// ============================================================================
+// Master Localization Source Dictionary (en-us.json)
+// ============================================================================
+// Lazily loads and caches the canonical English localization dictionary.
+// Used during build-time packaging to compile locales into keyless value arrays
+// and prune redundant untranslated strings, relying on i18n.js fallback resolution.
+let masterEnUsLocale = null;
+function getMasterEnUsLocale() {
+    // Return cached dictionary if already parsed from disk
+    if (masterEnUsLocale) {
+        return masterEnUsLocale;
+    }
+
+    try {
+        // Resolve absolute path to the canonical English locale file
+        const enPath = path.resolve(__dirname, 'src/locales/en-us.json');
+
+        // Read and parse the source dictionary synchronously
+        masterEnUsLocale = JSON.parse(fs.readFileSync(enPath, 'utf8'));
+    } catch (err) {
+        // Fallback to empty dictionary if source file cannot be read
+        masterEnUsLocale = {};
+    }
+
+    return masterEnUsLocale;
+}
+
+// Cached list of canonical localization keys (excluding section comments)
+let masterEnUsKeys = null;
+function getMasterEnUsKeys() {
+    if (masterEnUsKeys) {
+        return masterEnUsKeys;
+    }
+
+    // Extract sorted list of operational keys, omitting group comments like "_Litefin Specific Keys"
+    const en = getMasterEnUsLocale();
+    masterEnUsKeys = Object.keys(en).filter(k => !k.startsWith('_'));
+    return masterEnUsKeys;
+}
+
 // ============================================================================
 /**
  * Factory function to generate Webpack plugins required for different tiers.
@@ -44,6 +198,19 @@ function getPlugins(tier, options = {}) {
     // Retrieve the source icon path, defaulting to standard icon.png in assets/
     const iconSrc = options.iconSrc || 'assets/icon.png';
 
+    /*
+     * Bundled assets (images, resources, etc.).
+     *
+     * warmup.mp4 is a Tizen-only artifact: the boot compositor warmup replays it
+     * through the hardware AVPlay plane behind the app splash. Desktop, Android
+     * (both Tauri) and the web client plugin have no AVPlay plane, so the clip is
+     * deliberately omitted from those outputs instead of shipping dead weight.
+     */
+    const assetsPattern = { from: 'src/assets', to: 'assets', noErrorOnMissing: true };
+    if (buildTier === 'desktop' || buildTier === 'web') {
+        assetsPattern.globOptions = { ignore: ['**/warmup.mp4'] };
+    }
+
     // Build files pattern list for CopyWebpackPlugin
     const patterns = [
         // Copy Tizen config file to root of build directory
@@ -56,11 +223,73 @@ function getPlugins(tier, options = {}) {
         { from: 'assets/icon-80.png', to: 'assets/icon-80.png' },
         { from: 'assets/icon-130.png', to: 'assets/icon-130.png' },
         // Copy general assets (images, resources, etc.)
-        { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
-        // Copy translation localization files
-        { from: 'src/locales', to: 'locales' },
-        // Copy libpgs web worker file
-        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
+        assetsPattern,
+        /*
+         * Canonical translation keys dictionary:
+         * Emits _keys.json containing only the ordered keys array.
+         * Shipped once so external tools or standalone XHR fallbacks can reference the index schema.
+         */
+        {
+            from: 'src/locales/en-us.json',
+            to: 'locales/_keys.json',
+            transform() {
+                // Emit single-line compact array of keys
+                return JSON.stringify(getMasterEnUsKeys());
+            }
+        },
+        /*
+         * Translation localization dictionaries (src/locales/*.json):
+         * Compiles human-readable key-value dictionaries into ultra-compact keyless
+         * value arrays. Cuts locale payload sizes by over 50% across all 26 languages
+         * (~1.3 MB uncompressed savings) while maintaining standard readable JSON
+         * in source control for translators.
+         *
+         * Non-English locales omit strings identical to en-us.json (as empty strings),
+         * allowing i18n.js to transparently resolve them from the fallback dictionary.
+         */
+        {
+            from: 'src/locales',
+            to: 'locales',
+            transform(content, absoluteFrom) {
+                // Ensure we only process locale JSON files
+                if (typeof absoluteFrom === 'string' && absoluteFrom.endsWith('.json')) {
+                    try {
+                        // Parse raw JSON buffer to a JavaScript object
+                        const parsed = JSON.parse(content.toString('utf8'));
+                        const masterEnglish = getMasterEnUsLocale();
+                        const keys = getMasterEnUsKeys();
+                        const isPrimaryEnglish = absoluteFrom.endsWith('en-us.json');
+
+                        // Map each canonical key to its corresponding translated string value
+                        const values = new Array(keys.length);
+                        for (let i = 0; i < keys.length; i++) {
+                            const k = keys[i];
+                            const val = parsed[k];
+
+                            // For non-English locales, omit values identical to English fallback
+                            if (!isPrimaryEnglish && val === masterEnglish[k]) {
+                                values[i] = '';
+                            } else {
+                                values[i] = (val !== undefined && val !== null) ? val : '';
+                            }
+                        }
+
+                        // Emit single-line, fully minified value array payload
+                        return JSON.stringify(values);
+                    } catch (err) {
+                        // In case of syntax or parse issues, fallback gracefully to raw content
+                        return content;
+                    }
+                }
+
+                // Non-JSON assets (e.g. languages.js) pass through unmutated
+                return content;
+            }
+        },
+        /*
+         * libpgs web worker ships unminified (95% comments) and is a Worker-script
+         * payload outside webpack's graph -> stripped via transform below.
+         */
         /*
          * WebOS SDK: required for window.webOS and window.webOS.service to exist.
          * Without this script the Luna service check in ApiClient.js
@@ -71,7 +300,9 @@ function getPlugins(tier, options = {}) {
         // Copy early boot diagnostic console logger for all builds
         { from: 'src/logger.js', to: 'js/logger.js' },
         // Copy early DOM and ES2015 polyfills script for all builds
-        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' }
+        { from: 'src/early-polyfills.js', to: 'js/early-polyfills.js' },
+        // Copy libpgs web worker file
+        { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' }
     ];
 
     // Include libass-wasm worker assets for modern, legacy, desktop, and web build tiers.
@@ -117,7 +348,8 @@ function getPlugins(tier, options = {}) {
         }),
         new CopyWebpackPlugin({ patterns }),
         new webpack.DefinePlugin({
-            __APP_VERSION__: JSON.stringify(require('./package.json').version)
+            __APP_VERSION__: JSON.stringify(require('./package.json').version),
+            __I18N_KEYS__: JSON.stringify(getMasterEnUsKeys())
         })
     ];
 
@@ -128,6 +360,25 @@ function getPlugins(tier, options = {}) {
             new webpack.NormalModuleReplacementPlugin(
                 /src[\\/]player[\\/]core[\\/]MoviVideoPlayer\.js$/,
                 path.resolve(__dirname, 'src/player/core/MoviVideoPlayer.stub.js')
+            ),
+            /*
+             * =======================================================================
+             * TV Bundle CSS: drop mobile-only stylesheets
+             * =======================================================================
+             * Tizen/webOS TV tiers never mount MobileNav (App.js suppresses it for
+             * platformInfo.isTv) and LayoutManager strips the mobile attributes
+             * (html[data-litefin-portrait|scaled|touch]) on TV hardware, so
+             * android-mobile.css and mobile-nav.css can never match on a TV yet
+             * cost ~180KB of raw stylesheet text inside the inline CSS bundle.
+             *
+             * ScrollController's data-horizontal-scroll compositing rules apply on
+             * TVs too - those live in scroll-compositing.css and are included in
+             * BOTH bundle.css and bundle.tv.css, so no behavior is lost here.
+             * =======================================================================
+             */
+            new webpack.NormalModuleReplacementPlugin(
+                /src[\\/]styles[\\/]bundle\.css$/,
+                path.resolve(__dirname, 'src/styles/bundle.tv.css')
             )
         );
     }
@@ -149,7 +400,7 @@ const tvResolveAliases = {
 };
 
 // ============================================================================
-// Modern build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
+// Modern build - Tizen 6.5+ / WebOS 22+ (No transpilation, pure ES6+, no source maps)
 // Formerly referred to as the "ES6" build tier. Renamed to "Modern" to ensure
 // non-technical users can easily distinguish this as the appropriate package
 // for newer/modern television models.
@@ -175,8 +426,13 @@ const modernConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -228,8 +484,13 @@ const debugConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -283,8 +544,13 @@ const normalConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -350,6 +616,7 @@ const legacyConfig = {
         hints: 'warning'
     },
     entry: [
+        'whatwg-fetch',
         'url-search-params-polyfill',
         './src/utils/DomPolyfills.js',
         './src/utils/AssJsPolyfills.js',
@@ -363,8 +630,13 @@ const legacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -397,7 +669,52 @@ const legacyConfig = {
                     }
                 }
             },
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            /*
+             * =======================================================================
+             * Consolidated Singleton CSS Inlining for Legacy Smart TVs (file://)
+             * =======================================================================
+             * Legacy TV platforms (webOS 3.x and Tizen 3.0, running Chromium 38-47)
+             * lack native CSS custom property ('var()') support.
+             *
+             * When packaged into local TV applications (webOS IPK and Tizen WGT),
+             * the app executes under the file:// protocol. MiniCssExtractPlugin
+             * outputs discrete external CSS files linked via <link rel="stylesheet">,
+             * which fail or hang on file:// XHR requests.
+             *
+             * Furthermore, standard 'style-loader' injects dozens of individual
+             * <style> tags (one per imported CSS module), forcing the browser to
+             * rebuild its internal stylesheet rule tree N times.
+             *
+             * 'injectType: styleTag' keeps one <style> element per CSS module:
+             * the boot bundle injects its own set, and each lazily loaded page
+             * chunk injects its OWN separate tags at chunk-eval time. A shared
+             * singleton tag would be REWRITTEN on every chunk load (style-loader
+             * stores the raw concatenated source), which would both wipe the
+             * CssVarsPolyfill's in-place var() resolution and stale its cached
+             * raw template. The polyfill processes every tag independently
+             * (template cache per element), so per-module tags are required.
+             * =======================================================================
+             */
+            /*
+             * css-minify-loader runs FIRST (use array executes bottom-up) on the
+             * raw stylesheet text, before css-loader wraps it in a JS string.
+             * style-loader injects the resulting string verbatim and Terser
+             * cannot touch it, so without this loader every comment and byte of
+             * whitespace in the .css sources ships inside main.js.
+             */
+            {
+                test: /\.css$/,
+                use: [
+                    {
+                        loader: 'style-loader',
+                        options: {
+                            injectType: 'styleTag'
+                        }
+                    },
+                    'css-loader',
+                    path.resolve(__dirname, 'css-minify-loader.cjs')
+                ]
+            },
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
@@ -461,8 +778,13 @@ const ultraLegacyConfig = {
     },
 
     optimization: {
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -504,15 +826,38 @@ const ultraLegacyConfig = {
                 }
             },
             /*
-             * style-loader is used here (not MiniCssExtractPlugin) because:
-             * Ultra-legacy apps run off the file:// protocol (local install).
-             * MiniCssExtractPlugin creates a separate main.css file that the
-             * css-vars-ponyfill tries to fetch via XMLHttpRequest, which is
-             * blocked by strict CORS rules on file:// in these ancient runtimes.
-             * style-loader bundles the CSS directly into the JS chunks as
-             * inline <style> tags — no network request, no CORS problem.
+             * =======================================================================
+             * Inline CSS Inlining for Ultra-Legacy Runtimes
+             * =======================================================================
+             * Ultra-legacy apps (webOS 1.x-2.x, Tizen 2.x, Chrome 26-32) run from
+             * local file:// installs with strict CORS restrictions on external CSS.
+             *
+             * 'injectType: styleTag' keeps one <style> element per CSS module: a
+             * shared singleton tag would be REWRITTEN whenever a lazily loaded
+             * page chunk appends its CSS (style-loader stores raw concatenated
+             * source), wiping the CssVarsPolyfill's in-place var() resolution and
+             * staling its cached raw template. The polyfill resolves every tag
+             * independently, so per-module tags are safe for chunked CSS.
+             * =======================================================================
+             * css-minify-loader runs FIRST (use array executes bottom-up) on the raw
+             * stylesheet text, before css-loader wraps it in a JS string. The injected
+             * style string bypasses Terser entirely, so raw .css comments and
+             * whitespace would otherwise ship verbatim inside js/main.js.
+             * =======================================================================
              */
-            { test: /\.css$/, use: ['style-loader', 'css-loader'] },
+            {
+                test: /\.css$/,
+                use: [
+                    {
+                        loader: 'style-loader',
+                        options: {
+                            injectType: 'styleTag'
+                        }
+                    },
+                    'css-loader',
+                    path.resolve(__dirname, 'css-minify-loader.cjs')
+                ]
+            },
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',
@@ -613,9 +958,13 @@ const normalOblongConfig = {
     },
 
     optimization: {
-        // Shared optimization settings
-        splitChunks: { chunks: 'all', maxSize: 100000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        // TV boot bundle splitting: a multi-MB single main.js is cut into
+        // ≤~800 KB initial chunks (V8 compile-zone friendly) by the shared
+        // policy in getTvInitialSplitChunks(). Async page/player chunks stay
+        // fully self-contained, as before.
+        splitChunks: getTvInitialSplitChunks(),
+        runtimeChunk: false,
+        minimizer: getMinimizers()
     },
 
     resolve: {
@@ -711,7 +1060,7 @@ const desktopConfig = {
 
     optimization: {
         splitChunks: { chunks: 'all', maxSize: 250000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        minimizer: getMinimizers()
     },
 
     module: {
@@ -786,7 +1135,7 @@ const webConfig = {
     optimization: {
         // Chunk splitting for efficient browser caching
         splitChunks: { chunks: 'all', maxSize: 250000 },
-        minimizer: ['...', new CssMinimizerPlugin()]
+        minimizer: getMinimizers()
     },
 
     module: {

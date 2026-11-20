@@ -18,7 +18,8 @@ globalThis.document = {
     documentElement: {
         clientWidth: 1920,
         clientHeight: 1080,
-        getAttribute: () => null
+        getAttribute: () => null,
+        setAttribute: () => {}
     },
     createElement: () => ({
         classList: { add: () => {}, remove: () => {}, toggle: () => {} },

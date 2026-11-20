@@ -7,15 +7,17 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/details.css';
+import '../styles/season.css';
+
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
-import { imageCache } from '../utils/ImageCache.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import { seerr } from '../api/seerrClient.js';
@@ -32,8 +34,14 @@ import DescriptionModal from '../components/DescriptionModal.js';
 import { RichMetadataTable } from '../components/RichMetadataTable.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
-import { resolveBestAudioStream, resolveSubtitleStream, isForcedStream, getEffectiveSubtitleMode } from '../player/core/JellyfinPlayer.js';
+import {
+    resolveBestAudioStream,
+    resolveSubtitleStream,
+    isForcedStream,
+    getEffectiveSubtitleMode
+} from '../player/core/StreamUtils.js';
 import { MediaHelper } from '../player/core/MediaHelper.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { prewarmManager } from '../player/core/PrewarmManager.js';
@@ -41,6 +49,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
+import { timeManager } from '../utils/TimeManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
@@ -49,6 +58,7 @@ import { formatDate } from '../utils/TimeUtils.js';
 import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 import { detailsIcons, settingsIcons } from '../utils/Icons.js';
 import { escapeHtml, getOverviewClampClass, shouldAlwaysShowOverviewButton, getOverviewButtonText } from '../utils/Utils.js';
+import { animeMarkerService } from '../utils/AnimeMarkerService.js';
 
 const log = logger.create('DetailsPage');
 
@@ -61,6 +71,7 @@ class DetailsPage extends Page {
         this._nextUp = null;
         this._seasons = null;
         this._episodes = null;
+        this._seriesMarkers = null;
         this._people = null;
 
         this._similar = null;
@@ -99,16 +110,15 @@ class DetailsPage extends Page {
      * related content rows (Similar, Next Up, Cast).
      */
     _renderMediaCard(item, isLandscape, type, options = {}) {
-        // Default to 'details-row' which maps to the 'home' preset (228px posters, 388px thumbs)
-        // rather than the massive 'details' primary image presets.
-        options.contextType = options.contextType || 'details-row';
-        return super._renderMediaCard(item, isLandscape, type, options);
+        // Resolve contextType string cleanly so Page.js receives a valid string rather than an options Object
+        const contextType = typeof options === 'string' ? options : (options?.contextType || 'details-row');
+        return super._renderMediaCard(item, isLandscape, type, contextType);
     }
 
     /**
      * Resolves the active layout mode based on the media item type.
      * Seasons and Episodes can have an independent layout mode configured.
-     * 
+     *
      * @param {Object} [item] - The media item if available
      * @returns {string} Layout mode identifier ('posterLeft', 'posterRight', 'backdropMinimal', 'backdropLeft')
      */
@@ -125,6 +135,31 @@ class DetailsPage extends Page {
         }
         // General layout preference used for Movies, Series, BoxSets, etc.
         return storage.getItem('pref:detailsLayout') || 'posterLeft';
+    }
+
+    /**
+     * Determine the user's preferred tooltip presentation mode for action buttons.
+     * Evaluates storage preference with fallback support for legacy boolean states.
+     *
+     * @returns {'hidden' | 'floating' | 'cards'} Resolved tooltip presentation style
+     * @private
+     */
+    _getActionTooltipsMode() {
+        // Read raw preference string from local storage
+        const pref = storage.getItem('pref:showActionTooltips');
+
+        // Check if explicitly configured to hide or legacy false flag
+        if (pref === 'hidden' || pref === 'false') {
+            return 'hidden';
+        }
+
+        // Check if configured for legacy card pill badges
+        if (pref === 'cards') {
+            return 'cards';
+        }
+
+        // Default presentation is clean floating text
+        return 'floating';
     }
 
     /**
@@ -173,11 +208,15 @@ class DetailsPage extends Page {
             layoutClass = 'layout-backdrop-left';
         }
 
-        const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
-        const tooltipsClass = showTooltips ? '' : 'tooltips-disabled';
+        // Resolve action tooltips display mode (floating text default, name cards, or hidden)
+        const tooltipMode = this._getActionTooltipsMode();
+        // Hide tooltips class used for layout adjustments when tooltips are disabled
+        const tooltipsClass = tooltipMode === 'hidden' ? 'tooltips-disabled' : '';
+        // Modifier class indicating whether floating or card style is active
+        const tooltipModeClass = `tooltip-mode-${tooltipMode}`;
 
         return `
-            <div class="page details-page ${layoutClass} ${tooltipsClass}">
+            <div class="page details-page ${layoutClass} ${tooltipsClass} ${tooltipModeClass}">
                 <!-- Backdrop -->
                 <div class="details-backdrop" id="backdrop">
                     <div class="backdrop-gradient"></div>
@@ -242,7 +281,7 @@ class DetailsPage extends Page {
                                 <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}" data-tooltip="${i18n.t('MoreOptions')}">
                                     ${detailsIcons.more}
                                 </button>
-                                <div class="action-btn-tooltip-bar" id="action-tooltip-bar">
+                                <div class="action-btn-tooltip-bar style-${tooltipMode}" id="action-tooltip-bar">
                                     <span class="action-btn-tooltip-text" id="action-tooltip-text"></span>
                                 </div>
                             </section>
@@ -416,6 +455,81 @@ class DetailsPage extends Page {
             // Setup action button tooltip listener
             this._setupTooltipListener();
 
+            // Listen for server-side user data updates (e.g. playback progress or watched commits)
+            this._onRemoteUserDataChanged = (userDataList) => {
+                if (!this._item || !Array.isArray(userDataList)) return;
+                const match = userDataList.find((u) => u.ItemId === this._itemId || u.ItemId === this._item.Id);
+                if (!match) return;
+
+                // Update active item UserData in place
+                this._item.UserData = this._item.UserData || {};
+                if (match.PlaybackPositionTicks !== undefined) {
+                    this._item.UserData.PlaybackPositionTicks = match.PlaybackPositionTicks;
+                }
+                if (match.Played !== undefined) {
+                    this._item.UserData.Played = match.Played;
+                }
+                if (match.PlayCount !== undefined) {
+                    this._item.UserData.PlayCount = match.PlayCount;
+                }
+                if (match.IsFavorite !== undefined) {
+                    this._item.UserData.IsFavorite = match.IsFavorite;
+                }
+                if (match.LastPlayedDate) {
+                    this._item.UserData.LastPlayedDate = match.LastPlayedDate;
+                }
+
+                // Update stop snapshot so local memory aligns with committed server state
+                const stopSnapshot = {
+                    itemId: this._item.Id,
+                    seriesId: this._item.SeriesId || null,
+                    seasonId: this._item.SeasonId || null,
+                    positionTicks: match.PlaybackPositionTicks || 0,
+                    durationTicks: this._item.RunTimeTicks || 0,
+                    isNearComplete: Boolean(match.Played),
+                    timestamp: Date.now()
+                };
+                state.set(`playback:lastStopped:${this._item.Id}`, stopSnapshot);
+                state.set('playback:lastStopped', stopSnapshot);
+
+                // Update UI action buttons (Play vs Resume, resume timestamp label)
+                this._updateButtons();
+
+                // Re-trigger prewarm with the updated authoritative resume position
+                if (
+                    this._item.Type === 'Movie' ||
+                    this._item.Type === 'Episode' ||
+                    this._item.Type === 'Video' ||
+                    this._item.Type === 'Trailer'
+                ) {
+                    prewarmManager.prewarm(this._item, {
+                        mediaSourceId: this._selectedMediaSourceId || this._item.MediaSources?.[0]?.Id,
+                        audioStreamIndex: this._selectedAudioIndex,
+                        subtitleStreamIndex: this._selectedSubtitleIndex
+                    });
+                }
+            };
+            eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
+
+            // ----------------------------------------------------------------
+            // Subscribe to background anime companion marker resolution
+            // ----------------------------------------------------------------
+            // Ensures episode badges (Filler, Mixed, Audio tracks) update automatically
+            // in the active view as soon as companion markers finish loading over the network
+            // ----------------------------------------------------------------
+            this._markerUnsub = animeMarkerService.onMarkersLoaded((loadedSeriesId, markers) => {
+                if (this._isDestroyed) return;
+                const currentSeriesId = this._item?.Type === 'Series'
+                    ? this._itemId
+                    : (this._item?.SeriesId || this._item?.ParentId || this._parentSeries?.Id);
+                if (!currentSeriesId) return;
+                if (animeMarkerService.normalizeId(currentSeriesId) === animeMarkerService.normalizeId(loadedSeriesId)) {
+                    this._seriesMarkers = markers;
+                    this._updateHeroAnimeBadges();
+                    this._updateEpisodeBadges();
+                }
+            });
+
             // Translate static UI labels
             i18n.translateDOM(this.el);
 
@@ -425,6 +539,16 @@ class DetailsPage extends Page {
             // Mark the page as rendered, fulfilling the Promise for NavigationState
             // to restore scroll/focus natively
             this.markReady();
+
+            // Notify App once the post-render frame settles so deferred player
+            // chunk prewarming waits until all secondary rows have mounted.
+            if (this._isMounted) {
+                requestAnimationFrame(() => {
+                    if (this._isMounted) {
+                        eventBus.emit('details:ready', { itemId: this._itemId });
+                    }
+                });
+            }
 
             // ----------------------------------------------------------------
             // Auto-chain check: did we just return from a local trailer that
@@ -620,7 +744,9 @@ class DetailsPage extends Page {
             !window.matchMedia('(pointer: fine)').matches;
 
         this._onFocusChangedForTooltip = (focusedEl) => {
-            const isEnabled = storage.getItem('pref:showActionTooltips') !== 'false';
+            // Check if tooltips mode is active (either floating or cards)
+            const tooltipMode = this._getActionTooltipsMode();
+            const isEnabled = tooltipMode !== 'hidden';
             const targetEl = focusedEl || document.activeElement;
             if (!isEnabled || !targetEl) {
                 tooltipBar.classList.remove('visible');
@@ -653,10 +779,11 @@ class DetailsPage extends Page {
                     // Calculate fixed position centered under the focused button relative to actionsContainer.
                     // Uses offset metrics rather than getBoundingClientRect to prevent 1-2px vertical jitter
                     // caused by scale(1.05) focus animations.
-                    const btnCenterX = targetEl.offsetLeft + (targetEl.offsetWidth / 2);
+                    const btnCenterX = targetEl.offsetLeft + targetEl.offsetWidth / 2;
                     const btnBottomY = targetEl.offsetTop + targetEl.offsetHeight;
 
                     tooltipBar.style.left = `${btnCenterX}px`;
+                    // Both styles hang from the focused button, so a wrapped second row gets its own label
                     tooltipBar.style.top = `${btnBottomY}px`;
                     tooltipText.textContent = text;
                     tooltipBar.classList.add('visible');
@@ -724,9 +851,10 @@ class DetailsPage extends Page {
         this._tooltipTimers = [];
         const updateInitial = () => {
             if (typeof this._onFocusChangedForTooltip !== 'function') return;
-            const targetEl = (document.activeElement && document.activeElement.closest('#actions'))
-                ? document.activeElement
-                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            const targetEl =
+                document.activeElement && document.activeElement.closest('#actions')
+                    ? document.activeElement
+                    : this.$('.resume-btn:not(.hidden)') || this.$('.play-btn');
             if (targetEl) {
                 this._onFocusChangedForTooltip?.(targetEl);
             }
@@ -747,7 +875,7 @@ class DetailsPage extends Page {
         if (!this._itemId) return;
 
         try {
-            log.info(`[DetailsPage] Re-fetching item metadata and visual assets for ${this._itemId}`);
+            log.info(`Re-fetching item metadata and visual assets for ${this._itemId}`);
 
             // 1. Build metadata fields query
             // Default to 'genres-studios-writers' to prevent loading excessive tags that bloat DOM
@@ -798,6 +926,16 @@ class DetailsPage extends Page {
                 requestedFields.push('People');
             }
 
+            // When the card rating badge feature is on, the Similar and other secondary
+            // card rows on this page also display rating badges — but those rows fetch
+            // their own items. The primary item detail itself already carries
+            // CommunityRating/CriticRating by default from the server when it's stored;
+            // requesting them explicitly here is harmless and ensures they're present
+            // even on servers that strip unrequested fields.
+            if (storage.getItem('pref:cardRatingsEnabled') === 'true') {
+                requestedFields.push('CommunityRating', 'CriticRating');
+            }
+
             // 2. Query fresh item details directly from server
             const item = await api.getItem(this._itemId, {
                 Fields: requestedFields.join(',')
@@ -807,6 +945,9 @@ class DetailsPage extends Page {
 
             // 3. Update active item reference in memory
             this._item = item;
+
+            // Reconcile with authoritative client state if server database commit is still in flight
+            this._reconcileItemWithLastStopped(this._item);
 
             // 4. Update series cache if applicable
             if (item.Type === 'Series') {
@@ -833,7 +974,7 @@ class DetailsPage extends Page {
                 logoContainer.innerHTML = '';
             }
         } catch (err) {
-            log.error('[DetailsPage] Failed to refresh item data:', err.message || err);
+            log.error('Failed to refresh item data:', err.message || err);
         }
     }
 
@@ -869,6 +1010,46 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Reconciles a media item's UserData against authoritative playback stop state.
+     * Prevents UI desynchronization on DetailsPage when the server database transaction
+     * is still processing or committing asynchronously right after the player exits.
+     *
+     * @param {Object} item - Media item with UserData
+     * @private
+     */
+    _reconcileItemWithLastStopped(item) {
+        if (!item || !item.Id) return;
+
+        // Retrieve last stopped snapshot from item-scoped key, bounded map, or singular fallback
+        const lastStopped =
+            state.get(`playback:lastStopped:${item.Id}`) ||
+            state.get('playback:lastStoppedMap')?.[item.Id] ||
+            (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
+
+        if (!lastStopped) return;
+
+        // Determine if local snapshot is still authoritative
+        // 1. Time-based validity: within 15 minutes of stopping
+        // 2. Or if server LastPlayedDate is older than our local stop snapshot timestamp
+        const lastPlayedMs = item.UserData?.LastPlayedDate ? new Date(item.UserData.LastPlayedDate).getTime() : 0;
+        const isNewerThanServer = lastPlayedMs > 0 && lastStopped.timestamp > lastPlayedMs;
+        const isRecent = Date.now() - lastStopped.timestamp < 900000; // 15 minutes
+
+        if (!isRecent && !isNewerThanServer) return;
+
+        item.UserData = item.UserData || {};
+        if (lastStopped.isNearComplete) {
+            // Playback completed or crossed watched threshold
+            item.UserData.Played = true;
+            item.UserData.PlaybackPositionTicks = 0;
+            item.UserData.UnplayedItemCount = 0;
+        } else if (lastStopped.positionTicks > 0) {
+            // Partially watched: preserve exact resume position
+            item.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+        }
+    }
+
     async _loadDetails() {
         // Invalidate optional metadata before starting a different item load.
         this._watchProvidersRequestId = (this._watchProvidersRequestId || 0) + 1;
@@ -876,6 +1057,7 @@ class DetailsPage extends Page {
         if (providersContainer) providersContainer.classList.add('hidden');
         this.setLoading(true);
         this._hasEnteredEpisodesGrid = false;
+        this._seriesMarkers = null;
 
         try {
             // ────────────────────────────────────────────────────────────────────────
@@ -890,6 +1072,7 @@ class DetailsPage extends Page {
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
             const requestedFields = [
+                'SeriesId',
                 'MediaStreams',
                 'MediaSources',
                 'Overview',
@@ -932,12 +1115,25 @@ class DetailsPage extends Page {
                 }
             }
 
+            // When the card rating badge feature is on, the Similar and other secondary
+            // card rows on this page also display rating badges — but those rows fetch
+            // their own items. The primary item detail itself already carries
+            // CommunityRating/CriticRating by default from the server when it's stored;
+            // requesting them explicitly here is harmless and ensures they're present
+            // even on servers that strip unrequested fields.
+            if (storage.getItem('pref:cardRatingsEnabled') === 'true') {
+                requestedFields.push('CommunityRating', 'CriticRating');
+            }
+
             const userPromise = state.get('user:data') ? Promise.resolve(state.get('user:data')) : api.getCurrentUser();
 
             const item = await api.getItem(this._itemId, {
                 Fields: requestedFields.join(',')
             });
             this._item = item;
+
+            // Reconcile with authoritative client state if server database commit is still in flight
+            this._reconcileItemWithLastStopped(this._item);
 
             // Synchronize container layout class once item type is determined
             this._updateLayoutClasses();
@@ -1163,7 +1359,7 @@ class DetailsPage extends Page {
             const resolvedAudio = MediaHelper.resolveSavedTrack(source, 'Audio', savedAudioTrack, this._itemId);
             if (resolvedAudio !== undefined) {
                 this._selectedAudioIndex = resolvedAudio;
-                log.info(`[DetailsPage] Restored saved audio track for ${this._itemId}: ${resolvedAudio}`);
+                log.info(`Restored saved audio track for ${this._itemId}: ${resolvedAudio}`);
             } else {
                 this._selectedAudioIndex = undefined;
             }
@@ -1176,9 +1372,7 @@ class DetailsPage extends Page {
             const resolvedSeriesAudio = MediaHelper.resolveSeriesTrack(source, 'Audio', this._item.SeriesId);
             if (resolvedSeriesAudio !== undefined) {
                 this._selectedAudioIndex = resolvedSeriesAudio;
-                log.info(
-                    `[DetailsPage] Restored series-level audio track for ${this._itemId}: ${resolvedSeriesAudio}`
-                );
+                log.info(`Restored series-level audio track for ${this._itemId}: ${resolvedSeriesAudio}`);
             }
         }
 
@@ -1197,7 +1391,7 @@ class DetailsPage extends Page {
             if (bestStream) {
                 this._selectedAudioIndex = bestStream.Index;
                 log.info(
-                    `[DetailsPage] Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                    `Auto-selected DirectPlay audio track for ${this._itemId}: ${this._selectedAudioIndex} (${bestStream.Codec})`
                 );
             }
         }
@@ -1216,13 +1410,20 @@ class DetailsPage extends Page {
         // Guard: If Subtitle Mode is 'None', never restore saved tracks.
         // If Subtitle Mode is 'OnlyForced', only restore if the saved track is actually forced.
         if (savedSubtitleTrack !== null && savedSubtitleTrack !== undefined && effectiveSubtitleMode !== 'None') {
-            const resolvedSubtitle = MediaHelper.resolveSavedTrack(source, 'Subtitle', savedSubtitleTrack, this._itemId);
+            const resolvedSubtitle = MediaHelper.resolveSavedTrack(
+                source,
+                'Subtitle',
+                savedSubtitleTrack,
+                this._itemId
+            );
             if (resolvedSubtitle !== undefined) {
                 if (effectiveSubtitleMode === 'OnlyForced') {
-                    const candidateStream = source.MediaStreams?.find((s) => s.Type === 'Subtitle' && s.Index === resolvedSubtitle);
+                    const candidateStream = source.MediaStreams?.find(
+                        (s) => s.Type === 'Subtitle' && s.Index === resolvedSubtitle
+                    );
                     if (candidateStream && isForcedStream(candidateStream)) {
                         this._selectedSubtitleIndex = resolvedSubtitle;
-                        log.info(`[DetailsPage] Restored saved forced subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
+                        log.info(`Restored saved forced subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
                     } else {
                         this._selectedSubtitleIndex = undefined;
                     }
@@ -1232,7 +1433,7 @@ class DetailsPage extends Page {
                     this._selectedSubtitleIndex = undefined;
                 } else {
                     this._selectedSubtitleIndex = resolvedSubtitle;
-                    log.info(`[DetailsPage] Restored saved subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
+                    log.info(`Restored saved subtitle track for ${this._itemId}: ${resolvedSubtitle}`);
                 }
             } else {
                 this._selectedSubtitleIndex = undefined;
@@ -1257,9 +1458,7 @@ class DetailsPage extends Page {
                     this._selectedSubtitleIndex = undefined;
                 } else {
                     this._selectedSubtitleIndex = resolvedSeriesSubtitle;
-                    log.info(
-                        `[DetailsPage] Restored series-level subtitle track for ${this._itemId}: ${resolvedSeriesSubtitle}`
-                    );
+                    log.info(`Restored series-level subtitle track for ${this._itemId}: ${resolvedSeriesSubtitle}`);
                 }
             }
         }
@@ -1270,7 +1469,7 @@ class DetailsPage extends Page {
                 audioStreamIndex: this._selectedAudioIndex
             });
             log.info(
-                `[DetailsPage] Resolved subtitle track from Subtitle Mode (${effectiveSubtitleMode}): ${this._selectedSubtitleIndex}`
+                `Resolved subtitle track from Subtitle Mode (${effectiveSubtitleMode}): ${this._selectedSubtitleIndex}`
             );
         }
 
@@ -1350,7 +1549,7 @@ class DetailsPage extends Page {
                 if (bestStream) {
                     this._selectedAudioIndex = bestStream.Index;
                     log.info(
-                        `[DetailsPage] Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
+                        `Auto-selected DirectPlay audio track for version ${id}: ${this._selectedAudioIndex} (${bestStream.Codec})`
                     );
                 }
             }
@@ -1448,22 +1647,75 @@ class DetailsPage extends Page {
                     .catch((err) => log.error('Failed to decode poster blurhash', err));
             }
 
-            const img = new Image();
-            img.onload = () => {
-                img.classList.add('loaded');
-                // Fade out and remove canvas when image loads
-                if (posterCanvas) {
-                    posterCanvas.style.opacity = '0';
-                    setTimeout(() => {
-                        if (posterCanvas && posterCanvas.parentNode) {
-                            posterCanvas.parentNode.removeChild(posterCanvas);
-                        }
-                    }, 250);
+            /*
+             * ================================================================
+             * Primary Poster Artwork Presentation
+             * ================================================================
+             * Instantiates the primary poster image element. When custom headers
+             * are active (e.g. Cloudflare Access), resolves via CustomHeadersManager
+             * to fetch the authenticated blob URL so native WebViews display it.
+             * ================================================================
+             */
+            const showFallback = () => {
+                // Ensure BlurHash placeholder canvas is removed when falling back
+                if (posterCanvas && posterCanvas.parentNode) {
+                    posterCanvas.parentNode.removeChild(posterCanvas);
                 }
+                const isLandscape = posterType === 'landscape';
+                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
             };
-            img.src = posterUrl;
-            img.alt = item.Name;
-            posterContainer.appendChild(img);
+
+            const applyPoster = (effectivePosterUrl) => {
+                const img = new Image();
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    // Fade out and remove canvas when image loads
+                    if (posterCanvas) {
+                        posterCanvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (posterCanvas && posterCanvas.parentNode) {
+                                posterCanvas.parentNode.removeChild(posterCanvas);
+                            }
+                        }, 250);
+                    }
+                };
+                img.onerror = () => {
+                    log.warn(`Failed to load details poster from ${effectivePosterUrl}`);
+                    // If native interception was used and the direct request failed, fallback to JS fetch & blob
+                    if (customHeaders?.hasCustomHeaders?.() && effectivePosterUrl === posterUrl) {
+                        customHeaders
+                            .resolveImageUrl(posterUrl, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== posterUrl) {
+                                    img.src = blobUrl;
+                                    return;
+                                }
+                                showFallback();
+                            })
+                            .catch(() => showFallback());
+                        return;
+                    }
+                    showFallback();
+                };
+                img.src = effectivePosterUrl;
+                img.alt = item.Name;
+                posterContainer.appendChild(img);
+            };
+
+            // Check if reverse proxy headers are active for the Jellyfin server
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(posterUrl);
+                if (cached) {
+                    applyPoster(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(posterUrl)
+                        .then((resolvedUrl) => applyPoster(resolvedUrl))
+                        .catch(() => applyPoster(posterUrl));
+                }
+            } else {
+                applyPoster(posterUrl);
+            }
         } else {
             // No primary image, show gradient fallback
             const isLandscape = posterType === 'landscape';
@@ -1501,14 +1753,55 @@ class DetailsPage extends Page {
     }
 
     async _loadSecondaryContent() {
+        // Resolve target series identifier for anime content markers and audio classifications
+        const seriesId = this._item.Type === 'Series'
+            ? this._itemId
+            : (this._item.SeriesId || this._item.ParentId);
+
+        // ---------------------------------------------------------------------
+        // Anime Markers & Content Badges Query (Opt-In Feature)
+        // ---------------------------------------------------------------------
+        // Check details page user settings prior to fetching companion metadata
+        // ---------------------------------------------------------------------
+        const showDetailsContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showDetailsAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        if (seriesId && (showDetailsContent || showDetailsAudio)) {
+            // First check memory cache synchronously so initial renders have markers immediately
+            this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
+
+            // Fetch series markers in background and update DOM when resolved
+            animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
+                if (markers) {
+                    this._seriesMarkers = markers;
+                    this._updateHeroAnimeBadges();
+                    this._updateEpisodeBadges();
+                }
+            }).catch(() => {});
+        }
+
         // Load additional data based on type
         if (this._item.Type === 'Series') {
-            // Next Up is above Seasons visually
+            /*
+             * Visual hierarchy for TV series: Next Up episode is prioritized
+             * and positioned directly above the Seasons row.
+             */
             await this._loadNextUp();
             await this._loadSeasons();
         } else if (this._item.Type === 'Season') {
-            this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
-            await this._loadEpisodes(this._item.SeriesId, this._itemId);
+            /*
+             * Resolve parent series identifier for metadata queries.
+             * Jellyfin seasons provide SeriesId directly, or ParentId as fallback.
+             */
+            const seriesId = this._item.SeriesId || this._item.ParentId;
+            this._parentSeries = state.get(`details:series:${seriesId}`);
+
+            /*
+             * Present Next Up on Season view if the upcoming episode falls within this season.
+             * Visually positioned right above the episode list to streamline resumption.
+             */
+            await this._loadNextUp();
+            await this._loadEpisodes(seriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
             this._parentSeries = state.get(`details:series:${this._item.SeriesId}`);
             // More from Season is above Guest Stars visually
@@ -1868,7 +2161,9 @@ class DetailsPage extends Page {
             const response = await api.getItems({
                 ParentId: this._itemId,
                 Recursive: false,
-                Fields: 'ProductionYear,PrimaryImageAspectRatio',
+                // Append rating fields when card rating badges are enabled, so collection
+                // grid cards can render the on-artwork rating badge without a re-fetch.
+                Fields: `ProductionYear,PrimaryImageAspectRatio${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CommunityRating,CriticRating' : ''}`,
                 SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 300
@@ -2168,28 +2463,6 @@ class DetailsPage extends Page {
         const item = this._item;
         const htmlParts = [];
 
-        // Helper to create row
-        const createRow = (key, items) => {
-            if (!items || items.length === 0) return '';
-            const translatedLabel = i18n.t(key);
-            const valuesHtml = items
-                .map((i) => {
-                    const name = i.Name || i; // Handle object or string
-                    const id = i.Id || '';
-                    const type = key.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
-
-                    return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
-                })
-                .join('');
-
-            return `
-                <div class="rich-meta-row">
-                    <div class="meta-label">${translatedLabel}</div>
-                    <div class="meta-value-list">${valuesHtml}</div>
-                </div>
-            `;
-        };
-
         // Genres (Prefer GenreItems for IDs, but fallback to Name strings)
         const genres = item.GenreItems && item.GenreItems.length > 0 ? item.GenreItems : item.Genres;
 
@@ -2217,8 +2490,13 @@ class DetailsPage extends Page {
             htmlParts.push(RichMetadataTable.createChipRow('Genres', genres));
         }
 
-        // Directors (only shown in 'all')
-        if (richMetadataStyle === 'all') {
+        // Directors (shown in 'all', 'genres-studios-writers', or 'genres-writers')
+        // Key creative leads; preserved when hiding tags/studios to maintain rich metadata hierarchy.
+        if (
+            richMetadataStyle === 'all' ||
+            richMetadataStyle === 'genres-studios-writers' ||
+            richMetadataStyle === 'genres-writers'
+        ) {
             const directors = (item.People || []).filter((p) => p.Type === 'Director');
             if (directors.length > 0) {
                 htmlParts.push(RichMetadataTable.createChipRow('Directors', directors));
@@ -2491,6 +2769,7 @@ class DetailsPage extends Page {
         }
 
         return new Promise((resolve) => {
+            // When logo image finishes loading, calculate aspect ratio and display container
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
                 if (logoContainer) {
@@ -2506,16 +2785,55 @@ class DetailsPage extends Page {
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
 
+                    // Update container dimensions to prevent layout shifts
                     logoContainer.style.height = `${containerHeight}px`;
 
+                    // Mount logo image element into DOM
                     logoContainer.innerHTML = '';
                     logoContainer.appendChild(img);
                     img.classList.add('loaded');
                 }
                 resolve();
             };
-            img.onerror = () => resolve();
-            img.src = logoUrl;
+
+            // Error recovery: fall back to JS fetch and Blob URL when native network request fails
+            img.onerror = () => {
+                if (customHeaders?.hasCustomHeaders?.() && !img.dataset.nativeFallbackTried) {
+                    img.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(logoUrl, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== logoUrl) {
+                                img.removeAttribute('crossorigin');
+                                img.src = blobUrl;
+                                return;
+                            }
+                            resolve();
+                        })
+                        .catch(() => resolve());
+                } else {
+                    resolve();
+                }
+            };
+
+            // Resolve logo URL via CustomHeadersManager if reverse proxy authentication is required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(logoUrl);
+                if (cached) {
+                    img.src = cached;
+                } else {
+                    customHeaders
+                        .resolveImageUrl(logoUrl)
+                        .then((resolvedUrl) => {
+                            img.src = resolvedUrl;
+                        })
+                        .catch(() => {
+                            img.src = logoUrl;
+                        });
+                }
+            } else {
+                img.src = logoUrl;
+            }
         });
     }
 
@@ -2738,7 +3056,8 @@ class DetailsPage extends Page {
         if (!activeAudio) {
             // Check if preferDirectPlayAudio auto-resolves a playable track (e.g. AC3/EAC3 over TrueHD/DTS)
             const bestAudioTrack = resolveBestAudioStream(source);
-            activeAudio = bestAudioTrack ||
+            activeAudio =
+                bestAudioTrack ||
                 audioStreams.find((s) => s.Index === source.DefaultAudioStreamIndex) ||
                 audioStreams.find((s) => s.IsDefault) ||
                 audioStreams[0];
@@ -2858,6 +3177,79 @@ class DetailsPage extends Page {
         return `<div class="details-tech-row">${pills.join('')}</div>`;
     }
 
+    /**
+     * Renders anime content and audio classification badges for the details hero header.
+     * Evaluates user preferences 'pref:detailsShowAnimeContentBadges' and 'pref:detailsShowAudioBadges'.
+     *
+     * @returns {string} HTML markup for the hero anime badges container
+     */
+    _renderHeroAnimeBadges() {
+        // Read user toggles for details page badges
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        // Return hidden container if both toggles are inactive
+        if (!showContent && !showAudio) {
+            return '<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills" style="display: none;"></span>';
+        }
+
+        // Query applicable pills for current details item (Episode, Series, Season, or Movie)
+        const pills = animeMarkerService.getItemPills(this._item, this._seriesMarkers, {
+            showContentBadges: showContent,
+            showAudioBadges: showAudio,
+            includeCanon: true
+        });
+
+        // Generate capsule HTML markup
+        const pillsHtml = pills.length > 0
+            ? animeMarkerService.renderPillsHtml(pills, { compact: false })
+            : '';
+
+        // Maintain mounted container element for dynamic background updates
+        const displayStyle = pills.length > 0 ? '' : 'style="display: none;"';
+        return `<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills" ${displayStyle}>${pillsHtml}</span>`;
+    }
+
+    /**
+     * Updates the hero header anime badges container in the active DOM once markers finish resolving.
+     */
+    _updateHeroAnimeBadges() {
+        const container = this.$('#details-hero-anime-pills');
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+
+        // Suppress display if user has disabled both settings
+        if (!showContent && !showAudio) {
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        // Resolve pills with updated marker cache
+        const pills = animeMarkerService.getItemPills(this._item, this._seriesMarkers, {
+            showContentBadges: showContent,
+            showAudioBadges: showAudio,
+            includeCanon: true
+        });
+
+        // Patch live DOM element
+        if (container) {
+            if (pills.length > 0) {
+                container.innerHTML = animeMarkerService.renderPillsHtml(pills, { compact: false });
+                container.style.display = '';
+            } else {
+                container.textContent = '';
+                container.style.display = 'none';
+            }
+        } else if (pills.length > 0) {
+            // Fallback insertion into metadata row if container was not previously rendered
+            const metaRow = this.$('.details-meta-row');
+            if (metaRow) {
+                const pillsHtml = animeMarkerService.renderPillsHtml(pills, { compact: false });
+                metaRow.insertAdjacentHTML('beforeend', `<span id="details-hero-anime-pills" class="meta-item anime-pills-row details-hero-anime-pills">${pillsHtml}</span>`);
+            }
+        }
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -2878,7 +3270,8 @@ class DetailsPage extends Page {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
             // Ends At
-            const endTime = new Date(Date.now() + item.RunTimeTicks / 10000);
+            // Use timeManager.now() so offline Tizen/WebOS TVs accurately reflect local time
+            const endTime = new Date(timeManager.now().getTime() + item.RunTimeTicks / 10000);
             const timeString = i18n.formatLocalTime(endTime);
             endsAtText = i18n.t('EndsAtValue', [timeString]);
         }
@@ -2903,14 +3296,17 @@ class DetailsPage extends Page {
         if (ttbRaw) {
             const parts = ttbRaw.split(',');
             const map = {};
-            parts.forEach((p) => { if (p.length > 1) map[p[0]] = p.substring(1); });
+            parts.forEach((p) => {
+                if (p.length > 1) map[p[0]] = p.substring(1);
+            });
             if (map.M) ttbLabel = `Main: ${map.M}h`;
             else if (map.H) ttbLabel = `Main+Extras: ${map.H}h`;
             else if (map.C) ttbLabel = `Completionist: ${map.C}h`;
         }
 
         let metaHtml = '';
-        if (gamePlatform) metaHtml += `<span class="meta-item meta-badge game-platform-pill">${escapeHtml(gamePlatform)}</span>`;
+        if (gamePlatform)
+            metaHtml += `<span class="meta-item meta-badge game-platform-pill">${escapeHtml(gamePlatform)}</span>`;
         if (ttbLabel) metaHtml += `<span class="meta-item meta-badge game-ttb-pill">${escapeHtml(ttbLabel)}</span>`;
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
         if (runtimeText) metaHtml += `<span class="meta-item">${runtimeText}</span>`;
@@ -3017,8 +3413,8 @@ class DetailsPage extends Page {
             isSeason
                 ? item.Name
                 : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
-                    ? item.OriginalTitle
-                    : ''
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -3071,10 +3467,14 @@ class DetailsPage extends Page {
             techHtml = this._renderTechnicalDetails();
         }
 
+        // Render anime content and audio classification badges for hero header
+        const heroAnimeBadgesHtml = this._renderHeroAnimeBadges();
+
         // Finish appending standard metadata row and technical specifications.
         heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
+                ${heroAnimeBadgesHtml}
             </div>
             ${techHtml}
         `;
@@ -3249,7 +3649,7 @@ class DetailsPage extends Page {
         if (!item || !Array.isArray(item.Tags)) return '';
         // Skip generic markers, return first specific console platform tag
         const skipTags = new Set(['JellyEmu', 'Game', 'MultiDisc', 'Unknown', 'Unsupported']);
-        return item.Tags.find(t => !skipTags.has(t)) || '';
+        return item.Tags.find((t) => !skipTags.has(t)) || '';
     }
 
     _updateButtons() {
@@ -3392,7 +3792,9 @@ class DetailsPage extends Page {
 
             // Apply localization to the formatted time label to construct the full button label text.
             const resumeLabel = i18n.t('ResumeAt', [timeString]);
-            const showTooltips = storage.getItem('pref:showActionTooltips') !== 'false';
+            // Check tooltip display mode
+            const tooltipMode = this._getActionTooltipsMode();
+            const showTooltips = tooltipMode !== 'hidden';
 
             if (showTooltips) {
                 // When tooltips are enabled, display timestamp only on the button pill
@@ -3564,9 +3966,10 @@ class DetailsPage extends Page {
 
         // Ensure tooltip is evaluated and displayed for whichever action button is currently active/focused (Play or Resume)
         requestAnimationFrame(() => {
-            const activeActionsBtn = (document.activeElement && document.activeElement.closest('#actions'))
-                ? document.activeElement
-                : (this.$('.resume-btn:not(.hidden)') || this.$('.play-btn'));
+            const activeActionsBtn =
+                document.activeElement && document.activeElement.closest('#actions')
+                    ? document.activeElement
+                    : this.$('.resume-btn:not(.hidden)') || this.$('.play-btn');
             this._onFocusChangedForTooltip?.(activeActionsBtn);
             // Balance action buttons evenly across 2 rows for mobile portrait orientation
             this._balanceMobileActionRows();
@@ -3591,6 +3994,29 @@ class DetailsPage extends Page {
         }
 
         try {
+            // =====================================================================
+            // Series Context Resolution
+            // =====================================================================
+            // Determine series identifier based on whether the active details page
+            // represents a top-level Series or an individual Season.
+            let seriesId = this._itemId;
+            if (this._item?.Type === 'Season') {
+                seriesId = this._item.SeriesId || this._item.ParentId;
+                if (!seriesId) {
+                    const parentSeries = await this._getParentSeriesItem();
+                    seriesId = parentSeries?.Id;
+                }
+            }
+
+            // Abort gracefully if series context could not be resolved
+            if (!seriesId) {
+                const nextUpSection = this.$('#next-up-section');
+                if (nextUpSection) {
+                    nextUpSection.classList.add('hidden');
+                }
+                return;
+            }
+
             let response;
 
             // Check if the current server is Emby. Emby ignores the SeriesId parameter
@@ -3599,25 +4025,74 @@ class DetailsPage extends Page {
             if (api.isEmby()) {
                 // Fetch the oldest unplayed episode of this series.
                 response = await api.getItems({
-                    ParentId: this._itemId,
+                    ParentId: seriesId,
                     Recursive: true,
                     IncludeItemTypes: 'Episode',
                     Limit: 1,
                     Filters: 'IsUnplayed',
                     SortBy: 'ParentIndexNumber,IndexNumber',
                     // Request all necessary fields for rendering the next up card.
-                    Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                    // Include SeriesPrimaryImageTag for reliable fallback to the series poster if thumbnails are missing.
+                    // CriticRating is appended when card rating badges are enabled.
+                    Fields: `Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CriticRating' : ''}`
                 });
             } else {
                 // For Jellyfin, use the standard NextUp endpoint which filters by SeriesId correctly.
-                response = await api.getNextUp({ SeriesId: this._itemId, Limit: 1 });
+                response = await api.getNextUp({ SeriesId: seriesId, Limit: 1 });
             }
 
             this._nextUp = response.Items || [];
 
+            // =====================================================================
+            // Season Scope Verification
+            // =====================================================================
+            // When viewing a Season details page, only display the Next Up card
+            // if the upcoming episode actually belongs to this specific season.
+            // If the next unplayed episode is in another season (or none exists),
+            // suppress the Next Up section so the episode list takes primary focus.
+            if (this._item?.Type === 'Season' && this._nextUp.length > 0) {
+                const nextEp = this._nextUp[0];
+                const isWithinThisSeason = Boolean(
+                    (nextEp.SeasonId && nextEp.SeasonId === this._itemId) ||
+                    (nextEp.ParentId && nextEp.ParentId === this._itemId) ||
+                    (nextEp.ParentIndexNumber != null &&
+                        this._item.IndexNumber != null &&
+                        nextEp.ParentIndexNumber === this._item.IndexNumber)
+                );
+
+                if (!isWithinThisSeason) {
+                    this._nextUp = [];
+                }
+            }
+
+            // If the episode returned by the server as Next Up was just marked complete,
+            // suppress it from the Next Up display so the finished item does not linger.
+            const nextUpTargetId = this._nextUp[0]?.Id;
+            const lastStopped =
+                (nextUpTargetId && state.get(`playback:lastStopped:${nextUpTargetId}`)) ||
+                (nextUpTargetId && state.get('playback:lastStoppedMap')?.[nextUpTargetId]) ||
+                state.get('playback:lastStopped');
+            if (
+                this._nextUp &&
+                this._nextUp.length > 0 &&
+                lastStopped &&
+                lastStopped.isNearComplete &&
+                this._nextUp[0].Id === lastStopped.itemId &&
+                Date.now() - lastStopped.timestamp < 900000
+            ) {
+                log.info('Server NextUp returned recently completed episode — suppressing stale item');
+                this._nextUp = [];
+            }
+
+            // Render next up if available and eligible for this view
             if (this._nextUp.length > 0) {
                 this._renderNextUp();
                 prewarmManager.prewarm(this._nextUp[0]);
+            } else {
+                const nextUpSection = this.$('#next-up-section');
+                if (nextUpSection) {
+                    nextUpSection.classList.add('hidden');
+                }
             }
         } catch (error) {
             log.warn('Failed to load next up', error);
@@ -3661,8 +4136,8 @@ class DetailsPage extends Page {
                     ep.ParentIndexNumber && ep.IndexNumber
                         ? `S${ep.ParentIndexNumber}E${ep.IndexNumber}. `
                         : ep.IndexNumber
-                            ? `${ep.IndexNumber}. `
-                            : '';
+                          ? `${ep.IndexNumber}. `
+                          : '';
 
                 const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
                 let runtimeText = '';
@@ -3672,14 +4147,35 @@ class DetailsPage extends Page {
                 }
                 let endsAtText = '';
                 if (ep.RunTimeTicks) {
-                    const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                    const endTime = new Date(timeManager.now().getTime() + ep.RunTimeTicks / 10000);
                     const timeString = i18n.formatLocalTime(endTime);
                     endsAtText = i18n.t('EndsAtValue', [timeString]);
                 }
 
+                // -------------------------------------------------------------
+                // Resolve Anime Content & Audio Badges for Next Up Row
+                // -------------------------------------------------------------
+                // Evaluates user settings for details page content & audio badges
+                // -------------------------------------------------------------
+                const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+                const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+                const pills = (showContent || showAudio)
+                    ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                        series: this._item,
+                        showContentBadges: showContent,
+                        showAudioBadges: showAudio
+                    })
+                    : [];
+                const animePillsHtml = pills.length > 0
+                    ? animeMarkerService.renderPillsHtml(pills, { compact: true })
+                    : '';
+
+                const targetSeriesId = ep.SeriesId || this._item?.SeriesId || (this._item?.Type === 'Series' ? this._item.Id : this._item?.Id);
+                const seriesIdAttr = targetSeriesId ? animeMarkerService.normalizeId(targetSeriesId) : '';
+
                 html += `
                     <div class="episode-row">
-                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                        <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" data-series-id="${seriesIdAttr}" tabindex="0">
                             <div class="episode-row-thumb">
                                 <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
                                 ${playedBadgeHtml}
@@ -3692,6 +4188,7 @@ class DetailsPage extends Page {
                                     ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                     ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                     ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                    ${animePillsHtml}
                                 </div>
                                 <div class="episode-row-overview">${ep.Overview || ''}</div>
                             </div>
@@ -3782,6 +4279,20 @@ class DetailsPage extends Page {
         const cached = state.get(cacheKey);
         if (cached) {
             this._episodes = cached;
+            // Query anime markers if user has enabled details content or audio badges
+            const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+            const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+            const shouldFetch = showContent || showAudio;
+
+            if (!this._seriesMarkers && seriesId && shouldFetch) {
+                animeMarkerService.fetchSeriesMarkers(seriesId).then((markers) => {
+                    if (markers) {
+                        this._seriesMarkers = markers;
+                        this._updateHeroAnimeBadges();
+                        this._renderEpisodes();
+                    }
+                }).catch(() => {});
+            }
             if (this._episodes.length > 0) {
                 this._renderEpisodes();
                 if (!this._nextUp || this._nextUp.length === 0) {
@@ -3793,8 +4304,42 @@ class DetailsPage extends Page {
         }
 
         try {
-            const response = await api.getEpisodes(seriesId, { SeasonId: seasonId });
+            // Check memory cache synchronously prior to async network invocation
+            if (!this._seriesMarkers && seriesId) {
+                this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
+            }
+
+            // -----------------------------------------------------------------
+            // Fetch Episodes & Optional Anime Marker Metadata Concurrently
+            // -----------------------------------------------------------------
+            // Queries companion anime classifications only if user opted in
+            // -----------------------------------------------------------------
+            const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+            const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+            const shouldFetch = showContent || showAudio;
+
+            const [response, markers] = await Promise.all([
+                api.getEpisodes(seriesId, { SeasonId: seasonId }),
+                (seriesId && shouldFetch)
+                    ? animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null)
+                    : Promise.resolve(null)
+            ]);
             this._episodes = response.Items || [];
+
+            // Reconcile episodes list with authoritative client state
+            if (this._episodes.length > 0) {
+                for (const ep of this._episodes) {
+                    this._reconcileItemWithLastStopped(ep);
+                }
+            }
+
+            // Store resolved markers in page instance state
+            if (markers) {
+                this._seriesMarkers = markers;
+            } else if (!this._seriesMarkers && seriesId) {
+                this._seriesMarkers = animeMarkerService.getCachedSeriesMarkers(seriesId);
+            }
+
             state.set(cacheKey, this._episodes);
 
             if (this._episodes.length > 0) {
@@ -3857,9 +4402,6 @@ class DetailsPage extends Page {
                         maxWidth: imageService.getParams('thumb').maxWidth,
                         quality: imageService.getParams('thumb').quality
                     });
-                    const episodeCode = i18n.ensureBiDi(
-                        `S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`
-                    );
                     const episodeTitle = i18n.ensureBiDi(ep.Name);
 
                     const showRating = Boolean(ep.CommunityRating && shouldShowScore(ep));
@@ -3870,14 +4412,35 @@ class DetailsPage extends Page {
                     }
                     let endsAtText = '';
                     if (ep.RunTimeTicks) {
-                        const endTime = new Date(Date.now() + ep.RunTimeTicks / 10000);
+                        const endTime = new Date(timeManager.now().getTime() + ep.RunTimeTicks / 10000);
                         const timeString = i18n.formatLocalTime(endTime);
                         endsAtText = i18n.t('EndsAtValue', [timeString]);
                     }
 
+                    // ---------------------------------------------------------
+                    // Extract Content Markers (Filler, Mixed, Recap) & Audio Track Pills
+                    // ---------------------------------------------------------
+                    // Evaluated according to details page content and audio settings
+                    // ---------------------------------------------------------
+                    const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+                    const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+                    const animePills = (showContent || showAudio)
+                        ? animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                            series: this._item,
+                            showContentBadges: showContent,
+                            showAudioBadges: showAudio
+                        })
+                        : [];
+                    const animePillsHtml = animePills.length > 0
+                        ? animeMarkerService.renderPillsHtml(animePills)
+                        : '';
+
+                    const targetSeriesId = ep.SeriesId || this._item?.SeriesId || (this._item?.Type === 'Series' ? this._item.Id : this._item?.Id);
+                    const seriesIdAttr = targetSeriesId ? animeMarkerService.normalizeId(targetSeriesId) : '';
+
                     html += `
                         <div class="episode-row">
-                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                            <button class="episode-row-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" data-series-id="${seriesIdAttr}" tabindex="0">
                                 <div class="episode-row-thumb">
                                     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${imgUrl}" alt="" class="lazy">
                                     ${playedBadgeHtml}
@@ -3890,6 +4453,7 @@ class DetailsPage extends Page {
                                         ${showRating ? `<span class="episode-row-rating">${detailsIcons.ratingStar}${ep.CommunityRating.toFixed(1)}</span>` : ''}
                                         ${runtimeText ? `<span>${runtimeText}</span>` : ''}
                                         ${endsAtText ? `<span>${endsAtText}</span>` : ''}
+                                        ${animePillsHtml}
                                     </div>
                                     <p class="episode-row-overview">${ep.Overview || ''}</p>
                                 </div>
@@ -3967,6 +4531,7 @@ class DetailsPage extends Page {
                     limit: 60,
                     moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                     isLandscape: true,
+                    seriesMarkers: this._seriesMarkers,
                     onClick: (card) => {
                         const stateKey = `details:lastFocusedItem:${this._itemId}`;
                         if (card.dataset.itemId) {
@@ -4022,7 +4587,7 @@ class DetailsPage extends Page {
                     return `
                         <button class="episode-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                             <div class="episode-thumb">
-                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : ''}
                             </div>
                             <div class="episode-info">
@@ -4032,6 +4597,143 @@ class DetailsPage extends Page {
                             </div>
                         </button>
                     `;
+                }
+            });
+        }
+    }
+
+    /**
+     * Updates anime marker badges (Filler, Mixed, Recap, Audio) on rendered episode rows
+     * and Next Up cards in the active DOM once companion markers finish loading.
+     */
+    _updateEpisodeBadges() {
+        // First synchronize hero header badges
+        this._updateHeroAnimeBadges();
+
+        if (!this._seriesMarkers) return;
+
+        // Skip badge mounting if user settings are disabled
+        const showContent = storage.getItem('pref:detailsShowAnimeContentBadges') === 'true';
+        const showAudio = storage.getItem('pref:detailsShowAudioBadges') === 'true';
+        if (!showContent && !showAudio) return;
+
+        // Resolve parent series object (supporting Series, Season, and nested view modes)
+        const seriesObj = this._parentSeries || (this._item?.Type === 'Series' ? this._item : null);
+
+        // 1. Update Next Up row badges if present (supporting list view and horizontal card row)
+        if (this._nextUp && Array.isArray(this._nextUp)) {
+            this._nextUp.forEach((ep) => {
+                const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                    series: seriesObj || this._item,
+                    season: this._item?.Type === 'Season' ? this._item : null,
+                    showContentBadges: showContent,
+                    showAudioBadges: showAudio
+                });
+
+                // A. Handle list layout (.episode-row-card)
+                const row = this.$(`.episode-row-card[data-episode-id="${ep.Id}"]`);
+                if (row) {
+                    const meta = row.querySelector('.episode-row-meta');
+                    if (meta) {
+                        const existingPills = meta.querySelector('.anime-pills-row');
+                        if (pills.length > 0) {
+                            const newHtml = animeMarkerService.renderPillsHtml(pills, { compact: true });
+                            if (existingPills) {
+                                existingPills.outerHTML = newHtml;
+                            } else {
+                                meta.insertAdjacentHTML('beforeend', newHtml);
+                            }
+                        } else if (existingPills) {
+                            if (typeof existingPills.remove === 'function') {
+                                existingPills.remove();
+                            } else if (existingPills.parentNode) {
+                                existingPills.parentNode.removeChild(existingPills);
+                            }
+                        }
+                    }
+                }
+
+                // B. Handle card layout (.media-card thumbnail)
+                const card = this.$(`.media-card[data-item-id="${ep.Id}"], .media-card[data-episode-id="${ep.Id}"]`);
+                if (card) {
+                    const cardImage = card.querySelector('.card-image') || card;
+                    const existingPills = card.querySelector('.card-anime-pills');
+                    if (pills.length > 0) {
+                        const newHtml = animeMarkerService.renderPillsHtml(pills, {
+                            compact: true,
+                            className: 'card-anime-pills'
+                        });
+                        if (existingPills) {
+                            existingPills.outerHTML = newHtml;
+                        } else {
+                            cardImage.insertAdjacentHTML('beforeend', newHtml);
+                        }
+                    } else if (existingPills) {
+                        if (typeof existingPills.remove === 'function') {
+                            existingPills.remove();
+                        } else if (existingPills.parentNode) {
+                            existingPills.parentNode.removeChild(existingPills);
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Update Season episode rows in vertical list if present
+        if (this._episodes && Array.isArray(this._episodes)) {
+            this._episodes.forEach((ep) => {
+                const pills = animeMarkerService.getEpisodePills(ep, this._seriesMarkers, {
+                    series: seriesObj || this._item,
+                    season: this._item?.Type === 'Season' ? this._item : null,
+                    showContentBadges: showContent,
+                    showAudioBadges: showAudio
+                });
+
+                // A. Handle vertical list layout
+                const row = this.$(`.episode-row-card[data-episode-id="${ep.Id}"]`);
+                if (row) {
+                    const meta = row.querySelector('.episode-row-meta');
+                    if (meta) {
+                        const existingPills = meta.querySelector('.anime-pills-row');
+                        if (pills.length > 0) {
+                            const newHtml = animeMarkerService.renderPillsHtml(pills);
+                            if (existingPills) {
+                                existingPills.outerHTML = newHtml;
+                            } else {
+                                meta.insertAdjacentHTML('beforeend', newHtml);
+                            }
+                        } else if (existingPills) {
+                            if (typeof existingPills.remove === 'function') {
+                                existingPills.remove();
+                            } else if (existingPills.parentNode) {
+                                existingPills.parentNode.removeChild(existingPills);
+                            }
+                        }
+                    }
+                }
+
+                // B. Handle card layout if season renders horizontal cards
+                const card = this.$(`.media-card[data-item-id="${ep.Id}"], .media-card[data-episode-id="${ep.Id}"]`);
+                if (card && card !== row) {
+                    const cardImage = card.querySelector('.card-image') || card;
+                    const existingPills = card.querySelector('.card-anime-pills');
+                    if (pills.length > 0) {
+                        const newHtml = animeMarkerService.renderPillsHtml(pills, {
+                            compact: true,
+                            className: 'card-anime-pills'
+                        });
+                        if (existingPills) {
+                            existingPills.outerHTML = newHtml;
+                        } else {
+                            cardImage.insertAdjacentHTML('beforeend', newHtml);
+                        }
+                    } else if (existingPills) {
+                        if (typeof existingPills.remove === 'function') {
+                            existingPills.remove();
+                        } else if (existingPills.parentNode) {
+                            existingPills.parentNode.removeChild(existingPills);
+                        }
+                    }
                 }
             });
         }
@@ -4410,6 +5112,13 @@ class DetailsPage extends Page {
             }
         }
 
+        // Reconcile season episodes with authoritative client state
+        if (allItems && allItems.length > 0) {
+            for (const ep of allItems) {
+                this._reconcileItemWithLastStopped(ep);
+            }
+        }
+
         // -------------------------------------------------------------
         // Retrieve preference to determine if we include current episode.
         // Defaults to false.
@@ -4436,19 +5145,21 @@ class DetailsPage extends Page {
             isLandscape: true,
             titleElText: this._item.SeasonName
                 ? i18n.t('MoreFromValue', [
-                    this._item.SeasonName.toLowerCase().startsWith('season ')
-                        ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
-                        : /^\d+$/.test(this._item.SeasonName)
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
                             ? i18n.t('Season') + ' ' + this._item.SeasonName
                             : this._item.SeasonName
-                ])
+                  ])
                 : null,
             // -------------------------------------------------------------
             // Pass option down to CardRenderer indicating if this is the active episode details page
+            // and supplying preloaded series markers for badge generation
             // -------------------------------------------------------------
             renderCard: (ep) =>
                 this._renderMediaCard(ep, true, 'episode', {
-                    isCurrentEpisode: ep.Id === this._itemId
+                    isCurrentEpisode: ep.Id === this._itemId,
+                    seriesMarkers: this._seriesMarkers
                 }),
             focusSectionName: 'more-from-season-section',
             currentIndex: currentEpisodeIndex
@@ -4653,10 +5364,7 @@ class DetailsPage extends Page {
 
         // 1. Movie handling
         if (type === 'Movie') {
-            const tmdbId =
-                this._item.ProviderIds?.Tmdb ||
-                this._item.ProviderIds?.tmdb ||
-                this._item.ProviderIds?.TMDB;
+            const tmdbId = this._item.ProviderIds?.Tmdb || this._item.ProviderIds?.tmdb || this._item.ProviderIds?.TMDB;
             if (!tmdbId) return null;
             return { mediaType: 'movie', tmdbId };
         }
@@ -5030,6 +5738,15 @@ class DetailsPage extends Page {
                 let target;
                 if (isShufflePlay) {
                     target = this._episodes[Math.floor(Math.random() * this._episodes.length)];
+                } else if (this._nextUp?.length > 0) {
+                    /*
+                     * If an upcoming episode within this season was resolved,
+                     * prioritize playing it when user triggers playback on the season.
+                     */
+                    target = this._nextUp[0];
+                    if (target.UserData?.PlaybackPositionTicks > 0) {
+                        resume = true;
+                    }
                 } else {
                     target = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
                 }
@@ -5109,7 +5826,8 @@ class DetailsPage extends Page {
                                 Limit: 1,
                                 Filters: 'IsUnplayed',
                                 SortBy: 'ParentIndexNumber,IndexNumber',
-                                Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                                // Include SeriesPrimaryImageTag for complete artwork fallback chains
+                                Fields: 'SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
                             });
                         } else {
                             // On Jellyfin, query next up directly using SeriesId parameter.
@@ -5189,19 +5907,37 @@ class DetailsPage extends Page {
                 quality: backdropParams.quality
             });
 
+        // Extract exact resume ticks when resuming playback
+        let startPositionTicks = null;
+        if (resume && !ghostMode) {
+            startPositionTicks = itemToPlay.UserData?.PlaybackPositionTicks || 0;
+        }
+
         eventBus.emit('player:play', {
             item: itemToPlay,
             resume: ghostMode ? false : resume,
+            startPositionTicks,
             mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
             backdropUrl,
-            ghostMode
+            ghostMode,
+            isShufflePlay
         });
     }
 
+    /**
+     * ========================================================================
+     * Shuffled Playback Entry Point
+     * ========================================================================
+     * Initiates playback in shuffle mode.
+     * The shuffle flag is forwarded directly in the `isShufflePlay` payload to
+     * the central player launcher in App.js. Shuffle mode is activated on the
+     * queue only once the item has been validated and playback starts, preventing
+     * premature state leakage if resolution fails or exits early.
+     */
     _shufflePlay() {
-        playQueue.setShuffleMode(true);
+        // Delegate directly to _play with the shuffle intent enabled
         this._play({ isShufflePlay: true });
     }
 
@@ -5221,7 +5957,9 @@ class DetailsPage extends Page {
             if (bestStream) {
                 currentIndex = bestStream.Index;
             } else {
-                const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
+                const defaultStream = tracks.find(
+                    (s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex
+                );
                 currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
             }
         }
@@ -5358,7 +6096,9 @@ class DetailsPage extends Page {
 
         if (isTrackSelection && languageManager.hasFavorites()) {
             if (!this._detailsShowAllTracks) {
-                const filtered = tracks.filter((t) => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t));
+                const filtered = tracks.filter(
+                    (t) => t.Index === -1 || t.Index === currentIndex || languageManager.isFavoriteTrack(t)
+                );
                 if (filtered.length < tracks.length) {
                     displayTracks = filtered;
                     isFiltered = true;
@@ -5571,7 +6311,8 @@ class DetailsPage extends Page {
                 this._prevFocus = currentFocused;
                 this._prevSection = focusManager.getActiveSection() || 'details-actions';
             } else {
-                this._prevFocus = this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
+                this._prevFocus =
+                    this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
                 this._prevSection = 'details-actions';
             }
         }
@@ -5623,8 +6364,6 @@ class DetailsPage extends Page {
         const isTvType =
             this._item?.Type === 'Series' || this._item?.Type === 'Season' || this._item?.Type === 'Episode';
 
-        const isMovieType = this._item?.Type === 'Movie';
-
         const isSeerrAvailable = await seerr.isAvailable();
 
         if (isSeerrAvailable && tmdbId) {
@@ -5655,7 +6394,16 @@ class DetailsPage extends Page {
                 options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') || 'Refresh metadata' });
 
                 // Identify Remote Metadata (supported on Movies, Series, BoxSets, MusicAlbums, Persons, etc.)
-                const invalidIdentifyTypes = ['Folder', 'UserRootFolder', 'CollectionFolder', 'UserView', 'TvChannel', 'Program', 'Timer', 'SeriesTimer'];
+                const invalidIdentifyTypes = [
+                    'Folder',
+                    'UserRootFolder',
+                    'CollectionFolder',
+                    'UserView',
+                    'TvChannel',
+                    'Program',
+                    'Timer',
+                    'SeriesTimer'
+                ];
                 if (!invalidIdentifyTypes.includes(i.Type)) {
                     options.push({ id: 'identify', label: i18n.t('Identify') || 'Identify' });
                 }
@@ -5712,14 +6460,14 @@ class DetailsPage extends Page {
             </div>
         `
                 : options
-                    .map((opt, i) => {
-                        return `
+                      .map((opt, i) => {
+                          return `
                 <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
-                    })
-                    .join('');
+                      })
+                      .join('');
 
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
@@ -5798,10 +6546,8 @@ class DetailsPage extends Page {
             if (this._prevFocus && document.contains(this._prevFocus)) {
                 focusManager.focusElement(this._prevFocus);
             } else {
-                const fallbackEl = this.$('.more-btn') ||
-                    this.$('.resume-btn') ||
-                    this.$('.play-btn') ||
-                    this.$('#actions button');
+                const fallbackEl =
+                    this.$('.more-btn') || this.$('.resume-btn') || this.$('.play-btn') || this.$('#actions button');
                 if (fallbackEl) {
                     focusManager.focusElement(fallbackEl);
                 } else {
@@ -6088,8 +6834,8 @@ class DetailsPage extends Page {
                     // begin processing before we re-render the sections.
                     setTimeout(() => {
                         if (!this._isMounted) return;
-                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => { });
-                        this._loadMoreFromSeason().catch(() => { });
+                        this._loadEpisodes(this._item.SeriesId, this._itemId).catch(() => {});
+                        this._loadMoreFromSeason().catch(() => {});
                     }, 500);
                 }
 
@@ -6525,9 +7271,8 @@ class DetailsPage extends Page {
                 // Build rich tooltip label
                 const seasonNum = (this._prevEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
                 const epNum = (this._prevEpisode.IndexNumber || 0).toString().padStart(2, '0');
-                const epLabel = this._prevEpisode.IndexNumber !== undefined
-                    ? `S${seasonNum}E${epNum}`
-                    : this._prevEpisode.Name;
+                const epLabel =
+                    this._prevEpisode.IndexNumber !== undefined ? `S${seasonNum}E${epNum}` : this._prevEpisode.Name;
                 const tooltipText = `${i18n.t('PreviousEpisode') || 'Previous Episode'}: ${epLabel}`;
                 prevBtn.setAttribute('data-tooltip', tooltipText);
                 prevBtn.setAttribute('aria-label', tooltipText);
@@ -6547,9 +7292,8 @@ class DetailsPage extends Page {
                 // Build rich tooltip label
                 const seasonNum = (this._nextEpisode.ParentIndexNumber || 0).toString().padStart(2, '0');
                 const epNum = (this._nextEpisode.IndexNumber || 0).toString().padStart(2, '0');
-                const epLabel = this._nextEpisode.IndexNumber !== undefined
-                    ? `S${seasonNum}E${epNum}`
-                    : this._nextEpisode.Name;
+                const epLabel =
+                    this._nextEpisode.IndexNumber !== undefined ? `S${seasonNum}E${epNum}` : this._nextEpisode.Name;
                 const tooltipText = `${i18n.t('NextEpisode') || 'Next Episode'}: ${epLabel}`;
                 nextBtn.setAttribute('data-tooltip', tooltipText);
                 nextBtn.setAttribute('aria-label', tooltipText);
@@ -6568,12 +7312,12 @@ class DetailsPage extends Page {
 
     /**
      * Navigates directly to an adjacent episode details page.
-     * 
+     *
      * @param {Object|null} targetEpisode - The destination episode object
      */
     _navigateToAdjacentEpisode(targetEpisode) {
         if (!targetEpisode?.Id) return;
-        log.info(`[DetailsPage] Navigating to adjacent episode: ${targetEpisode.Id} (${targetEpisode.Name})`);
+        log.info(`Navigating to adjacent episode: ${targetEpisode.Id} (${targetEpisode.Name})`);
         router.navigate(`/details/${targetEpisode.Id}`);
     }
 
@@ -6860,7 +7604,8 @@ class DetailsPage extends Page {
         }
 
         // Move Favorite Button BEFORE Audio, Subtitle, or More buttons if present
-        const anchorBtn = actionsContainer.querySelector('.audio-btn') ||
+        const anchorBtn =
+            actionsContainer.querySelector('.audio-btn') ||
             actionsContainer.querySelector('.subtitle-btn') ||
             actionsContainer.querySelector('.more-btn');
         if (anchorBtn && this._favBtn.el) {
@@ -7082,6 +7827,17 @@ class DetailsPage extends Page {
         if (this._episodeGrid) {
             this._episodeGrid.destroy();
             this._episodeGrid = null;
+        }
+
+        if (this._onRemoteUserDataChanged) {
+            eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
+            this._onRemoteUserDataChanged = null;
+        }
+
+        // Clean up anime marker update subscription
+        if (this._markerUnsub) {
+            this._markerUnsub();
+            this._markerUnsub = null;
         }
 
         const currentPath = router.getCurrentPath?.() || '';

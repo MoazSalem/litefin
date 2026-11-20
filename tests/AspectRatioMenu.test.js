@@ -322,3 +322,221 @@ test('WebOSPlayer: Resolves fallback dimensions when video element dimensions ar
     assert.strictEqual(mockStyle.top, '-189px');
     assert.strictEqual(mockStyle.objectFit, 'cover');
 });
+
+test('TizenAVPlayer: Calculates explicit display rect for non-square pixel DVD remuxes (NTSC and PAL)', async () => {
+    // ------------------------------------------------------------------------
+    // Tizen AVPlay Non-Square Pixel (Anamorphic) DAR Verification
+    // ------------------------------------------------------------------------
+    // Standard-definition DVDs store video using non-square pixels (720x480 for NTSC,
+    // 720x576 for PAL) relying on PAR/DAR flags to render in 4:3 or 16:9.
+    // AVPlay's hardware scaler strictly ignores these flags under PLAYER_DISPLAY_MODE_LETTER_BOX
+    // and PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO on NTSC MPEG-2 MKV remuxes.
+    // Verify that TizenAVPlayer detects the anamorphic mismatch and computes explicit
+    // letterbox/pillarbox geometry to scale to the true presentation ratio.
+    // ------------------------------------------------------------------------
+
+    const { TizenAVPlayer } = await import('../src/player/core/TizenAVPlayer.js');
+
+    let lastRect = null;
+    let lastMethod = null;
+    const mockAvplay = {
+        setDisplayRect: (x, y, w, h) => {
+            lastRect = { x, y, width: w, height: h };
+        },
+        setDisplayMethod: (method) => {
+            lastMethod = method;
+        },
+        getCurrentStreamInfo: () => []
+    };
+
+    const mockContainer = {
+        clientWidth: 1920,
+        clientHeight: 1080,
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: 1920, height: 1080 })
+    };
+
+    const player = new TizenAVPlayer({ container: mockContainer });
+    player._avplay = mockAvplay;
+
+    // ------------------------------------------------------------------------
+    // Case 1: NTSC DVD 4:3 Remux (720x480, AspectRatio: "4:3")
+    // ------------------------------------------------------------------------
+    // Storage ratio = 720 / 480 = 1.50 (3:2)
+    // Presentation ratio = 4 / 3 = 1.333333
+    // On 1920x1080: Height = 1080, Width = Math.round(1080 * 4/3) = 1440, Left = 240
+    player._currentPlayOptions = {
+        mediaSource: {
+            Width: 720,
+            Height: 480,
+            MediaStreams: [
+                {
+                    Type: 'Video',
+                    Width: 720,
+                    Height: 480,
+                    AspectRatio: '4:3'
+                }
+            ]
+        }
+    };
+
+    // Auto mode should correct the 3:2 distortion to 4:3 pillarbox
+    player.setAspectRatio('auto');
+    assert.strictEqual(player.getAspectRatio(), 'auto');
+    assert.deepStrictEqual(lastRect, { x: 240, y: 0, width: 1440, height: 1080 });
+    assert.strictEqual(lastMethod, 'PLAYER_DISPLAY_MODE_FULL_SCREEN');
+
+    // Video aspect ratio mode should also apply the corrected geometry
+    player.setAspectRatio('video_aspect_ratio');
+    assert.deepStrictEqual(lastRect, { x: 240, y: 0, width: 1440, height: 1080 });
+    assert.strictEqual(lastMethod, 'PLAYER_DISPLAY_MODE_FULL_SCREEN');
+
+    // Stretch mode should still stretch edge-to-edge
+    player.setAspectRatio('stretch');
+    assert.deepStrictEqual(lastRect, { x: 0, y: 0, width: 1920, height: 1080 });
+    assert.strictEqual(lastMethod, 'PLAYER_DISPLAY_MODE_FULL_SCREEN');
+
+    // ------------------------------------------------------------------------
+    // Case 2: PAL DVD 4:3 Remux (720x576, AspectRatio: "4:3")
+    // ------------------------------------------------------------------------
+    // Storage ratio = 720 / 576 = 1.25 (5:4)
+    // Presentation ratio = 4 / 3 = 1.333333
+    // On 1920x1080: Height = 1080, Width = 1440, Left = 240
+    player._currentPlayOptions = {
+        mediaSource: {
+            Width: 720,
+            Height: 576,
+            MediaStreams: [
+                {
+                    Type: 'Video',
+                    Width: 720,
+                    Height: 576,
+                    AspectRatio: '4:3'
+                }
+            ]
+        }
+    };
+
+    player.setAspectRatio('auto');
+    assert.deepStrictEqual(lastRect, { x: 240, y: 0, width: 1440, height: 1080 });
+    assert.strictEqual(lastMethod, 'PLAYER_DISPLAY_MODE_FULL_SCREEN');
+
+    // ------------------------------------------------------------------------
+    // Case 3: Anamorphic 16:9 NTSC DVD (720x480, AspectRatio: "16:9")
+    // ------------------------------------------------------------------------
+    // Storage ratio = 720 / 480 = 1.50 (3:2)
+    // Presentation ratio = 16 / 9 = 1.777778
+    // On 1920x1080: Width = 1920, Height = 1080, Left = 0, Top = 0
+    player._currentPlayOptions = {
+        mediaSource: {
+            Width: 720,
+            Height: 480,
+            MediaStreams: [
+                {
+                    Type: 'Video',
+                    Width: 720,
+                    Height: 480,
+                    AspectRatio: '16:9'
+                }
+            ]
+        }
+    };
+
+    player.setAspectRatio('auto');
+    assert.deepStrictEqual(lastRect, { x: 0, y: 0, width: 1920, height: 1080 });
+    assert.strictEqual(lastMethod, 'PLAYER_DISPLAY_MODE_FULL_SCREEN');
+});
+
+test('HtmlVideoPlayer: Corrects anamorphic non-square pixel DVD aspect ratio in auto mode', async () => {
+    // ------------------------------------------------------------------------
+    // HTML5 Video Non-Square Pixel DAR Correction Verification
+    // ------------------------------------------------------------------------
+    // When interlaced video falls back to HtmlVideoPlayer, browser decoders size
+    // <video> elements according to videoWidth / videoHeight (e.g. 720x480 -> 3:2),
+    // ignoring PAR/DAR flags. HtmlVideoPlayer must apply explicit letterbox/pillarbox
+    // geometry to display 4:3 DVDs correctly without 3:2 stretching.
+    // ------------------------------------------------------------------------
+
+    const { HtmlVideoPlayer } = await import('../src/player/core/HtmlVideoPlayer.js');
+
+    const mockStyle = {};
+    const mockVideo = {
+        videoWidth: 720,
+        videoHeight: 480,
+        style: mockStyle
+    };
+
+    const mockContainer = {
+        clientWidth: 1920,
+        clientHeight: 1080,
+        appendChild: () => {}
+    };
+
+    const player = new HtmlVideoPlayer({ container: mockContainer });
+    player._videoElement = mockVideo;
+
+    // 1. NTSC DVD remux (720x480, AspectRatio: "4:3")
+    player._currentPlayOptions = {
+        mediaSource: {
+            Width: 720,
+            Height: 480,
+            MediaStreams: [
+                {
+                    Type: 'Video',
+                    Width: 720,
+                    Height: 480,
+                    AspectRatio: '4:3'
+                }
+            ]
+        }
+    };
+
+    // Auto mode should pillarbox to 1440x1080 at left: 240px with objectFit: fill
+    player.setAspectRatio('auto');
+    assert.strictEqual(player.getAspectRatio(), 'auto');
+    assert.strictEqual(mockStyle.width, '1440px');
+    assert.strictEqual(mockStyle.height, '1080px');
+    assert.strictEqual(mockStyle.left, '240px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'fill');
+
+    // 2. Stretch mode should stretch across 100% of container
+    player.setAspectRatio('stretch');
+    assert.strictEqual(mockStyle.width, '100%');
+    assert.strictEqual(mockStyle.height, '100%');
+    assert.strictEqual(mockStyle.left, '0px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'fill');
+
+    // 3. Zoom mode should cover 100% of container
+    player.setAspectRatio('zoom');
+    assert.strictEqual(mockStyle.width, '100%');
+    assert.strictEqual(mockStyle.height, '100%');
+    assert.strictEqual(mockStyle.left, '0px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'cover');
+
+    // 4. Standard 1080p square-pixel content in auto mode
+    mockVideo.videoWidth = 1920;
+    mockVideo.videoHeight = 1080;
+    player._currentPlayOptions = {
+        mediaSource: {
+            Width: 1920,
+            Height: 1080,
+            MediaStreams: [
+                {
+                    Type: 'Video',
+                    Width: 1920,
+                    Height: 1080,
+                    AspectRatio: '16:9'
+                }
+            ]
+        }
+    };
+    player.setAspectRatio('auto');
+    assert.strictEqual(mockStyle.width, '100%');
+    assert.strictEqual(mockStyle.height, '100%');
+    assert.strictEqual(mockStyle.left, '0px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'contain');
+});
+

@@ -10,6 +10,7 @@ import { toast } from '../ui/Toast.js';
 import { i18n } from './i18n.js';
 import { logger } from './Logger.js';
 import { storage } from './StorageService.js';
+import { idleGate } from './IdleGate.js';
 
 const log = logger.create('VersionChecker');
 
@@ -72,7 +73,10 @@ class VersionChecker {
 
                 const title = i18n.t('NewVersionAvailable') || 'New Update Available!';
 
-                toast.show(`${title} — ${message}`, 10000, {
+                // Display notification with a concise 5-second auto-dismiss window
+                toast.show(`${title} — ${message}`, 5000, {
+                    id: 'app-update',
+                    replace: true,
                     icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="var(--jf-btn-primary-bg, #00a4dc)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`
                 });
             } else if (manual) {
@@ -96,8 +100,10 @@ class VersionChecker {
             return;
         }
 
-        // Add a slight delay to not block main thread startup/rendering
-        setTimeout(() => this.checkUpdate(false), 2000);
+        // Route startup check through idleGate so network fetching, JSON parsing,
+        // and toast UI rendering do not collide with boot rendering or initial D-pad scrolling.
+        // Requires a 5-second quiet window, bounded by a 30-second maximum postponement.
+        idleGate.runWhenIdle(() => this.checkUpdate(false), 5000, 30000);
     }
 }
 

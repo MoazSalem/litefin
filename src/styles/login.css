@@ -85,14 +85,50 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
 
 
 .server-section {
-    max-width: 600px;
+    max-width: 1000px;
     margin: 0 auto;
     text-align: left;
 }
 
+.server-proxy-headers-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 10px;
+    margin-bottom: 16px;
+}
+
+.server-proxy-headers-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 18px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid transparent;
+    border-radius: var(--jf-border-radius);
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.server-proxy-headers-btn .proxy-headers-icon {
+    margin-right: 8px;
+    stroke: currentColor;
+}
+
+.server-proxy-headers-btn:focus,
+.server-proxy-headers-btn.focused {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: var(--jf-accent);
+    color: #ffffff;
+    outline: none;
+    transform: scale(1.03);
+}
+
 .server-input-container {
     display: flex;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
 .server-input-container>*:not(:last-child) {

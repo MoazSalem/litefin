@@ -10,14 +10,16 @@
  */
 
 import { logger } from '../../utils/Logger.js';
+import { eventBus } from '../../core/EventBus.js';
 import { api } from '../../api/index.js';
+import { state } from '../../core/StateManager.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import FontLoader from '../../utils/FontLoader.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { webCodecsProbe } from '../../utils/WebCodecsProbe.js';
-import { resolveBestAudioStream, doesAudioTrackRequireDirectStream, resolveSubtitleStream, getEffectiveSubtitleMode } from './JellyfinPlayer.js';
+import { resolveBestAudioStream, doesAudioTrackRequireDirectStream, resolveSubtitleStream, getEffectiveSubtitleMode } from './StreamUtils.js';
 
 const log = logger.create('PrewarmManager');
 
@@ -50,6 +52,27 @@ export class PrewarmManager {
         // Guard check: Ensure valid item with an ID is provided
         if (!item || !item.Id) return;
 
+        // Reconcile item with authoritative client stop state if server UserData is stale
+        let lastStopped = null;
+        try {
+            if (typeof state !== 'undefined' && state?.get) {
+                lastStopped =
+                    state.get(`playback:lastStopped:${item.Id}`) ||
+                    state.get('playback:lastStoppedMap')?.[item.Id] ||
+                    (state.get('playback:lastStopped')?.itemId === item.Id ? state.get('playback:lastStopped') : null);
+            }
+        } catch (_) { }
+
+        if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+            item.UserData = item.UserData || {};
+            if (lastStopped.isNearComplete) {
+                item.UserData.Played = true;
+                item.UserData.PlaybackPositionTicks = 0;
+            } else if (lastStopped.positionTicks > 0) {
+                item.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+            }
+        }
+
         // Verify user hasn't disabled zero-latency prewarm in settings
         if (PlayerSettings.get('enablePrewarm') === false) return;
 
@@ -72,7 +95,7 @@ export class PrewarmManager {
                 if (bestStream) {
                     targetAudioIndex = bestStream.Index;
                     log.info(
-                        `[Prewarm] Auto-resolved DirectPlay audio track for "${item.Name}": Index ${targetAudioIndex} (${bestStream.Codec})`
+                        `Auto-resolved DirectPlay audio track for "${item.Name}": Index ${targetAudioIndex} (${bestStream.Codec})`
                     );
                 }
             }
@@ -99,28 +122,37 @@ export class PrewarmManager {
             }
         }
 
-        // Check if item is already prewarmed with identical track and media source options
+        // Read active global policy settings for parity checks
+        const activeForceDirectPlay = PlayerSettings.get('forceDirectPlay') || 'off';
+        const activeForceTranscode = Boolean(PlayerSettings.get('forceTranscode'));
+
+        // Check if item is already prewarmed with identical resume position, track, media source, and policy options
         const isSameItem = this._cachedItemId === item.Id;
         const isFresh = Date.now() - this._timestamp < 60000;
+        const isSamePosition = this._cachedItem?.UserData?.PlaybackPositionTicks === item.UserData?.PlaybackPositionTicks;
         const isSameSource = this._prewarmParams?.mediaSourceId === targetMediaSourceId;
         const isSameAudio = this._prewarmParams?.audioStreamIndex === targetAudioIndex;
         const isSameSubtitle = this._prewarmParams?.subtitleStreamIndex === targetSubtitleIndex;
+        const isSameForceDirectPlay = this._prewarmParams?.forceDirectPlay === activeForceDirectPlay;
+        const isSameForceTranscode = this._prewarmParams?.forceTranscode === activeForceTranscode;
 
-        if (isSameItem && isFresh && isSameSource && isSameAudio && isSameSubtitle) {
-            log.debug(`[Prewarm] Item "${item.Name}" already pre-warmed with matching parameters, skipping duplicate.`);
+        if (isSameItem && isFresh && isSamePosition && isSameSource && isSameAudio && isSameSubtitle && isSameForceDirectPlay && isSameForceTranscode) {
+            log.debug(`Item "${item.Name}" already pre-warmed with matching parameters, skipping duplicate.`);
             return;
         }
 
         // Cancel any pending prewarm for a previous item or differing configuration
         this.clear();
 
-        log.info(`[Prewarm] Initiating zero-latency prewarm for "${item.Name}" (${item.Id})`, {
+        log.info(`Initiating zero-latency prewarm for "${item.Name}" (${item.Id})`, {
             mediaSourceId: targetMediaSourceId,
             audioStreamIndex: targetAudioIndex,
-            subtitleStreamIndex: targetSubtitleIndex
+            subtitleStreamIndex: targetSubtitleIndex,
+            forceDirectPlay: activeForceDirectPlay,
+            forceTranscode: activeForceTranscode
         });
 
-        // Store active caching state
+        // Store active caching state including user playback policy flags
         this._cachedItemId = item.Id;
         this._cachedItem = item;
         this._timestamp = Date.now();
@@ -129,16 +161,18 @@ export class PrewarmManager {
             mediaSourceId: targetMediaSourceId,
             audioStreamIndex: targetAudioIndex,
             subtitleStreamIndex: targetSubtitleIndex,
-            playbackMode: 'auto'
+            playbackMode: 'auto',
+            forceDirectPlay: activeForceDirectPlay,
+            forceTranscode: activeForceTranscode
         };
 
         // 1. Preload subtitle font in background if configured
         try {
             const fontId = SubtitleStyles.getCurrentFontId();
             if (fontId) {
-                FontLoader.loadFont(fontId).catch(() => {});
+                FontLoader.loadFont(fontId).catch(() => { });
             }
-        } catch (_) {}
+        } catch (_) { }
 
         // 2. Pre-fetch PlaybackInfo from Jellyfin server using ApiClient
         try {
@@ -156,8 +190,9 @@ export class PrewarmManager {
                 backendType = 'webos';
             }
 
-            // Retrieve maximum streaming bitrate configured by user or default to 120Mbps
-            const manualBitrate = PlayerSettings.get('maxBitrateInternet') || 120000000;
+            // No quality picked in the OSD, as for a new item in JellyfinPlayer: the device
+            // profile applies the global limit (maxBitrateInternet) or the device default
+            const manualBitrate = null;
 
             // Resolve target MediaSource object for track requirement analysis
             const targetSource = targetMediaSourceId && item.MediaSources
@@ -228,13 +263,127 @@ export class PrewarmManager {
             const requestBody = {
                 DeviceProfile: clonedProfile,
                 UserId: api.userId,
-                MaxStreamingBitrate: manualBitrate,
+                // Same value JellyfinPlayer._getPlaybackInfo() sends for this profile
+                MaxStreamingBitrate: clonedProfile.MaxStreamingBitrate || manualBitrate || 120000000,
                 StartTimeTicks: prewarmOptions.startPositionTicks ?? defaultStartTicks,
                 AutoOpenLiveStream: true,
                 IsPlayback: true,
                 EnableDirectPlay: true,
                 EnableDirectStream: true
             };
+
+            // =================================================================
+            // Global Playback Policy Overrides in Prewarm Payload
+            // =================================================================
+            // Replicate the exact profile overrides that JellyfinPlayer uses so
+            // the server pre-warms with the correct PlayMethod (e.g. strict Direct Play
+            // or Forced Video Copy) instead of producing an incompatible transcode stream.
+            // =================================================================
+            if (activeForceTranscode) {
+                // Strict transcode mode
+                requestBody.EnableDirectPlay = false;
+                requestBody.EnableDirectStream = false;
+                requestBody.EnableTranscoding = true;
+                requestBody.AllowVideoStreamCopy = false;
+                requestBody.AllowAudioStreamCopy = false;
+                if (requestBody.DeviceProfile) {
+                    requestBody.DeviceProfile.DirectPlayProfiles = [];
+                    requestBody.DeviceProfile.DirectStreamProfiles = [];
+                }
+            } else if (activeForceDirectPlay === 'all' || activeForceDirectPlay === true) {
+                // Strict Direct Play: Direct play all audio and video formats natively
+                requestBody.EnableDirectPlay = true;
+                requestBody.EnableDirectStream = false;
+                requestBody.EnableTranscoding = false;
+                requestBody.AllowVideoStreamCopy = false;
+                requestBody.AllowAudioStreamCopy = false;
+
+                if (requestBody.DeviceProfile) {
+                    requestBody.DeviceProfile.DirectPlayProfiles = [{
+                        Container: 'm4v,3gp,ts,mpegts,mov,xvid,vob,mkv,wmv,asf,ogm,ogv,m2v,avi,mpg,mpeg,mp4,webm,wtv,dvr-ms,m2ts,rmvb,mxf',
+                        AudioCodec: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                        VideoCodec: 'h264,h265,hevc,vp8,vp9,mpeg1video,mpeg2video,mpeg4,wmv2,wmv3,vcl,theora,vc1,mpeg,h263,msmpeg4,av1',
+                        Type: 'Video'
+                    }, {
+                        Container: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                        AudioCodec: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                        Type: 'Audio'
+                    }];
+                    requestBody.DeviceProfile.TranscodingProfiles = [];
+                    requestBody.DeviceProfile.DirectStreamProfiles = [];
+                    requestBody.DeviceProfile.CodecProfiles = [];
+                    requestBody.DeviceProfile.ContainerProfiles = [];
+                }
+            } else if (activeForceDirectPlay === 'video') {
+                // Video Direct Play Only: Video is always copied, audio may transcode
+                requestBody.EnableDirectPlay = true;
+                requestBody.EnableDirectStream = true;
+                requestBody.EnableTranscoding = true;
+                requestBody.AllowVideoStreamCopy = true;
+                requestBody.AllowAudioStreamCopy = true;
+
+                const allVideoContainers = 'm4v,3gp,ts,mpegts,mov,xvid,vob,mkv,wmv,asf,ogm,ogv,m2v,avi,mpg,mpeg,mp4,webm,wtv,dvr-ms,m2ts,rmvb,mxf';
+                const allVideoCodecs = 'h264,h265,hevc,vp8,vp9,mpeg1video,mpeg2video,mpeg4,wmv2,wmv3,vcl,theora,vc1,mpeg,h263,msmpeg4,av1';
+
+                if (requestBody.DeviceProfile && Array.isArray(requestBody.DeviceProfile.DirectPlayProfiles)) {
+                    const supportedAudioCodecs = requestBody.DeviceProfile.DirectPlayProfiles
+                        .filter(p => p.Type === 'Video' && p.AudioCodec)
+                        .map(p => p.AudioCodec)
+                        .join(',');
+                    const audioCodecsList = supportedAudioCodecs || 'aac,mp3,ac3,eac3,flac,vorbis,opus';
+
+                    requestBody.DeviceProfile.DirectPlayProfiles = [{
+                        Container: allVideoContainers,
+                        AudioCodec: audioCodecsList,
+                        VideoCodec: allVideoCodecs,
+                        Type: 'Video'
+                    }, {
+                        Container: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                        AudioCodec: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                        Type: 'Audio'
+                    }];
+                }
+
+                if (requestBody.DeviceProfile && Array.isArray(requestBody.DeviceProfile.CodecProfiles)) {
+                    requestBody.DeviceProfile.CodecProfiles = requestBody.DeviceProfile.CodecProfiles.filter(p => p.Type !== 'Video' && p.Type !== 'VideoAudio');
+                }
+            } else if (activeForceDirectPlay === 'audio') {
+                // Audio Direct Play Only: Audio is direct-played/copied, video may transcode
+                requestBody.EnableDirectPlay = true;
+                requestBody.EnableDirectStream = true;
+                requestBody.EnableTranscoding = true;
+                requestBody.AllowVideoStreamCopy = true;
+                requestBody.AllowAudioStreamCopy = true;
+
+                const allAudioCodecs = 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac';
+                const allContainersList = 'm4v,3gp,ts,mpegts,mov,xvid,vob,mkv,wmv,asf,ogm,ogv,m2v,avi,mpg,mpeg,mp4,webm,wtv,dvr-ms,m2ts,rmvb,mxf';
+
+                if (requestBody.DeviceProfile && Array.isArray(requestBody.DeviceProfile.DirectPlayProfiles)) {
+                    const supportedVideoCodecs = requestBody.DeviceProfile.DirectPlayProfiles
+                        .filter(p => p.Type === 'Video' && p.VideoCodec)
+                        .map(p => p.VideoCodec)
+                        .join(',');
+                    const videoCodecsList = supportedVideoCodecs || 'h264,hevc,vp9,av1';
+
+                    requestBody.DeviceProfile.DirectPlayProfiles = [{
+                        Container: allContainersList,
+                        AudioCodec: allAudioCodecs,
+                        VideoCodec: videoCodecsList,
+                        Type: 'Video'
+                    }, {
+                        Container: allAudioCodecs,
+                        AudioCodec: allAudioCodecs,
+                        Type: 'Audio'
+                    }];
+                }
+
+                if (requestBody.DeviceProfile && Array.isArray(requestBody.DeviceProfile.CodecProfiles)) {
+                    requestBody.DeviceProfile.CodecProfiles = requestBody.DeviceProfile.CodecProfiles.filter(p => p.Type !== 'Audio');
+                }
+            }
+
+            // consumePlaybackInfo() reuses the response only for the same bitrate limit
+            this._prewarmParams.maxStreamingBitrate = requestBody.MaxStreamingBitrate;
 
             // Attach MediaSourceId if specifically resolved and not a dynamic Live TV channel
             const isLiveChannel = item.Type === 'TvChannel';
@@ -265,18 +414,18 @@ export class PrewarmManager {
                 { signal: this._abortController.signal }
             )
                 .then((data) => {
-                    log.info(`[Prewarm] Successfully pre-fetched PlaybackInfo for "${item.Name}"!`);
+                    log.info(`Successfully pre-fetched PlaybackInfo for "${item.Name}"!`);
                     return data;
                 })
                 .catch((err) => {
                     // Suppress abort errors triggered by clean invalidation
                     if (err.name !== 'AbortError') {
-                        log.warn('[Prewarm] Background PlaybackInfo fetch failed:', err);
+                        log.warn('Background PlaybackInfo fetch failed:', err);
                     }
                     return null;
                 });
         } catch (err) {
-            log.warn('[Prewarm] Failed to setup background PlaybackInfo prewarm:', err);
+            log.warn('Failed to setup background PlaybackInfo prewarm:', err);
             this._playbackInfoPromise = null;
         }
     }
@@ -290,7 +439,25 @@ export class PrewarmManager {
     getPrewarmedItem(itemId) {
         // Ensure cache matches requested item ID and is within validity TTL window
         if (this._cachedItemId === itemId && this._cachedItem && Date.now() - this._timestamp < this._ttlMs) {
-            log.info(`[Prewarm] Cache hit! Reusing pre-loaded item metadata for: ${itemId}`);
+            // Reconcile with latest stop snapshot if client recorded recent stop progress
+            try {
+                const lastStopped =
+                    state.get(`playback:lastStopped:${itemId}`) ||
+                    state.get('playback:lastStoppedMap')?.[itemId] ||
+                    (state.get('playback:lastStopped')?.itemId === itemId ? state.get('playback:lastStopped') : null);
+
+                if (lastStopped && Date.now() - lastStopped.timestamp < 900000) {
+                    this._cachedItem.UserData = this._cachedItem.UserData || {};
+                    if (lastStopped.isNearComplete) {
+                        this._cachedItem.UserData.Played = true;
+                        this._cachedItem.UserData.PlaybackPositionTicks = 0;
+                    } else if (lastStopped.positionTicks > 0) {
+                        this._cachedItem.UserData.PlaybackPositionTicks = lastStopped.positionTicks;
+                    }
+                }
+            } catch (_) { }
+
+            log.info(`Cache hit! Reusing pre-loaded item metadata for: ${itemId}`);
             return this._cachedItem;
         }
         return null;
@@ -313,16 +480,38 @@ export class PrewarmManager {
         ) {
             // 1. Validate playback mode: If user forced transcode or remux, generic prewarm cannot be used
             if (options.playbackMode && options.playbackMode !== 'auto') {
-                log.debug('[Prewarm] Custom playbackMode requested, discarding generic prewarm.');
+                log.debug('Custom playbackMode requested, discarding generic prewarm.');
                 this.clear();
                 return null;
             }
 
-            // 2. Validate MediaSourceId: If user or player selected a different version, invalidate
+            // 2. Validate forceDirectPlay & forceTranscode settings parity if tracked
+            const activeForceDirectPlay = PlayerSettings.get('forceDirectPlay') || 'off';
+            const activeForceTranscode = Boolean(PlayerSettings.get('forceTranscode'));
+
+            if (this._prewarmParams?.forceDirectPlay !== undefined && this._prewarmParams.forceDirectPlay !== activeForceDirectPlay) {
+                log.info(
+                    `ForceDirectPlay setting changed since prewarm ` +
+                    `(prewarmed: ${this._prewarmParams.forceDirectPlay}, active: ${activeForceDirectPlay}). Discarding prewarm.`
+                );
+                this.clear();
+                return null;
+            }
+
+            if (this._prewarmParams?.forceTranscode !== undefined && this._prewarmParams.forceTranscode !== activeForceTranscode) {
+                log.info(
+                    `ForceTranscode setting changed since prewarm ` +
+                    `(prewarmed: ${this._prewarmParams.forceTranscode}, active: ${activeForceTranscode}). Discarding prewarm.`
+                );
+                this.clear();
+                return null;
+            }
+
+            // 3. Validate MediaSourceId: If user or player selected a different version, invalidate
             if (options.mediaSourceId && this._prewarmParams?.mediaSourceId) {
                 if (options.mediaSourceId !== this._prewarmParams.mediaSourceId) {
                     log.info(
-                        `[Prewarm] MediaSource mismatch (expected ${this._prewarmParams.mediaSourceId}, requested ${options.mediaSourceId}). Discarding prewarm.`
+                        `MediaSource mismatch (expected ${this._prewarmParams.mediaSourceId}, requested ${options.mediaSourceId}). Discarding prewarm.`
                     );
                     this.clear();
                     return null;
@@ -350,7 +539,7 @@ export class PrewarmManager {
                     : null;
             if (prewarmedAudio !== requestedAudio) {
                 log.info(
-                    `[Prewarm] Audio stream mismatch (prewarmed: ${prewarmedAudio}, requested: ${requestedAudio}). Discarding prewarm.`
+                    `Audio stream mismatch (prewarmed: ${prewarmedAudio}, requested: ${requestedAudio}). Discarding prewarm.`
                 );
                 this.clear();
                 return null;
@@ -374,14 +563,33 @@ export class PrewarmManager {
                     : null;
             if (prewarmedSubtitle !== requestedSubtitle) {
                 log.info(
-                    `[Prewarm] Subtitle stream mismatch (prewarmed: ${prewarmedSubtitle}, requested: ${requestedSubtitle}). Discarding prewarm.`
+                    `Subtitle stream mismatch (prewarmed: ${prewarmedSubtitle}, requested: ${requestedSubtitle}). Discarding prewarm.`
                 );
                 this.clear();
                 return null;
             }
 
-            log.info(`[Prewarm] Zero-Latency Cache Hit! Consuming prewarmed PlaybackInfo for: ${itemId}`);
+            // =================================================================
+            // 5. Validate Bitrate Limit Parity
+            // =================================================================
+            // The server picks direct play or a transcode (and its bitrate) from
+            // the request's limit. A quality lowered in the OSD must not reuse a
+            // response negotiated for the default limit.
+            // =================================================================
+            const prewarmedBitrate = this._prewarmParams?.maxStreamingBitrate;
+            if (options.maxStreamingBitrate && prewarmedBitrate && Number(options.maxStreamingBitrate) !== Number(prewarmedBitrate)) {
+                log.info(
+                    `Bitrate limit mismatch (prewarmed: ${prewarmedBitrate}, requested: ${options.maxStreamingBitrate}). Discarding prewarm.`
+                );
+                this.clear();
+                return null;
+            }
+
+            log.info(`Zero-Latency Cache Hit! Consuming prewarmed PlaybackInfo for: ${itemId}`);
             const promise = this._playbackInfoPromise;
+            // Clear cached item references upon consumption so they cannot be reused stale
+            this._cachedItemId = null;
+            this._cachedItem = null;
             // Prevent duplicate consumption; subsequent calls will trigger fresh request
             this._playbackInfoPromise = null;
             return promise;
@@ -399,9 +607,20 @@ export class PrewarmManager {
      */
     invalidateCache() {
         // Log cache invalidation event for playback diagnostics
-        log.info('[Prewarm] Invalidate cache requested — clearing prewarm manager memory and aborting requests');
+        log.info('Invalidate cache requested — clearing prewarm manager memory and aborting requests');
 
         // Flush all cached data and abort any ongoing network pre-fetches
+        this.clear();
+    }
+
+    /**
+     * Drop a prewarmed PlaybackInfo that no playback has taken yet, e.g. because
+     * the device profile it was built with changed. A request already handed to
+     * the player by consumePlaybackInfo() is left to finish.
+     */
+    discardUnconsumed() {
+        if (!this._playbackInfoPromise) return;
+        log.info('Device capabilities changed — discarding the prewarmed PlaybackInfo');
         this.clear();
     }
 
@@ -413,7 +632,7 @@ export class PrewarmManager {
         if (this._abortController) {
             try {
                 this._abortController.abort();
-            } catch (_) {}
+            } catch (_) { }
             this._abortController = null;
         }
         // Reset cached variables and tracked parameters
@@ -425,5 +644,16 @@ export class PrewarmManager {
     }
 }
 
-export const prewarmManager = new PrewarmManager();
+/**
+ * webOS reports the real panel (UHD, Dolby Vision) only after startup, and a
+ * PlaybackInfo prewarmed before that was built with the fallback profile.
+ * @param {PrewarmManager} manager
+ * @returns {PrewarmManager}
+ */
+function discardOnCapabilityChange(manager) {
+    eventBus.on('webos:deviceInfoReady', () => manager.discardUnconsumed());
+    return manager;
+}
+
+export const prewarmManager = discardOnCapabilityChange(new PrewarmManager());
 export default prewarmManager;

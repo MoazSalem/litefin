@@ -236,3 +236,51 @@ test('LanguageManager - regression: token matching avoids false substrings acros
     assert.equal(manager.isFavoriteTrack({ DisplayTitle: 'Norwegian (Stereo)' }), true);
 });
 
+test('LanguageManager - filterSingularCultures excludes regional dialects and deduplicates languages', () => {
+    const { manager } = setup();
+
+    const mockCultures = [
+        // Singular Arabic
+        { Name: 'ar', DisplayName: 'Arabic', ThreeLetterISOLanguageName: 'ara', TwoLetterISOLanguageName: 'ar' },
+        // Dialect Arabic variations
+        { Name: 'ar-EG', DisplayName: 'Arabic (Egypt)', ThreeLetterISOLanguageName: 'ara', TwoLetterISOLanguageName: 'ar' },
+        { Name: 'ar-SA', DisplayName: 'Arabic (Saudi Arabia)', ThreeLetterISOLanguageName: 'ara', TwoLetterISOLanguageName: 'ar' },
+        // Singular English
+        { Name: 'en', DisplayName: 'English', ThreeLetterISOLanguageName: 'eng', TwoLetterISOLanguageName: 'en' },
+        // Dialect English variations
+        { Name: 'en-US', DisplayName: 'English (United States)', ThreeLetterISOLanguageName: 'eng', TwoLetterISOLanguageName: 'en' },
+        { Name: 'en-GB', DisplayName: 'English (United Kingdom)', ThreeLetterISOLanguageName: 'eng', TwoLetterISOLanguageName: 'en' },
+        // Singular French
+        { Name: 'fr', DisplayName: 'French', ThreeLetterISOLanguageName: 'fra', TwoLetterISOLanguageName: 'fr' },
+        // Dialect French variation
+        { Name: 'fr-CA', DisplayName: 'French (Canada)', ThreeLetterISOLanguageName: 'fra', TwoLetterISOLanguageName: 'fr' }
+    ];
+
+    const singular = manager.filterSingularCultures(mockCultures);
+
+    // Only singular Arabic, English, and French should be retained
+    assert.equal(singular.length, 3);
+    assert.equal(singular[0].Name, 'ar');
+    assert.equal(singular[1].Name, 'en');
+    assert.equal(singular[2].Name, 'fr');
+    assert.equal(singular[0].DisplayName, 'Arabic');
+    assert.equal(singular[1].DisplayName, 'English');
+    assert.equal(singular[2].DisplayName, 'French');
+
+    // Works with dropdown options { value, label } format
+    const dropdownOptions = [
+        { value: 'ara', label: 'Arabic' },
+        { value: 'ar-EG', label: 'Arabic (Egypt)' },
+        { value: 'eng', label: 'English' },
+        { value: 'en-US', label: 'English (United States)' }
+    ];
+    const singularOptions = manager.filterSingularCultures(dropdownOptions);
+    assert.equal(singularOptions.length, 2);
+    assert.equal(singularOptions[0].value, 'ara');
+    assert.equal(singularOptions[1].value, 'eng');
+
+    // Handles null / empty inputs gracefully
+    assert.equal(manager.filterSingularCultures(null).length, 0);
+    assert.equal(manager.filterSingularCultures([]).length, 0);
+});
+

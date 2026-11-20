@@ -1,0 +1,54 @@
+/**
+ * ============================================================================
+ * Litefin - High-Performance GPU Accelerated & Instant Horizontal Scroll
+ * Compositing Rules (shared across ALL build tiers)
+ * ============================================================================
+ * When GPU accelerated mode or instant snapping is selected, bypass native
+ * overflow-x scrolling and delegate row centering directly to CSS translate3d
+ * transforms on .row-items-track. This eliminates container.scrollLeft layout
+ * thrashing on Android TV and low-power smart TV hardware.
+ *
+ * These blocks were previously at the top of android-mobile.css. They are
+ * shared because ScrollController stamps html[data-horizontal-scroll] on
+ * every platform, including Tizen/webOS TVs - so they MUST remain in the
+ * TV stylesheet bundle while the rest of android-mobile.css and
+ * mobile-nav.css are excluded from TV tiers (mobile-only rules, inert on
+ * TV: LayoutManager strips html[data-litefin-portrait|scaled|touch] on TVs
+ * and MobileNav is never mounted on TVs).
+ * ============================================================================
+ */
+
+html[data-horizontal-scroll="gpu"] [data-platform="android"] .row-items,
+html[data-horizontal-scroll="gpu"] .row-items,
+html[data-horizontal-scroll="instant"] [data-platform="android"] .row-items,
+html[data-horizontal-scroll="instant"] .row-items {
+    /* Disable overflow scroller to prevent scrollLeft fighting CSS transform */
+    overflow-x: hidden !important;
+    touch-action: pan-y;
+}
+
+html[data-horizontal-scroll="gpu"] [data-platform="android"] .row-items-track,
+html[data-horizontal-scroll="gpu"] .row-items-track {
+    /* Promote sliding track element to its own dedicated hardware compositor plane */
+    will-change: transform;
+}
+
+/* ============================================================================
+ * Scroll Physics Engines (opt-in: pref:scrollPhysics)
+ * ============================================================================
+ * When a physics engine is enabled, ScrollController._springTrackHorizontal
+ * drives .row-items-track transforms per-frame through a RAF integrator.
+ * The CSS transition would then lag every JS write by 150ms and visibly
+ * fight the integrator — so disable it while physics is active.
+ * ============================================================================ */
+html[data-scroll-physics="spring"] [data-platform="android"] .row-items-track,
+html[data-scroll-physics="spring"] .row-items-track,
+html[data-scroll-physics="chase"] [data-platform="android"] .row-items-track,
+html[data-scroll-physics="chase"] .row-items-track,
+html[data-scroll-physics="rail"] [data-platform="android"] .row-items-track,
+html[data-scroll-physics="rail"] .row-items-track,
+html[data-scroll-physics="fling"] [data-platform="android"] .row-items-track,
+html[data-scroll-physics="fling"] .row-items-track {
+    -webkit-transition: none;
+    transition: none;
+}

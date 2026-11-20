@@ -1,0 +1,636 @@
+/*
+ * ============================================================================
+ * Performance Diagnostic Overlay Stylesheet (Ultra-Lightweight / TV-Tuned)
+ * ============================================================================
+ * High-efficiency diagnostic HUD and compact pill overlay.
+ * Specifically tuned for low-power Smart TV chipsets and constrained webviews.
+ * Completely avoids expensive CSS backdrop-filter blurs, box-shadows, and
+ * continuous @keyframes repaint loops to ensure zero compositing penalty.
+ * ============================================================================
+ */
+
+/* Root overlay container anchored in viewport */
+#performance-diagnostic-overlay {
+    position: fixed;
+    z-index: 100000;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #f5f5f7;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto;
+}
+
+/* Visibility toggling based on data-mode */
+#performance-diagnostic-overlay[data-mode="full"] .perf-hud-panel {
+    display: flex;
+}
+
+#performance-diagnostic-overlay[data-mode="full"] .perf-pill {
+    display: none !important;
+}
+
+#performance-diagnostic-overlay[data-mode="compact"] .perf-hud-panel {
+    display: none !important;
+}
+
+#performance-diagnostic-overlay[data-mode="compact"] .perf-pill {
+    display: flex;
+}
+
+/* Positioning anchors */
+#performance-diagnostic-overlay[data-position="top-right"] {
+    top: 20px;
+    right: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="top-left"] {
+    top: 20px;
+    left: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="bottom-right"] {
+    bottom: 20px;
+    right: 20px;
+}
+
+#performance-diagnostic-overlay[data-position="bottom-left"] {
+    bottom: 20px;
+    left: 20px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* FULL HUD PANEL MODE                                                        */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Flat, high-contrast opaque container.
+ * Uses solid dark fill instead of backdrop blur filters to guarantee instant
+ * layer compositing on Tizen, webOS, and low-end hardware.
+ */
+.perf-hud-panel {
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    background: #111116;
+    border: 1px solid #2e2e38;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+/* Transparent click-through modifier for live UI testing under HUD */
+#performance-diagnostic-overlay.perf-clickthrough {
+    pointer-events: none !important;
+}
+
+#performance-diagnostic-overlay.perf-clickthrough .perf-hud-panel {
+    pointer-events: none !important;
+    opacity: 0.65;
+}
+
+#performance-diagnostic-overlay.perf-clickthrough .perf-hud-header {
+    pointer-events: auto !important; /* Allow header interaction to disable clickthrough */
+}
+
+#performance-diagnostic-overlay.perf-clickthrough .perf-hud-controls,
+#performance-diagnostic-overlay.perf-clickthrough .perf-btn-icon {
+    pointer-events: auto !important;
+}
+
+/* Header toolbar */
+.perf-hud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #181820;
+    border-bottom: 1px solid #262630;
+    cursor: grab;
+    user-select: none;
+}
+
+.perf-hud-header:active {
+    cursor: grabbing;
+}
+
+/* Title and live status indicator */
+.perf-hud-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Static flat status indicator dot (zero @keyframes animation loops) */
+.perf-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #30d158;
+}
+
+.perf-hud-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+}
+
+.perf-badge-target-hz {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #152840;
+    color: #5ac8fa;
+    border: 1px solid #1e4270;
+    letter-spacing: 0.02em;
+}
+
+/* Header control buttons */
+.perf-hud-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.perf-btn-icon {
+    background: #20202a;
+    border: 1px solid #323240;
+    color: #e5e5ea;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    pointer-events: auto;
+    padding: 0;
+}
+
+.perf-btn-icon:hover {
+    background: #2a2a38;
+    color: #ffffff;
+}
+
+.perf-btn-icon:active {
+    background: #323244;
+}
+
+.perf-btn-icon.active {
+    background: #1a365d;
+    border-color: #2b6cb0;
+    color: #63b3ed;
+}
+
+.perf-btn-icon svg,
+.perf-btn-icon svg * {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+    pointer-events: none !important;
+}
+
+/* Navigation tabs inside HUD */
+.perf-hud-nav {
+    display: flex;
+    padding: 8px 12px 4px 12px;
+    gap: 6px;
+    background: #111116;
+}
+
+.perf-tab-btn {
+    flex: 1;
+    background: #181820;
+    border: 1px solid #262630;
+    border-radius: 6px;
+    color: #8e8e93;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    text-align: center;
+}
+
+.perf-tab-btn:hover {
+    color: #d1d1d6;
+    background: #20202a;
+}
+
+.perf-tab-btn.active {
+    color: #ffffff;
+    background: #242432;
+    border-color: #3b3b4e;
+    font-weight: 600;
+}
+
+/* Scrollable metrics viewport */
+.perf-hud-body {
+    padding: 10px 14px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* Discreet scrollbar */
+.perf-hud-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.perf-hud-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.perf-hud-body::-webkit-scrollbar-thumb {
+    background: #323240;
+    border-radius: 4px;
+}
+
+/* Hero primary readout section */
+.perf-hero-section {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+.perf-hero-fps-box {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.perf-hero-fps-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: #30d158;
+}
+
+.perf-hero-fps-unit {
+    font-size: 13px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.perf-hero-frametime {
+    text-align: right;
+}
+
+.perf-hero-frametime-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: #f5f5f7;
+}
+
+.perf-hero-frametime-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #8e8e93;
+    text-transform: uppercase;
+}
+
+/* Frame rate statistics 4-column metric card grid */
+.perf-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.perf-stat-card {
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
+    padding: 8px 6px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.perf-stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #8e8e93;
+}
+
+.perf-stat-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+/* Status colors */
+.perf-val-good {
+    color: #30d158 !important;
+}
+
+.perf-val-warn {
+    color: #ffd60a !important;
+}
+
+.perf-val-poor {
+    color: #ff453a !important;
+}
+
+.perf-val-info {
+    color: #5ac8fa !important;
+}
+
+/* Canvas performance graph container */
+.perf-graph-container {
+    background: #0d0d12;
+    border: 1px solid #22222a;
+    border-radius: 8px;
+    padding: 8px 10px 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.perf-graph-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 600;
+    color: #8e8e93;
+}
+
+.perf-graph-canvas {
+    width: 100%;
+    height: 72px;
+    display: block;
+}
+
+/* Web Vitals cards list */
+.perf-vitals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perf-vital-card {
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.perf-vital-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.perf-vital-name-group {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.perf-vital-acronym {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.perf-vital-title {
+    font-size: 11px;
+    color: #8e8e93;
+}
+
+.perf-vital-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.perf-badge-good {
+    background: #102d18;
+    color: #30d158;
+    border: 1px solid #1a522a;
+}
+
+.perf-badge-warn {
+    background: #332800;
+    color: #ffd60a;
+    border: 1px solid #665000;
+}
+
+.perf-badge-poor {
+    background: #330d0a;
+    color: #ff453a;
+    border: 1px solid #661a14;
+}
+
+.perf-badge-waiting {
+    background: #1f1f26;
+    color: #8e8e93;
+    border: 1px solid #30303a;
+}
+
+.perf-vital-metric-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.perf-vital-value {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
+
+.perf-vital-target {
+    font-size: 10px;
+    color: #636366;
+}
+
+.perf-vital-element-box {
+    background: #0d0d12;
+    border: 1px solid #22222a;
+    border-radius: 4px;
+    padding: 4px 7px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: #aeaeb2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* System & Runtime metrics tab layout */
+.perf-system-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perf-system-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: #16161e;
+    border: 1px solid #262632;
+    border-radius: 8px;
+}
+
+.perf-system-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #8e8e93;
+}
+
+.perf-system-val {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: #f5f5f7;
+}
+
+/* Memory progress bar */
+.perf-memory-bar-track {
+    width: 100%;
+    height: 6px;
+    background: #242430;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.perf-memory-bar-fill {
+    height: 100%;
+    background: #30d158;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+/* -------------------------------------------------------------------------- */
+/* COMPACT PILL MODE                                                          */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Flat, solid floating badge.
+ * Zero box-shadow and zero backdrop blur to eliminate compositing overhead.
+ */
+.perf-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    background: #14141a;
+    border: 1px solid #323240;
+    border-radius: 9999px;
+    cursor: grab;
+    pointer-events: auto;
+}
+
+.perf-pill:hover {
+    background: #1c1c24;
+}
+
+.perf-pill:active {
+    cursor: grabbing;
+}
+
+.perf-pill-item {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.perf-pill-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.perf-pill-unit {
+    font-size: 10px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+}
+
+.perf-pill-divider {
+    width: 1px;
+    height: 12px;
+    background: #323240;
+}
+
+.perf-pill-expand-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    color: #8e8e93;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.perf-pill-expand-btn:hover {
+    color: #ffffff;
+}
+
+.perf-pill-expand-btn svg,
+.perf-pill-expand-btn svg * {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+    pointer-events: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* RESPONSIVE ADAPTATIONS                                                     */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+    #performance-diagnostic-overlay[data-position="top-right"],
+    #performance-diagnostic-overlay[data-position="top-left"] {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    #performance-diagnostic-overlay[data-position="bottom-right"],
+    #performance-diagnostic-overlay[data-position="bottom-left"] {
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .perf-hud-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+}

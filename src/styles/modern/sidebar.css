@@ -7,8 +7,7 @@
 /* ----------------------------------------------------------------------------
    1. Modern Sidebar Container (Applies to both Modern & Modern Collapsed)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar="floating-buttons"] .sidebar,
-html[data-layout-sidebar="floating-island"] .sidebar {
+html[data-sidebar-floating="modern"] .sidebar {
     /* Rounded outer right profile for a modern floating look */
     border-right: none !important;
 }
@@ -32,9 +31,7 @@ html[data-layout-sidebar="floating-island"] .sidebar {
 /* ----------------------------------------------------------------------------
    2. Sidebar Items: Base Layout (Constant geometry for zero nudge)
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .sidebar-item,
-html[data-layout-sidebar="floating-buttons"] .sidebar-item,
-html[data-layout-sidebar="floating-island"] .sidebar-item {
+html[data-sidebar-family="modern"] .sidebar-item {
     width: 100%;
     margin: 0;
     padding: 0;
@@ -52,33 +49,23 @@ html[data-layout-sidebar="floating-island"] .sidebar-item {
 }
 
 /* Unselected items: clean muted tone */
-html[data-layout-sidebar^="modern"] .sidebar-item:not(.active):not(:focus):not(.focused),
-html[data-layout-sidebar="floating-buttons"] .sidebar-item:not(.active):not(:focus):not(.focused),
-html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) {
+html[data-sidebar-family="modern"] .sidebar-item:not(.active):not(:focus):not(.focused) {
     color: rgba(255, 255, 255, 0.45);
 }
 
 /* ----------------------------------------------------------------------------
    3. Collapsed Mode: Centered Squircle Icon Indicator
    ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .item-icon,
-html[data-layout-sidebar^="modern"] .logo-icon,
-html[data-layout-sidebar="floating-buttons"] .item-icon,
-html[data-layout-sidebar="floating-buttons"] .logo-icon,
-html[data-layout-sidebar="floating-island"] .item-icon,
-html[data-layout-sidebar="floating-island"] .logo-icon {
+html[data-sidebar-family="modern"] .item-icon,
+html[data-sidebar-family="modern"] .logo-icon {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-html[data-layout-sidebar^="modern"] .item-icon::before,
-html[data-layout-sidebar^="modern"] .logo-icon::before,
-html[data-layout-sidebar="floating-buttons"] .item-icon::before,
-html[data-layout-sidebar="floating-buttons"] .logo-icon::before,
-html[data-layout-sidebar="floating-island"] .item-icon::before,
-html[data-layout-sidebar="floating-island"] .logo-icon::before {
+html[data-sidebar-family="modern"] .item-icon::before,
+html[data-sidebar-family="modern"] .logo-icon::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -112,26 +99,18 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover)
 }
 
 /* Active icon: solid crisp white */
-html[data-layout-sidebar^="modern"] .sidebar-item.active .item-icon,
-html[data-layout-sidebar="floating-buttons"] .sidebar-item.active .item-icon,
-html[data-layout-sidebar="floating-island"] .sidebar-item.active .item-icon {
+html[data-sidebar-family="modern"] .sidebar-item.active .item-icon {
     color: #ffffff;
 }
 
 /* Custom selected color override support (Only when NOT focused) */
-html[data-layout-sidebar^="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-html[data-layout-sidebar="floating-buttons"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-html[data-layout-sidebar="floating-island"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon {
+html[data-sidebar-family="modern"][data-sidebar-selected-color="accent"] .sidebar-item.active:not(:focus):not(.focused) .item-icon {
     color: var(--jf-accent);
 }
 
 /* Focus on collapsed state: scale icon with spring physics */
-html[data-layout-sidebar^="modern"] .sidebar-item:focus,
-html[data-layout-sidebar^="modern"] .sidebar-item.focused,
-html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus,
-html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused,
-html[data-layout-sidebar="floating-island"] .sidebar-item:focus,
-html[data-layout-sidebar="floating-island"] .sidebar-item.focused {
+html[data-sidebar-family="modern"] .sidebar-item:focus,
+html[data-sidebar-family="modern"] .sidebar-item.focused {
     color: var(--jf-primary-btn-color, #ffffff) !important;
     z-index: 20;
 }
@@ -149,9 +128,7 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar:not(.expanded):not(:hover)
 }
 
 /* Disable classic sliding focus bar in modern layout mode */
-html[data-layout-sidebar^="modern"] .sidebar-focus-indicator,
-html[data-layout-sidebar="floating-buttons"] .sidebar-focus-indicator,
-html[data-layout-sidebar="floating-island"] .sidebar-focus-indicator {
+html[data-sidebar-family="modern"] .sidebar-focus-indicator {
     display: none !important;
 }
 
@@ -214,13 +191,13 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
 }
 
 /* RTL Support for collapsed indicator morphing */
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item::after {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item::after {
     left: 22px !important;
     right: 272px !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar.expanded .sidebar-item::after,
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:hover .sidebar-item::after {
     left: 12px !important;
     right: 12px !important;
 }
@@ -276,12 +253,8 @@ html[data-layout-sidebar="modern"] .sidebar:hover .sidebar-item.focused::after {
    5. Modern Libraries Single Accordion Item & Sub-list
    ---------------------------------------------------------------------------- */
 /* Hide classic section header across all modern and floating layouts */
-html[data-layout-sidebar^="modern"] #section-header,
-html[data-layout-sidebar="floating-buttons"] #section-header,
-html[data-layout-sidebar="floating-island"] #section-header,
-html[data-layout-sidebar^="modern"] .sidebar-section-header,
-html[data-layout-sidebar="floating-buttons"] .sidebar-section-header,
-html[data-layout-sidebar="floating-island"] .sidebar-section-header {
+html[data-sidebar-family="modern"] #section-header,
+html[data-sidebar-family="modern"] .sidebar-section-header {
     display: none !important;
 }
 
@@ -419,7 +392,36 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
 /* ----------------------------------------------------------------------------
    7. RTL Support for Modern Sidebar
    ---------------------------------------------------------------------------- */
-[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar {
+/*
+ * rtl.css flips every sidebar row with row-reverse so the collapsed classic
+ * rail keeps icons visible. Modern/floating rails instead mirror the whole
+ * layout: icons stay on the right edge (reading start) and are compensated with
+ * a -250px transform while the rail is collapsed. Restore normal row order so
+ * expanded rows read icon-on-right / text-on-left like a true RTL mirror.
+ */
+html[dir="rtl"][data-sidebar-family="modern"] .sidebar-item,
+html[dir="rtl"][data-sidebar-family="modern"] .sidebar-header {
+    flex-direction: row !important;
+}
+
+/*
+ * The expandable "modern" layout reuses the classic collapsed rail geometry
+ * (element translated +250px in RTL), so mirror the LTR icon compensation:
+ * pull the icons back into the visible right-hand rail while collapsed.
+ */
+html[dir="rtl"][data-layout-sidebar="modern"] body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern"] body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar:not(.expanded):not(:hover) .sidebar-item.focused .item-icon {
+    -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+    transform: translate3d(-250px, 0, 0) scale(1.08) !important;
+}
+
+html[dir="rtl"][data-layout-sidebar^="modern"] .sidebar {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     border-top-left-radius: 20px;
@@ -433,7 +435,7 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
  * Mirrors LTR transparency logic to prevent hardcoded dark gradient bleed
  * on right-to-left layout configurations across all active themes.
  */
-[dir="rtl"] html[data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+html[dir="rtl"][data-layout-sidebar^="modern"] .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL rails */
     background: transparent !important;
     background-color: transparent !important;
@@ -442,7 +444,7 @@ html[data-layout-sidebar^="modern"] .sidebar-footer {
     border-left-color: transparent !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern"] .sidebar-chevron {
+html[dir="rtl"][data-layout-sidebar="modern"] .sidebar-chevron {
     margin-left: 18px;
     margin-right: auto;
 }
@@ -586,25 +588,19 @@ html[data-layout-sidebar="floating-island"] .sidebar:hover .back-text {
 /* ----------------------------------------------------------------------------
  * Back Button Modern Layout Tweaks & Squircle Suppression
  * ---------------------------------------------------------------------------- */
-html[data-layout-sidebar^="modern"] .sidebar-back-btn .item-icon::before,
-html[data-layout-sidebar="floating-buttons"] .sidebar-back-btn .item-icon::before,
-html[data-layout-sidebar="floating-island"] .sidebar-back-btn .item-icon::before {
+/* Back control is rendered below the brand logo, so the logo stays top-anchored */
+html[data-sidebar-family="modern"] .sidebar-back-btn .item-icon::before {
     display: none !important;
 }
 
-/* Fluid spring push for the Litefin brand logo in modern layouts */
-html[data-layout-sidebar^="modern"] .sidebar.has-back-button #sidebar-logo-header,
-html[data-layout-sidebar="floating-buttons"] .sidebar.has-back-button #sidebar-logo-header,
-html[data-layout-sidebar="floating-island"] .sidebar.has-back-button #sidebar-logo-header {
-    margin-top: 4px;
-    margin-bottom: 12px;
-}
-
-/* Hide logo action tooltip in normal expanded modern and classic sidebars */
-.logo-tooltip,
-#sidebar-logo-header .logo-tooltip,
+/*
+ * Hide logo action tooltip in normal expanded modern and classic sidebars
+ * where the logo branding text is already rendered in the main drawer body.
+ */
 html[data-layout-sidebar="modern"] #sidebar-logo-header .logo-tooltip,
-html:not([data-layout-sidebar^="modern"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) #sidebar-logo-header .logo-tooltip {
+html[data-layout-sidebar="modern"] .logo-tooltip,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) #sidebar-logo-header .logo-tooltip,
+html:not([data-layout-sidebar="modern-collapsed"]):not([data-layout-sidebar="floating-buttons"]):not([data-layout-sidebar="floating-island"]) .logo-tooltip {
     display: none !important;
 }
 
@@ -682,10 +678,33 @@ html[data-layout-sidebar="floating-island"] #sidebar-logo-header:not(:focus):not
     visibility: hidden !important;
 }
 
-/* Reveal tooltip with fluid spring scaling on focus / hover */
+/*
+ * Reveal tooltip with fluid spring scaling on focus / hover.
+ * Anchoring to both #main-sidebar and generic selectors guarantees
+ * robust specificity over legacy base sheets and ensures reliable display
+ * when navigating via remote control, D-pad, keyboard, or mouse hover.
+ */
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:focus .item-text,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item.focused .item-text,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:hover .item-text,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header:hover .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="modern-collapsed"] #main-sidebar .sidebar-item:hover .sidebar-syncplay-label,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .item-text,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header:hover .logo-tooltip,
 html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
 html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
 html[data-layout-sidebar="modern-collapsed"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
@@ -695,9 +714,27 @@ html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-user-n
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:focus .sidebar-syncplay-label,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item.focused .sidebar-syncplay-label,
 html[data-layout-sidebar="modern-collapsed"] .sidebar-item:hover .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:focus .item-text,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item.focused .item-text,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header:hover .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-buttons"] #main-sidebar .sidebar-item:hover .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .item-text,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .item-text,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header:hover .logo-tooltip,
 html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
 html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
 html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
@@ -707,9 +744,27 @@ html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-user-n
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:focus .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item.focused .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-buttons"] .sidebar-item:hover .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:focus .item-text,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item.focused .item-text,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header:hover .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:focus .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item.focused .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:hover .sidebar-user-name,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:focus .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item.focused .sidebar-syncplay-label,
+html[data-layout-sidebar="floating-island"] #main-sidebar .sidebar-item:hover .sidebar-syncplay-label,
 html[data-layout-sidebar="floating-island"] .sidebar-item:focus .item-text,
 html[data-layout-sidebar="floating-island"] .sidebar-item.focused .item-text,
 html[data-layout-sidebar="floating-island"] .sidebar-item:hover .item-text,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header:focus .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header.focused .logo-tooltip,
+html[data-layout-sidebar="floating-island"] #sidebar-logo-header:hover .logo-tooltip,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:focus .logo-tooltip,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.focused .logo-tooltip,
 html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:hover .logo-tooltip,
@@ -894,16 +949,10 @@ html[data-layout-sidebar="floating-buttons"] #sidebar-logo-header.sidebar-item.a
 
 /* Lock default and themed sidebar container backgrounds across all hover and expanded states */
 html[data-layout-sidebar="modern-collapsed"] .sidebar,
-html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
-html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
-html[data-layout-sidebar="modern"] .sidebar.expanded,
-html[data-layout-sidebar="modern"] .sidebar:hover,
 html[data-layout-sidebar="floating-buttons"] .sidebar,
-html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
-html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
 html[data-layout-sidebar="floating-island"] .sidebar,
-html[data-layout-sidebar="floating-island"] .sidebar:hover,
-html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+html[data-sidebar-family="modern"] .sidebar:hover,
+html[data-sidebar-family="modern"] .sidebar.expanded {
     background-color: #101010 !important;
     background-color: var(--sidebar-bg, #101010) !important;
     background-image: none !important;
@@ -953,9 +1002,9 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
     box-shadow: none !important;
     border-right-color: transparent !important;
 }
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded {
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -963,11 +1012,11 @@ html[data-layout-sidebar="modern-collapsed"] body:not(.sidebar-mode-hidden) .sid
 }
 
 /* RTL Ambient Glow mode overrides */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
-[dir="rtl"] html[data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed.expanded,
+html[dir="rtl"][data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar:not(.expanded):not(:hover):not(.black-collapsed):not(.semi-transparent-collapsed):not(.tinted-semi-collapsed),
+html[dir="rtl"][data-layout-sidebar="modern"][data-theme-mode="ambient"] body:not(.sidebar-mode-hidden) .sidebar.transparent-collapsed:not(.expanded):not(:hover) {
     /* Pure transparency for RTL layouts */
     background: transparent !important;
     background-color: transparent !important;
@@ -1065,72 +1114,74 @@ html[data-layout-sidebar="floating-buttons"] .sidebar-chevron {
 }
 
 /* RTL Support for Tooltips */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar.expanded,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar.expanded {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar.expanded,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar.expanded,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar.expanded {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .item-icon {
+    /* Icons live on the element's right edge; shift them into the visible left
+       100px once the right-anchored rail is translated +250px off-screen. */
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.08) !important;
     transform: translate3d(-250px, 0, 0) scale(1.08) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .item-text,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] .sidebar-item .sidebar-syncplay-label,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] .sidebar-item .sidebar-syncplay-label,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .item-text,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .sidebar-user-name,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item .sidebar-syncplay-label {
     left: auto !important;
     right: 342px !important;
 }
@@ -1314,16 +1365,17 @@ html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item
 }
 
 /* RTL Support for popover */
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-sub-libraries {
     left: auto !important;
-    right: calc(var(--sidebar-width-collapsed) + 12px) !important;
+    /* Mirror the LTR left: 342px anchor so the popover opens to the left of the rail */
+    right: 342px !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] #sidebar-sub-libraries .library-item .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] #sidebar-sub-libraries .library-item .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-sub-libraries .library-item .item-icon {
     margin: 0 0 0 12px !important;
 }
 
@@ -1454,8 +1506,10 @@ html[data-layout-sidebar="floating-island"] .sidebar.expanded {
     flex-direction: column !important;
     justify-content: flex-start !important;
     align-items: flex-start !important;
-    /* Full viewport height bounds with generous safe-area padding */
-    height: 100vh !important;
+    /* Fill the full-height #sidebar-container. Using 100% (instead of 100vh)
+       keeps the rail flush with the screen when the root CSS zoom scales the
+       canvas, since viewport units are not compensated for zoom. */
+    height: 100% !important;
     padding: 20px 0 16px 0 !important;
     box-sizing: border-box !important;
     /* Completely transparent rail backdrop */
@@ -1574,8 +1628,9 @@ html[data-layout-sidebar="floating-island"] .sidebar-content {
     /* Allow flexbox to size content to children while respecting max available space */
     flex: 0 1 auto !important;
     height: auto !important;
-    /* Reserve headroom for header logo and footer user profile */
-    max-height: calc(100vh - 200px) !important;
+    /* Reserve headroom for header logo and footer user profile. Percentage is
+       resolved against the zoom-aware rail height (100%), unlike 100vh. */
+    max-height: calc(100% - 200px) !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
@@ -1599,7 +1654,7 @@ html[data-layout-sidebar="floating-island"] .sidebar-content {
 
 /* When logo is hidden in settings, expand available vertical headroom */
 html[data-layout-sidebar="floating-island"] .sidebar.sidebar-logo-hidden .sidebar-content {
-    max-height: calc(100vh - 128px) !important;
+    max-height: calc(100% - 128px) !important;
 }
 
 /* Individual navigation buttons within the island */
@@ -1616,6 +1671,15 @@ html[data-layout-sidebar="floating-island"] .sidebar-content .library-item {
 html[data-layout-sidebar="floating-island"] .sidebar-content::before {
     display: none !important;
     content: none !important;
+}
+
+/*
+ * The capsule is exclusive to the floating-island layout. Hide it everywhere
+ * else so it can never occupy flex space (defensive against inline geometry
+ * left over from a previous floating-island session).
+ */
+html:not([data-layout-sidebar="floating-island"]) .floating-island-pill {
+    display: none !important;
 }
 
 /*
@@ -1642,9 +1706,10 @@ html[data-layout-sidebar="floating-island"] .floating-island-pill {
     transition: top 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .floating-island-pill {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .floating-island-pill {
     left: auto !important;
-    right: 262px !important;
+    /* Mirror LTR left: 268px within the 350px rail */
+    right: 268px !important;
 }
 
 /* All middle buttons in floating island have NO background pseudo-elements */
@@ -1728,34 +1793,45 @@ html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.fo
 }
 
 /* RTL Support for Floating Island */
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
+/*
+ * The floating-island rail uses align-items: flex-start. In RTL, flex-start
+ * maps to the right edge, which shrink-wraps the header to the off-screen part
+ * of the translated rail. Stretch it so the logo keeps a visible hit area in
+ * the on-screen 100px icon column (the logo icon itself is translated back in).
+ */
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-header {
+    align-self: stretch !important;
+    width: 100% !important;
+}
+
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-item:not(.active):not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:not(.active):not(:focus):not(.focused):not(:hover) .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1) !important;
     transform: translate3d(-250px, 0, 0) scale(1) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.active:not(:focus):not(.focused) .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.active:not(:focus):not(.focused) .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.05) !important;
     transform: translate3d(-250px, 0, 0) scale(1.05) !important;
 }
 
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-content > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar-footer > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-content > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item:focus .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover .sidebar-footer > .sidebar-item.focused .item-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar #sidebar-logo-header.sidebar-item.focused .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item:focus .logo-icon,
+html[dir="rtl"][data-layout-sidebar="floating-island"] .sidebar:hover #sidebar-logo-header.sidebar-item.focused .logo-icon {
     -webkit-transform: translate3d(-250px, 0, 0) scale(1.22) !important;
     transform: translate3d(-250px, 0, 0) scale(1.22) !important;
 }
@@ -1803,10 +1879,7 @@ html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:fo
 /* RTL: Off-screen translation when hidden - omit :focus-within for Chromium <63 compatibility */
 html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
     -webkit-transform: translate3d(100%, 0, 0) !important;
     transform: translate3d(100%, 0, 0) !important;
 }
@@ -1823,19 +1896,7 @@ html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;
 }
@@ -1846,13 +1907,7 @@ html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collap
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .logo-icon,
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .item-icon,
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-collapsed .sidebar .item-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .logo-icon,
-[dir="rtl"] html[data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon {
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-collapsed .sidebar .item-icon {
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
 }

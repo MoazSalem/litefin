@@ -30,6 +30,7 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 import { serverPluginClient } from './ServerPluginClient.js';
 import PluginAPI from './PluginAPI.js';
 import PluginWidgetHost from './PluginWidgetHost.js';
@@ -79,6 +80,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'mdblist-ratings',
         load: () => import('./installed/mdblist-ratings/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // Home Screen Sections — extra Home rows configured on the server
+    // Server dependency: home-screen-sections
+    // -------------------------------------------------------------------------
+    {
+        id: 'home-screen-sections',
+        load: () => import('./installed/home-screen-sections/index.js')
     }
 ];
 
@@ -104,6 +114,13 @@ class PluginManager {
 
         // Whether the manager has been initialized
         this._initialized = false;
+
+        // Resolves once init() has finished loading every bundled plugin.
+        // Consumers that render before plugins are ready (e.g. the home hero
+        // carousel during cold boot) await this to enrich their content later.
+        this._readyPromise = new Promise((resolve) => {
+            this._resolveReady = resolve;
+        });
     }
 
     // ========================================================================
@@ -136,6 +153,23 @@ class PluginManager {
 
         this._initialized = true;
         log.info(`Plugin system ready. ${this._plugins.size} plugin(s) active.`);
+        this._resolveReady();
+    }
+
+    /**
+     * Whether init() has finished loading all bundled plugins.
+     * @returns {boolean}
+     */
+    get isReady() {
+        return this._initialized;
+    }
+
+    /**
+     * Resolves once init() has finished loading all bundled plugins.
+     * @returns {Promise<void>}
+     */
+    whenReady() {
+        return this._readyPromise;
     }
 
     // ========================================================================
@@ -579,6 +613,9 @@ class PluginManager {
 
         serverPluginClient.reset();
         this._initialized = false;
+        this._readyPromise = new Promise((resolve) => {
+            this._resolveReady = resolve;
+        });
         log.info('PluginManager destroyed');
     }
 
@@ -626,7 +663,6 @@ class PluginManager {
         // ------------------------------------------------------------------
         let enabled = true;
         try {
-            const { storage } = await import('../utils/StorageService.js');
             const stored = storage.getItem(`plugin:enabled:${plugin.id}`);
 
             if (stored !== null) {
@@ -657,7 +693,6 @@ class PluginManager {
             // ------------------------------------------------------------------
             let previouslyConfirmed = false;
             try {
-                const { storage } = await import('../utils/StorageService.js');
                 previouslyConfirmed = storage.getItem(`serverPlugin:available:${plugin.serverDependency}`) === 'true';
             } catch (err) {
                 log.warn('Could not read server plugin confirmation:', err);

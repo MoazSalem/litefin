@@ -25,7 +25,13 @@
     position: absolute;
     /* High enough to float clearly above the controls row without clashing.
        Controls row sits at ~12% from bottom; we go to 28% to leave breathing room. */
-    bottom: 28%;
+    /*
+     * Float above the playback controls row with comfortable visual clearance.
+     * When multiple intro skipper segments are active simultaneously (e.g. recap + intro),
+     * --widget-stack-index dynamically shifts each subsequent segment downward so they
+     * stack neatly one below another without overlap.
+     */
+    bottom: calc(28% - (var(--widget-stack-index, 0) * 4.4em));
     left: 6%;             /* Left-aligned, matching the back button side */
     z-index: 10;          /* Above video plane, below modal menus */
 
@@ -40,7 +46,8 @@
     /* Smooth entry/exit — approximates a spring feel within CSS constraints */
     transition:
         opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+        bottom 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Visible state — triggered by PluginWidgetHost when shouldShow() returns true */

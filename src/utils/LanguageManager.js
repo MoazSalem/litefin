@@ -171,7 +171,9 @@ class LanguageManager {
             if (!c) return;
             const three = (c.ThreeLetterISOLanguageName || c.value || '').toLowerCase();
             const two = (c.TwoLetterISOLanguageName || '').toLowerCase();
-            const name = (c.DisplayName || c.label || '').replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '').trim();
+            const name = (c.DisplayName || c.label || '')
+                .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+                .trim();
 
             if (!three && !two && !name) return;
 
@@ -183,7 +185,8 @@ class LanguageManager {
             }
 
             // Check if existing definition already present
-            const existing = (three ? this._codeToLangMap.get(three) : null) || (two ? this._codeToLangMap.get(two) : null);
+            const existing =
+                (three ? this._codeToLangMap.get(three) : null) || (two ? this._codeToLangMap.get(two) : null);
             if (existing) {
                 if (two && !existing.twoLetter) existing.twoLetter = two;
                 if (name && !existing.name) existing.name = name;
@@ -218,6 +221,79 @@ class LanguageManager {
      */
     getAllStandardLanguages() {
         return [...COMMON_LANGUAGES];
+    }
+
+    /**
+     * Filter a collection of culture definitions or language dropdown options to retain
+     * only singular, canonical languages and strip out regional dialects.
+     *
+     * Media audio and subtitle streams adhere to ISO-639-2/ISO-639-1 standards without
+     * regional country sub-tags (e.g., 'ara' or 'eng', not 'ar-EG' or 'en-US').
+     * This utility excludes entries containing country qualifiers in parentheses or
+     * sub-tag delimiters ('-', '_'), and deduplicates entries by canonical language code.
+     *
+     * @param {Array<Object>} cultures - Array of culture objects or dropdown option entries
+     * @returns {Array<Object>} Filtered array containing singular language definitions
+     */
+    filterSingularCultures(cultures) {
+        // Return empty collection if input is invalid or not an array
+        if (!cultures || !Array.isArray(cultures)) {
+            return [];
+        }
+
+        // Track seen language identifiers to prevent dialect and code duplicates
+        const seenKeys = new Set();
+        const singularList = [];
+
+        // Evaluate each culture entry against canonical language rules
+        cultures.forEach((item) => {
+            if (!item) return;
+
+            // Extract raw codes and display labels for dialect detection
+            const rawCode = item.Name || item.value || item.code || '';
+            const rawName = item.DisplayName || item.label || item.name || '';
+
+            // Reject explicit dialect indicators: hyphenated regional codes or country parentheses
+            if (rawCode.includes('-') || rawCode.includes('_') || rawName.includes('(')) {
+                return;
+            }
+
+            // Normalize using language manager mapping
+            const norm = this.normalizeLanguage(item);
+            if (!norm || !norm.code) return;
+
+            // Guard against normalized values containing dialect tags or parentheses
+            if (norm.code.includes('-') || norm.code.includes('_') || (norm.name && norm.name.includes('('))) {
+                return;
+            }
+
+            // Generate lowercase keys for exact deduplication
+            const canonicalCode = (norm.code || '').toLowerCase();
+            const twoLetterCode = (norm.twoLetter || '').toLowerCase();
+            const englishName = (norm.name || '').toLowerCase();
+
+            // Deduplicate across code variants and English names
+            if (
+                seenKeys.has(canonicalCode) ||
+                (twoLetterCode && seenKeys.has(twoLetterCode)) ||
+                (englishName && seenKeys.has(englishName))
+            ) {
+                return;
+            }
+
+            // Register all related keys to prevent alias collisions
+            seenKeys.add(canonicalCode);
+            if (twoLetterCode) seenKeys.add(twoLetterCode);
+            if (englishName) seenKeys.add(englishName);
+            if (norm.altCodes && Array.isArray(norm.altCodes)) {
+                norm.altCodes.forEach((alt) => seenKeys.add(alt.toLowerCase()));
+            }
+
+            // Retain original item object in the filtered singular output
+            singularList.push(item);
+        });
+
+        return singularList;
     }
 
     /**
@@ -274,7 +350,8 @@ class LanguageManager {
             if (nativeName) tokens.add(nativeName);
 
             // Lookup canonical definition to grab any alternative codes
-            const canonical = this._codeToLangMap.get(code) || this._codeToLangMap.get(twoLetter) || this._nameToLangMap.get(name);
+            const canonical =
+                this._codeToLangMap.get(code) || this._codeToLangMap.get(twoLetter) || this._nameToLangMap.get(name);
             if (canonical) {
                 if (canonical.code) tokens.add(canonical.code.toLowerCase());
                 if (canonical.twoLetter) tokens.add(canonical.twoLetter.toLowerCase());
@@ -316,7 +393,9 @@ class LanguageManager {
 
         const current = this.getFavorites();
         // Check if already present by code or twoLetter
-        const exists = current.some((f) => f.code === normalized.code || (f.twoLetter && f.twoLetter === normalized.twoLetter));
+        const exists = current.some(
+            (f) => f.code === normalized.code || (f.twoLetter && f.twoLetter === normalized.twoLetter)
+        );
 
         if (!exists) {
             current.push(normalized);
@@ -410,7 +489,8 @@ class LanguageManager {
             const baseCode = clean.split(/[-_]/)[0];
 
             // Look up directly in cache
-            const directMatch = this._codeToLangMap.get(clean) || this._codeToLangMap.get(baseCode) || this._nameToLangMap.get(clean);
+            const directMatch =
+                this._codeToLangMap.get(clean) || this._codeToLangMap.get(baseCode) || this._nameToLangMap.get(clean);
 
             if (directMatch) {
                 return {
@@ -465,7 +545,10 @@ class LanguageManager {
         if (tokens.size === 0) return false;
 
         // 0. If item is a media stream track object with Language or DisplayTitle fields
-        if (typeof item === 'object' && (item.Language !== undefined || item.DisplayTitle !== undefined || item.Title !== undefined)) {
+        if (
+            typeof item === 'object' &&
+            (item.Language !== undefined || item.DisplayTitle !== undefined || item.Title !== undefined)
+        ) {
             return this.isFavoriteTrack(item);
         }
 
@@ -575,6 +658,7 @@ class LanguageManager {
             // Check non-ASCII / non-Latin native script tokens (e.g. 'العربية', '日本語', '한국어')
             for (const token of tokens) {
                 // If token contains non-ASCII characters, safe to check inclusion
+                // eslint-disable-next-line no-control-regex
                 if (/[^\x00-\x7F]/.test(token) && cleanTitle.includes(token)) {
                     return true;
                 }
@@ -622,7 +706,7 @@ class LanguageManager {
 
         return options.filter((opt) => {
             // Determine raw value/identifier
-            const val = getValueFn ? getValueFn(opt) : (opt && opt.value !== undefined ? opt.value : opt);
+            const val = getValueFn ? getValueFn(opt) : opt && opt.value !== undefined ? opt.value : opt;
             const valStr = String(val).toLowerCase();
 
             // Always keep special fallback options

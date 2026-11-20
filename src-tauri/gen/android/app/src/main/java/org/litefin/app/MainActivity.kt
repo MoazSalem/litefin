@@ -1,22 +1,42 @@
 package org.litefin.app
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.graphics.Bitmap
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.media3.ui.AspectRatioFrameLayout
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * =============================================================================
@@ -52,7 +72,7 @@ class MainActivity : TauriActivity() {
   // View Hierarchy References
   // ---------------------------------------------------------------------------
   // Reference to the native TextureView used for video playback
-  private var textureView: TextureView? = null
+  private var surfaceView: SurfaceView? = null
 
   // Reference to the AspectRatioFrameLayout enforcing movie proportions
   private var aspectRatioLayout: AspectRatioFrameLayout? = null
@@ -68,6 +88,39 @@ class MainActivity : TauriActivity() {
 
   // Tracks cold-launch deep link payload until claimed by web application
   private var initialDeepLink: String? = null
+
+  // ---------------------------------------------------------------------------
+  // Reverse Proxy & Custom Headers State
+  // ---------------------------------------------------------------------------
+  // Stores configured reverse proxy base URL and custom headers (e.g. Cloudflare
+  // Service Tokens) for native WebView request interception.
+  // ---------------------------------------------------------------------------
+  @Volatile
+  private var protectedServerUrl: String? = null
+  private val customProxyHeaders = ConcurrentHashMap<String, String>()
+
+  // ---------------------------------------------------------------------------
+  // Display Mode & Refresh Rate State
+  // ---------------------------------------------------------------------------
+  // Stores original system display mode prior to auto-matching
+  private var originalDisplayModeId: Int = 0
+
+  // Denotes whether a custom display mode was activated during playback
+  private var isDisplayModeSwitched: Boolean = false
+
+  /**
+   * Encapsulates physical display resolution and refresh rate attributes
+   * from Android's DisplayManager subsystem.
+   */
+  data class DisplayModeInfo(
+    val modeId: Int,
+    val physicalWidth: Int,
+    val physicalHeight: Int,
+    val refreshRate: Float
+  ) {
+    // Refresh rate in thousandths (e.g. 23976 for 23.976 fps, 60000 for 60 fps)
+    val refreshRateRounded: Int = (refreshRate * 1000).roundToInt()
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     instance = this
@@ -120,6 +173,79 @@ class MainActivity : TauriActivity() {
     // -------------------------------------------------------------------------
     val defaultFullscreen = isTvDevice()
     setFullscreen(defaultFullscreen)
+
+    // -------------------------------------------------------------------------
+    // Request Local Network & Nearby Devices Permissions
+    // -------------------------------------------------------------------------
+    // Android 13+ (API 33+) and Android 17+ (API 37+ / Samsung One UI 9) require
+    // runtime permissions under the 'Nearby devices' permission group
+    // (NEARBY_WIFI_DEVICES and ACCESS_LOCAL_NETWORK) to communicate with local
+    // network subnets (LAN IPs) and execute UDP server auto-discovery.
+    // -------------------------------------------------------------------------
+    requestLocalNetworkPermissions()
+  }
+
+  /**
+   * ===========================================================================
+   * Local Network & Nearby Devices Permission Dispatcher
+   * ===========================================================================
+   * Inspects and requests required runtime permissions for local network (LAN)
+   * communication and Jellyfin server auto-discovery.
+   *
+   * On modern Android builds (Android 13+ / API 33+ and Android 17+ / API 37+ /
+   * Samsung One UI 9), outbound sockets to local IP subnets and UDP broadcast
+   * discovery packets are blocked unless the application holds runtime
+   * permissions in the 'Nearby devices' permission group.
+   * ===========================================================================
+   */
+  internal fun requestLocalNetworkPermissions() {
+    // Collect permissions required by the current runtime platform level
+    val permissionsToRequest = ArrayList<String>()
+
+    // -------------------------------------------------------------------------
+    // Android 13+ (API 33+ / TIRAMISU) Nearby Wi-Fi Devices Permission
+    // -------------------------------------------------------------------------
+    // Enforced by Samsung One UI and Android 13+ to grant access to local Wi-Fi
+    // peer communication and local IP routing without requiring device GPS.
+    // -------------------------------------------------------------------------
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val nearbyWifiPermission = "android.permission.NEARBY_WIFI_DEVICES"
+      if (checkSelfPermission(nearbyWifiPermission) != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(nearbyWifiPermission)
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Android 17+ (API 37+ / One UI 9) Local Network Access Permission
+    // -------------------------------------------------------------------------
+    // Mandatory for applications targeting targetSdk 37. Prevents silent dropping
+    // of TCP/UDP packets when attempting to connect to private network ranges.
+    // -------------------------------------------------------------------------
+    if (Build.VERSION.SDK_INT >= 37) {
+      val localNetworkPermission = "android.permission.ACCESS_LOCAL_NETWORK"
+      if (checkSelfPermission(localNetworkPermission) != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(localNetworkPermission)
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Dispatch Runtime Permission Prompt
+    // -------------------------------------------------------------------------
+    // If any permissions are currently missing, request them via the registered
+    // ActivityResultContracts launcher in WryActivity.
+    // -------------------------------------------------------------------------
+    if (permissionsToRequest.isNotEmpty()) {
+      try {
+        requestPermissions(permissionsToRequest.toTypedArray()) { allGranted ->
+          Log.i(
+            "LitefinNetwork",
+            "Local network / nearby devices permission request finished: allGranted=$allGranted"
+          )
+        }
+      } catch (e: Exception) {
+        Log.e("LitefinNetwork", "Failed to launch local network permission request: ${e.message}", e)
+      }
+    }
   }
 
   /**
@@ -138,7 +264,8 @@ class MainActivity : TauriActivity() {
   }
 
   override fun onDestroy() {
-    // Release screen wake lock to avoid holding display flags when activity terminates
+    // Revert custom display refresh rate and release screen wake lock
+    resetDisplayMode()
     setKeepScreenOn(false)
     if (instance == this) {
       instance = null
@@ -194,7 +321,42 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(AndroidBridge(), "LitefinAndroid")
 
     // -------------------------------------------------------------------------
-    // 4. Lock Native Remote Focus to the WebView & Suppress Default Highlight
+    // 4. Configure Cookie Jar & Allow Third-Party Cookie Persistence
+    // -------------------------------------------------------------------------
+    // Enables standard cookie management for authenticated reverse proxies and
+    // ensures cross-origin API and asset requests retain authorization state.
+    // -------------------------------------------------------------------------
+    try {
+      val cookieManager = CookieManager.getInstance()
+      cookieManager.setAcceptCookie(true)
+      cookieManager.setAcceptThirdPartyCookies(webView, true)
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed configuring CookieManager: ${e.message}")
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Wrap WebViewClient to Intercept Protected Server Requests
+    // -------------------------------------------------------------------------
+    // Intercepts image requests destined for the Jellyfin server when reverse
+    // proxy headers (Cloudflare Service Tokens, Authentik, etc.) are active.
+    // Directs requests through native OkHttp with credentials injected,
+    // completely eliminating CORS OPTIONS preflights and JS Blob allocations.
+    // -------------------------------------------------------------------------
+    try {
+      val defaultClient = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        webView.webViewClient
+      } else {
+        RustWebViewClient(webView as RustWebView, this)
+      }
+      if (defaultClient != null && defaultClient !is AuthenticatedWebViewClient) {
+        webView.webViewClient = AuthenticatedWebViewClient(defaultClient)
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed attaching AuthenticatedWebViewClient: ${e.message}")
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. Lock Native Remote Focus to the WebView & Suppress Default Highlight
     // -------------------------------------------------------------------------
     // On Android TV platforms operating in non-touch D-pad mode, ensure the
     // WebView immediately requests and claims focus so initial key events
@@ -376,21 +538,32 @@ class MainActivity : TauriActivity() {
     // Uses TextureView for seamless alpha blending with transparent WebView.
     // Wrapped in Media3's AspectRatioFrameLayout to prevent video stretching.
     // -------------------------------------------------------------------------
-    val texture = TextureView(this).apply {
+    // -------------------------------------------------------------------------
+    // Hardware Video Plane (SurfaceView inside AspectRatioFrameLayout)
+    // -------------------------------------------------------------------------
+    // Placed at index 0 (behind WebView at index 1).
+    // Uses SurfaceView for zero-copy hardware video decoding via MediaCodec.
+    // Unlike TextureView, SurfaceView punches through to Hardware Composer (HWC),
+    // preserving 10-bit YUV pixel formats, wide color gamuts (BT.2020),
+    // and CTA-861.3 / SMPTE ST 2086 HDR10, HLG, and Dolby Vision dynamic metadata.
+    // Wrapped in Media3 AspectRatioFrameLayout to prevent video stretching.
+    // -------------------------------------------------------------------------
+    val surface = SurfaceView(this).apply {
       layoutParams = FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT
       )
-      // TextureView MUST remain View.VISIBLE at all times so Android creates
-      // and maintains its SurfaceTexture for ExoPlayer MediaCodec decoders.
-      // Alpha is set to 0f so the canvas is transparent until playback is ready.
-      visibility = View.VISIBLE
-      alpha = 0f
+      // SurfaceView is placed behind the window view hierarchy so the transparent
+      // WebView canvas composites cleanly on top of the video plane.
+      setZOrderMediaOverlay(false)
+      setZOrderOnTop(false)
+      // Conceal video decoding canvas on cold launch until playback starts
+      visibility = View.GONE
       // Video decoding canvas must never participate in D-pad focus traversal
       isFocusable = false
     }
 
-    this.textureView = texture
+    this.surfaceView = surface
 
     // Container enforcing native video aspect ratio with centered letterboxing/pillarboxing
     val aspectContainer = AspectRatioFrameLayout(this).apply {
@@ -407,7 +580,7 @@ class MainActivity : TauriActivity() {
     }
     this.aspectRatioLayout = aspectContainer
 
-    aspectContainer.addView(texture)
+    aspectContainer.addView(surface)
     container.addView(aspectContainer)
     container.addView(webView)
 
@@ -436,10 +609,11 @@ class MainActivity : TauriActivity() {
       // -----------------------------------------------------------------------
       // Reveal Hardware Decoding Plane
       // -----------------------------------------------------------------------
-      textureView?.visibility = View.VISIBLE
-      textureView?.alpha = 1f
-      // Clear container and window backgrounds to allow video decode
-      // on the hardware TextureView to show through cleanly to the compositor
+      // Making the SurfaceView visible directs SurfaceFlinger to allocate
+      // its hardware layer and punch the compositor hole through the window.
+      surfaceView?.visibility = View.VISIBLE
+      // Clear container and window backgrounds to allow zero-copy video decode
+      // on the hardware SurfaceView to show through cleanly to the compositor
       rootContainer?.setBackgroundColor(Color.TRANSPARENT)
       window.setBackgroundDrawableResource(android.R.color.transparent)
       // Prevent Android system screensaver / display sleep during active playback
@@ -453,17 +627,16 @@ class MainActivity : TauriActivity() {
   fun hideVideoSurface() {
     runOnUiThread {
       // -----------------------------------------------------------------------
-      // Seamlessly Conceal Video Texture via Alpha
+      // Seamlessly Conceal Video Surface
       // -----------------------------------------------------------------------
-      // Setting alpha = 0f guarantees the last decoded video frame from the
-      // previous movie is completely invisible to the user, while preserving
-      // the active SurfaceTexture so ExoPlayer can decode the next stream's
-      // first frame immediately without stalling in the NO_SURFACE state.
-      // -----------------------------------------------------------------------
-      textureView?.alpha = 0f
+      // Setting visibility to View.GONE cleans up the hardware overlay layer,
+      // closing the compositor punch-through hole.
+      surfaceView?.visibility = View.GONE
       // Restore solid pitch black backgrounds for standard navigation UI
       rootContainer?.setBackgroundColor(Color.BLACK)
       window.setBackgroundDrawableResource(android.R.color.black)
+      // Reset window HDR mode back to standard dynamic range
+      setHdrMode(false)
       // Clear keep-screen-on flag once video plane is hidden
       setKeepScreenOn(false)
     }
@@ -537,64 +710,79 @@ class MainActivity : TauriActivity() {
    * replacing the TextureView in the aspectContainer forces Android to allocate
    * a fresh hardware SurfaceTexture immediately.
    */
-  fun resetTextureView() {
-    runOnUiThread {
-      val current = textureView
-      val container = aspectRatioLayout ?: return@runOnUiThread
-      if (current != null) {
-        container.removeView(current)
-      }
-      val freshTexture = TextureView(this).apply {
-        layoutParams = FrameLayout.LayoutParams(
-          FrameLayout.LayoutParams.MATCH_PARENT,
-          FrameLayout.LayoutParams.MATCH_PARENT
-        )
-        visibility = View.VISIBLE
-        alpha = 0f
-        isFocusable = false
-      }
-      container.addView(freshTexture, 0)
-      this.textureView = freshTexture
-    }
-  }
-
   /**
-   * Retrieves or recreates a fresh, available [TextureView] instance for ExoPlayer attachment.
-   * If the previous TextureView's SurfaceTexture was destroyed upon player release,
-   * detaching and re-attaching a fresh TextureView ensures Android allocates a new
-   * hardware SurfaceTexture immediately.
+   * Backward-compatibility hook. With SurfaceView, Media3 manages the
+   * SurfaceHolder callback lifecycle automatically across playback sessions.
    */
-  fun getTextureView(): TextureView? {
-    val current = textureView
-    if (current != null && current.isAvailable && current.surfaceTexture != null) {
-      return current
-    }
-
-    // Recreate if TextureView has lost its SurfaceTexture
-    aspectRatioLayout?.let { container ->
-      current?.let { container.removeView(it) }
-      val freshTexture = TextureView(this).apply {
-        layoutParams = FrameLayout.LayoutParams(
-          FrameLayout.LayoutParams.MATCH_PARENT,
-          FrameLayout.LayoutParams.MATCH_PARENT
-        )
-        visibility = View.VISIBLE
-        alpha = 0f
-        isFocusable = false
-      }
-      container.addView(freshTexture, 0)
-      this.textureView = freshTexture
-      return freshTexture
-    }
-
-    return current
+  fun resetTextureView() {
+    // No-op for SurfaceView
   }
 
   /**
    * Backward-compatibility accessor.
    */
-  fun getSurfaceView(): android.view.SurfaceView? {
+  fun getTextureView(): TextureView? {
     return null
+  }
+
+  /**
+   * Retrieves the active [SurfaceView] instance for ExoPlayer attachment.
+   */
+  fun getSurfaceView(): SurfaceView? {
+    return surfaceView
+  }
+
+  /**
+   * ===========================================================================
+   * Native Window HDR Color Mode Management
+   * ===========================================================================
+   * Toggles native window color mode between [ActivityInfo.COLOR_MODE_DEFAULT]
+   * and [ActivityInfo.COLOR_MODE_HDR] on Android 8.0+ (API 26+).
+   *
+   * Explicitly signals Android WindowManager and SurfaceFlinger that the active
+   * window presents high dynamic range content (HDR10, HLG, Dolby Vision).
+   * This prevents Android 13/14+ display compositors from clamping output
+   * buffers to standard dynamic range or stripping HDMI HDR InfoFrames.
+   *
+   * @param enableHdr When true, activates HDR color mode. When false, restores SDR.
+   * ===========================================================================
+   */
+  fun setHdrMode(enableHdr: Boolean) {
+    runOnUiThread {
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          val targetColorMode = if (enableHdr) {
+            ActivityInfo.COLOR_MODE_HDR
+          } else {
+            ActivityInfo.COLOR_MODE_DEFAULT
+          }
+          if (window.colorMode != targetColorMode) {
+            window.colorMode = targetColorMode
+          }
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed updating window colorMode: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Checks whether the connected display hardware natively supports Dolby Vision.
+   */
+  fun isDolbyVisionSupported(): Boolean {
+    return try {
+      val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        this.display
+      } else {
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay
+      }
+      val hdrCaps = display?.hdrCapabilities
+      val supportedTypes = hdrCaps?.supportedHdrTypes ?: intArrayOf()
+      supportedTypes.contains(1) // Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION = 1
+    } catch (_: Exception) {
+      false
+    }
   }
 
   /**
@@ -602,6 +790,167 @@ class MainActivity : TauriActivity() {
    */
   fun getWebView(): WebView? {
     return activeWebView
+  }
+
+  // ===========================================================================
+  // Hardware Display Refresh Rate & Mode Matching
+  // ===========================================================================
+
+  /**
+   * Switches the window preferred display mode ID directly on the main UI thread.
+   * Prompts the Android TV display subsystem and HDMI eARC/CEC controller
+   * to adapt physical frame rates without 3:2 pulldown judder.
+   *
+   * @param modeId Target display mode identifier from Display.getMode().
+   */
+  fun changeDisplayMode(modeId: Int) {
+    runOnUiThread {
+      try {
+        if (isFinishing || isDestroyed) {
+          return@runOnUiThread
+        }
+        val attrs = window.attributes
+        if (attrs.preferredDisplayModeId != modeId) {
+          // Cache default mode before first switch
+          if (!isDisplayModeSwitched) {
+            originalDisplayModeId = attrs.preferredDisplayModeId
+          }
+          android.util.Log.i("MainActivity", "changeDisplayMode: modeId=$modeId (previous=${attrs.preferredDisplayModeId})")
+          attrs.preferredDisplayModeId = modeId
+          window.attributes = attrs
+          isDisplayModeSwitched = (modeId != 0 && modeId != originalDisplayModeId)
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed changing display mode to $modeId: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Restores original display mode when media playback stops or the player is released.
+   */
+  fun resetDisplayMode() {
+    runOnUiThread {
+      try {
+        if (isFinishing || isDestroyed) {
+          return@runOnUiThread
+        }
+        if (isDisplayModeSwitched) {
+          val attrs = window.attributes
+          android.util.Log.i("MainActivity", "resetDisplayMode: restoring default mode ($originalDisplayModeId)")
+          attrs.preferredDisplayModeId = originalDisplayModeId
+          window.attributes = attrs
+          isDisplayModeSwitched = false
+        }
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed resetting display mode: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * Selects and applies the best physical display mode matching the stream frame rate and resolution.
+   *
+   * @param streamWidth Physical pixel width of video stream.
+   * @param streamHeight Physical pixel height of video stream.
+   * @param targetFrameRate Media frame rate (e.g., 23.976, 24, 25, 29.97, 50, 59.94, 60).
+   * @return True if a matching display mode was identified and applied.
+   */
+  fun matchDisplayMode(streamWidth: Int, streamHeight: Int, targetFrameRate: Float): Boolean {
+    if (targetFrameRate <= 0f) {
+      return false
+    }
+
+    try {
+      val displayManager = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return false
+      val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return false
+      val supportedModes = display.supportedModes ?: return false
+
+      // Wrap raw display modes in helper objects
+      val modes = supportedModes.map { mode ->
+        DisplayModeInfo(
+          modeId = mode.modeId,
+          physicalWidth = mode.physicalWidth,
+          physicalHeight = mode.physicalHeight,
+          refreshRate = mode.refreshRate
+        )
+      }
+
+      val streamRate = (targetFrameRate * 1000).roundToInt()
+      val currentMode = display.mode
+
+      // 1. Filter modes that satisfy the video stream resolution without downscaling
+      val sizeFiltered = modes.filter { mode ->
+        streamWidth <= 0 || streamHeight <= 0 || (mode.physicalWidth >= streamWidth && mode.physicalHeight >= streamHeight)
+      }.ifEmpty { modes }
+
+      // 2. Filter modes matching the target frame rate cadence
+      val candidates = sizeFiltered.filter { mode ->
+        frameRateMatches(mode.refreshRateRounded, streamRate)
+      }.ifEmpty { sizeFiltered }
+
+      // 3. Find target mode: exact frame rate match preferred, otherwise highest resolution
+      val targetMode = candidates.firstOrNull { mode ->
+        mode.refreshRateRounded == streamRate &&
+        (streamWidth <= 0 || (mode.physicalWidth == streamWidth && mode.physicalHeight == streamHeight))
+      } ?: candidates.filter { mode ->
+        mode.refreshRateRounded == streamRate
+      }.maxByOrNull { mode ->
+        mode.physicalWidth * mode.physicalHeight
+      } ?: candidates.maxByOrNull { mode ->
+        mode.physicalWidth * mode.physicalHeight
+      }
+
+      if (targetMode != null && targetMode.modeId != currentMode.modeId) {
+        changeDisplayMode(targetMode.modeId)
+        return true
+      }
+    } catch (e: Exception) {
+      android.util.Log.w("MainActivity", "Failed matching display mode: ${e.message}")
+    }
+
+    return false
+  }
+
+  /**
+   * Determines if display refresh rate cadence is compatible with the video stream frame rate.
+   */
+  private fun frameRateMatches(modeRate: Int, streamRate: Int): Boolean {
+    if (streamRate <= 0) return false
+    // Exact multiple (e.g., 24fps -> 24Hz, 48Hz, 120Hz; 25fps -> 50Hz, 100Hz; 30fps -> 60Hz, 120Hz)
+    if (modeRate % streamRate == 0) return true
+    // 2.5x cadence (e.g., 24fps -> 60Hz)
+    if (modeRate == (streamRate * 2.5).roundToInt()) return true
+    // Fractional tolerance (e.g. 23.976 vs 24.000 or 59.94 vs 60.000)
+    if (abs(modeRate - streamRate) <= 50) return true
+    // Multiple of rounded integer frame rate
+    val intStreamRate = ((streamRate + 500) / 1000) * 1000
+    if (intStreamRate > 0 && modeRate % intStreamRate == 0) return true
+    return false
+  }
+
+  /**
+   * Queries connected display panel and serializes available modes to JSON.
+   */
+  fun getSupportedDisplayModesJson(): String {
+    return try {
+      val displayManager = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+      val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+      val supportedModes = display?.supportedModes ?: emptyArray()
+      val array = org.json.JSONArray()
+      for (mode in supportedModes) {
+        val obj = org.json.JSONObject().apply {
+          put("modeId", mode.modeId)
+          put("width", mode.physicalWidth)
+          put("height", mode.physicalHeight)
+          put("refreshRate", mode.refreshRate)
+        }
+        array.put(obj)
+      }
+      array.toString()
+    } catch (e: Exception) {
+      "[]"
+    }
   }
 
   /**
@@ -880,9 +1229,110 @@ class MainActivity : TauriActivity() {
     }
 
     /**
+     * =========================================================================
+     * Nearby Devices & Local Network Permission State Probe
+     * =========================================================================
+     * Verifies whether runtime permissions required for communicating with local
+     * area network devices (192.168.x.x, 10.x.x.x) have been granted.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun hasNearbyDevicesPermission(): Boolean {
+      var isGranted = true
+
+      // -----------------------------------------------------------------------
+      // Verify Android 13+ (API 33+) Nearby Wi-Fi Devices Permission Status
+      // -----------------------------------------------------------------------
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val nearbyWifi = "android.permission.NEARBY_WIFI_DEVICES"
+        if (checkSelfPermission(nearbyWifi) != PackageManager.PERMISSION_GRANTED) {
+          isGranted = false
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // Verify Android 17+ (API 37+ / One UI 9) Local Network Permission Status
+      // -----------------------------------------------------------------------
+      if (Build.VERSION.SDK_INT >= 37) {
+        val localNetwork = "android.permission.ACCESS_LOCAL_NETWORK"
+        if (checkSelfPermission(localNetwork) != PackageManager.PERMISSION_GRANTED) {
+          isGranted = false
+        }
+      }
+
+      return isGranted
+    }
+
+    /**
+     * =========================================================================
+     * Trigger Explicit Permission Dialog
+     * =========================================================================
+     * Allows the web interface or server discovery workflow to explicitly
+     * trigger the system permission request dialog if permissions are missing.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun requestNearbyDevicesPermission() {
+      runOnUiThread {
+        this@MainActivity.requestLocalNetworkPermissions()
+      }
+    }
+
+    /**
      * Determines whether the host device is an Android TV / Google TV device.
      * Evaluates official Android UiModeManager television state and leanback feature flags.
      */
+    /**
+     * =========================================================================
+     * Connected Display HDR Capabilities Probe
+     * =========================================================================
+     * Queries physical display hardware capabilities via Android Display API
+     * (Display.getHdrCapabilities) to detect HDR10, HLG, HDR10+, and Dolby Vision.
+     *
+     * Returns a structured JSON payload allowing the frontend DeviceProfile
+     * to accurately configure video range types and direct play capabilities.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun getHdrCapabilities(): String {
+      return try {
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          this@MainActivity.display
+        } else {
+          @Suppress("DEPRECATION")
+          this@MainActivity.windowManager.defaultDisplay
+        }
+        val hdrCaps = display?.hdrCapabilities
+        val supportedTypes = hdrCaps?.supportedHdrTypes ?: intArrayOf()
+        val isHdrDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          display?.isHdr == true || supportedTypes.isNotEmpty()
+        } else {
+          supportedTypes.isNotEmpty()
+        }
+
+        // Display.HdrCapabilities constants:
+        // 1 = HDR_TYPE_DOLBY_VISION
+        // 2 = HDR_TYPE_HDR10
+        // 3 = HDR_TYPE_HLG
+        // 4 = HDR_TYPE_HDR10_PLUS
+        val hasDv = supportedTypes.contains(1)
+        val hasHdr10 = supportedTypes.contains(2) || isHdrDisplay
+        val hasHlg = supportedTypes.contains(3) || isHdrDisplay
+        val hasHdr10Plus = supportedTypes.contains(4)
+
+        val json = JSONObject()
+        json.put("supported", isHdrDisplay)
+        json.put("hdr10", hasHdr10)
+        json.put("hlg", hasHlg)
+        json.put("dolbyVision", hasDv)
+        json.put("hdr10Plus", hasHdr10Plus)
+        json.toString()
+      } catch (e: Exception) {
+        val isTv = try { this@MainActivity.isTvDevice() } catch (_: Exception) { true }
+        """{"supported":$isTv,"hdr10":$isTv,"hlg":$isTv,"dolbyVision":$isTv,"hdr10Plus":false}"""
+      }
+    }
+
     @JavascriptInterface
     fun isTv(): Boolean {
       // Delegate to centralized activity device check
@@ -919,8 +1369,15 @@ class MainActivity : TauriActivity() {
     }
 
     /**
-     * Queries hardware decoder support via Android MediaCodecList.
-     * Accurately determines if device hardware supports AVC, HEVC, VP9, and AV1.
+     * =========================================================================
+     * Hardware Video Decoder Capability Probe
+     * =========================================================================
+     * Queries registered decoders via Android MediaCodecList to determine genuine
+     * hardware decoding support for AVC, HEVC, VP9, VP8, AV1, MPEG-2, and VC-1.
+     *
+     * Prevents playback black-screens on mobile chipsets that lack MPEG-2 or VC-1
+     * decoders (e.g. where c2.android.mpeg2.decoder is restricted to the TV domain).
+     * =========================================================================
      */
     @JavascriptInterface
     fun getSupportedVideoCodecs(): String {
@@ -928,8 +1385,10 @@ class MainActivity : TauriActivity() {
         // Query list of regular decoders registered with the Android media framework
         val codecList = android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS)
         val supportedMimes = mutableSetOf<String>()
+
         // Iterate available codecs and extract supported video mime types
         for (info in codecList.codecInfos) {
+          // Exclude encoders to ensure only decoder profiles are evaluated
           if (!info.isEncoder) {
             for (type in info.supportedTypes) {
               if (type.startsWith("video/", ignoreCase = true)) {
@@ -938,6 +1397,7 @@ class MainActivity : TauriActivity() {
             }
           }
         }
+
         // Package findings into JSON payload for profile evaluation
         val result = org.json.JSONObject()
         result.put("h264", supportedMimes.contains("video/avc"))
@@ -945,11 +1405,22 @@ class MainActivity : TauriActivity() {
         result.put("vp9", supportedMimes.contains("video/x-vnd.on2.vp9"))
         result.put("vp8", supportedMimes.contains("video/x-vnd.on2.vp8"))
         result.put("av1", supportedMimes.contains("video/av01"))
-        result.put("mpeg2video", supportedMimes.contains("video/mpeg2"))
+        result.put("mpeg2video", supportedMimes.contains("video/mpeg2") || supportedMimes.contains("video/mp2v"))
+
+        // Probe standard Android VC-1 mime type (video/wvc1) as well as vendor aliases
+        val hasVc1 = supportedMimes.contains("video/wvc1") ||
+                     supportedMimes.contains("video/x-ms-wmv") ||
+                     supportedMimes.contains("video/vc1")
+        result.put("vc1", hasVc1)
+
         result.toString()
       } catch (e: Exception) {
-        // Safe fallback for older Android TV devices
-        """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":true}"""
+        // Evaluate television hardware classification to configure safe fallback defaults
+        // Android TV boxes standardly support MPEG-2 decode, whereas phones frequently lack it
+        val isTv = try { this@MainActivity.isTvDevice() } catch (_: Exception) { false }
+        val mpeg2Default = isTv
+
+        """{"h264":true,"hevc":true,"vp9":true,"vp8":true,"av1":false,"mpeg2video":$mpeg2Default,"vc1":false}"""
       }
     }
 
@@ -1032,6 +1503,385 @@ class MainActivity : TauriActivity() {
       val payload = initialDeepLink
       initialDeepLink = null
       return payload
+    }
+
+    /**
+     * Matches connected display panel refresh rate and resolution to video stream parameters.
+     */
+    @JavascriptInterface
+    fun setRefreshRate(frameRate: Float, width: Int, height: Int): Boolean {
+      return this@MainActivity.matchDisplayMode(width, height, frameRate)
+    }
+
+    /**
+     * Restores default system display refresh rate and resolution.
+     */
+    @JavascriptInterface
+    fun resetRefreshRate(): Boolean {
+      this@MainActivity.resetDisplayMode()
+      return true
+    }
+
+    /**
+     * Queries connected display panel supported resolution and refresh rate modes.
+     */
+    @JavascriptInterface
+    fun getSupportedDisplayModes(): String {
+      return this@MainActivity.getSupportedDisplayModesJson()
+    }
+
+    /**
+     * =========================================================================
+     * Synchronize Custom Reverse Proxy Headers
+     * =========================================================================
+     * Receives reverse proxy credentials (e.g. Cloudflare Service Tokens)
+     * configured in frontend settings, allowing native request interception
+     * to attach headers directly without triggering CORS preflights.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun setCustomHeaders(serverUrl: String?, headersJson: String?) {
+      try {
+        protectedServerUrl = serverUrl?.trimEnd('/')
+        customProxyHeaders.clear()
+        if (!headersJson.isNullOrEmpty()) {
+          val json = JSONObject(headersJson)
+          val keys = json.keys()
+          while (keys.hasNext()) {
+            val key = keys.next()
+            val value = json.optString(key)
+            if (key.isNotBlank() && value.isNotBlank()) {
+              customProxyHeaders[key] = value
+            }
+          }
+        }
+        android.util.Log.i("MainActivity", "Synchronized ${customProxyHeaders.size} custom proxy headers for $protectedServerUrl")
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed to parse custom headers JSON: ${e.message}")
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Native Header Interception Query
+     * =========================================================================
+     * Informs frontend runtime whether native request interception is active.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun hasNativeHeaderInterception(): Boolean {
+      return true
+    }
+
+    /**
+     * =========================================================================
+     * Session Cookie Injection Bridge
+     * =========================================================================
+     * Stores an authentication cookie directly into the Android WebView
+     * cookie jar for the specified server domain.
+     * =========================================================================
+     */
+    @JavascriptInterface
+    fun setCookie(url: String?, cookie: String?) {
+      if (url.isNullOrBlank() || cookie.isNullOrBlank()) return
+      try {
+        CookieManager.getInstance().setCookie(url, cookie)
+      } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "Failed to set cookie: ${e.message}")
+      }
+    }
+  }
+
+  /**
+   * ===========================================================================
+   * Authenticated WebView Client
+   * ===========================================================================
+   * Wraps Tauri's underlying [RustWebViewClient] to provide native request
+   * interception for reverse-proxy-protected Jellyfin media assets.
+   *
+   * Key Advantages:
+   * 1. Eliminates CORS OPTIONS preflight latency (saves 100-300ms per image).
+   * 2. Eliminates in-memory Blob URL generation and JS heap pressure on TVs.
+   * 3. Streams network response directly into Chromium's native image pipeline.
+   * ===========================================================================
+   */
+  inner class AuthenticatedWebViewClient(
+    private val delegate: WebViewClient
+  ) : WebViewClient() {
+
+    // Dedicated OkHttpClient instance with persistent connection pooling
+    private val httpClient: OkHttpClient by lazy {
+      OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
+    }
+
+    override fun shouldInterceptRequest(
+      view: WebView?,
+      request: WebResourceRequest?
+    ): WebResourceResponse? {
+      // Safely extract request URI and fallback to default delegate when absent
+      val url = request?.url ?: return delegate.shouldInterceptRequest(view, request)
+      val urlStr = url.toString()
+      val serverUrl = protectedServerUrl
+
+      // Check if request targets the configured reverse-proxy server
+      if (!serverUrl.isNullOrEmpty() && customProxyHeaders.isNotEmpty() && urlStr.startsWith(serverUrl, ignoreCase = true)) {
+        val path = url.path ?: ""
+        val method = request.method ?: "GET"
+
+        // ---------------------------------------------------------------------
+        // 1. Short-Circuit ALL CORS Preflight OPTIONS Requests for Protected Server
+        // ---------------------------------------------------------------------
+        // When JavaScript fetch() attaches custom reverse-proxy authentication headers
+        // (such as Cloudflare Service Tokens or Authelia keys), Chromium in WebView
+        // automatically dispatches an unauthenticated OPTIONS preflight request.
+        // Upstream reverse proxies (Cloudflare Access) reject unauthenticated preflights
+        // with 403 Forbidden, and server-side plugin endpoints lack dedicated OPTIONS handlers.
+        // Short-circuiting all OPTIONS requests for the configured server with 204 No Content
+        // and RFC-compliant CORS headers guarantees immediate, zero-latency CORS compliance.
+        // ---------------------------------------------------------------------
+        if (method.equals("OPTIONS", ignoreCase = true)) {
+          // Resolve request origin case-insensitively from incoming headers
+          val origin = request.requestHeaders.entries.firstOrNull {
+            it.key.equals("Origin", ignoreCase = true)
+          }?.value?.trim()?.ifEmpty { null } ?: "*"
+
+          // Resolve requested headers case-insensitively from preflight request
+          val reqHeaders = request.requestHeaders.entries.firstOrNull {
+            it.key.equals("Access-Control-Request-Headers", ignoreCase = true)
+          }?.value?.trim()?.ifEmpty { null } ?: "*"
+
+          // W3C CORS Specification: Access-Control-Allow-Headers MUST NOT be wildcard '*'
+          // when Access-Control-Allow-Credentials is true; provide explicit header list when absent.
+          val allowedHeaders = if (reqHeaders == "*") {
+            "Authorization, X-Emby-Authorization, X-MediaBrowser-Token, Content-Type, Accept, Origin, User-Agent, X-Requested-With, Cache-Control, Pragma, If-None-Match, " + customProxyHeaders.keys.joinToString(", ")
+          } else {
+            reqHeaders
+          }
+
+          // Build preflight response headers dictionary
+          val preflightHeaders = mutableMapOf(
+            "Access-Control-Allow-Origin" to origin,
+            "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "Access-Control-Allow-Headers" to allowedHeaders,
+            "Access-Control-Max-Age" to "86400"
+          )
+
+          // W3C CORS Specification: Access-Control-Allow-Credentials MUST NOT be 'true'
+          // when Access-Control-Allow-Origin is wildcard '*', otherwise Chromium aborts with CORS error.
+          if (origin != "*") {
+            preflightHeaders["Access-Control-Allow-Credentials"] = "true"
+            preflightHeaders["Vary"] = "Origin"
+          }
+
+          // Return empty 204 No Content preflight response directly into Chromium network stack
+          return WebResourceResponse(
+            "text/plain",
+            "UTF-8",
+            204,
+            "No Content",
+            preflightHeaders,
+            java.io.ByteArrayInputStream(ByteArray(0))
+          )
+        }
+
+        // Case-insensitive check for image accept headers across browser variants
+        val hasImageAccept = request.requestHeaders.entries.any {
+          it.key.equals("Accept", ignoreCase = true) && it.value.contains("image/")
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. Identify Native Read Interception Targets
+        // ---------------------------------------------------------------------
+        // Intercept ONLY image assets, artwork endpoints, and server health pings
+        // natively via OkHttp.
+        // Critical: DO NOT intercept API or JSON plugin routes (/Litefin/..., /Items/..., etc.)
+        // because Android WebView's WebResourceRequest intentionally filters out the
+        // Jellyfin 'Authorization' header for cross-origin security isolation.
+        // API requests are handled directly by JavaScript fetch() which already
+        // attaches both reverse-proxy headers and Jellyfin session tokens, while
+        // benefiting from the local OPTIONS preflight short-circuit above.
+        // ---------------------------------------------------------------------
+        val isTargetResource = path.contains("/Images/", ignoreCase = true) ||
+          hasImageAccept ||
+          path.endsWith("/System/Ping", ignoreCase = true)
+
+        // Only handle standard read operations natively
+        if (isTargetResource && (method.equals("GET", ignoreCase = true) ||
+            method.equals("HEAD", ignoreCase = true))) {
+
+          try {
+            // Instantiate native request builder for the intercepted destination
+            val reqBuilder = Request.Builder().url(urlStr)
+            if (method.equals("HEAD", ignoreCase = true)) {
+              reqBuilder.head()
+            } else {
+              reqBuilder.get()
+            }
+
+            // Forward original request headers while omitting Host and Accept-Encoding.
+            // Stripping Accept-Encoding lets OkHttp transparently decompress Gzip internally,
+            // delivering uncompressed raw byte streams directly to the WebView decoder.
+            // Crucial: We must also strip conditional validation headers (If-None-Match, If-Modified-Since, If-Range).
+            // Android WebView's shouldInterceptRequest handler replaces the internal cache layer.
+            // If the upstream reverse proxy or Jellyfin responds with HTTP 304, WebView's Chromium network
+            // pipeline does NOT pull from disk cache and instead fails decoding on a 0-byte stream.
+            // Stripping validation headers forces an unconditional 200 OK stream with full body bytes.
+            request.requestHeaders.forEach { (key, value) ->
+              val lower = key.lowercase()
+              if (lower != "host" &&
+                  lower != "accept-encoding" &&
+                  lower != "if-none-match" &&
+                  lower != "if-modified-since" &&
+                  lower != "if-range" &&
+                  !customProxyHeaders.containsKey(key)) {
+                try {
+                  // Sanitize value to strip CR/LF preventing OkHttp header argument exceptions
+                  val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                  reqBuilder.header(key.trim(), sanitizedVal)
+                } catch (_: Exception) {}
+              }
+            }
+
+            // Inject configured reverse-proxy authentication headers (e.g. Cloudflare Service Tokens)
+            customProxyHeaders.forEach { (key, value) ->
+              try {
+                val sanitizedVal = value.replace("\r", "").replace("\n", "").trim()
+                reqBuilder.header(key.trim(), sanitizedVal)
+              } catch (_: Exception) {}
+            }
+
+            // Execute network request natively via connection-pooled HTTP client
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            val code = response.code
+            val body = response.body
+
+            // Android WebResourceResponse reasonPhrase specification strictly requires
+            // ASCII letters and spaces only: regex ^[a-zA-Z ]+$. Numbers or symbols trigger
+            // an immediate IllegalArgumentException, crashing native interception into fallback.
+            val safeReasonPhrase = when (code) {
+              200 -> "OK"
+              201 -> "Created"
+              204 -> "No Content"
+              304 -> "Not Modified"
+              400 -> "Bad Request"
+              401 -> "Unauthorized"
+              403 -> "Forbidden"
+              404 -> "Not Found"
+              500 -> "Internal Server Error"
+              502 -> "Bad Gateway"
+              503 -> "Service Unavailable"
+              504 -> "Gateway Timeout"
+              else -> if (code in 200..299) "OK" else "Error"
+            }
+
+            // Handle successful resource payloads (2xx) with non-null response streams
+            if (response.isSuccessful && body != null) {
+              val contentType = body.contentType()?.toString() ?: "image/jpeg"
+              val mimeType = contentType.substringBefore(";").trim()
+              val responseHeaders = mutableMapOf<String, String>()
+
+              // Filter out upstream CORS, hop-by-hop transport, and compression headers.
+              // Crucial Root Cause: OkHttp automatically decompresses and de-chunks response streams.
+              // If the upstream server returned 'Transfer-Encoding: chunked' (standard for large 1080p/4K backdrops),
+              // OkHttp yields an already de-chunked raw binary byte stream.
+              // Leaking 'transfer-encoding: chunked' into WebResourceResponse instructs Chromium's
+              // network loader to expect chunk boundaries on raw bytes, failing immediately with
+              // ERR_INVALID_CHUNKED_ENCODING and breaking high-resolution backdrop rendering.
+              response.headers.names().forEach { name ->
+                val lowerName = name.lowercase()
+                if (lowerName != "content-encoding" &&
+                    lowerName != "content-length" &&
+                    lowerName != "transfer-encoding" &&
+                    lowerName != "connection" &&
+                    lowerName != "keep-alive" &&
+                    lowerName != "trailer" &&
+                    !lowerName.startsWith("access-control-")) {
+                  responseHeaders[name] = response.header(name) ?: ""
+                }
+              }
+
+              // Guarantee single canonical permissive CORS response headers
+              responseHeaders["Access-Control-Allow-Origin"] = "*"
+              responseHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+              responseHeaders["Access-Control-Allow-Headers"] = "*"
+              responseHeaders["Access-Control-Max-Age"] = "86400"
+
+              // Binary media must pass null for encoding; text payloads use charset
+              val encoding = if (mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/")) {
+                null
+              } else {
+                body.contentType()?.charset()?.name() ?: "UTF-8"
+              }
+
+              // Return fully resolved binary stream directly into WebView decoder
+              return WebResourceResponse(
+                mimeType,
+                encoding,
+                code,
+                safeReasonPhrase,
+                responseHeaders,
+                body.byteStream()
+              )
+            } else {
+              // Return upstream error response with permissive CORS so JS fetch error handlers can read status
+              val contentType = body?.contentType()?.toString() ?: "application/json"
+              val mimeType = contentType.substringBefore(";").trim()
+              val errorHeaders = mutableMapOf(
+                "Access-Control-Allow-Origin" to "*",
+                "Access-Control-Allow-Methods" to "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+                "Access-Control-Allow-Headers" to "*"
+              )
+              val encoding = body?.contentType()?.charset()?.name() ?: "UTF-8"
+              val stream = body?.byteStream() ?: java.io.ByteArrayInputStream(ByteArray(0))
+              return WebResourceResponse(
+                mimeType,
+                encoding,
+                code,
+                safeReasonPhrase,
+                errorHeaders,
+                stream
+              )
+            }
+          } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Native interceptor failed for $urlStr: ${e.message}")
+          }
+        }
+      }
+
+      // Fall back to Tauri's default asset loader
+      return delegate.shouldInterceptRequest(view, request)
+    }
+
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+      return delegate.shouldOverrideUrlLoading(view, request)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+      @Suppress("DEPRECATION")
+      return delegate.shouldOverrideUrlLoading(view, url)
+    }
+
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+      delegate.onPageStarted(view, url, favicon)
+    }
+
+    override fun onPageFinished(view: WebView?, url: String?) {
+      delegate.onPageFinished(view, url)
+    }
+
+    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+      delegate.onReceivedError(view, request, error)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+      @Suppress("DEPRECATION")
+      delegate.onReceivedError(view, errorCode, description, failingUrl)
     }
   }
 }

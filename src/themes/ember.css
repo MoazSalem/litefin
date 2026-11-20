@@ -1,0 +1,153 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Ember Theme
+ * ============================================================================
+ * The only warm dark mode: a candlelit roasted brown-black canvas with a
+ * firelight glow rising from the bottom edge. Glass surfaces carry a fixed
+ * warm ember tint while buttons and focus states follow the accent color.
+ * ============================================================================
+ */
+
+[data-theme-mode="ember"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so glow bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(8, 5, 3, 0.88);
+
+    --jf-text-primary: #fff4ea;
+    --jf-text-secondary: rgba(255, 235, 214, 0.78);
+    --jf-text-tertiary: rgba(255, 220, 190, 0.55);
+    --jf-text-disabled: rgba(255, 220, 190, 0.3);
+
+    --jf-success: #ffb27a;
+    --jf-warning: #ffc046;
+    --jf-error: #ff7a59;
+    --jf-info: #f4a259;
+
+    /* Fixed warm ember-tinted translucent glass chrome */
+    --jf-input-bg: rgba(255, 158, 84, 0.09);
+    --jf-input-border: rgba(255, 158, 84, 0.22);
+    --jf-button-bg: rgba(255, 158, 84, 0.13);
+    --jf-button-hover: rgba(255, 158, 84, 0.25);
+    --jf-switch-bg: rgba(255, 158, 84, 0.2);
+    --jf-switch-handle: var(--jf-accent-content-color, #0d0906);
+
+    --jf-shadow-sm: 0 2px 4px rgba(5, 2, 1, 0.45);
+    --jf-shadow-md: 0 4px 14px rgba(5, 2, 1, 0.55);
+    --jf-shadow-lg: 0 12px 44px rgba(5, 2, 1, 0.65);
+
+    --jf-scrollbar: rgba(255, 255, 255, 0.18);
+    --jf-scrollbar-hover: rgba(255, 255, 255, 0.35);
+
+    --jf-button-border-focus: #ffffff;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(255, 158, 84, 0.12);
+    --jf-action-btn-border: rgba(255, 158, 84, 0.24);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #0d0906);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Flat warm-black baseline on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="ember"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="ember"] body {
+    /* body must stay transparent so the firelight layer shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * FIRELIGHT ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders:
+ *   1. A vertical roasted canvas: cool near-black at the top melting into
+ *      glowing charcoal-brown at the bottom.
+ *   2. A candlelight hearth bloom centered at the bottom edge.
+ *   3. Two low ember sparks hugging the bottom corners.
+ */
+[data-theme-mode="ember"] body::before,
+html[data-theme-mode="ember"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Hearth glow rising from behind the content */
+        radial-gradient(65% 55% at 50% 110%,
+                rgba(255, 130, 42, 0.32) 0%,
+                rgba(255, 130, 42, 0.13) 38%,
+                transparent 66%),
+        /* Bottom-left ember spark */
+        radial-gradient(35% 38% at 6% 102%,
+                rgba(255, 94, 24, 0.20) 0%,
+                transparent 62%),
+        /* Bottom-right ember spark */
+        radial-gradient(35% 38% at 94% 102%,
+                rgba(255, 94, 24, 0.20) 0%,
+                transparent 62%),
+        /* Roasted vertical canvas: pitch-brown top fading to firelit base */
+        linear-gradient(to top, #1d1007 0%, #120a06 45%, #0b0705 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="ember"] .page {
+    /* Reset the opaque page paint so the firelight shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the firelight layer during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="ember"],
+[data-theme-mode="ember"] body.player-active,
+html.player-active[data-theme-mode="ember"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="ember"] body.player-active::before,
+html.player-active[data-theme-mode="ember"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="ember"] body.player-active .page,
+html.player-active[data-theme-mode="ember"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}

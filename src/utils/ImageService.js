@@ -8,6 +8,34 @@
 
 import { storage } from './StorageService.js';
 
+/** Height / width ratios used to derive a bounded `maxHeight` per image type. */
+const ASPECT_POSTER = 1.5; // 2:3
+const ASPECT_WIDESCREEN = 9 / 16; // 16:9
+const ASPECT_SQUARE = 1; // 1:1
+
+/**
+ * Resolves the natural aspect ratio for a Jellyfin image slot.
+ * @param {string} type Resolved preset key (e.g. 'home-poster', 'hero-banner')
+ * @returns {number} height / width ratio
+ * @private
+ */
+function _resolveAspectRatio(type) {
+    if (
+        type === 'backdrop' ||
+        type.endsWith('backdrop') ||
+        type.startsWith('hero-') ||
+        type.endsWith('thumb') ||
+        type === 'episode' ||
+        type === 'library-list'
+    ) {
+        return ASPECT_WIDESCREEN;
+    }
+    if (type.endsWith('square') || type.endsWith('artist') || type.endsWith('small')) {
+        return ASPECT_SQUARE;
+    }
+    return ASPECT_POSTER;
+}
+
 class ImageService {
     /**
      * Get current quality preset dynamically.
@@ -500,8 +528,7 @@ class ImageService {
 
         // 1.5 Intercept and map to modern/expanded/modern-posters layout card sizes if active
         const mediaLayout =
-            typeof document !== 'undefined' &&
-            document.documentElement
+            typeof document !== 'undefined' && document.documentElement
                 ? document.documentElement.getAttribute('data-layout-media-rows')
                 : 'classic';
         const isModern = mediaLayout === 'modern';
@@ -567,17 +594,17 @@ class ImageService {
                 type !== 'logo' &&
                 type !== 'backdrop';
             if (isRowCard) {
-                const layoutDefaultScale = (isExpanded || isModernPosters) ? 1.2 : 1.0;
+                const layoutDefaultScale = isExpanded || isModernPosters ? 1.2 : 1.0;
                 const scale =
                     parseFloat(
                         storage.getItem(
                             isExpanded
                                 ? 'pref:expandedCardSizeScale'
                                 : isModernPosters
-                                    ? 'pref:modernPostersCardSizeScale'
-                                    : isModern
-                                        ? 'pref:modernCardSizeScale'
-                                        : 'pref:classicCardSizeScale'
+                                  ? 'pref:modernPostersCardSizeScale'
+                                  : isModern
+                                    ? 'pref:modernCardSizeScale'
+                                    : 'pref:classicCardSizeScale'
                         )
                     ) || layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {
@@ -625,10 +652,25 @@ class ImageService {
         }
 
         const maxWidth = currentScale[type] !== undefined ? currentScale[type] : 300;
+        const quality = currentScale.quality;
+
+        /*
+         * Full-screen artwork (hero, generic backdrop, details backdrop) is left
+         * unconstrained so 4K panels can still receive high-resolution textures.
+         * Row cards keep a bounded maxHeight derived from their slot aspect ratio
+         * so portrait artwork cannot arrive taller than the card can display.
+         */
+        const isFullScreenArtwork = type === 'backdrop' || type === 'details-backdrop' || type.startsWith('hero-');
+
+        let maxHeight = null;
+        if (!isFullScreenArtwork && typeof maxWidth === 'number' && maxWidth > 0) {
+            maxHeight = Math.round(maxWidth * _resolveAspectRatio(type));
+        }
 
         return {
             maxWidth,
-            quality: currentScale.quality
+            maxHeight,
+            quality
         };
     }
 }

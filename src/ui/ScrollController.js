@@ -7,6 +7,7 @@
  *
  * Supports:
  *   - Smooth scrolling with easeOutQuad easing (vertical + horizontal)
+ *   - Apple-style spring physics scrolling (opt-in via pref:scrollPhysics)
  *   - Animation retargeting (updating target mid-animation)
  *   - Row-based vertical alignment (media rows snap to top)
  *   - Horizontal card centering within row-items containers
@@ -23,6 +24,31 @@
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { imageCache } from '../utils/ImageCache.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
+import {
+    createSpring,
+    springStep,
+    chaseStep,
+    railStep,
+    flingStep,
+    normalizeScrollPhysics,
+    SPRING_SUBSTEP_MS,
+    SPRING_SETTLE_DISTANCE_PX,
+    SPRING_SETTLE_VELOCITY_PX_MS,
+    SPRING_MAX_DURATION_MS,
+    SPRING_MIN_DURATION_MS,
+    CHASE_TAU_FACTOR,
+    RAIL_DECEL_ZONE_FRACTION,
+    FLING_VELOCITY_MULTIPLIER,
+    PHYSICS_SETTLE_DISTANCE_PX,
+    GLIDE_ZONE_FRACTION,
+    GLIDE_ZONE_MAX_PX,
+    GLIDE_MIN_DURATION_MS,
+    getHorizontalDurationMs,
+    NOMINAL_FRAME_MS,
+    CADENCE_DT_MAX_MS
+} from './SpringPhysics.js';
 
 // ============================================================================
 // Constants — all tunable values in one place for easy TV hardware tweaking
@@ -31,27 +57,21 @@ import { platformInfo } from '../utils/PlatformInfo.js';
 /**
  * Resolves the base vertical scroll animation duration (in ms) based on user preference and platform:
  * - 'instant': 0ms (snaps immediately with no motion)
- * - 'current' (default): Snappy platform default (130ms on desktop/web, 180ms on TV)
- * - 'smooth': Balanced smoothness (200ms on desktop/web, 240ms on TV)
+ * - 'current': Snappy platform default (130ms on desktop/web, 180ms on TV)
+ * - 'smooth' (default): Balanced smoothness (200ms on desktop/web, 240ms on TV)
  * - 'slower': Relaxed, cinematic smooth (280ms on desktop/web, 340ms on TV)
  *
  * @returns {number} Duration in milliseconds
  */
 function getBaseVerticalDuration() {
-    const pref = storage.getItem('pref:scrollSmoothingDuration') || 'current';
+    // Defaults to 'smooth' for fluid vertical navigation motion
+    const pref = storage.getItem('pref:scrollSmoothingDuration') || 'smooth';
     if (pref === 'instant') return 0;
     const isDesktop = platformInfo.isDesktop || platformInfo.isWeb;
     if (pref === 'slower') return isDesktop ? 280 : 340;
     if (pref === 'smooth') return isDesktop ? 200 : 240;
     return isDesktop ? 130 : 180;
 }
-
-// Default animation duration (ms) for vertical smooth scrolling.
-// Dynamically evaluates user preference (instant, current, smooth, slower) and active platform.
-const SCROLL_DURATION_VERTICAL = () => getBaseVerticalDuration();
-
-// Animation duration (ms) for horizontal card-centering scrolls
-const SCROLL_DURATION_HORIZONTAL = 120;
 
 // Minimum pixel difference to consider "not at target" (avoids sub-pixel jitter)
 const SCROLL_SNAP_THRESHOLD = 1;
@@ -66,11 +86,49 @@ const ROW_CUTOFF_BUFFER = 40;
 // remain strictly off-screen above the viewport.
 const DEFAULT_SCROLL_OFFSET_TOP = 40;
 
+// Default bottom offset (px) when aligning a row to the bottom of the viewport.
+// Tuned to 18px to hit the ideal visual balance:
+// - Keeps the succeeding row's section title strictly off-screen below the viewport.
+// - Gives the active row's card titles, subtitles, and years generous breathing room above the bottom screen edge.
+// - Prevents top-edge clipping of the active row title on portrait and standard poster cards.
+const DEFAULT_SCROLL_OFFSET_BOTTOM = 18;
+
 // Threshold (px) — if the row's top is already within this distance of
 // the ideal scroll position, skip scrolling. Prevents micro-jitter when
 // navigating horizontally within the same row, but keep it small so
 // vertical transitions always trigger a smooth scroll.
 const SCROLL_ALIGN_THRESHOLD = 5;
+
+/**
+ * Single CSS transform property backed by this engine.
+ *
+ * Writing BOTH `transform` and `webkitTransform` from an animation loop mutates
+ * the same CSS property twice per frame (~60 extra style invalidations/sec on
+ * the hot GPU path). Feature-detect once at module load and write only one.
+ */
+const TRANSFORM_PROPERTY = (() => {
+    try {
+        if (typeof document !== 'undefined' && document.documentElement && document.documentElement.style) {
+            if ('transform' in document.documentElement.style) return 'transform';
+            if ('webkitTransform' in document.documentElement.style) return 'webkitTransform';
+        }
+    } catch (_) {
+        // Fall through to the standards property
+    }
+    return 'transform';
+})();
+
+/**
+ * Positions a GPU compositor track at a vertical offset using exactly one
+ * style write. Purely a write — never reads layout.
+ *
+ * @param {HTMLElement|null} track - GPU compositor track (.vertical-scroll-track)
+ * @param {number} offset - Vertical offset in px
+ */
+function writeTrackTransform(track, offset) {
+    if (!track) return;
+    track.style[TRANSFORM_PROPERTY] = `translate3d(0px, -${offset}px, 0px)`;
+}
 
 // Buffer (px) around viewport edges for horizontal row visibility detection.
 // Used when scrolling a parent row into view before centering a card.
@@ -84,10 +142,6 @@ const GENERIC_SCROLL_MARGIN = 100;
 // row-based alignment is disabled to prevent jarring jumps.
 const TALL_ROW_MULTIPLIER = 2.0;
 
-// Fraction of viewport height: elements shorter than this are centered,
-// elements taller are bottom-aligned. (Increased to 0.9 so large grid cards center properly)
-const SMALL_ELEMENT_FRACTION = 0.9;
-
 // Fraction of viewport height: if a single scroll delta exceeds this fraction,
 // snap instantly instead of animating. Hero carousel ↔ row transitions on
 // the home page produce 500-750px deltas that exceed the Tizen GPU's compositing
@@ -95,6 +149,48 @@ const SMALL_ELEMENT_FRACTION = 0.9;
 // gradient overlays, backdrop layer) AND the content rows (per-row translateZ(0)
 // compositor layers), causing visible frame drops. Instant-snapping large deltas
 const LARGE_SCROLL_SNAP_FRACTION = 0.45;
+
+// Distance (px) above which a vertical hop is a genuine "long leap" (hero
+// carousel ↔ content rows, multi-row jumps, page-level transitions) whose
+// duration is stretched so the compositor gets fewer, cheaper pixels per frame.
+//
+// It must sit comfortably ABOVE ordinary row-to-row hops: poster rows are
+// ~574px tall (vs ~468px for landscape/square), so their hops travel up to
+// ~600px. The old 550px line caught every single poster hop and stretched it
+// by ×1.25 — poster rows then animated ~25% slower than landscape rows at the
+// same pref:scrollSmoothingDuration, which reads as "poster rows lag when
+// scrolled to". 700px keeps every row-type hop at the configured budget while
+// still slowing true hero/multi-row leaps.
+const LARGE_JUMP_THRESHOLD_PX = 700;
+
+// ============================================================================
+// ADAPTIVE PHYSICS SAMPLING (webOS 3 / low-tier hardware)
+// ============================================================================
+// Physics engines are frame-rate normalized, but their *character* degrades
+// when panel frame delivery is slow: the spring engine's crisp per-substep
+// envelope turns into stutter when rAF intervals swing past ~24ms (webOS 3
+// routinely drops to 30-40fps under image loads). While spring physics is
+// active the controller measures rolling rAF intervals; a slow median flips
+// the engine to CHASE, whose single-exponential update is inherently immune
+// to frame jank (see chaseStep's stall-safety guarantee).
+// ============================================================================
+
+// Cap for a *calibrated* rAF interval sample. Samples past this are genuine
+// stalls (tab hidden, GC pause) and would poison the median — reject them.
+const ADAPTIVE_SAMPLE_REJECT_MAX_MS = 500;
+
+// Rolling sample window (frames) for the median frame-interval measurement.
+const ADAPTIVE_SAMPLE_WINDOW = 24;
+
+// Minimum samples before degradation judgments are trusted (~0.4s of scroll).
+const ADAPTIVE_MIN_SAMPLES = 6;
+
+// Median rAF interval above which the panel is treated as frame-time starved.
+// 24ms ≈ <40fps — the point where the spring's crispness visibly degrades.
+const ADAPTIVE_FRAME_TARGET_MS = 24;
+
+// All scroll physics engines recognized by getScrollPhysics() live in
+// SpringPhysics.js (SCROLL_PHYSICS_ENGINES / normalizeScrollPhysics).
 
 class ScrollController {
     constructor() {
@@ -118,10 +214,20 @@ class ScrollController {
         // ====================================================================
         this._nativeScrollActive = false;
         this._nativeScrollTimeout = null;
+
+        // Resume timer for the CSS-composited horizontal track transition
+        // (the only animated path that has no RAF completion callback).
+        this._imageResumeTimer = null;
+        // Post-frame macrotask handle for deferred scroll:finished emission
+        this._finishEmitTimer = null;
         // Track the current target coordinate of any active native smooth scroll.
         // Prevents re-invoking container.scrollTo({ behavior: 'smooth' }) with the
         // same target coordinate mid-scroll, which would retrigger the animation.
         this._nativeTargetScroll = null;
+
+        // Track containers wrapped with .vertical-scroll-track in GPU mode so
+        // native/horizontal scrolls skip full-subtree querySelector scans.
+        this._gpuTrackedContainers = typeof WeakSet === 'function' ? new WeakSet() : null;
 
         // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
         //
@@ -138,8 +244,243 @@ class ScrollController {
         // ====================================================================
         this._offsetCache = new WeakMap();
 
+        // PERFORMANCE: stable layout metrics for vertical D-pad navigation.
+        //
+        // Even with the offsetTop cache above, the row-scroll branch still read
+        // row.offsetHeight, pageContent.clientHeight and rowItems.clientWidth on
+        // EVERY up/down press. Each of those is a layout read, and because the
+        // keypress path also mutates focus classes, the first read flushed a
+        // full synchronous reflow of the whole page (50-120ms on Tizen).
+        //
+        // Rows, row tracks and the page viewport do not change dimensions while
+        // the user navigates, so cache them once and invalidate on resize /
+        // layout preference changes / page navigation.
+        this._rowMetrics = new WeakMap();
+        this._containerMetrics = new WeakMap();
+
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('resize', () => this.invalidateMetrics());
+        }
+        eventBus.on('layout:changed', () => this.invalidateMetrics());
+
         // Expose to window for lazy-load checking to bypass circular imports
         window.__scrollController = this;
+
+        // --------------------------------------------------------------------
+        // HORIZONTAL SCROLL MODE INITIALIZATION
+        // --------------------------------------------------------------------
+        // Stamps the initial data-horizontal-scroll attribute on <html>
+        // and subscribes to runtime preference changes from SettingsPage.
+        // --------------------------------------------------------------------
+        this._applyHorizontalScrollMode(this.getHorizontalScrollMode());
+        eventBus.on('pref:horizontalScrollMode', (mode) => {
+            this._applyHorizontalScrollMode(mode);
+        });
+
+        // --------------------------------------------------------------------
+        // SCROLL PHYSICS INITIALIZATION
+        // --------------------------------------------------------------------
+        // Stamps the initial data-scroll-physics attribute on <html>. The
+        // 'spring' value flips .row-items-track CSS transitions off — JS-driven
+        // per-frame transform writes (the spring integrator) would otherwise
+        // fight the CSS transition on every frame.
+        // --------------------------------------------------------------------
+        this._applyScrollPhysics(this.getScrollPhysics());
+        eventBus.on('pref:scrollPhysics', (physics) => {
+            // Reset both axis engines so an in-flight animation never
+            // blends two different physics models.
+            this.cancelAnimation('vertical');
+            this.cancelAnimation('horizontal');
+            this._applyScrollPhysics(physics === 'easing' ? 'easing' : physics);
+        });
+
+        // --------------------------------------------------------------------
+        // ADAPTIVE FRAME SAMPLER
+        // --------------------------------------------------------------------
+        // Rolling log of recent rAF intervals (ms). Populated by the physics
+        // loop every animated frame; decides whether the spring engine should
+        // degrade to CHASE on frame-time-starved panels (webOS 3 et al).
+        // --------------------------------------------------------------------
+        this._frameSamples = [];
+    }
+
+    /**
+     * Resolves the active vertical scroll animation mode from stored preferences.
+     * Supported options:
+     * - 'gpu': Fast hardware-accelerated CSS translate3d transforms on .vertical-scroll-track.
+     * - 'native': Smooth animated scrolling via JS RAF scrollTop.
+     * - 'current': Standard custom JS RAF loops.
+     * - 'instant': Immediate position snapping without transition delay.
+     *
+     * @returns {'gpu'|'native'|'current'|'instant'} Active vertical scroll mode
+     */
+    getVerticalScrollMode() {
+        // Retrieve explicit user preference from persistent local storage
+        const stored = storage.getItem('pref:verticalScrollMode');
+        if (stored) {
+            return stored;
+        }
+
+        // Default to smooth native scrolling across all platforms
+        // for unified, fluid, and predictable vertical viewport transitions.
+        // Native mode ensures consistent scroll dynamics without compositor quirks.
+        return 'native';
+    }
+
+    /**
+     * Resolves the configured horizontal media row scroll animation mode from stored preferences.
+     * Supported options:
+     * - 'gpu': Fast hardware-accelerated CSS translate3d transitions directly on .row-items-track.
+     * - 'native': Smooth animated scrolling via container.scrollLeft / smoothScrollTo.
+     * - 'instant': Immediate snap to focused card without animation.
+     *
+     * @returns {'gpu'|'native'|'instant'} Active horizontal scroll mode
+     */
+    getHorizontalScrollMode() {
+        // Retrieve explicit user preference from persistent local storage
+        const stored = storage.getItem('pref:horizontalScrollMode');
+        if (stored) {
+            return stored;
+        }
+
+        /*
+         * Default horizontal scrolling animation behavior:
+         * - Defaults to 'native' (Smooth) across all platforms for unified,
+         *   consistent, and fluid media row scrolling.
+         */
+        return 'native';
+    }
+
+    /**
+     * ========================================================================
+     * VERTICAL SCROLL FOCUS ALIGNMENT CONFIGURATION
+     * ========================================================================
+     * Resolves the target alignment mode when focusing rows or vertical list items.
+     * Supported options:
+     *   - 'bottom' (Default): Aligns focused rows toward the lower viewport boundary.
+     *     This drastically minimizes scroll frequency, as rows already within view
+     *     require zero scroll adjustments, eliminating unnecessary repaints and
+     *     GPU compositor thrashing on Smart TV hardware.
+     *   - 'middle': Centers the active row or item in the middle of the viewport.
+     *   - 'top': Sticks the active row near the top of the viewport with top padding.
+     *
+     * @returns {'bottom'|'middle'|'top'} Active vertical scroll alignment mode
+     * ========================================================================
+     */
+    getVerticalScrollAlignment() {
+        // Read explicit user preference from persistent local storage
+        const stored = storage.getItem('pref:verticalScrollAlignment');
+
+        // Validate and normalize supported alignment keywords
+        if (stored === 'top' || stored === 'middle' || stored === 'center' || stored === 'bottom') {
+            return stored === 'center' ? 'middle' : stored;
+        }
+
+        // 'bottom' is the default behavior: it preserves viewport stability and
+        // eliminates repetitive layout scrolling when navigating adjacent rows.
+        return 'bottom';
+    }
+
+    /**
+     * Stamped onto document.documentElement to control overflow behavior and
+     * hardware-compositing rules in layout.css / android-mobile.css.
+     *
+     * @param {'gpu'|'native'|'instant'} mode
+     * @private
+     */
+    _applyHorizontalScrollMode(mode) {
+        // Guard against redundant root DOM attribute mutations, as modifying
+        // attributes on <html> invalidates styles across every node in the document.
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
+            if (
+                typeof document.documentElement.getAttribute === 'function' &&
+                document.documentElement.getAttribute('data-horizontal-scroll') === mode
+            ) {
+                return;
+            }
+            document.documentElement.setAttribute('data-horizontal-scroll', mode);
+        }
+    }
+
+    /**
+     * Resolves the active scroll physics engine from stored preferences via
+     * the shared SpringPhysics normalizer (same rules as TouchHorizontalScroller
+     * and the settings dropdown). Supported options:
+     * - 'easing' (default): Classic time-based easeOutQuad curves.
+     * - 'spring': Critically-damped velocity physics (Apple TV glide).
+     * - 'chase': First-order exponential camera follower (continuous chase).
+     * - 'rail': Constant-velocity travel with a linear deceleration tail.
+     * - 'fling': Momentum sweep with friction-glide landing.
+     *
+     * @returns {'easing'|'spring'|'chase'|'rail'|'fling'} Active physics engine
+     */
+    getScrollPhysics() {
+        return normalizeScrollPhysics(storage.getItem('pref:scrollPhysics'));
+    }
+
+    /**
+     * Stamped onto document.documentElement so stylesheets can disable CSS
+     * transition rules that would fight JS-driven physics transform writes.
+     *
+     * @param {'easing'|'spring'|'chase'|'rail'|'fling'} physics
+     * @private
+     */
+    _applyScrollPhysics(physics) {
+        // Only write to <html> when the attribute value actually changes
+        // to avoid global style invalidation across the entire DOM tree.
+        if (typeof document !== 'undefined' && typeof document.documentElement?.setAttribute === 'function') {
+            if (
+                typeof document.documentElement.getAttribute === 'function' &&
+                document.documentElement.getAttribute('data-scroll-physics') === physics
+            ) {
+                return;
+            }
+            document.documentElement.setAttribute('data-scroll-physics', physics);
+        }
+    }
+
+    /**
+     * Records one raw rAF interval (ms) into the adaptive sampler.
+     * @param {number} deltaMs
+     * @private
+     */
+    _recordFrameDelta(deltaMs) {
+        this._frameSamples.push(deltaMs);
+        if (this._frameSamples.length > ADAPTIVE_SAMPLE_WINDOW) {
+            this._frameSamples.shift();
+        }
+    }
+
+    /**
+     * Decides whether the panel's frame delivery is too slow for the spring
+     * engine's crisp per-substep envelope. Uses the median of the rolling
+     * rAF-interval sampler so single outliers never trigger the fallback.
+     *
+     * @returns {boolean} True when median frame time exceeds ADAPTIVE_FRAME_TARGET_MS
+     * @private
+     */
+    _isFrameTimingDegraded() {
+        const samples = this._frameSamples;
+        if (samples.length < ADAPTIVE_MIN_SAMPLES) return false;
+        const sorted = [...samples].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)] > ADAPTIVE_FRAME_TARGET_MS;
+    }
+
+    /**
+     * Resolves the physics engine to actually integrate with. The Apple TV
+     * spring auto-degrades to CHASE when the frame sampler detects a slow
+     * panel: a follower update is a single exponential, perfectly stable at
+     * any frame interval, so jank reads as mild slowness instead of stutter.
+     *
+     * @returns {'spring'|'chase'|'rail'|'fling'}
+     * @private
+     */
+    _resolvePhysicsEngine() {
+        const pref = this.getScrollPhysics();
+        if (pref === 'spring' && this._isFrameTimingDegraded()) {
+            return 'chase';
+        }
+        return pref;
     }
 
     /**
@@ -174,8 +515,93 @@ class ScrollController {
             this._horizontalScrollAnimationId === null &&
             !this._nativeScrollActive
         ) {
-            eventBus.emit('scroll:finished');
+            // Defer scroll:finished delivery by one macrotask turn so Frame K's
+            // rAF only commits the final scroll transform/offset and yields to
+            // the compositor without bundling listener work into that frame.
+            if (this._finishEmitTimer) {
+                clearTimeout(this._finishEmitTimer);
+            }
+            this._finishEmitTimer = setTimeout(() => {
+                this._finishEmitTimer = null;
+                // Bail cleanly if a consecutive navigation restarted scroll before turn ran
+                if (this.isAnimating) return;
+
+                // All motion has settled — let the image pre-warmer refill the
+                // HTTP cache after a short compositor-cool-down window.
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.finish');
+                this._resumeImagePrewarm();
+                eventBus.emit('scroll:finished');
+            }, 0);
         }
+    }
+
+    /**
+     * Suspends ImageCache pre-warming while the viewport is in motion. Keeping
+     * image decodes off the main thread during D-pad scrolling is the single
+     * biggest win for smooth TV navigation on legacy panels.
+     * @private
+     */
+    _pauseImagePrewarm() {
+        if (this._finishEmitTimer) {
+            clearTimeout(this._finishEmitTimer);
+            this._finishEmitTimer = null;
+        }
+        // Cancel any pending CSS-track resume so a vertical RAF scroll that
+        // starts during the horizontal settle window fully owns the pause.
+        // Without this, a stale horizontal timer could call resume() again
+        // after the vertical animation already resumed, pushing the settle
+        // delay out by another full cooldown window.
+        if (this._imageResumeTimer) {
+            clearTimeout(this._imageResumeTimer);
+            this._imageResumeTimer = null;
+        }
+
+        if (imageCache && typeof imageCache.pause === 'function') {
+            imageCache.pause();
+        }
+
+        // Broadcast scroll start so post-scroll lazy queues cancel any pending settle
+        // flush timer immediately when the next keypress starts scrolling.
+        eventBus.emit('scroll:started');
+    }
+
+    /**
+     * Resumes ImageCache pre-warming after a full 1200ms quiet window. D-pad
+     * key repeats land every 250-500ms, so the previous 250ms settle dropped
+     * decode work exactly between two presses (the `ScrollController.finish
+     * (+Nms)` long-task cluster). The delay itself is scheduled inside
+     * ImageCache.resume() and is cancelled by the next scroll:started.
+     * @private
+     */
+    _resumeImagePrewarm() {
+        if (imageCache && typeof imageCache.resume === 'function') {
+            imageCache.resume(1200);
+        }
+    }
+
+    /**
+     * Schedules a pre-warm resume after a CSS-composited horizontal track
+     * transition. Unlike RAF-driven scrolls, CSS transitions expose no
+     * completion callback, so the configured duration acts as the settle cue.
+     * Skips the resume when another axis is still animating — that axis'
+     * _checkScrollFinished() owns the resume in that case.
+     *
+     * @param {number} [delayMs] - Transition duration plus settle margin
+     * @private
+     */
+    _scheduleImagePrewarmResume(delayMs) {
+        if (this._imageResumeTimer) {
+            clearTimeout(this._imageResumeTimer);
+            this._imageResumeTimer = null;
+        }
+
+        const wait =
+            typeof delayMs === 'number' && delayMs >= 0 ? delayMs : this.getHorizontalScrollDuration();
+
+        this._imageResumeTimer = setTimeout(() => {
+            this._imageResumeTimer = null;
+            if (!this.isAnimating) this._resumeImagePrewarm();
+        }, wait);
     }
 
     // ========================================================================
@@ -203,8 +629,6 @@ class ScrollController {
      */
     prewarmOffsetCache(elements, relativeTo) {
         if (!elements || !relativeTo) return;
-
-        let warmedCount = 0;
 
         // Walk every element's offsetParent chain and store the cumulative top.
         // All reads are batched in this single call, so the browser only needs
@@ -238,7 +662,6 @@ class ScrollController {
             // containers will exit early and must NOT be cached (stale values).
             if (current === relativeTo) {
                 this._offsetCache.set(el, { container: relativeTo, value: top });
-                warmedCount++;
             }
         }
     }
@@ -272,7 +695,7 @@ class ScrollController {
         if (!container) return 0;
 
         // Retrieve active vertical scroll style preference.
-        const scrollMode = storage.getItem('pref:verticalScrollMode') || 'native';
+        const scrollMode = this.getVerticalScrollMode();
 
         // Check if GPU mode is active and parse the translate3d string coordinate.
         if (scrollMode === 'gpu') {
@@ -316,6 +739,19 @@ class ScrollController {
     }
 
     /**
+     * Resolves the horizontal (media-row) scroll animation duration (ms).
+     * Honors the same 4-value scrollSmoothingDuration preference as vertical
+     * navigation ('instant' | 'current' | 'smooth' | 'slower'), mapped to
+     * proportionally quicker timings since row hops are shorter.
+     * @returns {number}
+     */
+    getHorizontalScrollDuration() {
+        const pref = storage.getItem('pref:scrollSmoothingDuration') || 'smooth';
+        const isDesktop = platformInfo.isDesktop || platformInfo.isWeb;
+        return getHorizontalDurationMs(pref, isDesktop);
+    }
+
+    /**
      * Smooth scroll with easeOutQuad easing and retarget support.
      *
      * Uses a time-based animation with proper easing curve.
@@ -329,37 +765,56 @@ class ScrollController {
      * @param {'vertical'|'horizontal'} [direction='vertical'] - Scroll axis
      */
     smoothScrollTo(container, targetScroll, duration = null, direction = 'vertical') {
+        if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController.smoothScrollTo');
         const isVertical = direction === 'vertical';
         const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
 
         // Resolve active scroll mode and duration preference from stored user preferences.
-        const scrollMode = isVertical ? storage.getItem('pref:verticalScrollMode') || 'native' : 'current';
-        const durationPref = storage.getItem('pref:scrollSmoothingDuration') || 'current';
+        const scrollMode = isVertical ? this.getVerticalScrollMode() : this.getHorizontalScrollMode();
+        const durationPref = storage.getItem('pref:scrollSmoothingDuration') || 'smooth';
 
         /* ====================================================================
          * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
          * ====================================================================
-         * Snaps content immediately without animation if verticalScrollMode or
-         * scrollSmoothingDuration is configured to 'instant'.
+         * Snaps content immediately without animation if verticalScrollMode,
+         * horizontalScrollMode, or scrollSmoothingDuration is configured to 'instant'.
          * ==================================================================== */
-        let durationToUse = duration !== null ? (typeof duration === 'function' ? duration() : duration) : (isVertical ? this.getVerticalScrollDuration() : SCROLL_DURATION_HORIZONTAL);
-        if (isVertical && (scrollMode === 'instant' || durationPref === 'instant')) {
+        let durationToUse =
+            duration !== null
+                ? typeof duration === 'function'
+                    ? duration()
+                    : duration
+                : isVertical
+                  ? this.getVerticalScrollDuration()
+                  : this.getHorizontalScrollDuration();
+        if (scrollMode === 'instant' || durationPref === 'instant') {
             durationToUse = 0;
         }
 
-        // Reset the vertical track's transform if we've switched away from GPU mode.
-        if (!isVertical || scrollMode !== 'gpu') {
+        // Reset the vertical track's transform if we've switched away from GPU mode,
+        // skipping the 1,500+ node subtree query when container never used GPU tracks.
+        if (
+            (!isVertical || scrollMode !== 'gpu') &&
+            (!this._gpuTrackedContainers || this._gpuTrackedContainers.has(container))
+        ) {
             const existingTrack = container.querySelector('.vertical-scroll-track');
             if (existingTrack && (existingTrack.style.transform || existingTrack.style.webkitTransform)) {
                 existingTrack.style.transform = 'translate3d(0px, 0px, 0px)';
                 existingTrack.style.webkitTransform = 'translate3d(0px, 0px, 0px)';
+            }
+            // Clear tracking once the lingering GPU track transform is zeroed out.
+            if (this._gpuTrackedContainers) {
+                this._gpuTrackedContainers.delete(container);
             }
         }
 
         // Initialize or retrieve the vertical scroll track in GPU mode.
         let track = null;
         if (isVertical && scrollMode === 'gpu') {
+            if (this._gpuTrackedContainers) {
+                this._gpuTrackedContainers.add(container);
+            }
             track = container.querySelector('.vertical-scroll-track');
             if (!track) {
                 // Wrap all direct children inside a hardware-accelerated wrapper container.
@@ -385,19 +840,24 @@ class ScrollController {
         // ----------------------------------------------------------------
         // DYNAMIC VELOCITY ADAPTATION (Hero Carousel & Long Leaps)
         // ----------------------------------------------------------------
-        // Standard row-to-row navigation (~350-450px) uses the snappy base duration
-        // (130ms on desktop, 180ms on TV). Only massive transitions (e.g. hero carousel ↔
-        // first content row at >550px) scale smoothly to prevent compositor hitching.
+        // Standard row-to-row navigation (up to ~600px on tall poster rows) uses the
+        // snappy base duration (130ms on desktop, 180ms on TV) so every row type feels
+        // identical. Only massive transitions (hero carousel ↔ content rows, multi-row
+        // jumps beyond LARGE_JUMP_THRESHOLD_PX) scale smoothly to prevent compositor
+        // hitching.
         // ----------------------------------------------------------------
         if (isVertical && durationToUse > 0) {
             // Measure the absolute travel distance across the vertical axis
             const distance = Math.abs(targetScroll - currentScroll);
 
-            // True large vertical transitions (e.g. hero carousel ↔ content rows at >550px)
-            if (distance > 550) {
+            // True large vertical transitions (e.g. hero carousel ↔ content rows)
+            if (distance > LARGE_JUMP_THRESHOLD_PX) {
                 const minFloor = Math.round(durationToUse * 1.25);
                 const maxCap = Math.round(durationToUse * 1.75);
-                durationToUse = Math.min(maxCap, Math.max(minFloor, Math.round(durationToUse * (1 + (distance - 550) / 400))));
+                durationToUse = Math.min(
+                    maxCap,
+                    Math.max(minFloor, Math.round(durationToUse * (1 + (distance - LARGE_JUMP_THRESHOLD_PX) / 400)))
+                );
             }
         }
 
@@ -444,14 +904,54 @@ class ScrollController {
                 } else {
                     container.scrollTop = targetScroll;
                 }
-                // STABILIZATION: Force reset of horizontal drift on vertical containers.
-                if (container.scrollLeft !== 0) {
-                    container.scrollLeft = 0;
-                }
+                // Horizontal drift was already cleared on clean layout prior to writing scrollTop;
+                // never read scrollLeft immediately after scrollTop or layout forces a full reflow.
             } else {
                 container.scrollLeft = targetScroll;
             }
             this._checkScrollFinished();
+            return;
+        }
+
+        // Animation confirmed — halt pre-warming for the duration of motion.
+        this._pauseImagePrewarm();
+
+        /* ====================================================================
+         * ONE-SHOT GPU CLAMP (ZERO LAYOUT READS PER FRAME)
+         * ====================================================================
+         * In GPU mode the compositor track owns vertical motion, so the scroll
+         * container must rest at scrollTop 0. Reading `container.scrollTop`
+         * inside the RAF loop forces a synchronous layout on every ~16ms frame
+         * (the transform writes above already dirty the style tree) — that read
+         * is the 56-62ms `ScrollController._step` spike. Clamp exactly once
+         * here, while the tree is already dirty from the keypress path, so both
+         * the easing and spring loops can write transforms only.
+         * ==================================================================== */
+        if (isVertical && scrollMode === 'gpu' && container.scrollTop !== 0) {
+            container.scrollTop = 0;
+        }
+
+        /* ====================================================================
+         * 🍏 SCROLL PHYSICS ENGINES (OPT-IN)
+         * ====================================================================
+         * When pref:scrollPhysics is set, the hop is delegated to the
+         * velocity-driven engine integrators (spring / chase / rail / fling)
+         * instead of the time-based easing loop. Everything above this point
+         * (instant snap, GPU track setup, dynamic duration scaling for long
+         * leaps) applies identically to all engines.
+         * ==================================================================== */
+        if (this.getScrollPhysics() !== 'easing') {
+            this._springScrollTo({
+                stateKey,
+                animIdKey,
+                container,
+                track,
+                currentScroll,
+                targetScroll,
+                duration: durationToUse,
+                isVertical,
+                scrollMode
+            });
             return;
         }
 
@@ -524,7 +1024,8 @@ class ScrollController {
         // to use an S-curve easing profile rather than pure deceleration
         const isLargeScroll = isVertical && Math.abs(targetScroll - currentScroll) > 320;
 
-        // Create new animation state
+        // Create new animation state (lastWritten suppresses sub-0.5px tail
+        // micro-writes and prevents double writes on settlement frame K)
         this[stateKey] = {
             container,
             track,
@@ -532,7 +1033,8 @@ class ScrollController {
             target: targetScroll,
             startTime: null, // Initialized in first RAF frame
             duration: durationToUse,
-            isLargeScroll
+            isLargeScroll,
+            lastWritten: null
         };
 
         // Standard easeOutQuad: fast start, smooth deceleration (t * (2 - t))
@@ -561,70 +1063,72 @@ class ScrollController {
             // Initialize startTime on the first actual frame if not set
             if (!state.startTime) {
                 state.startTime = time;
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController._step');
             }
 
             const elapsed = time - state.startTime;
             const progress = Math.min(elapsed / state.duration, 1);
 
-            // For large vertical transitions (e.g. hero carousel ↔ first row), use the gentle
-            // smoothstep curve to keep initial velocity safe for TV compositing. For standard
-            // row-to-row navigation, use blended easeOutQuad for maximum responsiveness.
-            const eased = state.isLargeScroll
-                ? easeSmoothStep(progress)
-                : progress < EASE_BLEND
-                    ? easeOutQuad(progress)
-                    : blendAt + blendRemaining * easeOutQuad((progress - EASE_BLEND) / blendDuration);
-
-            // Interpolate between start and target
-            const distance = state.target - state.startScroll;
-            const newScroll = state.startScroll + distance * eased;
-
-            // Apply scroll position
-            if (isVertical) {
-                if (scrollMode === 'gpu') {
-                    // Update GPU transform coordinates using pre-cached track element
-                    const currentTrack = state.track;
-                    if (currentTrack) {
-                        currentTrack.style.transform = `translate3d(0px, -${newScroll}px, 0px)`;
-                        currentTrack.style.webkitTransform = `translate3d(0px, -${newScroll}px, 0px)`;
-                    }
-                    container.scrollTop = 0;
-                } else {
-                    // Write vertical scroll position directly to container.
-                    // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
-                    // metrics here! Setting scrollTop dirties the layout tree. Reading
-                    // scrollLeft immediately afterwards forces a full synchronous reflow
-                    // on every 16ms animation frame, reducing complex pages like HomePage
-                    // (with 1500+ DOM nodes) down to a laggy 3 FPS.
-                    state.container.scrollTop = newScroll;
-                }
-            } else {
-                state.container.scrollLeft = newScroll;
-            }
-
             if (progress < 1) {
+                // For large vertical transitions (e.g. hero carousel ↔ first row), use the gentle
+                // smoothstep curve to keep initial velocity safe for TV compositing. For standard
+                // row-to-row navigation, use blended easeOutQuad for maximum responsiveness.
+                const eased = state.isLargeScroll
+                    ? easeSmoothStep(progress)
+                    : progress < EASE_BLEND
+                      ? easeOutQuad(progress)
+                      : blendAt + blendRemaining * easeOutQuad((progress - EASE_BLEND) / blendDuration);
+
+                // Interpolate between start and target
+                const distance = state.target - state.startScroll;
+                const newScroll = state.startScroll + distance * eased;
+
+                // Suppress sub-0.5px tail micro-deltas that add compositor churn
+                // without shifting rendered pixels on screen.
+                if (state.lastWritten === null || Math.abs(newScroll - state.lastWritten) >= 0.5) {
+                    state.lastWritten = newScroll;
+                    if (isVertical) {
+                        if (scrollMode === 'gpu') {
+                            // PERFORMANCE: transform writes only — no layout reads, no
+                            // scrollTop writes, no class/attribute mutations. The
+                            // container was clamped to scrollTop 0 once at animation
+                            // start (see smoothScrollTo), so a per-frame read here would
+                            // only force a synchronous layout of the whole page.
+                            writeTrackTransform(state.track, newScroll);
+                        } else {
+                            // Write vertical scroll position directly to container.
+                            // CRITICAL PERFORMANCE RULE: Do NOT read scrollLeft or other layout
+                            // metrics here! Setting scrollTop dirties the layout tree. Reading
+                            // scrollLeft immediately afterwards forces a full synchronous reflow
+                            // on every 16ms animation frame, reducing complex pages like HomePage
+                            // (with 1500+ DOM nodes) down to a laggy 3 FPS.
+                            state.container.scrollTop = newScroll;
+                        }
+                    } else {
+                        state.container.scrollLeft = newScroll;
+                    }
+                }
+
                 // Continue animation loop on the next frame
                 this[animIdKey] = requestAnimationFrame(animate);
             } else {
-                // Snap to exact target and clean up animation state
-                if (isVertical) {
-                    if (scrollMode === 'gpu') {
-                        const currentTrack = state.track;
-                        if (currentTrack) {
-                            currentTrack.style.transform = `translate3d(0px, -${state.target}px, 0px)`;
-                            currentTrack.style.webkitTransform = `translate3d(0px, -${state.target}px, 0px)`;
+                // Frame K settlement: write exact target once (no preceding
+                // intermediate write on the final frame) before cleanup.
+                if (state.lastWritten !== state.target) {
+                    state.lastWritten = state.target;
+                    if (isVertical) {
+                        if (scrollMode === 'gpu') {
+                            // Write-only completion: the one-shot clamp at animation
+                            // start already parked the container at scrollTop 0.
+                            writeTrackTransform(state.track, state.target);
+                        } else {
+                            state.container.scrollTop = state.target;
                         }
-                        container.scrollTop = 0;
+                        // Horizontal drift is cleared at smoothScrollTo entry before scrollTop dirties layout;
+                        // reading scrollLeft right after scrollTop would trigger a full-tree reflow inside finish.
                     } else {
-                        state.container.scrollTop = state.target;
+                        state.container.scrollLeft = state.target;
                     }
-                    // STABILIZATION: Settle any horizontal drift once at animation completion,
-                    // avoiding per-frame layout recalculations during motion.
-                    if (state.container.scrollLeft !== 0) {
-                        state.container.scrollLeft = 0;
-                    }
-                } else {
-                    state.container.scrollLeft = state.target;
                 }
                 this[animIdKey] = null;
                 this[stateKey] = null;
@@ -635,6 +1139,508 @@ class ScrollController {
         // Note: For the very first frame, we don't have a 'time' yet,
         // so we let the animate function initialize it.
         this[animIdKey] = requestAnimationFrame(animate);
+    }
+
+    /**
+     * ========================================================================
+     * APPLE-STYLE SPRING SCROLL ENGINE (velocity-driven, opt-in)
+     * ========================================================================
+     * Integrates a damped harmonic oscillator (see SpringPhysics.js) inside
+     * a RAF loop. Engine guarantees:
+     *   1. VELOCITY CONTINUITY: retargeting only re-aims the spring — the
+     *      current velocity is untouched — so held D-pad key repeats produce
+     *      one continuous camera glide instead of restart-from-zero curves.
+     *   2. FIXED-STEP INTEGRATION: semi-implicit Euler with ≤8ms substeps,
+     *      so trajectories are identical on 30/60/120 Hz displays.
+     *   3. DETERMINISTIC SETTLE: snaps when both |Δx| < 0.3px and |v| <
+     *      0.015px/ms, with a hard SPRING_MAX_DURATION_MS timeout net.
+     *
+     * Shared state schema (also reused by the horizontal GPU track spring):
+     *   { container, track, axis, scrollMode, omega, zeta, x, v, target,
+     *     startTime, lastFrameTime, elapsed, physics, _write, _finalize }
+     *
+     * @param {Object} p
+     * @param {string} p.stateKey - Axis state slot ('_verticalScrollState' | '_horizontalScrollState')
+     * @param {string} p.animIdKey - Axis RAF id slot
+     * @param {HTMLElement} p.container - Scrollable container
+     * @param {HTMLElement|null} p.track - Vertical GPU compositor track (or null)
+     * @param {number} p.currentScroll - Current scroll position, px
+     * @param {number} p.targetScroll - Target scroll position, px
+     * @param {number} p.duration - Settle budget from duration preference, ms
+     * @param {boolean} p.isVertical - True for vertical axis
+     * @param {'gpu'|'native'|'current'|'instant'} p.scrollMode - Active axis scroll mode
+     * @private
+     */
+    _springScrollTo({
+        stateKey,
+        animIdKey,
+        container,
+        track,
+        currentScroll,
+        targetScroll,
+        duration,
+        isVertical,
+        scrollMode
+    }) {
+        const existing = this[stateKey];
+
+        if (existing && existing.physics) {
+            if (Math.abs(existing.target - targetScroll) < SCROLL_SNAP_THRESHOLD) {
+                // Unchanged destination — let the in-flight engine finish.
+                return;
+            }
+            // VELOCITY CONTINUITY: re-aim without touching current (x, v).
+            // Fresh settle budget and glide band for long re-aims.
+            existing.target = targetScroll;
+            existing.startTime = null;
+            existing.elapsed = 0;
+            existing.budget = Math.max(duration || 0, SPRING_MIN_DURATION_MS);
+            existing.glide = null;
+            existing.glideZone = Math.min(
+                GLIDE_ZONE_MAX_PX,
+                Math.abs(existing.target - existing.x) * GLIDE_ZONE_FRACTION
+            );
+            // Rail/fling derive their speed from remaining distance — refresh.
+            if (existing.engine === 'rail') {
+                this._refreshRailState(existing, duration);
+            } else if (existing.engine === 'fling') {
+                this._refreshFlingState(existing, duration);
+            }
+            return;
+        }
+        // Switching engines mid-flight: cleanly stop the old easing loop
+        // before the physics engine takes over the axis state slot.
+        if (existing && this[animIdKey]) {
+            cancelAnimationFrame(this[animIdKey]);
+            this[animIdKey] = null;
+        }
+
+        // ----------------------------------------------------------------
+        // ONE-SHOT GPU CLAMP (mirrors smoothScrollTo)
+        // ----------------------------------------------------------------
+        // The per-frame writer below must never read scrollTop: on the GPU
+        // track the transform owns the pixels, and a scrollTop read after a
+        // style write forces a full synchronous layout every frame.
+        // ----------------------------------------------------------------
+        if (isVertical && scrollMode === 'gpu' && container.scrollTop !== 0) {
+            container.scrollTop = 0;
+        }
+
+        // ----------------------------------------------------------------
+        // Axis write strategy — mirrors the easing engine exactly:
+        //   vertical gpu    → translate3d on .vertical-scroll-track
+        //   vertical native → container.scrollTop
+        //   horizontal      → container.scrollLeft
+        // ----------------------------------------------------------------
+        let write;
+        let finalize;
+
+        if (isVertical) {
+            // Sub-pixel suppression: the integrator emits absolute positions, so
+            // rewriting a transform that moved <0.5px produces no visible change
+            // while still dirtying the style tree every frame.
+            let lastWritten = null;
+
+            write = (value) => {
+                if (scrollMode === 'gpu') {
+                    // Write-only GPU path: the container is clamped to scrollTop 0
+                    // once before the loop starts (see smoothScrollTo), so reading
+                    // scrollTop here would force a synchronous layout per frame.
+                    if (lastWritten !== null && Math.abs(value - lastWritten) < 0.5) return;
+                    lastWritten = value;
+                    const currentTrack = this[stateKey] && this[stateKey].track;
+                    writeTrackTransform(currentTrack, value);
+                } else {
+                    // CRITICAL PERFORMANCE RULE: no layout reads while writing
+                    // (see the easing engine's scrollTop branch).
+                    if (lastWritten !== null && Math.abs(value - lastWritten) < 0.5) return;
+                    lastWritten = value;
+                    container.scrollTop = value;
+                }
+            };
+            finalize = (value) => {
+                if (scrollMode === 'gpu') {
+                    writeTrackTransform(track, value);
+                } else {
+                    container.scrollTop = value;
+                }
+                // Horizontal drift is already zeroed at smoothScrollTo entry against clean layout;
+                // skip post-write scrollLeft read so ScrollController.finish never forces synchronous layout.
+            };
+        } else {
+            write = (value) => {
+                container.scrollLeft = value;
+            };
+            finalize = (value) => {
+                container.scrollLeft = value;
+            };
+        }
+
+        this[stateKey] = this._createPhysicsState({
+            engine: this._resolvePhysicsEngine(),
+            axis: isVertical ? 'vertical' : 'horizontal',
+            container,
+            track,
+            scrollMode,
+            current: currentScroll,
+            target: targetScroll,
+            duration,
+            _write: write,
+            _finalize: finalize
+        });
+
+        this._runSpringLoop(stateKey, animIdKey);
+    }
+
+    /**
+     * Apple-style spring for the horizontal GPU compositor track
+     * (.row-items-track). Used by scrollIntoView when horizontal scroll mode
+     * is 'gpu' and physics is enabled — CSS cubic-bezier transitions cannot
+     * reproduce a spring/follower, so the JS integrator drives the transform
+     * per frame instead (data-scroll-physics disables the CSS transition for
+     * exactly this reason).
+     *
+     * Reuses the horizontal axis state slot so cancelAnimation, isAnimating
+     * and scroll:finished behave identically to every other engine.
+     *
+     * @param {HTMLElement} track - .row-items-track element to slide
+     * @param {number} targetX - Target horizontal offset, px
+     * @param {number} currentX - Current horizontal offset, px
+     * @param {boolean} isRtl - RTL layout flag
+     * @private
+     */
+    _springTrackHorizontal(track, targetX, currentX, isRtl) {
+        const stateKey = '_horizontalScrollState';
+        const animIdKey = '_horizontalScrollAnimationId';
+        const existing = this[stateKey];
+
+        if (existing && existing.physics) {
+            if (Math.abs(existing.target - targetX) < SCROLL_SNAP_THRESHOLD) {
+                return;
+            }
+            // VELOCITY CONTINUITY: re-aim without touching current (x, v).
+            // Fresh settle budget and glide band for long re-aims.
+            existing.target = targetX;
+            existing.startTime = null;
+            existing.elapsed = 0;
+            existing.budget = Math.max(this.getHorizontalScrollDuration(), SPRING_MIN_DURATION_MS);
+            existing.glide = null;
+            existing.glideZone = Math.min(
+                GLIDE_ZONE_MAX_PX,
+                Math.abs(existing.target - existing.x) * GLIDE_ZONE_FRACTION
+            );
+            // Rail/fling derive their speed from remaining distance — refresh.
+            if (existing.engine === 'rail') {
+                this._refreshRailState(existing, this.getHorizontalScrollDuration());
+            } else if (existing.engine === 'fling') {
+                this._refreshFlingState(existing, this.getHorizontalScrollDuration());
+            }
+            return;
+        }
+        if (existing && this[animIdKey]) {
+            cancelAnimationFrame(this[animIdKey]);
+            this[animIdKey] = null;
+        }
+
+        const transformFor = (value) => (isRtl ? `translate3d(${value}px, 0, 0)` : `translate3d(-${value}px, 0, 0)`);
+
+        this[stateKey] = this._createPhysicsState({
+            engine: this._resolvePhysicsEngine(),
+            axis: 'horizontal',
+            container: track,
+            track,
+            scrollMode: 'gpu',
+            current: currentX,
+            target: targetX,
+            duration: this.getHorizontalScrollDuration(),
+            _write: (value) => {
+                const transformStr = transformFor(value);
+                track.style.webkitTransform = transformStr;
+                track.style.transform = transformStr;
+            },
+            _finalize: (value) => {
+                const transformStr = transformFor(value);
+                track.style.webkitTransform = transformStr;
+                track.style.transform = transformStr;
+            }
+        });
+
+        this._runSpringLoop(stateKey, animIdKey);
+    }
+
+    /**
+     * Builds the physics state for whichever engine was resolved. Shared by
+     * all integration surfaces (vertical GPU/native, horizontal native, and
+     * the horizontal GPU track) so every engine behaves identically on both
+     * axes. Rail and fling derive their speed budgets from the hop distance
+     * and duration preference; chase derives τ; spring derives ω/ζ/v₀.
+     *
+     * @param {Object} o
+     * @param {'spring'|'chase'|'rail'|'fling'} o.engine - Resolved engine
+     * @param {'vertical'|'horizontal'} o.axis - Motion axis
+     * @param {HTMLElement} o.container - Scrollable container (or track)
+     * @param {HTMLElement|null} o.track - GPU compositor track (or null)
+     * @param {string} o.scrollMode - Active axis scroll mode
+     * @param {number} o.current - Current scroll position, px
+     * @param {number} o.target - Target scroll position, px
+     * @param {number} o.duration - Settle budget from duration preference, ms
+     * @param {Function} o._write - Per-frame position writer
+     * @param {Function} o._finalize - Target snap on completion
+     * @returns {Object} Physics state consumed by _runSpringLoop
+     * @private
+     */
+    _createPhysicsState({ engine, axis, container, track, scrollMode, current, target, duration, _write, _finalize }) {
+        const distance = target - current;
+        const durationFloor = Math.max(duration || 0, SPRING_MIN_DURATION_MS);
+        // Engines with exponential tails get a terminal glide band; rail
+        // already decelerates linearly, so it never needs the handover.
+        const glideZone = engine === 'rail' ? 0 : Math.min(GLIDE_ZONE_MAX_PX, Math.abs(distance) * GLIDE_ZONE_FRACTION);
+        const base = {
+            physics: true,
+            engine,
+            axis,
+            container,
+            track,
+            scrollMode,
+            x: current,
+            v: 0,
+            target,
+            startTime: null,
+            lastFrameTime: null,
+            elapsed: 0,
+            // The settle budget the glide must respect. Total animation time
+            // (spring + glide) is then exactly the configured duration at any
+            // frame rate, instead of the spring's free-running exponential
+            // tail (~500ms for a 340ms setting on long hops).
+            budget: durationFloor,
+            glide: null,
+            glideZone,
+            _write,
+            _finalize
+        };
+
+        if (engine === 'chase') {
+            // One exponential per frame; τ from the duration preference.
+            return { ...base, tau: durationFloor / CHASE_TAU_FACTOR };
+        }
+        if (engine === 'rail') {
+            // Constant-velocity slope matched to the easing engine's initial
+            // departure speed (2·D/T), with a linear deceleration tail.
+            const dist = Math.abs(distance);
+            return {
+                ...base,
+                speed: (2 * dist) / durationFloor,
+                decelZone: RAIL_DECEL_ZONE_FRACTION * dist
+            };
+        }
+        if (engine === 'fling') {
+            // Momentum sweep: velocity-capped follower. The launch speed
+            // ceiling derives from the hop so distant targets sweep faster.
+            const dist = Math.abs(distance);
+            return {
+                ...base,
+                tau: durationFloor / CHASE_TAU_FACTOR,
+                vCap: Math.max(FLING_VELOCITY_MULTIPLIER * ((2 * dist) / durationFloor), 0.3)
+            };
+        }
+        // Default: critically damped spring (Apple TV).
+        const { omega, zeta, v0 } = createSpring(distance, durationFloor);
+        return { ...base, omega, zeta, v: v0 };
+    }
+
+    /**
+     * Recomputes rail speed parameters after a mid-flight retarget (the
+     * remaining distance changed, so the fixed slope must re-derive).
+     * @param {Object} state - Rail physics state
+     * @param {number} duration - Settle budget, ms
+     * @private
+     */
+    _refreshRailState(state, duration) {
+        const dist = Math.abs(state.target - state.x);
+        state.speed = (2 * dist) / Math.max(duration || 0, SPRING_MIN_DURATION_MS);
+        state.decelZone = RAIL_DECEL_ZONE_FRACTION * dist;
+    }
+
+    /**
+     * Recomputes fling momentum ceiling after a mid-flight retarget.
+     * @param {Object} state - Fling physics state
+     * @param {number} duration - Settle budget, ms
+     * @private
+     */
+    _refreshFlingState(state, duration) {
+        const dist = Math.abs(state.target - state.x);
+        state.vCap = Math.max(
+            FLING_VELOCITY_MULTIPLIER * ((2 * dist) / Math.max(duration || 0, SPRING_MIN_DURATION_MS)),
+            0.3
+        );
+    }
+
+    /**
+     * Shared RAF driver for every physics axis. Integrates the engine with
+     * fixed substeps (8ms for the spring's second-order integrator, 16ms for
+     * the follower engines), records frame deltas into the adaptive sampler,
+     * and delegates per-frame writes to the state's _write closure.
+     *
+     * @param {string} stateKey - Axis state slot
+     * @param {string} animIdKey - Axis RAF id slot
+     * @private
+     */
+    _runSpringLoop(stateKey, animIdKey) {
+        const animate = (time) => {
+            const s = this[stateKey];
+            if (!s || !s.physics) return;
+
+            // Anchor the clock on the very first RAF frame (dt = 0), or
+            // re-anchor after a retarget refreshed the settle budget.
+            if (s.lastFrameTime === null) {
+                s.lastFrameTime = time;
+            }
+            if (s.startTime === null) {
+                s.startTime = time;
+                if (typeof markPerfOperation === 'function') markPerfOperation('ScrollController._step');
+            }
+
+            // Adaptive sampling: feed the RAW interval before clamping, but
+            // reject genuine stalls (hidden tab) from poisoning the median.
+            const rawDelta = time - s.lastFrameTime;
+            s.lastFrameTime = time;
+            if (rawDelta > 0 && rawDelta < ADAPTIVE_SAMPLE_REJECT_MAX_MS) {
+                this._recordFrameDelta(rawDelta);
+            }
+
+            // WALL-ACCURATE CADENCE: integrate the ACTUAL interval since the
+            // last paint (clamped). Deriving dt from a sliding median made the
+            // animation take MORE wall time than the configured duration
+            // whenever the panel got slower than the median had converged to
+            // (poster rows composite at ~30fps vs ~60fps on landscape rows →
+            // the same setting ran ~2.2x longer, the "posters feel laggy"
+            // slowdown between rows). Clamping the raw interval keeps the
+            // configured duration honest at every frame rate: 16.7ms panels
+            // paint small steps, 33ms panels paint double-sized steps at half
+            // the rate — same perceived speed — while a single late frame can
+            // never teleport (64ms tap) or stall the clock.
+            const dt = Math.min(Math.max(rawDelta, NOMINAL_FRAME_MS), CADENCE_DT_MAX_MS);
+            let remainingDt = dt;
+
+            // Settle budget accumulates INTEGRATED simulation time, not wall
+            // clock (identical accounting to TouchHorizontalScroller). Timing
+            // the SPRING_MAX_DURATION_MS hard timeout on wall clock fired the
+            // finalize() snap while the physics was still tens of pixels
+            // short of the target — the visible post-scroll "nudge" (20-30px
+            // jump) on slow Tizen hardware. Retarget re-anchoring restarts
+            // the budget, preserving the original "fresh settle budget" intent.
+            s.elapsed += dt;
+
+            if (s.glide) {
+                // BUDGET-EXACT TERMINAL GLIDE: monotone cubic Hermite from the
+                // handover position to the target, starting at the TRUE entry
+                // velocity and landing exactly when the configured settle
+                // budget expires.
+                //
+                //   shape(u) = a·u + (3−2a)·u² + (a−2)·u³,  a = vEntry·T / R
+                //
+                // a is clamped to [0, 3] (the cubic's monotonicity limit), so
+                // the departure speed equals the spring's true velocity (C1:
+                // no mid-flight speed step — the old floor-clamped entry
+                // accelerated the paint by 30-100% at the seam) unless the
+                // spring arrived implausibly fast.
+                const u = Math.min((s.elapsed - s.glide.start) / s.glide.dur, 1);
+                const a = s.glide.alpha;
+                const shape = a * u + (3 - 2 * a) * u * u + (a - 2) * u * u * u;
+                s.x = s.glide.x0 + s.glide.span * shape;
+                // Check landing/timeout BEFORE writing so Frame K calls _finalize once
+                // instead of writing s.x and immediately overwriting with s.target.
+                if (u >= 1 || s.elapsed >= SPRING_MAX_DURATION_MS) {
+                    s._finalize(s.target);
+                    this[animIdKey] = null;
+                    this[stateKey] = null;
+                    this._checkScrollFinished();
+                    return;
+                }
+                s._write(s.x);
+                this[animIdKey] = requestAnimationFrame(animate);
+                return;
+            }
+
+            while (remainingDt > 0) {
+                const h = Math.min(remainingDt, s.engine === 'spring' ? SPRING_SUBSTEP_MS : 16);
+                const [nx, nv] = this._advancePhysics(s, h);
+                s.x = nx;
+                s.v = nv;
+                remainingDt -= h;
+            }
+
+            const settled = this._isPhysicsSettled(s);
+            if (settled || s.elapsed >= SPRING_MAX_DURATION_MS) {
+                s._finalize(s.target);
+                this[animIdKey] = null;
+                this[stateKey] = null;
+                this._checkScrollFinished();
+                return;
+            }
+
+            s._write(s.x);
+
+            // Glide handover: distance remaining inside the glide band and
+            // still moving toward the target → replace the exponential tail
+            // with a glide that consumes the REMAINING settle budget, so the
+            // total animation time equals the configured duration on every row
+            // type and frame rate.
+            const remaining = Math.abs(s.target - s.x);
+            if (remaining > 0 && remaining <= s.glideZone && !s.glide) {
+                const vEntry = Math.abs(s.v);
+                const dur = Math.max(s.budget - s.elapsed, GLIDE_MIN_DURATION_MS);
+                // a·R/T must equal the entry velocity; clamped to the cubic's
+                // monotone range.
+                const alpha = Math.min(Math.max((vEntry * dur) / remaining, 0), 3);
+                s.glide = { x0: s.x, dur, start: s.elapsed, alpha, span: s.target - s.x };
+            }
+
+            this[animIdKey] = requestAnimationFrame(animate);
+        };
+
+        this[animIdKey] = requestAnimationFrame(animate);
+    }
+
+    /**
+     * One integration substep for the state's active engine.
+     * @param {Object} s - Physics state
+     * @param {number} h - Substep duration, ms
+     * @returns {[number, number]} New [x, v]
+     * @private
+     */
+    _advancePhysics(s, h) {
+        switch (s.engine) {
+            case 'chase':
+                return chaseStep(s.x, s.target, s.tau, h);
+            case 'rail':
+                return railStep(s.x, s.target, s.speed, s.decelZone, h);
+            case 'fling':
+                return flingStep(s.x, s.v, s.target, s.tau, s.vCap, h);
+            default:
+                return springStep(s.x, s.v, s.target, s.omega, s.zeta, h);
+        }
+    }
+
+    /**
+     * Engine-specific settle criterion. The spring requires velocity and
+     * distance convergence; chase/rail settle on distance alone (their
+     * crossing guards guarantee no residual motion); fling also waits for
+     * its momentum to dissipate.
+     *
+     * @param {Object} s - Physics state
+     * @returns {boolean}
+     * @private
+     */
+    _isPhysicsSettled(s) {
+        const dx = Math.abs(s.target - s.x);
+        if (s.engine === 'spring') {
+            return dx < SPRING_SETTLE_DISTANCE_PX && Math.abs(s.v) < SPRING_SETTLE_VELOCITY_PX_MS;
+        }
+        if (s.engine === 'fling') {
+            return dx < PHYSICS_SETTLE_DISTANCE_PX && Math.abs(s.v) < SPRING_SETTLE_VELOCITY_PX_MS;
+        }
+        return dx < PHYSICS_SETTLE_DISTANCE_PX;
     }
 
     /**
@@ -690,8 +1696,8 @@ class ScrollController {
         const subLibs = element.closest('#sidebar-sub-libraries');
         if (subLibs) {
             // Check if #sidebar-sub-libraries is actively overflowing with auto/scroll styles
-            const hasPopoverScroll = subLibs.scrollHeight > subLibs.clientHeight &&
-                window.getComputedStyle(subLibs).overflowY !== 'visible';
+            const hasPopoverScroll =
+                subLibs.scrollHeight > subLibs.clientHeight && window.getComputedStyle(subLibs).overflowY !== 'visible';
             return hasPopoverScroll ? subLibs : null;
         }
 
@@ -728,12 +1734,73 @@ class ScrollController {
     }
 
     /**
+     * Read-only metrics for a scroll container.
+     *
+     * `clientHeight` is cached for `.page-content` only — the page viewport is
+     * stable between resizes, while modals/popovers may be resized while open
+     * and must always be measured live.
+     *
+     * @param {HTMLElement} container
+     * @returns {{width: number, height: number}}
+     * @private
+     */
+    _getContainerMetrics(container) {
+        if (!container) return { width: 0, height: 0 };
+
+        const isPageContent = container.classList && container.classList.contains('page-content');
+        if (!isPageContent) {
+            return { width: container.clientWidth, height: container.clientHeight };
+        }
+
+        let metrics = this._containerMetrics.get(container);
+        if (!metrics) {
+            metrics = { width: container.clientWidth, height: container.clientHeight };
+            this._containerMetrics.set(container, metrics);
+        }
+        return metrics;
+    }
+
+    /**
+     * Cached row geometry for vertical D-pad row transitions.
+     *
+     * A `.media-row` keeps the same height and layout-exception flags for its
+     * entire lifetime; only doc-level layout changes invalidate this cache.
+     *
+     * @param {HTMLElement} row - `.media-row` element
+     * @param {HTMLElement} container - Scroll container the row lives in
+     * @returns {{container: HTMLElement, height: number, hasPersonGrid: boolean}}
+     * @private
+     */
+    _getRowMetrics(row, container) {
+        let metrics = this._rowMetrics.get(row);
+        if (metrics && metrics.container === container) return metrics;
+
+        metrics = {
+            container,
+            height: row.offsetHeight || 0,
+            hasPersonGrid: Boolean(row.querySelector('.person-grid'))
+        };
+        this._rowMetrics.set(row, metrics);
+        return metrics;
+    }
+
+    /**
+     * Clears cached layout metrics. Called on viewport resize, layout
+     * preference changes, and page navigation.
+     * @public
+     */
+    invalidateMetrics() {
+        this._rowMetrics = new WeakMap();
+        this._containerMetrics = new WeakMap();
+    }
+
+    /**
      * Scroll an element into view with intelligent positioning.
      *
      * Handles multiple scroll strategies:
-     *   - Row-based vertical: ALWAYS aligns the parent .media-row to the
-     *     top with a configurable offset (default 50px), guarded by a
-     *     threshold to prevent jitter on horizontal nav within the same row.
+     *   - Row-based vertical: Aligns the parent .media-row based on user preference
+     *     (bottom by default to minimize scroll frequency, middle/centered, or top),
+     *     guarded by a threshold to prevent jitter on horizontal nav within the same row.
      *   - Hero section: Always scrolls to absolute 0.
      *   - Horizontal: Centers the element within its .row-items container.
      *   - Generic vertical: Simple scroll-into-view with margins for
@@ -774,7 +1841,8 @@ class ScrollController {
         // focus transition on Tizen hardware.
         // ----------------------------------------------------------------
         if (element.id === 'hero-carousel-container' || element.closest('#hero-carousel-container')) {
-            if (pageContent) {
+            // Skip vertical snap when the caller already restored scrollTop manually
+            if (!options.skipVerticalScroll && pageContent) {
                 // ============================================================
                 // HERO FAST PATH SNAP CHECK
                 // ============================================================
@@ -783,12 +1851,17 @@ class ScrollController {
                 // who prefer instant jumps don't wait for animations.
                 // ============================================================
                 const currentScroll = this.getVerticalScroll(pageContent);
-                const viewHeight = pageContent.clientHeight;
+                // Cached viewport height — no clientHeight read on the keypress path.
+                const viewHeight = this._getContainerMetrics(pageContent).height;
                 const scrollDelta = Math.abs(currentScroll);
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
 
-                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration());
+                this.smoothScrollTo(
+                    pageContent,
+                    0,
+                    options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration()
+                );
             }
             return;
         }
@@ -867,16 +1940,38 @@ class ScrollController {
         // VERTICAL EPISODE LIST FAST PATH
         // ----------------------------------------------------------------
         // For vertical episode list items (e.g. season episodes list & Next Up list),
-        // scroll the page container on EVERY focus change so each focused episode card
-        // is comfortably aligned in the viewport (at 180px top offset).
+        // calculate target scroll according to the configured vertical alignment preference
+        // (bottom by default, middle/centered, or top).
         // ----------------------------------------------------------------
-        const isVerticalListCard = element.closest('.episode-row-card, .episode-row, .episode-list-container') || element.classList.contains('episode-row-card');
+        const isVerticalListCard =
+            element.closest('.episode-row-card, .episode-row, .episode-list-container') ||
+            element.classList.contains('episode-row-card');
         if (isVerticalListCard && pageContent) {
+            if (options.skipVerticalScroll) {
+                return;
+            }
             const cardEl = element.closest('.episode-row-card') || element;
             const cardTop = getCumulativeOffsetTop(cardEl, pageContent);
+            const cardHeight = cardEl.offsetHeight || 100;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const currentScroll = this.getVerticalScroll(pageContent);
+            const alignment = this.getVerticalScrollAlignment();
 
-            const targetScroll = Math.max(0, cardTop - 180);
+            // Calculate ideal vertical target based on selected alignment mode
+            let targetScroll;
+            if (alignment === 'middle') {
+                // Center the focused episode card within the viewport
+                targetScroll = cardTop - viewHeight / 2 + cardHeight / 2;
+            } else if (alignment === 'bottom') {
+                // Bottom-align with comfortable headroom from the viewport bottom edge
+                targetScroll = cardTop + cardHeight - viewHeight + 100;
+            } else {
+                // Classic top-aligned positioning with 180px top offset
+                targetScroll = cardTop - 180;
+            }
+
+            // Guard against negative scroll offsets
+            targetScroll = Math.max(0, targetScroll);
 
             // Active in-flight target awareness: compare against destination target
             // so mid-flight keypresses targeting the same alignment don't re-trigger
@@ -884,8 +1979,8 @@ class ScrollController {
                 this._nativeScrollActive && this._nativeTargetScroll !== null
                     ? this._nativeTargetScroll
                     : this._verticalScrollState
-                        ? this._verticalScrollState.target
-                        : currentScroll;
+                      ? this._verticalScrollState.target
+                      : currentScroll;
 
             if (Math.abs(targetScroll - activeTarget) > 5) {
                 this.smoothScrollTo(
@@ -902,10 +1997,15 @@ class ScrollController {
         // Row scroll aligns the entire .media-row to a top offset
         // ----------------------------------------------------------------
         const row = pageContent ? element.closest('.media-row') : null;
-        let useRowScroll = !!row;
+        // Honor skipVerticalScroll so state restores can center horizontally only
+        let useRowScroll = !options.skipVerticalScroll && !!row;
         let activePageContent = pageContent; // May be nulled for hero
+        let rowMetrics = null; // Populated once, reused by the alignment branch
 
         if (useRowScroll) {
+            // Cached once per row — no offsetHeight read on subsequent keypresses.
+            rowMetrics = this._getRowMetrics(row, pageContent);
+
             // HERO EXCEPTION: Hero sections always snap to scroll position 0
             const isHero = row.classList.contains('details-main-split');
 
@@ -916,24 +2016,28 @@ class ScrollController {
                 // navigation up to hero snaps cleanly without forcing animation.
                 // ============================================================
                 const currentScroll = this.getVerticalScroll(pageContent);
-                const viewHeight = pageContent.clientHeight;
+                const viewHeight = this._getContainerMetrics(pageContent).height;
                 const scrollDelta = Math.abs(currentScroll);
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
 
-                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration());
+                this.smoothScrollTo(
+                    pageContent,
+                    0,
+                    options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration()
+                );
                 // Disable further row-based alignment logic and generic vertical scroll
                 useRowScroll = false;
                 activePageContent = null;
             }
             // TALL ROW EXCEPTION: If the row is much taller than the viewport,
             // disable row-alignment to prevent jarring jumps.
-            else if (row.offsetHeight > pageContent.clientHeight * TALL_ROW_MULTIPLIER) {
+            else if (rowMetrics.height > this._getContainerMetrics(pageContent).height * TALL_ROW_MULTIPLIER) {
                 useRowScroll = false;
             }
             // GRID EXCEPTION: If the row contains a wrap-grid (like Season episodes),
             // row-based snapping will fail spectacularly on deep navigation.
-            else if (row.querySelector('.person-grid')) {
+            else if (rowMetrics.hasPersonGrid) {
                 useRowScroll = false;
             }
         }
@@ -961,9 +2065,9 @@ class ScrollController {
             element.classList.contains('details-rich-meta') ||
             Boolean(element.closest('#rich-meta, .details-rich-meta, #rich-meta-container'));
 
-        if (isRichMeta && pageContent && pageContent.querySelector('.details-main-split')) {
+        if (!options.skipVerticalScroll && isRichMeta && pageContent && pageContent.querySelector('.details-main-split')) {
             const currentScroll = this.getVerticalScroll(pageContent);
-            const viewHeight = pageContent.clientHeight;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const scrollDelta = Math.abs(currentScroll);
 
             // If already browsing near the top of the details page, stay grounded at 0
@@ -976,7 +2080,11 @@ class ScrollController {
                 // smoothly glide back to the top to reveal the hero and metadata table together
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
-                this.smoothScrollTo(pageContent, 0, options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration());
+                this.smoothScrollTo(
+                    pageContent,
+                    0,
+                    options.instantScroll || forceInstant ? 0 : this.getVerticalScrollDuration()
+                );
             }
 
             // Grounding complete — bypass row-based and generic scroll-into-view
@@ -985,29 +2093,51 @@ class ScrollController {
         }
 
         // ----------------------------------------------------------------
-        // Row-based vertical scrolling — ALWAYS ALIGN TO TOP
-        // On every focus change, we target the ideal top-aligned position
-        // for the parent .media-row. This produces many small, smooth
-        // scrolls instead of rare, jarring large jumps — critical for
-        // performance on slow Tizen hardware.
+        // Row-based vertical scrolling — ALIGN ACCORDING TO USER PREFERENCE
+        // Targets the configured scroll alignment position for the parent .media-row:
+        //   - 'bottom' (Default): Aligns row bottom to the viewport bottom with padding.
+        //     Substantially reduces total scroll actions since rows already in view
+        //     stay perfectly stationary without viewport jumping.
+        //   - 'middle': Vertically centers the row in the viewport.
+        //   - 'top': Classic Litefin behavior aligning the row near the top.
         //
         // A threshold (SCROLL_ALIGN_THRESHOLD) prevents micro-jitter when
         // navigating horizontally within the same row or between tightly
         // packed items (e.g. genre header → genre grid in the same row).
         // ----------------------------------------------------------------
         if (useRowScroll && row) {
-            // Batch all DOM reads first (Samsung Tizen optimization)
+            // Batch all DOM reads first (Samsung Tizen optimization).
+            // Row height / viewport height come from the metrics cache so no
+            // layout flush is triggered here.
             const rowTop = getCumulativeOffsetTop(row, pageContent);
+            const rowHeight = (rowMetrics || this._getRowMetrics(row, pageContent)).height;
             const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
-            const viewHeight = pageContent.clientHeight;
+            const viewHeight = this._getContainerMetrics(pageContent).height;
             const currentScroll = this.getVerticalScroll(pageContent);
+            const alignment = this.getVerticalScrollAlignment();
 
-            // Ideal target: row top sits at the configured offset from viewport top
-            let targetScroll = rowTop - padding;
+            // Compute ideal target scroll position based on alignment preference
+            let targetScroll;
+            if (alignment === 'middle') {
+                // Middle alignment: center the entire .media-row vertically
+                targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
+            } else if (alignment === 'bottom') {
+                // Bottom alignment: place row bottom cleanly near the viewport bottom.
+                // Tuned to 18px offset to hit the ideal balance between keeping the succeeding row's
+                // title strictly off-screen while giving card subtitles comfortable breathing room.
+                const offsetBottom =
+                    typeof config.scrollOffsetBottom === 'number'
+                        ? config.scrollOffsetBottom
+                        : DEFAULT_SCROLL_OFFSET_BOTTOM;
+                targetScroll = rowTop + rowHeight - viewHeight + offsetBottom;
+            } else {
+                // Top alignment: row top sits at configured offset from viewport top
+                targetScroll = rowTop - padding;
+            }
 
             // Safety check: ensure the specific focused element is actually visible
             // at the computed scroll position. Handles tall-row edge cases where the
-            // focused item might be below the visible area at the row-aligned position.
+            // focused item might be below or above the visible area at the row-aligned position.
             //
             // OPTIMIZATION: Skip this check for VirtualCardRow items (detected via
             // data-virtual-index). Cards managed by VirtualCardRow are ALWAYS within
@@ -1023,11 +2153,15 @@ class ScrollController {
                 const elBottom = elTop + element.offsetHeight;
 
                 if (elBottom > targetScroll + viewHeight) {
-                    // Element too far down — bottom-align instead
+                    // Element cut off at the bottom — adjust target scroll to keep it in view
                     targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
+                } else if (elTop < targetScroll + padding) {
+                    // Element cut off at the top — adjust target scroll to keep it in view
+                    targetScroll = elTop - padding;
                 }
             }
 
+            // Never allow scrolling above the top boundary
             targetScroll = Math.max(0, targetScroll);
 
             // Only scroll if the delta exceeds the alignment threshold.
@@ -1052,8 +2186,8 @@ class ScrollController {
                 this._nativeScrollActive && this._nativeTargetScroll !== null
                     ? this._nativeTargetScroll
                     : this._verticalScrollState
-                        ? this._verticalScrollState.target
-                        : currentScroll;
+                      ? this._verticalScrollState.target
+                      : currentScroll;
 
             const scrollDelta = Math.abs(targetScroll - activeTarget);
             if (scrollDelta > SCROLL_ALIGN_THRESHOLD) {
@@ -1081,13 +2215,13 @@ class ScrollController {
 
             if (rowItems) {
                 // First: scroll the parent row into view vertically if needed
-                // (only if not already handled by row-based scroll above)
+                // (only if not already handled above or bypassed by skipVerticalScroll)
                 const parentRow = element.closest('.media-row');
-                if (parentRow && pageContent && !useRowScroll) {
+                if (!options.skipVerticalScroll && parentRow && pageContent && !useRowScroll) {
                     const rowTop = getCumulativeOffsetTop(parentRow, pageContent);
-                    const rowHeight = parentRow.offsetHeight;
+                    const rowHeight = this._getRowMetrics(parentRow, pageContent).height;
                     const rowBottom = rowTop + rowHeight;
-                    const viewHeight = pageContent.clientHeight;
+                    const viewHeight = this._getContainerMetrics(pageContent).height;
                     const currentScroll = this.getVerticalScroll(pageContent);
                     const viewBottom = currentScroll + viewHeight;
 
@@ -1096,8 +2230,21 @@ class ScrollController {
                         rowTop < currentScroll + HORIZONTAL_ROW_VISIBILITY_BUFFER ||
                         rowBottom > viewBottom - HORIZONTAL_ROW_VISIBILITY_BUFFER
                     ) {
-                        // Center the row vertically
-                        const targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
+                        // Align the row vertically according to user alignment preference
+                        const fallbackAlignment = this.getVerticalScrollAlignment();
+                        let targetScroll;
+                        if (fallbackAlignment === 'bottom') {
+                            const offsetBottom =
+                                typeof config?.scrollOffsetBottom === 'number'
+                                    ? config.scrollOffsetBottom
+                                    : DEFAULT_SCROLL_OFFSET_BOTTOM;
+                            targetScroll = rowBottom - viewHeight + offsetBottom;
+                        } else if (fallbackAlignment === 'top') {
+                            targetScroll = rowTop - DEFAULT_SCROLL_OFFSET_TOP;
+                        } else {
+                            targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
+                        }
+
                         this.smoothScrollTo(
                             pageContent,
                             Math.max(0, targetScroll),
@@ -1164,94 +2311,114 @@ class ScrollController {
                     if (trackWidth > containerWidth) {
                         const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
-                        // =====================================================
-                        // ANDROID (Touch): Native horizontal scroller
-                        // =====================================================
-                        // On Android the media row is a real overflow-x scroller
-                        // managed by TouchHorizontalScroller. The WebView compositor
-                        // directly owns touch drag and fling inertia. Centering
-                        // writes to scrollLeft instead of CSS track transform so
-                        // D-pad spatial navigation and touch gestures share the
-                        // same coordinate system without fighting each other.
-                        if (platformInfo.isAndroid) {
+                        // -------------------------------------------------------------
+                        // RESOLVE ACTIVE HORIZONTAL SCROLL ANIMATION MODE
+                        // -------------------------------------------------------------
+                        // 'gpu': Fast hardware-accelerated CSS translate3d transforms on .row-items-track
+                        // 'native': Continuous animated scrolling via container.scrollLeft / smoothScrollTo
+                        // 'instant': Immediate position snapping without transition delay
+                        // -------------------------------------------------------------
+                        const horizontalMode = this.getHorizontalScrollMode();
+                        const durationPref = storage.getItem('pref:scrollSmoothingDuration') || 'smooth';
+                        const isInstant =
+                            options.instantScroll || horizontalMode === 'instant' || durationPref === 'instant';
+
+                        if (horizontalMode === 'native') {
+                            // =========================================================
+                            // NATIVE TOUCH / OVERFLOW-X SCROLLER MODE
+                            // =========================================================
+                            // Writes directly to rowItems.scrollLeft. Primarily used on
+                            // touch devices (Android mobile/tablets) so D-pad and touch
+                            // swipe inertia share the exact same coordinate system.
+                            // =========================================================
                             const signedLeft = isRtl ? -finalScrollLeft : finalScrollLeft;
-                            if (options.instantScroll) {
+                            if (isInstant) {
                                 rowItems.scrollLeft = signedLeft;
                             } else {
                                 this.smoothScrollTo(
                                     rowItems,
                                     signedLeft,
-                                    SCROLL_DURATION_HORIZONTAL,
+                                    this.getHorizontalScrollDuration(),
                                     'horizontal'
                                 );
                             }
-                        } else if (options.instantScroll) {
-                            // Use completely hardware-accelerated CSS transform!
-                            // OPTIMIZATION: Parse the current transform to check if we're already
-                            // at the target position. This skips the forced-layout reflow path
-                            // entirely when navigating vertically (the card is already centered).
-                            // track.offsetHeight is a synchronous layout and is expensive on Tizen.
+                        } else if (isInstant) {
+                            // =========================================================
+                            // INSTANT GPU SNAPSHOT (0ms CSS TRANSFORM)
+                            // =========================================================
+                            // Reset scrollLeft if previously manipulated in native mode
+                            if (rowItems.scrollLeft !== 0) {
+                                rowItems.scrollLeft = 0;
+                            }
+
+                            // Bypass CSS transitions for instant snap without forced layout reflows
                             const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                            // ================================================================
-                            // Robust horizontal parsing regex matching optional units (px/%)
-                            // ================================================================
                             const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)(?:px|%)?/);
                             const currentTransformX = match ? parseFloat(match[1]) : 0;
                             const alreadyCentered =
                                 Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
 
                             if (!alreadyCentered) {
-                                // Bypass CSS transitions for instant snap.
-                                // IMPORTANT: We must NOT read track.offsetHeight here to force a reflow —
-                                // that is a synchronous layout flush that stalls the Tizen compositor on
-                                // every row entry. Instead, toggle transition off, write the transform,
-                                // and restore transition asynchronously on the next frame once the
-                                // browser has committed the no-transition paint.
                                 track.style.transition = 'none';
                                 track.style.webkitTransition = 'none';
-                                if (isRtl) {
-                                    track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                    track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                } else {
-                                    track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                }
-                                // Restore transition property on the next frame (after the browser
-                                // has committed the transform snap) — zero layout reads needed.
+                                const transformStr = isRtl
+                                    ? `translate3d(${finalScrollLeft}px, 0, 0)`
+                                    : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                                track.style.webkitTransform = transformStr;
+                                track.style.transform = transformStr;
+
                                 requestAnimationFrame(() => {
                                     track.style.webkitTransition = '';
                                     track.style.transition = '';
                                 });
                             }
                         } else {
-                            // Same position check for the smooth (CSS transition) path.
-                            // .row-items-track has a 150ms CSS transition on transform — writing
-                            // the same value triggers a useless animated "wobble" on every vertical
-                            // row-enter even though the horizontal position hasn't changed at all.
+                            // =========================================================
+                            // FAST (GPU ACCELERATED) COMPOSITED TRANSITIONS
+                            // =========================================================
+                            // Delegates horizontal sliding directly to the GPU compositor via
+                            // CSS transform. Bypasses main-thread scrollLeft layout recalculations,
+                            // delivering 60 FPS scrolling on Android TV and low-power hardware.
+                            // =========================================================
+                            if (rowItems.scrollLeft !== 0) {
+                                rowItems.scrollLeft = 0;
+                            }
+
                             const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                            // ================================================================
-                            // Robust horizontal parsing regex matching optional units (px/%)
-                            // ================================================================
                             const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)(?:px|%)?/);
                             const currentTransformX = match ? parseFloat(match[1]) : 0;
-                            if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
-                                if (isRtl) {
-                                    // In RTL, moving track right reveals further elements on the left
-                                    track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                    track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                } else {
-                                    track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                }
+
+                            if (this.getScrollPhysics() !== 'easing') {
+                                // =========================================================
+                                // SCROLL PHYSICS (GPU COMPOSITED TRACK)
+                                // =========================================================
+                                // CSS cubic-bezier transitions cannot express a
+                                // spring or follower, so the JS integrator drives
+                                // per-frame transform writes. The CSS transition
+                                // on .row-items-track is disabled while physics
+                                // is active (data-scroll-physics on <html>).
+                                // =========================================================
+                                this._pauseImagePrewarm();
+                                this._springTrackHorizontal(track, finalScrollLeft, currentTransformX, isRtl);
+                            } else if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
+                                const transformStr = isRtl
+                                    ? `translate3d(${finalScrollLeft}px, 0, 0)`
+                                    : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+
+                                // Hold pre-warming for the CSS transition, then
+                                // resume half a frame after the row settles.
+                                this._pauseImagePrewarm();
+                                this._scheduleImagePrewarmResume(this.getHorizontalScrollDuration() + 50);
+
+                                track.style.webkitTransform = transformStr;
+                                track.style.transform = transformStr;
                             }
                         }
-                    } else if (platformInfo.isAndroid) {
-                        // Short rows on Android: reset the native scroller instead
-                        // of the unused track transform.
-                        rowItems.scrollLeft = 0;
                     } else {
-                        // For short rows, ensure the track is reset to 0 to prevent stale
-                        // offsets if items were removed or the window was resized.
+                        // Short rows: reset both native scroller and track transform
+                        if (rowItems.scrollLeft !== 0) {
+                            rowItems.scrollLeft = 0;
+                        }
                         track.style.webkitTransform = 'translate3d(0, 0, 0)';
                         track.style.transform = 'translate3d(0, 0, 0)';
                     }
@@ -1263,11 +2430,15 @@ class ScrollController {
 
                     const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
                     const finalScrollLeft = Math.max(0, targetScroll);
+                    const horizontalMode = this.getHorizontalScrollMode();
+                    const durationPref = storage.getItem('pref:scrollSmoothingDuration') || 'smooth';
+                    const isInstant =
+                        options.instantScroll || horizontalMode === 'instant' || durationPref === 'instant';
 
                     this.smoothScrollTo(
                         rowItems,
                         finalScrollLeft,
-                        options.instantScroll ? 0 : SCROLL_DURATION_HORIZONTAL,
+                        isInstant ? 0 : this.getHorizontalScrollDuration(),
                         'horizontal'
                     );
                 }
@@ -1278,7 +2449,7 @@ class ScrollController {
 
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
-                const viewHeight = activePageContent.clientHeight;
+                const viewHeight = this._getContainerMetrics(activePageContent).height;
                 const currentScroll = this.getVerticalScroll(activePageContent);
 
                 // ================================================================
@@ -1296,8 +2467,8 @@ class ScrollController {
                     this._nativeScrollActive && this._nativeTargetScroll !== null
                         ? this._nativeTargetScroll
                         : this._verticalScrollState
-                            ? this._verticalScrollState.target
-                            : currentScroll;
+                          ? this._verticalScrollState.target
+                          : currentScroll;
 
                 // ============================================================
                 // PERF: CACHE ELEMENT HEIGHT PER SECTION
@@ -1329,17 +2500,18 @@ class ScrollController {
                 // For the floating sub-libraries popover, 12px padding keeps items
                 // within the popup window bounds. Generic containers use 100px.
                 // -------------------------------------------------------------
-                const isSidebar = activePageContent.classList.contains('sidebar-content') ||
+                const isSidebar =
+                    activePageContent.classList.contains('sidebar-content') ||
                     activePageContent.classList.contains('filter-sidebar');
                 const isSubLibs = activePageContent.id === 'sidebar-sub-libraries';
-                const topMargin = isSidebar ? 24 : (isSubLibs ? 12 : GENERIC_SCROLL_MARGIN);
-                let bottomMargin = isSidebar ? 32 : (isSubLibs ? 12 : GENERIC_SCROLL_MARGIN);
+                const topMargin = isSidebar ? 24 : isSubLibs ? 12 : GENERIC_SCROLL_MARGIN;
+                let bottomMargin = isSidebar ? 32 : isSubLibs ? 12 : GENERIC_SCROLL_MARGIN;
 
                 let finalScrollTop = activeTarget;
 
                 // Apply custom scroll offset from section config
                 const customOffset = config?.scrollOffsetTop || 0;
-                let effectiveTopMargin = (isSidebar || isSubLibs) ? topMargin : Math.max(topMargin, customOffset);
+                let effectiveTopMargin = isSidebar || isSubLibs ? topMargin : Math.max(topMargin, customOffset);
 
                 // PREVENT JITTER: If the element and its margins don't completely fit in the viewport
                 // together, the top and bottom edge guards will fight each other on every horizontal move.
@@ -1383,9 +2555,15 @@ class ScrollController {
      * Should be called when navigating between pages.
      */
     resetCache() {
+        if (this._finishEmitTimer) {
+            clearTimeout(this._finishEmitTimer);
+            this._finishEmitTimer = null;
+        }
         // Clear the offsetTop cache so stale row positions don't persist
         // across page navigations (rows on the new page have different offsets).
         this._offsetCache = new WeakMap();
+        // Row heights and viewport dimensions also belong to the old page.
+        this.invalidateMetrics();
     }
 }
 

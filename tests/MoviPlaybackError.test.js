@@ -63,6 +63,18 @@ test('MoviVideoPlayer: Startup watchdog and error event bindings verification', 
         moviSource.includes('this._clearStartupWatchdog();'),
         'MoviVideoPlayer must clear the watchdog upon successful play and teardown'
     );
+
+    // 9. Verify automatic software fallback (sw="auto") is configured
+    assert.ok(
+        moviSource.includes("setAttribute('sw', 'auto')"),
+        'MoviVideoPlayer must set sw="auto" attribute on element to enable silent software decoding fallback'
+    );
+
+    // 10. Verify enableSoftwareDecoding is engaged when canTrySoftware is surfaced
+    assert.ok(
+        moviSource.includes('element.enableSoftwareDecoding()'),
+        'MoviVideoPlayer must invoke element.enableSoftwareDecoding() if canTrySoftware is present'
+    );
 });
 
 test('MoviVideoPlayer: Error handling and watchdog behavior simulation', async () => {

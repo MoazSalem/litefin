@@ -11,6 +11,8 @@ import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { detectTizenVersion, getDeviceCapabilities } from '../../api/profiles/TizenProfile.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
+import { tizenAdapter } from '../../tizen/TizenAdapter.js';
 
 const log = logger.create('TizenAVPlayer');
 
@@ -72,6 +74,11 @@ const isDtsSupported = () => {
 // TizenAVPlayer Class
 // ============================================================================
 
+// Id of the <object type="application/avplayer"> element that hosts the AVPlay
+// hardware plane during real playback. The id lets a previous session's node be
+// re-adopted instead of duplicated, and lets destroy() clean up after a crash.
+const AVPLAY_OBJECT_ID = 'litefin-avplayer-host';
+
 export class TizenAVPlayer {
     /**
      * @param {Object} options
@@ -90,6 +97,8 @@ export class TizenAVPlayer {
 
         this._currentSrc = null;
         this._currentPlayOptions = null;
+        // <object type="application/avplayer"> owned by this player instance
+        this._avplayObjectEl = null;
         this._duration = 0;
         this._isPlaying = false;
         this._isTizenPlaying = false;
@@ -117,6 +126,14 @@ export class TizenAVPlayer {
 
         // Tracks the actively selected internal Tizen TEXT track index
         this._activeTizenSubtitleIndex = null;
+
+        // Tracks the actively selected internal Tizen AUDIO track index.
+        // Stored in player state to allow re-asserting or unsticking the audio
+        // decoder pipeline when Samsung AVPlay drops or desyncs the audio stream during seek.
+        this._activeTizenAudioIndex = null;
+
+        // Flag indicating whether active audio track re-assertion is pending playback stabilization
+        this._pendingAudioTrackReassert = false;
 
         // Subtitle offset in seconds (applied via AVPlay's native API)
         this._subtitleOffset = 0;
@@ -153,6 +170,10 @@ export class TizenAVPlayer {
         // which calls play() — violating the contract and causing native decoder freezes.
         this._seekInProgress = false;
 
+        // Set when the last seekTo() never called back and the failsafe in _safeSeekTo()
+        // gave up on it. Such a seek has not landed, whatever a clock reports.
+        this._seekTimedOut = false;
+
         // Tracks whether onbufferingcomplete fired during an active seek.
         // When seek is in progress, onbufferingcomplete is suppressed (can't call
         // _checkNativePlay). This flag lets the seek success callback know that
@@ -171,6 +192,9 @@ export class TizenAVPlayer {
         // If a second seek arrives while one is in flight, queue it here and
         // execute after the current seek finishes.
         this._queuedSeekPositionMs = null;
+        this._queuedSeekPositionTicks = null;
+        this._queuedSeekOptions = null;
+        this._queuedSeekTimerId = null;
 
         // ── Subtitle Track Change Cooldown ───────────────────────────────────
         // Samsung's hardware decoder needs a settling period after
@@ -235,14 +259,23 @@ export class TizenAVPlayer {
     // ========================================================================
 
     /**
-     * Retrieve active video stream dimensions from hardware stream info or media source metadata.
+     * Retrieve active video stream dimensions and display aspect ratio (DAR) from
+     * hardware stream info or Jellyfin media source metadata.
+     *
+     * Non-square pixel media (such as standard-definition DVD remuxes encoded in NTSC 720x480
+     * or PAL 720x576) have a pixel storage matrix whose aspect ratio differs significantly
+     * from the intended presentation display aspect ratio (e.g., 4:3 or 16:9 anamorphic).
+     * This method extracts both the pixel dimensions and the authoritative display aspect ratio.
      *
      * @private
-     * @returns {{width: number, height: number}} Intrinsic stream pixel width and height
+     * @returns {{width: number, height: number, aspectRatio: number, isAnamorphic: boolean}}
      */
     _getVideoDimensions() {
+        // Track pixel matrix width and height
         let vw = 0;
         let vh = 0;
+        // String representation of the presentation aspect ratio (e.g., '4:3', '16:9')
+        let aspectStr = '';
 
         // --------------------------------------------------------------------
         // 1. Hardware Stream Inspection
@@ -263,6 +296,9 @@ export class TizenAVPlayer {
                             : videoStream.extra_info;
                         vw = Number(extra.Width || extra.width || 0);
                         vh = Number(extra.Height || extra.height || 0);
+                        if (extra.AspectRatio || extra.aspect_ratio || extra.aspectRatio) {
+                            aspectStr = String(extra.AspectRatio || extra.aspect_ratio || extra.aspectRatio);
+                        }
                     }
                 }
             } catch (e) {
@@ -274,19 +310,33 @@ export class TizenAVPlayer {
         // 2. Play Options MediaSource Inspection
         // --------------------------------------------------------------------
         // Fall back to server media stream metadata supplied in playback options
-        if (!vw || !vh) {
-            const mediaSource = this._currentPlayOptions?.mediaSource;
-            if (mediaSource) {
+        const mediaSource = this._currentPlayOptions?.mediaSource;
+        if (mediaSource) {
+            // Check top-level mediaSource dimensions
+            if (!vw || !vh) {
                 if (mediaSource.Width && mediaSource.Height) {
                     vw = Number(mediaSource.Width);
                     vh = Number(mediaSource.Height);
-                } else if (Array.isArray(mediaSource.MediaStreams)) {
-                    const videoStream = mediaSource.MediaStreams.find((s) => s && s.Type === 'Video');
-                    if (videoStream && videoStream.Width && videoStream.Height) {
-                        vw = Number(videoStream.Width);
-                        vh = Number(videoStream.Height);
+                }
+            }
+
+            // Inspect detailed media streams list
+            if (Array.isArray(mediaSource.MediaStreams)) {
+                const videoStream = mediaSource.MediaStreams.find((s) => s && s.Type === 'Video');
+                if (videoStream) {
+                    if (!vw || !vh) {
+                        vw = Number(videoStream.Width || 0);
+                        vh = Number(videoStream.Height || 0);
+                    }
+                    if (!aspectStr && videoStream.AspectRatio) {
+                        aspectStr = String(videoStream.AspectRatio);
                     }
                 }
+            }
+
+            // Check container-level aspect ratio
+            if (!aspectStr && mediaSource.AspectRatio) {
+                aspectStr = String(mediaSource.AspectRatio);
             }
         }
 
@@ -294,30 +344,84 @@ export class TizenAVPlayer {
         // 3. Play Options Item Metadata Inspection
         // --------------------------------------------------------------------
         // If media source metadata is absent, check top-level item stream definitions
-        if (!vw || !vh) {
-            const item = this._currentPlayOptions?.item;
-            const streams = item?.MediaStreams || item?.MediaSources?.[0]?.MediaStreams;
+        const item = this._currentPlayOptions?.item;
+        if (item) {
+            const streams = item.MediaStreams || item.MediaSources?.[0]?.MediaStreams;
             if (Array.isArray(streams)) {
                 const videoStream = streams.find((s) => s && s.Type === 'Video');
-                if (videoStream && videoStream.Width && videoStream.Height) {
-                    vw = Number(videoStream.Width);
-                    vh = Number(videoStream.Height);
+                if (videoStream) {
+                    if (!vw || !vh) {
+                        vw = Number(videoStream.Width || 0);
+                        vh = Number(videoStream.Height || 0);
+                    }
+                    if (!aspectStr && videoStream.AspectRatio) {
+                        aspectStr = String(videoStream.AspectRatio);
+                    }
+                }
+            }
+            if (!aspectStr && item.AspectRatio) {
+                aspectStr = String(item.AspectRatio);
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // 4. Parse Display Aspect Ratio String
+        // --------------------------------------------------------------------
+        // Converts ratios like "4:3", "16:9", "2.40:1", or numeric decimals like "1.333333"
+        let parsedRatio = 0;
+        if (aspectStr && typeof aspectStr === 'string') {
+            if (aspectStr.includes(':')) {
+                const parts = aspectStr.split(':');
+                const num = parseFloat(parts[0]);
+                const den = parseFloat(parts[1]);
+                if (num > 0 && den > 0) {
+                    parsedRatio = num / den;
+                }
+            } else {
+                const val = parseFloat(aspectStr);
+                if (!isNaN(val) && val > 0) {
+                    parsedRatio = val;
                 }
             }
         }
 
-        return { width: vw, height: vh };
+        // --------------------------------------------------------------------
+        // 5. Evaluate Anamorphic / Non-Square Pixel Geometry
+        // --------------------------------------------------------------------
+        // In square-pixel content, storage matrix ratio (vw / vh) matches DAR (parsedRatio).
+        // For non-square pixel formats (NTSC DVD 720x480 -> 3:2 vs 4:3, PAL DVD 720x576 -> 5:4 vs 4:3),
+        // storage ratio diverges significantly from presentation ratio (>5% variance).
+        let isAnamorphic = false;
+        if (vw > 0 && vh > 0 && parsedRatio > 0) {
+            const storageRatio = vw / vh;
+            if (Math.abs(storageRatio - parsedRatio) > 0.05) {
+                isAnamorphic = true;
+            }
+        } else if (parsedRatio <= 0 && vw > 0 && vh > 0) {
+            parsedRatio = vw / vh;
+        }
+
+        return {
+            width: vw,
+            height: vh,
+            aspectRatio: parsedRatio > 0 ? parsedRatio : 0,
+            isAnamorphic
+        };
     }
 
     /**
      * Compute and apply hardware-backed video plane layout geometry based on active aspect ratio mode.
      *
      * Samsung Tizen AVPlay does not support CSS object-fit on its underlying hardware overlay plane.
-     * To achieve a seamless crop/zoom effect without distortion:
-     * - We calculate the uniform magnification factor using Math.max(containerWidth / videoWidth, containerHeight / videoHeight)
-     * - We center the scaled dimensions across the viewport using symmetric negative coordinate offsets
-     * - We push the calculated rectangle to AVPlay via setDisplayRect with PLAYER_DISPLAY_MODE_FULL_SCREEN
-     * - The TV hardware video subsystem naturally clips the off-screen margins at physical display edges
+     * Furthermore, AVPlay's hardware scaler strictly ignores SAR/PAR flags for non-square pixel
+     * content (such as NTSC 720x480 or PAL 720x576 DVD remuxes) when using standard letterbox mode,
+     * incorrectly displaying the raw storage grid (3:2 or 5:4).
+     *
+     * To achieve pixel-perfect presentation matching true Display Aspect Ratio (DAR):
+     * - We detect non-square pixel streams by comparing storage ratio with server DAR metadata.
+     * - For anamorphic content, we compute explicit letterbox/pillarbox geometry fitted into the display.
+     * - We apply the calculated rectangle to AVPlay via setDisplayRect with PLAYER_DISPLAY_MODE_FULL_SCREEN.
+     * - For standard square-pixel streams, native hardware letterbox or auto aspect modes are retained.
      *
      * @private
      */
@@ -349,6 +453,58 @@ export class TizenAVPlayer {
                 );
                 this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
                 log.info('Applied display geometry (stretch):', { x: cLeft, y: cTop, width: cw, height: ch });
+                return;
+            }
+
+            // Inspect video dimensions and presentation aspect ratio metadata
+            const dims = this._getVideoDimensions();
+
+            // ================================================================
+            // Anamorphic & Non-Square Pixel Handling
+            // ================================================================
+            // When playing non-square pixel media, AVPlay's letterbox mode fails because it
+            // calculates geometry from raw coded frame width/height (e.g. 720x480 -> 3:2).
+            // In addition, PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO fails on NTSC streams in Matroska containers.
+            // If the stream is anamorphic with a known DAR, compute explicit display rect coordinates
+            // and stretch within that mathematically exact bounding box.
+            if (dims.isAnamorphic && dims.aspectRatio > 0 && mode !== 'stretch') {
+                const targetRatio = dims.aspectRatio;
+                const containerRatio = cw / ch;
+                let targetW = cw;
+                let targetH = ch;
+                let targetLeft = cLeft;
+                let targetTop = cTop;
+
+                // Fit video inside container while maintaining intended presentation aspect ratio
+                if (targetRatio < containerRatio) {
+                    // Content is taller/narrower than viewport (e.g. 4:3 content on 16:9 display) -> Pillarbox
+                    targetH = Math.round(ch);
+                    targetW = Math.round(ch * targetRatio);
+                    targetLeft = Math.round(cLeft + (cw - targetW) / 2);
+                    targetTop = Math.round(cTop);
+                } else if (targetRatio > containerRatio) {
+                    // Content is wider than viewport (e.g. 21:9 Cinemascope on 16:9 display) -> Letterbox
+                    targetW = Math.round(cw);
+                    targetH = Math.round(cw / targetRatio);
+                    targetLeft = Math.round(cLeft);
+                    targetTop = Math.round(cTop + (ch - targetH) / 2);
+                }
+
+                // Push calculated coordinates directly to AVPlay overlay plane
+                this._avplay.setDisplayRect(
+                    Math.round(targetLeft),
+                    Math.round(targetTop),
+                    Math.round(targetW),
+                    Math.round(targetH)
+                );
+                this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
+                log.info('Applied display geometry (anamorphic DAR correction):', {
+                    x: targetLeft,
+                    y: targetTop,
+                    width: targetW,
+                    height: targetH,
+                    aspectRatio: targetRatio
+                });
                 return;
             }
 
@@ -421,6 +577,118 @@ export class TizenAVPlayer {
     }
 
     // ========================================================================
+    // AVPlay Hardware Plane Host
+    // ========================================================================
+
+    /**
+     * Mounts the <object type="application/avplayer"> element that hosts the
+     * hardware video plane for this playback session.
+     *
+     * TizenAVPlayer owns this node so the boot warmup can remove its full-screen
+     * plane completely instead of leaving a dormant placeholder behind. The host
+     * spans the whole viewport because AVPlay composites through setDisplayRect()
+     * screen coordinates — the element itself just has to give the plugin a
+     * surface. pointer-events stays 'none' so the OSD overlay keeps receiving
+     * keys and pointer input above the video.
+     *
+     * Idempotent: re-adopts any node left over from a previous session.
+     *
+     * @returns {HTMLElement|null} The host element, or null if the DOM is inert
+     * @private
+     */
+    _ensureAvPlayerObject() {
+        if (typeof document === 'undefined' || !document.body || typeof document.createElement !== 'function') {
+            return null;
+        }
+        try {
+            const existing =
+                this._avplayObjectEl ||
+                (typeof document.getElementById === 'function' ? document.getElementById(AVPLAY_OBJECT_ID) : null);
+
+            let el = existing;
+            if (!el) {
+                el = document.createElement('object');
+                el.id = AVPLAY_OBJECT_ID;
+                el.type = 'application/avplayer';
+                document.body.appendChild(el);
+            }
+
+            el.setAttribute('aria-hidden', 'true');
+            el.style.position = 'fixed';
+            el.style.top = '0px';
+            el.style.left = '0px';
+            el.style.width = '100%';
+            el.style.height = '100%';
+            el.style.opacity = '1';
+            el.style.pointerEvents = 'none';
+            el.style.zIndex = '0';
+            el.style.background = 'transparent';
+
+            this._avplayObjectEl = el;
+            return el;
+        } catch (err) {
+            log.warn('TizenAVPlayer: Failed to mount AVPlayer hardware plane host:', err.message || err);
+            return null;
+        }
+    }
+
+    /**
+     * Removes the AVPlay hardware plane host once the native session is fully
+     * closed, so no dormant plugin node is left on screen for the next page.
+     * Also triggers a WAM compositor layer reset to restore full 60Hz UI.
+     * @private
+     */
+    _removeAvPlayerObject() {
+        const el =
+            this._avplayObjectEl ||
+            (typeof document !== 'undefined' && typeof document.getElementById === 'function'
+                ? document.getElementById(AVPLAY_OBJECT_ID)
+                : null);
+        this._avplayObjectEl = null;
+
+        // ---------------------------------------------------------------------
+        // 1. Cleanly unmount registered AVPlayer host node from DOM tree
+        // ---------------------------------------------------------------------
+        if (el) {
+            try {
+                if (el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            } catch (err) {
+                log.debug('TizenAVPlayer: AVPlayer hardware plane host removal skipped:', err.message || err);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. Safety pass: verify no orphaned application/avplayer nodes linger
+        // ---------------------------------------------------------------------
+        try {
+            if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+                const lingering = document.querySelectorAll(`object[type="application/avplayer"], #${AVPLAY_OBJECT_ID}`);
+                for (let i = 0; i < lingering.length; i++) {
+                    const node = lingering[i];
+                    if (node && node.parentNode) {
+                        node.parentNode.removeChild(node);
+                    }
+                }
+            }
+        } catch (_) {
+            // Non-fatal on mock or restricted DOM environments
+        }
+
+        // ---------------------------------------------------------------------
+        // 3. Force WAM compositor to exit hardware overlay mode and restore 60Hz UI
+        // ---------------------------------------------------------------------
+        try {
+            if (tizenAdapter && typeof tizenAdapter.resetCompositorLayer === 'function') {
+                tizenAdapter.resetCompositorLayer();
+            }
+        } catch (_) {
+            // Ignore compositor reset failures
+        }
+    }
+
+    // ========================================================================
     // Playback Control
     // ========================================================================
 
@@ -434,6 +702,13 @@ export class TizenAVPlayer {
         }
 
         log.info('Starting playback');
+
+        // Abort any in-flight boot compositor warmup cycle so native AVPlay state
+        // cleanly returns to NONE before real playback calls avplay.open().
+        if (tizenAdapter && typeof tizenAdapter.abortWarmup === 'function' && tizenAdapter.abortWarmup()) {
+            log.info('Aborted active Tizen compositor warmup before opening playback');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
 
         try {
             // Track if we were actually active to know if a cleanup sleep is needed
@@ -486,6 +761,9 @@ export class TizenAVPlayer {
             }
 
             // Open the media
+            // Mount our own AVPlay plane host first: the boot warmup removes its
+            // element on teardown, so nothing is guaranteed to be in the DOM here.
+            this._ensureAvPlayerObject();
             this._avplay.open(options.url);
             this._currentSrc = options.url; // Set currentSrc after open
             try {
@@ -532,6 +810,25 @@ export class TizenAVPlayer {
                         } catch (e2) {
                             log.warn('Failed to set USER_AGENT/USERAGENT:', e2.message || e2);
                         }
+                    }
+
+                    // ----------------------------------------------------------------
+                    // Custom Reverse Proxy Headers (Tizen AVPlay Native Engine)
+                    // If custom proxy auth headers are configured for this stream URL,
+                    // format and pass them via AVPlay's CUSTOM_MESSAGE property.
+                    // ----------------------------------------------------------------
+                    try {
+                        const targetUrl = options.url || this._currentSrc;
+                        const proxyHdrs = customHeaders.getHeadersForUrl(targetUrl, this._serverUrl);
+                        if (proxyHdrs && typeof proxyHdrs === 'object' && Object.keys(proxyHdrs).length > 0) {
+                            const headerPairs = Object.entries(proxyHdrs)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join('\r\n') + '\r\n';
+                            this._avplay.setStreamingProperty("CUSTOM_MESSAGE", headerPairs);
+                            log.info('Attached custom headers to AVPlay pipeline');
+                        }
+                    } catch (eHdr) {
+                        log.warn('Failed to set AVPlay CUSTOM_MESSAGE streaming property:', eHdr.message || eHdr);
                     }
 
                     if (!isDirectPlay) {
@@ -939,20 +1236,6 @@ export class TizenAVPlayer {
                 this._bufferingComplete = false;
                 this._isNativeBuffering = true;
 
-                // Immediate check if navigator is already explicitly offline
-                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-                    log.warn('TizenAVPlayer: Buffering while offline — emitting network error early');
-                    this.onEvent({
-                        type: 'error',
-                        data: {
-                            code: 'PLAYER_ERROR_CONNECTION_FAILED',
-                            message: 'PLAYER_ERROR_CONNECTION_FAILED',
-                            isNetworkError: true
-                        }
-                    });
-                    return;
-                }
-
                 if (this._isPlaying && !this._suppressWaitingEvent) {
                     this.onEvent({ type: 'waiting' });
                 }
@@ -972,6 +1255,51 @@ export class TizenAVPlayer {
                 log.info('Buffering complete (network threshold reached)');
                 this._bufferingComplete = true;
                 this._isNativeBuffering = false;
+
+                // ─────────────────────────────────────────────────────────────
+                // Hardware Stream Descriptors Inspection
+                // ─────────────────────────────────────────────────────────────
+                // Query and log active hardware stream descriptors on buffering complete.
+                // Exposes post-seek pipeline state, dropped audio entries, or index desyncs.
+                try {
+                    const currentStreams = (typeof this._avplay?.getCurrentStreamInfo === 'function')
+                        ? this._avplay.getCurrentStreamInfo()
+                        : (window.webapis?.avplay?.getCurrentStreamInfo ? window.webapis.avplay.getCurrentStreamInfo() : null);
+                    log.info('[onbufferingcomplete] webapis.avplay.getCurrentStreamInfo():', currentStreams);
+
+                    // Auto-detect initial native audio track index if not explicitly selected
+                    if (this._activeTizenAudioIndex === null && Array.isArray(currentStreams)) {
+                        const audioStream = currentStreams.find(
+                            (s) => s && s.type && s.type.toUpperCase() === 'AUDIO'
+                        );
+                        if (audioStream && typeof audioStream.index !== 'undefined') {
+                            this._activeTizenAudioIndex = Number(audioStream.index);
+                            log.info(`[onbufferingcomplete] Auto-detected active native AUDIO track index: ${this._activeTizenAudioIndex}`);
+                        }
+                    }
+                } catch (streamErr) {
+                    log.debug('[onbufferingcomplete] Failed to query getCurrentStreamInfo():', streamErr);
+                }
+
+                // Fall back to first available audio track if still untracked
+                if (this._activeTizenAudioIndex === null && this._avplay && typeof this._avplay.getTotalTrackInfo === 'function') {
+                    try {
+                        const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                        const audioTracks = totalTracks.filter(
+                            (t) => t && t.type && t.type.toUpperCase() === 'AUDIO'
+                        );
+                        if (audioTracks.length > 0 && typeof audioTracks[0].index !== 'undefined') {
+                            this._activeTizenAudioIndex = Number(audioTracks[0].index);
+                            log.info(`[onbufferingcomplete] Defaulted active native AUDIO track index: ${this._activeTizenAudioIndex}`);
+                        }
+                    } catch (_) { }
+                }
+
+                // If audio track re-assertion was deferred pending buffer completion, execute it now
+                if (this._pendingAudioTrackReassert && !this._seekInProgress) {
+                    this._pendingAudioTrackReassert = false;
+                    this._assertActiveAudioTrack();
+                }
 
                 // Track transition point: Buffer is full but clock hasn't started yet.
                 // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
@@ -1181,10 +1509,17 @@ export class TizenAVPlayer {
                 // DirectPlay Seek Verification Disarm:
                 // If a DirectPlay seek verification guard is active, disarm it
                 // as soon as rendered display frames confirm arrival near the target.
+                // We evaluate absolute drift to verify the hardware demuxer landed
+                // within keyframe tolerance. We deliberately avoid checking
+                // currentTime >= (target - 15), because when seeking backwards from
+                // a later timestamp, an unexecuted or stuck seek would falsely report
+                // success and disarm the recovery watchdog prematurely.
                 // ─────────────────────────────────────────────────────────────
                 if (this._directSeekTargetSec !== null) {
+                    // Compute absolute distance between active presentation clock and seek target
                     const drift = Math.abs(currentTime - this._directSeekTargetSec);
-                    if (drift < 15 || currentTime >= (this._directSeekTargetSec - 15)) {
+                    // Disarm only when playhead position arrives within GOP keyframe tolerance
+                    if (drift < 15) {
                         log.debug(`[DirectSeekVerify] Display presentation confirmed at ${currentTime.toFixed(2)}s (target: ${this._directSeekTargetSec.toFixed(2)}s) — guard disarmed`);
                         this._clearDirectSeekVerification();
                     }
@@ -1295,6 +1630,8 @@ export class TizenAVPlayer {
                 if (tizenAudioIndex !== null) {
                     try {
                         this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                        // Record active native audio track index in player state
+                        this._activeTizenAudioIndex = tizenAudioIndex;
                         this._pendingAudioIndex = null;
                     } catch (e) {
                         if (e.name === 'InvalidStateError' || e.code === 11) {
@@ -1682,6 +2019,12 @@ export class TizenAVPlayer {
                 // tick causes audio to leak for half a second behind the loading screen.
                 this._emitPlaying();
 
+                // If audio track re-assertion was deferred pending PLAYING state, execute it now
+                if (this._pendingAudioTrackReassert && !this._seekInProgress) {
+                    this._pendingAudioTrackReassert = false;
+                    this._assertActiveAudioTrack();
+                }
+
                 // IMPROVEMENT E: Eager seek on forced path.
                 //
                 // When _forceTizenPlayPassed is true, the safety timeout bypassed
@@ -1774,6 +2117,31 @@ export class TizenAVPlayer {
         let state = 'UNKNOWN';
         try { state = this._avplay.getState(); } catch (_) {}
         if (state !== 'PLAYING' && state !== 'PAUSED') {
+            // When skipping chapters or scrubbing rapidly, a previous seek may have temporarily
+            // left the hardware pipeline in READY state waiting for buffer replenishment.
+            // If the user intends to play, proactively re-assert play() and defer the seek briefly
+            // to allow AVPlay to transition back to PLAYING instead of dropping the seek.
+            if (state === 'READY' && this._isPrepared) {
+                log.info(`_safeSeekTo(): AVPlay state is 'READY' — re-asserting play and deferring seek to ${ms}ms`);
+                if (this._isPlaying) {
+                    try {
+                        this._avplay.play();
+                        this._isTizenPlaying = true;
+                    } catch (playErr) {
+                        log.debug('_safeSeekTo(): play() assertion in READY failed:', playErr);
+                    }
+                }
+                // Schedule a deferred retry to give the native demuxer time to settle in PLAYING
+                setTimeout(() => {
+                    if (this._avplay && this._isPrepared) {
+                        this._safeSeekTo(ms, onSuccess, onError);
+                    } else if (onError) {
+                        onError(new Error('Player closed during deferred seek'));
+                    }
+                }, 80);
+                return;
+            }
+
             log.warn(`_safeSeekTo(): AVPlay state is '${state}' — seekTo() not valid, aborting`);
             if (onError) onError(new Error(`Invalid state for seek: ${state}`));
             return;
@@ -1790,6 +2158,7 @@ export class TizenAVPlayer {
         const seekStartTime = Date.now();
         // Track that a native hardware seek operation is actively in flight
         this._seekInProgress = true;
+        this._seekTimedOut = false;
 
         /*
          * ====================================================================
@@ -1807,6 +2176,7 @@ export class TizenAVPlayer {
             if (this._seekInProgress) {
                 log.warn(`[SeekTelemetry] hardware seekTo timed out after 6000ms for target=${requestedMs}ms — clearing seekInProgress flag`);
                 this._seekInProgress = false;
+                this._seekTimedOut = true;
             }
         }, 6000);
 
@@ -1834,14 +2204,36 @@ export class TizenAVPlayer {
                     // Exposes exact landing accuracy vs keyframe boundaries and execution duration.
                     log.info(`[SeekTelemetry] target=${requestedMs}ms before=${beforeMs}ms landed=${landedMs}ms delta=${deltaMs}ms (took ${durationMs}ms)`);
 
+                    // ─────────────────────────────────────────────────────────────
+                    // Post-Seek Stream Descriptors Diagnostics
+                    // ─────────────────────────────────────────────────────────────
+                    // Log webapis.avplay.getCurrentStreamInfo() immediately on seek completion.
+                    // Verifies whether native demuxer dropped the audio descriptor, altered track indices,
+                    // or left the audio pipeline stalled after buffer flush.
+                    try {
+                        const currentStreams = (typeof this._avplay?.getCurrentStreamInfo === 'function')
+                            ? this._avplay.getCurrentStreamInfo()
+                            : (window.webapis?.avplay?.getCurrentStreamInfo ? window.webapis.avplay.getCurrentStreamInfo() : null);
+                        log.info('[SeekTelemetry] webapis.avplay.getCurrentStreamInfo():', currentStreams);
+                    } catch (streamErr) {
+                        log.warn('[SeekTelemetry] Failed to query getCurrentStreamInfo() post-seek:', streamErr);
+                    }
+
                     // Update authoritative presentation time immediately upon hardware seek landing
                     const actualMs = (typeof landedMs === 'number' && !isNaN(landedMs) && landedMs >= 0)
                         ? landedMs
                         : requestedMs;
                     this._currentTimeSec = actualMs / 1000;
 
+                    // Re-assert active subtitle and audio tracks only if no further seek is queued or actively running.
+                    // Doing so while another seek is pending causes illegal concurrent AVPlay API invocations.
+                    if (this._queuedSeekPositionMs === null && !this._seekInProgress) {
+                        this._assertActiveSubtitleTrack();
+                        // Re-assert and unstick active audio track once seekTo succeeds and AVPlay reaches READY or PLAYING
+                        this._assertActiveAudioTrack();
+                    }
+
                     if (onSuccess) onSuccess(landedMs);
-                    this._assertActiveSubtitleTrack();
                 },
                 (e) => {
                     // Mark seek finished on hardware error
@@ -1947,14 +2339,34 @@ export class TizenAVPlayer {
         // 12s upper bound for high-bitrate 4K network seek & buffering on older Tizen CPUs
         const MAX_SEEK_WAIT_MS = 12000;
 
-        // Measure actual hardware decoder position vs target
-        const curSec = Math.max(
-            this.getCurrentTime(),
-            (Number(this._avplay?.getCurrentTime()) || 0) / 1000
-        );
-        const drift = Math.abs(curSec - targetSeconds);
-        // Allow 15s keyframe drift tolerance (typical max GOP length)
-        const isNear = drift < 15 || curSec >= (targetSeconds - 15);
+        // Active execution condition: Seek, cooldown, buffer, or queued skip still in flight
+        const isStillWorking = this._seekInProgress ||
+                               this._deferredSeekTimerId !== null ||
+                               this._queuedSeekPositionMs !== null ||
+                               this._queuedSeekTimerId !== null ||
+                               this._isNativeBuffering;
+
+        // Measure both clocks against the target: the presentation clock (oncurrentplaytime
+        // or the seek's landing point) and the hardware decoder clock.
+        const presentationSec = this.getCurrentTime();
+        const decoderSec = (Number(this._avplay?.getCurrentTime()) || 0) / 1000;
+        const presentationDrift = Math.abs(presentationSec - targetSeconds);
+        const decoderDrift = Math.abs(decoderSec - targetSeconds);
+        // Position reported in the logs below: the clock closest to the target
+        const curSec = presentationDrift <= decoderDrift ? presentationSec : decoderSec;
+        // Allow 15s keyframe drift tolerance (typical max GOP interval for compressed streams).
+        // Must evaluate absolute drift exclusively: checking curSec >= (targetSeconds - 15)
+        // produces a false-positive whenever seeking backwards and the hardware decoder
+        // fails to seek, remaining stuck at a later presentation timestamp.
+        const presentationNear = presentationDrift < 15;
+        const decoderNear = decoderDrift < 15;
+        // Both clocks at the target: landed. A single clock is trusted only once the seek
+        // has settled: while seekTo() is in flight some firmware already reports the
+        // requested position, and a seekTo() that never called back has not landed. Once
+        // settled, one clock still at the old position (e.g. a backward seek whose other
+        // clock has not caught up) must not flag a seek that did land.
+        const seekSettled = !isStillWorking && !this._seekTimedOut;
+        const isNear = (presentationNear && decoderNear) || ((presentationNear || decoderNear) && seekSettled);
 
         // Success condition: Playhead reached target region
         if (isNear) {
@@ -1962,11 +2374,6 @@ export class TizenAVPlayer {
             this._clearDirectSeekVerification();
             return;
         }
-
-        // Active execution condition: Seek, cooldown, or buffer still in flight
-        const isStillWorking = this._seekInProgress ||
-                               this._deferredSeekTimerId !== null ||
-                               this._isNativeBuffering;
 
         if (isStillWorking) {
             // If still within maximum allowable seek window, continue polling
@@ -2000,6 +2407,8 @@ export class TizenAVPlayer {
     _assertActiveSubtitleTrack() {
         if (!this._avplay || !this._isPrepared) return;
         if (this._activeTizenSubtitleIndex === null || this._activeTizenSubtitleIndex === -1) return;
+        // Do not touch subtitle track APIs if a seek operation is currently active, queued, or deferred
+        if (this._seekInProgress || this._queuedSeekPositionMs !== null || this._queuedSeekTimerId !== null) return;
 
         try {
             this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
@@ -2014,6 +2423,121 @@ export class TizenAVPlayer {
             log.debug('Post-seek subtitle track re-asserted:', this._activeTizenSubtitleIndex);
         } catch (e) {
             log.warn('Post-seek subtitle re-assertion failed:', e);
+        }
+    }
+
+    /**
+     * Re-assert active native AUDIO track after a seek completes.
+     *
+     * On Samsung Tizen AVPlay, demuxer buffer flushes during seekTo() frequently result in:
+     * 1. The AUDIO stream descriptor disappearing completely from webapis.avplay.getCurrentStreamInfo().
+     * 2. The active audio track index silently resetting to track 0 (default/alternate language).
+     * 3. The audio stream remaining listed with its original index, but the native decoding
+     *    pipeline freezing into a silent/stalled state.
+     *
+     * Once AVPlay lands in READY or PLAYING state:
+     * - If the audio track is missing or switched, re-assert setSelectTrack('AUDIO', targetIndex).
+     * - If already on that index, briefly toggle via an alternate audio track (if available)
+     *   or re-apply the track selection to kick the hardware decoder pipeline back to life.
+     *
+     * @private
+     */
+    _assertActiveAudioTrack() {
+        // Validate player readiness and active hardware instance
+        if (!this._avplay || !this._isPrepared) return;
+
+        // Ensure we have a recorded active native audio track index
+        if (this._activeTizenAudioIndex === null || this._activeTizenAudioIndex === undefined) return;
+
+        // Avoid touching track selection while subsequent seeks are pending or queued
+        if (this._seekInProgress || this._queuedSeekPositionMs !== null || this._queuedSeekTimerId !== null) return;
+
+        // Verify native AVPlay state — must be in READY, PLAYING, or PAUSED
+        let avplayState = 'UNKNOWN';
+        try {
+            avplayState = this._avplay.getState();
+        } catch (_) { }
+
+        // Gated on READY or PLAYING (or PAUSED) state
+        if (avplayState !== 'READY' && avplayState !== 'PLAYING' && avplayState !== 'PAUSED') {
+            log.debug(`[AudioTrackAssert] Deferred — AVPlay state is '${avplayState}', not READY or PLAYING`);
+            this._pendingAudioTrackReassert = true;
+            return;
+        }
+
+        const targetIndex = Number(this._activeTizenAudioIndex);
+
+        try {
+            // Retrieve current stream info from native AVPlay hardware
+            let currentStreams = null;
+            if (typeof this._avplay.getCurrentStreamInfo === 'function') {
+                try {
+                    currentStreams = this._avplay.getCurrentStreamInfo();
+                } catch (streamErr) {
+                    log.debug('[AudioTrackAssert] getCurrentStreamInfo query failed:', streamErr);
+                }
+            }
+
+            // Locate active audio stream descriptor in the returned hardware array
+            let currentAudioStream = null;
+            if (Array.isArray(currentStreams)) {
+                currentAudioStream = currentStreams.find(
+                    (s) => s && s.type && s.type.toUpperCase() === 'AUDIO'
+                );
+            }
+
+            // Extract the active audio track index reported by AVPlay
+            const currentAudioIndex = currentAudioStream && typeof currentAudioStream.index !== 'undefined'
+                ? Number(currentAudioStream.index)
+                : null;
+
+            log.info(`[AudioTrackAssert] Target index=${targetIndex}, current reported index=${currentAudioIndex}, state=${avplayState}`);
+
+            // Query total available tracks to determine if an alternative track exists for toggling
+            let totalTracks = [];
+            try {
+                if (typeof this._avplay.getTotalTrackInfo === 'function') {
+                    totalTracks = this._avplay.getTotalTrackInfo() || [];
+                }
+            } catch (_) { }
+
+            // Filter down to available AUDIO descriptors
+            const audioTracks = totalTracks.filter(
+                (t) => t && t.type && t.type.toUpperCase() === 'AUDIO'
+            );
+
+            // If AVPlay still reports the target index, the decoder pipeline may be stalled:
+            // Briefly toggle via an alternate audio track or re-apply the track to kick the decoder
+            if (currentAudioIndex === targetIndex) {
+                const altTrack = audioTracks.find((t) => Number(t.index) !== targetIndex);
+                if (altTrack) {
+                    log.info(`[AudioTrackAssert] Audio already on index ${targetIndex} — briefly toggling via track ${altTrack.index} to unstall decoder pipeline`);
+                    try {
+                        this._avplay.setSelectTrack('AUDIO', Number(altTrack.index));
+                    } catch (toggleErr) {
+                        log.debug('[AudioTrackAssert] Temporary track toggle step failed:', toggleErr);
+                    }
+                } else {
+                    log.info(`[AudioTrackAssert] Audio already on index ${targetIndex} (single track) — re-applying track selection`);
+                }
+                this._avplay.setSelectTrack('AUDIO', targetIndex);
+            } else {
+                // Audio track is missing from stream info or switched to another index: re-assert selection
+                log.info(`[AudioTrackAssert] Audio desynced or missing (current=${currentAudioIndex}) — re-asserting AUDIO track ${targetIndex}`);
+                this._avplay.setSelectTrack('AUDIO', targetIndex);
+            }
+
+            this._activeTizenAudioIndex = targetIndex;
+            this._pendingAudioTrackReassert = false;
+            log.info(`[AudioTrackAssert] Successfully re-asserted AUDIO track index ${targetIndex}`);
+        } catch (e) {
+            // Handle state transition errors (e.g. HLS streams requiring PLAYING state)
+            if (e.name === 'InvalidStateError' || e.code === 11) {
+                log.debug(`[AudioTrackAssert] setSelectTrack failed with InvalidStateError in state '${avplayState}', deferring to PLAYING state`);
+                this._pendingAudioTrackReassert = true;
+            } else {
+                log.warn('[AudioTrackAssert] Failed to re-assert AUDIO track:', e);
+            }
         }
     }
 
@@ -2294,6 +2818,8 @@ export class TizenAVPlayer {
      */
     async _stopInternal() {
         this._activeTizenSubtitleIndex = null;
+        this._activeTizenAudioIndex = null;
+        this._pendingAudioTrackReassert = false;
 
         // ── Cancel all pending timeouts BEFORE touching AVPlay. ──────────────
         //
@@ -2347,6 +2873,7 @@ export class TizenAVPlayer {
         // Clear seek-in-progress flag so stale state doesn't block _checkNativePlay
         // on a future playback session
         this._seekInProgress = false;
+        this._seekTimedOut = false;
         this._bufferingCompleteDuringSeek = false;
         this._isNativeBuffering = false;
         this._lastSubtitleTrackChangeTime = 0;
@@ -2356,7 +2883,13 @@ export class TizenAVPlayer {
         // Reset any pending deferred pause on teardown
         this._pendingPause = false;
 
+        if (this._queuedSeekTimerId !== null) {
+            clearTimeout(this._queuedSeekTimerId);
+            this._queuedSeekTimerId = null;
+        }
         this._queuedSeekPositionMs = null;
+        this._queuedSeekPositionTicks = null;
+        this._queuedSeekOptions = null;
         if (this._deferredSeekTimerId !== null) {
             clearTimeout(this._deferredSeekTimerId);
             this._deferredSeekTimerId = null;
@@ -2385,7 +2918,7 @@ export class TizenAVPlayer {
 
             // 1. Attempt stop
             try {
-                const state = this._avplay.getState();
+                const state = typeof this._avplay.getState === 'function' ? this._avplay.getState() : 'NONE';
                 if (state !== 'NONE' && state !== 'IDLE') {
                     this._avplay.stop();
                 }
@@ -2393,7 +2926,19 @@ export class TizenAVPlayer {
                 log.debug('AVPlay stop failed (possibly already idle):', e.message || e);
             }
 
-            // 2. Force close (True Reset to NONE state).
+            // 2. Collapse hardware video display rectangle so WAM releases overlay plane
+            try {
+                if (typeof this._avplay.setDisplayRect === 'function') {
+                    this._avplay.setDisplayRect(0, 0, 0, 0);
+                }
+            } catch (e) {
+                log.debug('AVPlay setDisplayRect(0, 0, 0, 0) failed:', e.message || e);
+            }
+
+            // Yield a brief macrotask tick to allow native state machine to transition out of PLAYING
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // 3. Force close (True Reset to NONE state).
             // This is critical for episode-to-episode transitions to clear
             // stale buffers and decoder state.
             try {
@@ -2417,6 +2962,8 @@ export class TizenAVPlayer {
     async stop() {
         this._stopPositionTracking();
         await this._stopInternal();
+        // Native session is closed — release the plane host we mounted for it.
+        this._removeAvPlayerObject();
 
         this._currentSrc = null;
         this._currentPlayOptions = null;
@@ -2433,16 +2980,18 @@ export class TizenAVPlayer {
     seek(positionTicks, options = {}) {
         if (!this._avplay || !this._isPrepared) return;
 
-        // If a seek is already in flight, queue this one to run after it completes
-        // instead of attempting concurrent seeks which violate Samsung's AVPlay API
-        // contract (no API calls between seekTo and its callback).
-        if (this._seekInProgress) {
+        // If a seek is already in flight or a queued seek timer is armed, queue this target
+        // to execute once the hardware demuxer completes its current operation. This prevents
+        // concurrent seekTo calls which violate Samsung's AVPlay API contract.
+        if (this._seekInProgress || this._queuedSeekTimerId !== null) {
             const targetTicks = positionTicks;
             const targetMs = Math.floor(
                 Math.max(0, targetTicks - (this._currentPlayOptions?.transcodingOffsetTicks || 0)) / 10000
             );
             this._queuedSeekPositionMs = targetMs;
-            log.debug(`seek(): seek in progress — queued subsequent seek to ${targetMs}ms`);
+            this._queuedSeekPositionTicks = positionTicks;
+            this._queuedSeekOptions = options;
+            log.debug(`seek(): seek in progress or queued — updated queued target to ${targetMs}ms`);
             return;
         }
 
@@ -2597,28 +3146,45 @@ export class TizenAVPlayer {
 
                     /*
                      * ================================================================
-                     * CONSECUTIVE QUEUED SEEK EXECUTION PRIORITY
+                     * CONSECUTIVE QUEUED SEEK EXECUTION (ASYNC SCHEDULING)
                      * ================================================================
                      * If another seek arrived while this hardware seek was in flight
-                     * (e.g. user pressed seek repeatedly in rapid succession), execute
-                     * the queued target immediately.
+                     * (e.g. user pressed next/previous chapter repeatedly in rapid succession),
+                     * schedule the queued target after a brief settling delay (50ms).
                      *
-                     * CRITICAL PIPELINE STABILITY RULE:
-                     * We MUST NOT emit 'seeked' or resume playback (_checkNativePlay) here!
-                     * Emitting 'seeked' prematurely signals OSDController and JellyfinPlayer
-                     * to unpause and transition AVPlay to PLAYING state right before we call
-                     * seekTo() for the queued position. In Tizen AVPlay, issuing seekTo()
-                     * during an unpause transition causes the decoder to reject the seek,
-                     * stall in READY, or abort playback entirely.
+                     * CRITICAL PIPELINE STABILITY RULES:
+                     * 1. We MUST NOT call this.seek() synchronously inside the native seekTo callback!
+                     *    Calling seekTo() from inside the completion callback is re-entrant into the
+                     *    native player's C++ thread and causes PLAYER_ERROR_INVALID_OPERATION or crashes.
+                     * 2. We MUST NOT emit 'seeked' or resume playback (_checkNativePlay) here,
+                     *    as that would signal intermediate playback transitions before the final target.
+                     * 3. A 50ms asynchronous breather allows the native demuxer to finish unwinding
+                     *    its callback and settle before the next seekTo() call is dispatched.
                      * ================================================================
                      */
                     const queuedMs = this._queuedSeekPositionMs;
-                    if (queuedMs !== null) {
+                    if (queuedMs !== null || this._queuedSeekPositionTicks !== null) {
+                        const queuedTicks = this._queuedSeekPositionTicks !== null
+                            ? this._queuedSeekPositionTicks
+                            : queuedMs * 10000;
+                        const queuedOptions = this._queuedSeekOptions || { suppressWaitingEvent: true };
+
+                        if (this._queuedSeekTimerId !== null) {
+                            clearTimeout(this._queuedSeekTimerId);
+                            this._queuedSeekTimerId = null;
+                        }
                         this._queuedSeekPositionMs = null;
+                        this._queuedSeekPositionTicks = null;
+                        this._queuedSeekOptions = null;
+
                         if (this._avplay && this._isPrepared) {
-                            const queuedTicks = queuedMs * 10000;
-                            log.debug(`seek(): executing queued seek to ${queuedMs}ms without intermediate seeked/resume`);
-                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                            log.debug(`seek(): scheduling queued seek to ${queuedTicks / 10000}ms after hardware seek settlement`);
+                            this._queuedSeekTimerId = setTimeout(() => {
+                                this._queuedSeekTimerId = null;
+                                if (this._avplay && this._isPrepared) {
+                                    this.seek(queuedTicks, queuedOptions);
+                                }
+                            }, 50);
                             return;
                         }
                     }
@@ -2749,12 +3315,28 @@ export class TizenAVPlayer {
 
                     // If a subsequent seek was queued, prioritize executing it over error escalation
                     const queuedMs = this._queuedSeekPositionMs;
-                    if (queuedMs !== null) {
+                    if (queuedMs !== null || this._queuedSeekPositionTicks !== null) {
+                        const queuedTicks = this._queuedSeekPositionTicks !== null
+                            ? this._queuedSeekPositionTicks
+                            : queuedMs * 10000;
+                        const queuedOptions = this._queuedSeekOptions || { suppressWaitingEvent: true };
+
+                        if (this._queuedSeekTimerId !== null) {
+                            clearTimeout(this._queuedSeekTimerId);
+                            this._queuedSeekTimerId = null;
+                        }
                         this._queuedSeekPositionMs = null;
+                        this._queuedSeekPositionTicks = null;
+                        this._queuedSeekOptions = null;
+
                         if (this._avplay && this._isPrepared) {
-                            const queuedTicks = queuedMs * 10000;
-                            log.debug(`seek(): executing queued seek to ${queuedMs}ms after failed intermediate seek`);
-                            this.seek(queuedTicks, { suppressWaitingEvent: true });
+                            log.debug(`seek(): scheduling queued seek to ${queuedTicks / 10000}ms after failed intermediate seek`);
+                            this._queuedSeekTimerId = setTimeout(() => {
+                                this._queuedSeekTimerId = null;
+                                if (this._avplay && this._isPrepared) {
+                                    this.seek(queuedTicks, queuedOptions);
+                                }
+                            }, 50);
                             return;
                         }
                     }
@@ -2765,18 +3347,21 @@ export class TizenAVPlayer {
                         this._bufferingCompleteDuringSeek = false;
                     }
 
-                    // DirectPlay seek failure escalation:
-                    // If hardware demuxer rejects seekTo on raw container, escalate to Remux
+                    // ─────────────────────────────────────────────────────────────────
+                    // DirectPlay Transient Seek Error Handling & Guard Retention:
+                    // Rapid chapter skips or scrub bursts can trigger transient demuxer
+                    // rejections while the native decoder flushes. We intentionally do NOT
+                    // immediately emit 'resumeseekfailed' here, as that falsely escalates
+                    // temporary skip collisions to a full server Remux restart.
+                    // Instead, the authoritative verification watchdog (_verifyDirectPlaySeek)
+                    // remains active: if the container is genuinely unseekable (e.g. missing
+                    // Cues) and the playhead stays stuck after settling, _runDirectSeekCheck()
+                    // will reliably emit 'resumeseekfailed' for Remux fallback.
+                    // ─────────────────────────────────────────────────────────────────
                     const isDirectPlay = this._currentPlayOptions?.playMethod === 'DirectPlay';
-                    const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || Boolean(this._currentPlayOptions?.mediaSource?.LiveStreamId);
                     const targetSeconds = positionTicks / 10000000;
-                    if (isDirectPlay && !isLive && targetSeconds >= 5) {
-                        log.warn(`TizenAVPlayer: DirectPlay seek to ${targetSeconds.toFixed(2)}s failed natively — emitting resumeseekfailed for Remux fallback`);
-                        this._clearDirectSeekVerification();
-                        this.onEvent({
-                            type: 'resumeseekfailed',
-                            data: { targetPositionTicks: positionTicks }
-                        });
+                    if (isDirectPlay && targetSeconds >= 5) {
+                        log.warn(`TizenAVPlayer: Native seekTo to ${targetSeconds.toFixed(2)}s reported error — keeping verification watchdog active:`, e);
                     }
 
                     // Apply pending operation on error too
@@ -2933,6 +3518,10 @@ export class TizenAVPlayer {
                 log.debug(`Audio track Stream ${streamIndex} (list index ${listIndex}) deferred — seekInProgress=${this._seekInProgress}, state='${avplayState}'`);
                 this._pendingAudioIndex = streamIndex;
                 this._currentAudioStreamIndex = listIndex;
+                const deferredTizenIndex = this._findTizenAudioIndex(streamIndex);
+                if (deferredTizenIndex !== null) {
+                    this._activeTizenAudioIndex = deferredTizenIndex;
+                }
                 return;
             }
 
@@ -2941,6 +3530,7 @@ export class TizenAVPlayer {
             if (tizenAudioIndex !== null) {
                 this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                 this._currentAudioStreamIndex = listIndex;
+                this._activeTizenAudioIndex = tizenAudioIndex;
                 log.info(`TizenAVPlayer: Selected AUDIO list index ${listIndex} (Stream ${streamIndex}) → native Tizen index ${tizenAudioIndex}`);
             } else {
                 log.warn(`TizenAVPlayer: Could not find Tizen audio track for list index ${listIndex} (Stream ${streamIndex})`);
@@ -3420,7 +4010,12 @@ export class TizenAVPlayer {
      * @returns {boolean} True if seek operation, queued seek, or cooldown deferral is active
      */
     get isSeeking() {
-        return Boolean(this._seekInProgress || this._deferredSeekTimerId !== null || this._queuedSeekPositionMs !== null);
+        return Boolean(
+            this._seekInProgress ||
+            this._deferredSeekTimerId !== null ||
+            this._queuedSeekPositionMs !== null ||
+            this._queuedSeekTimerId !== null
+        );
     }
 
     // ========================================================================
@@ -3456,15 +4051,91 @@ export class TizenAVPlayer {
         this._suspendedPositionMs = 0;
         this._wasPlayingBeforeSuspend = false;
 
+        // ---------------------------------------------------------------------
+        // Cancel all pending timeouts and timers before touching AVPlay
+        // ---------------------------------------------------------------------
+        if (this._subtitleConfirmTimerId !== null) {
+            clearTimeout(this._subtitleConfirmTimerId);
+            this._subtitleConfirmTimerId = null;
+        }
+        if (this._suppressWaitingTimeout) {
+            clearTimeout(this._suppressWaitingTimeout);
+            this._suppressWaitingTimeout = null;
+        }
+        if (this._readyTrackTimeoutId) {
+            clearTimeout(this._readyTrackTimeoutId);
+            this._readyTrackTimeoutId = null;
+        }
+        if (this._initialBufferTimeoutId) {
+            clearTimeout(this._initialBufferTimeoutId);
+            this._initialBufferTimeoutId = null;
+        }
+        if (this._seekBufferTimeoutId !== null) {
+            clearTimeout(this._seekBufferTimeoutId);
+            this._seekBufferTimeoutId = null;
+        }
+        this._clearDirectSeekVerification();
+        if (this._seekSafetyTimeoutId !== null) {
+            clearTimeout(this._seekSafetyTimeoutId);
+            this._seekSafetyTimeoutId = null;
+        }
+        if (this._bufferingDeadlockTimeoutId) {
+            clearTimeout(this._bufferingDeadlockTimeoutId);
+            this._bufferingDeadlockTimeoutId = null;
+        }
+        if (this._queuedSeekTimerId !== null) {
+            clearTimeout(this._queuedSeekTimerId);
+            this._queuedSeekTimerId = null;
+        }
+        if (this._deferredSeekTimerId !== null) {
+            clearTimeout(this._deferredSeekTimerId);
+            this._deferredSeekTimerId = null;
+        }
+
+        // ---------------------------------------------------------------------
+        // Cleanly sequence native decoder release
+        // ---------------------------------------------------------------------
         if (this._avplay) {
+            // 1. Release listener before stop/close so VRAM references are freed
             try {
-                this._avplay.stop();
-                this._avplay.close();
-            } catch (e) {
-                // Ignore cleanup errors
+                if (typeof this._avplay.setListener === 'function') {
+                    this._avplay.setListener(null);
+                }
+            } catch (_) {
+                // Ignore listener cleanup errors during destroy
+            }
+
+            // 2. Halt media pipeline if actively playing, paused, or prepared
+            try {
+                const state = typeof this._avplay.getState === 'function' ? this._avplay.getState() : 'NONE';
+                if (state !== 'NONE' && state !== 'IDLE' && typeof this._avplay.stop === 'function') {
+                    this._avplay.stop();
+                }
+            } catch (_) {
+                // Ignore stop errors during destroy
+            }
+
+            // 3. Reset hardware display rect to zero so WAM disengages video plane
+            try {
+                if (typeof this._avplay.setDisplayRect === 'function') {
+                    this._avplay.setDisplayRect(0, 0, 0, 0);
+                }
+            } catch (_) {
+                // Ignore display rect errors during destroy
+            }
+
+            // 4. Force native close to return hardware state machine to NONE
+            try {
+                if (typeof this._avplay.close === 'function') {
+                    this._avplay.close();
+                }
+            } catch (_) {
+                // Ignore close errors during destroy
             }
         }
 
+        // Unmount hardware plane host and trigger WAM compositor reset
+        this._removeAvPlayerObject();
         this._avplay = null;
         this._currentSrc = null;
         this._currentPlayOptions = null;
@@ -3476,6 +4147,14 @@ export class TizenAVPlayer {
      */
     getCurrentAudioStreamIndex() {
         return this._currentAudioStreamIndex;
+    }
+
+    /**
+     * Get active native Tizen AUDIO track index
+     * @returns {number|null}
+     */
+    getActiveTizenAudioIndex() {
+        return this._activeTizenAudioIndex;
     }
 
     /**

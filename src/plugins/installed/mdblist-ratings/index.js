@@ -10,11 +10,12 @@
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
 import { storage } from '../../../utils/StorageService.js';
+import { openExternalUrl } from '../../../pages/settings/modals/AboutDeviceSpecs.js';
 import {
     getMdbProviderInfo,
-    formatRatingValue,
     normalizeWebClientSettings,
-    filterAndOrderRatings
+    filterAndOrderRatings,
+    buildProviderHref
 } from './ratingsFormatter.js';
 
 export default {
@@ -25,12 +26,16 @@ export default {
     serverDependency: 'mdblist-ratings',
     defaultEnabled: false,
 
+    // Runtime flag tracking whether the server plugin endpoints are responsive and compatible
+    _isServerAvailable: true,
+
     async init(api) {
         this.api = api;
         this.log = api.log;
         this._settings = null;
         this._settingsPromise = null;
         this._awardsEnabledOnServer = true; // Default to true until checked
+        this._isServerAvailable = true;
         this.log.info('MDBList Ratings plugin initialization started');
 
         // Fetch and cache server-side WebClientSettings (safe for non-admins)
@@ -56,13 +61,28 @@ export default {
                 const cfg = await this.api.serverPlugins.call('/Plugins/MdbListRatings/WebClientSettings');
                 this._settings = normalizeWebClientSettings(cfg);
                 this._awardsEnabledOnServer = this._settings.awards.enabled;
+                this._isServerAvailable = true;
                 this.log.info(
-                    `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}`
+                    `MDBList server settings loaded: mode=${this._settings.mode}, order=[${this._settings.order.join(',')}], awards=${this._settings.awards.enabled}, clickable=${this._settings.clickable}`
                 );
             } catch (err) {
+                const status = err?.status;
                 // Fallback for legacy 10.xx plugins where WebClientSettings endpoint does not exist
-                this.log.info('MDBList WebClientSettings endpoint not available; probing legacy awards capability...');
-                await this._checkAwardsCapabilityLegacy(this.api);
+                this.log.info(`MDBList WebClientSettings endpoint not available (HTTP ${status || 'err'}); probing legacy awards capability...`);
+                const legacyAvailable = await this._checkAwardsCapabilityLegacy(this.api);
+
+                // If both modern WebClientSettings and legacy fallback endpoints failed with incompatible
+                // status codes (404 Not Found, 405 Method Not Allowed, or 403 Forbidden), mark capability
+                // unavailable for the entire session so subsequent calls become fast no-ops.
+                if (!legacyAvailable) {
+                    this._isServerAvailable = false;
+                    this._awardsEnabledOnServer = false;
+                    this.log.warn(`MDBList server plugin endpoints are incompatible or unavailable (HTTP ${status}). Disabling MDBList queries for this session.`);
+                    try {
+                        storage.setItem('serverPlugin:available:mdblist-ratings', 'false');
+                    } catch (_) {}
+                }
+
                 this._settings = normalizeWebClientSettings({
                     enableWebAwardBadges: this._awardsEnabledOnServer
                 });
@@ -77,8 +97,11 @@ export default {
 
     /**
      * Legacy probe for older Jellyfin 10.xx plugin versions without WebClientSettings.
+     * @param {Object} api - Plugin API client
+     * @returns {Promise<boolean>} True if any legacy endpoint succeeded
      */
     async _checkAwardsCapabilityLegacy(api) {
+        let legacyAvailable = false;
         try {
             const pluginId = 'ab96f8b5-45ef-44be-81d6-99bc01e26b9d';
             const config = await api.serverPlugins.call(`/Plugins/${pluginId}/Configuration`);
@@ -89,19 +112,23 @@ export default {
             } else {
                 this._awardsEnabledOnServer = true;
             }
+            legacyAvailable = true;
         } catch (e) {
+            // Configuration endpoint might be 403 (non-admin) or 404/405.
+            // Try AwardsDefinitions endpoint.
             try {
                 await api.serverPlugins.call('/Plugins/MdbListRatings/AwardsDefinitions');
                 this._awardsEnabledOnServer = true;
+                legacyAvailable = true;
             } catch (err) {
-                if (err.status === 404) {
-                    this._awardsEnabledOnServer = false;
-                    this.log.info(
-                        'Server-side Awards API not found (legacy plugin version). Awards will not be loaded.'
-                    );
-                }
+                this._awardsEnabledOnServer = false;
+                this.log.info(
+                    `Server-side Awards API not found or unsupported (HTTP ${err?.status || 'err'}). Awards will not be loaded.`
+                );
+                legacyAvailable = false;
             }
         }
+        return legacyAvailable;
     },
 
     /**
@@ -111,32 +138,66 @@ export default {
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
-     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string }>}
+     * @returns {Promise<{ ratings: Array, badges: Array, features: Object|null, settings: Object, imdbId: string, context: Object }|null>}
      */
     async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
+        // Fast no-op if the server plugin endpoints were marked unavailable
+        if (this._isServerAvailable === false) {
+            return null;
+        }
+
         try {
             // Ensure server settings are loaded first so filtering can be applied
             const settings = await this.getSettings();
 
+            // Re-check availability in case initial probe resolved while waiting
+            if (this._isServerAvailable === false) {
+                return null;
+            }
+
             // 1. Try to get IDs, ratings, and features from MDBList cache
-            const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            let data = null;
+            try {
+                data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            } catch (cacheErr) {
+                const status = cacheErr?.status;
+                // If endpoint returns 404, 405, or 403, server plugin route is missing or incompatible
+                if (status === 404 || status === 405 || status === 403) {
+                    this._isServerAvailable = false;
+                    this.log.warn(
+                        `MDBList CachedByItemId failed (HTTP ${status}). Marking server capability unavailable for this session.`
+                    );
+                    try {
+                        storage.setItem('serverPlugin:available:mdblist-ratings', 'false');
+                    } catch (_) {}
+                }
+                return null;
+            }
 
             // 2. Filter and order ratings strictly according to user settings & deduplicate
             const rawRatings = data && data.hasCache ? data.ratings || [] : [];
             const filteredRatings = filterAndOrderRatings(rawRatings, settings);
 
-            // 3. Resolve IMDb ID only if awards are requested and enabled
-            let finalImdbId = null;
+            // 3. Resolve IMDb and TMDb identifiers for awards and deep-link navigation
+            let finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb || null;
+            let finalTmdbId = data?.ids?.tmdb || data?.ids?.Tmdb || null;
+            let itemInfo = null;
+
+            // Determine if full item info from Jellyfin is required
             const awardsAllowed = includeAwards && settings.awards.enabled && this._awardsEnabledOnServer !== false;
-            if (awardsAllowed) {
-                finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
-                if (!finalImdbId) {
-                    try {
-                        const itemInfo = await this.api.getItem(itemId);
-                        finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
-                    } catch (e) {
-                        this.log.warn('Could not fetch IMDb ID from Jellyfin for metadata request:', e);
+            const needsItemInfo = (!finalImdbId && awardsAllowed) || ((!finalImdbId || !finalTmdbId) && settings.clickable);
+
+            if (needsItemInfo) {
+                try {
+                    itemInfo = await this.api.getItem(itemId);
+                    if (!finalImdbId) {
+                        finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb || null;
                     }
+                    if (!finalTmdbId) {
+                        finalTmdbId = itemInfo?.ProviderIds?.Tmdb || itemInfo?.ProviderIds?.tmdb || null;
+                    }
+                } catch (e) {
+                    this.log.warn('Could not fetch item info from Jellyfin for metadata request:', e);
                 }
             }
 
@@ -164,16 +225,32 @@ export default {
                 }
             }
 
+            // Assemble structured metadata context for external provider page resolution
+            const context = {
+                ids: {
+                    imdb: finalImdbId,
+                    tmdb: finalTmdbId
+                },
+                contentType: itemInfo?.Type
+                    ? (itemInfo.Type === 'Series' ? 'show' : itemInfo.Type.toLowerCase())
+                    : 'movie',
+                seasonNumber: itemInfo?.Type === 'Episode'
+                    ? itemInfo?.ParentIndexNumber
+                    : (itemInfo?.Type === 'Season' ? itemInfo?.IndexNumber : null),
+                episodeNumber: itemInfo?.Type === 'Episode' ? itemInfo?.IndexNumber : null
+            };
+
             return {
                 ratings: filteredRatings,
                 badges: awards || [],
                 features: data?.whatsonFeatures || data?.whatson_features || null,
                 settings,
-                imdbId: finalImdbId
+                imdbId: finalImdbId,
+                context
             };
         } catch (err) {
             this.log.warn(`MDBList Plugin metadata fetch failed for ${itemId}:`, err);
-            return { ratings: [], badges: [], features: null, settings: this._settings, imdbId };
+            return { ratings: [], badges: [], features: null, settings: this._settings, imdbId, context: null };
         }
     },
 
@@ -197,7 +274,13 @@ export default {
                     // Render Ratings Row (Respect Score Visibility / Mystery Mode)
                     const item = api.getCurrentItem();
                     if (metadata.ratings.length > 0 && shouldShowScore(item)) {
-                        this._renderRatingsRow(pageEl, metadata.ratings, metadata.features, metadata.settings);
+                        this._renderRatingsRow(
+                            pageEl,
+                            metadata.ratings,
+                            metadata.features,
+                            metadata.settings,
+                            metadata.context
+                        );
                     }
 
                     // Render Awards Row
@@ -234,9 +317,9 @@ export default {
     },
 
     async _fetchAndRenderAwards(pageEl, imdbId, retryCount = 0) {
-        // Skip if awards are explicitly disabled or unsupported on the server, or locally
+        // Skip if awards or the server plugin are explicitly disabled or unsupported on the server, or locally
         const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
-        if (this._awardsEnabledOnServer === false || !userWantsAwards) {
+        if (this._isServerAvailable === false || this._awardsEnabledOnServer === false || !userWantsAwards) {
             return;
         }
 
@@ -255,6 +338,10 @@ export default {
                 this._fetchAndRenderAwards(pageEl, imdbId, retryCount + 1);
             }
         } catch (err) {
+            const status = err?.status;
+            if (status === 404 || status === 405 || status === 403) {
+                this._awardsEnabledOnServer = false;
+            }
             this.log.warn('Awards fetch failed:', err);
         }
     },
@@ -266,8 +353,9 @@ export default {
      * @param {Array} ratings - Array of rating objects
      * @param {Object} [features] - Extra metadata features (e.g. IMDb Top 250)
      * @param {Object} [settings] - Server WebClientSettings configuration
+     * @param {Object} [context] - Media context for deep link resolution
      */
-    _renderRatingsRow(pageEl, ratings, features = null, settings = null) {
+    _renderRatingsRow(pageEl, ratings, features = null, settings = null, context = null) {
         const metaRow = pageEl.querySelector('.details-meta-row');
         if (!metaRow) return;
 
@@ -283,6 +371,7 @@ export default {
         // Base URL for plugin assets
         const assetBase = `${this.api.serverUrl}/Plugins/MdbListRatings/Assets/`;
         const activeSettings = settings || this._settings;
+        const isClickable = Boolean(activeSettings && activeSettings.clickable === true);
 
         // Build items
         let html = '<div class="mdblist-ratings-row" tabindex="-1">';
@@ -310,14 +399,33 @@ export default {
                 iconHtml = `<span class="mdblist-rating-icon star-emoji">⭐</span>`;
             }
 
-            html += `
-                <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
-                    <span class="provider-icon ${provider.className}">
-                        ${iconHtml}
-                    </span>
-                    <span class="mdblist-value">${provider.formattedText}</span>
-                </div>
+            // Construct visual presentation elements (provider badge icon and tabular score value)
+            const itemInnerHtml = `
+                <span class="provider-icon ${provider.className}">
+                    ${iconHtml}
+                </span>
+                <span class="mdblist-value">${provider.formattedText}</span>
             `;
+
+            // If server clickable option is active, resolve destination hyperlink
+            // Both icon and score value are unified into 1 clickable entry for mouse users
+            const href = isClickable ? buildProviderHref(rating.source || rating.Source, rating, context) : null;
+
+            if (href) {
+                html += `
+                    <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
+                        <a href="${href}" class="mdblist-rating-link" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-label="${provider.displayName}: ${provider.formattedText}">
+                            ${itemInnerHtml}
+                        </a>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="mdblist-item" title="${provider.displayName}: ${provider.formattedText}">
+                        ${itemInnerHtml}
+                    </div>
+                `;
+            }
         }
 
         html += '</div>';
@@ -327,13 +435,30 @@ export default {
         const targetRow = techRow || metaRow;
         targetRow.insertAdjacentHTML('afterend', html);
 
-        // Add subtle entrance animation with spring curve
-        requestAnimationFrame(() => {
-            const row = pageEl.querySelector('.mdblist-ratings-row');
-            if (row) {
-                row.classList.add('visible');
+        const row = pageEl.querySelector('.mdblist-ratings-row');
+        if (row) {
+            // Wire mouse-click event delegation for external rating provider links
+            if (isClickable) {
+                row.addEventListener('click', (e) => {
+                    const link = e.target.closest('.mdblist-rating-link');
+                    if (!link) return;
+
+                    // Strictly intercept mouse click to prevent D-pad remote focus or card bubble
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const targetUrl = link.getAttribute('href');
+                    if (targetUrl) {
+                        openExternalUrl(targetUrl);
+                    }
+                });
             }
-        });
+
+            // Add subtle entrance animation with spring curve
+            requestAnimationFrame(() => {
+                row.classList.add('visible');
+            });
+        }
     },
 
     /**

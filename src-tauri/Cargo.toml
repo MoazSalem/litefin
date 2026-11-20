@@ -66,8 +66,10 @@ tauri = { version = "2.12", features = [] }
 # units, strips all symbol tables and debuginfo, and eliminates panic landing pads.
 # -----------------------------------------------------------------------------
 [profile.release]
-# Optimize aggressively for binary size ('z' optimizes for minimal footprint)
-opt-level = "z"
+# Optimize aggressively for runtime speed ('z' trimmed size but throttled the
+# IPC bridge, discovery, and JNI call paths — a Tauri shell is small enough
+# that size savings never justified the perf cost)
+opt-level = 3
 
 # Enable whole-crate Link-Time Optimization across all dependencies
 lto = true

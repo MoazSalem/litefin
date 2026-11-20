@@ -279,7 +279,7 @@ const skipIntroPlugin = {
                 const guardKey = `${type}-${idx}`;
                 if (this._skippedSegments.has(guardKey)) {
                     // Only re-arm when playhead is safely ahead of segment start in reverse
-                    if (positionTicks < segment.start - (2 * TICKS_PER_SECOND)) {
+                    if (positionTicks < segment.start - 2 * TICKS_PER_SECOND) {
                         this._skippedSegments.delete(guardKey);
                     }
                 }
@@ -299,7 +299,11 @@ const skipIntroPlugin = {
             segmentList.forEach((segment, idx) => {
                 const guardKey = `${type}-${idx}`;
                 // Guard: Skip segments that have already fired in this playback pass
-                if (!this._skippedSegments.has(guardKey) && positionTicks >= segment.start && positionTicks < segment.end) {
+                if (
+                    !this._skippedSegments.has(guardKey) &&
+                    positionTicks >= segment.start &&
+                    positionTicks < segment.end
+                ) {
                     matchedSegment = segment;
                     matchedIndex = idx;
                 }
@@ -461,12 +465,11 @@ const skipIntroPlugin = {
                     this._recapSegment = serverRecaps.sort((a, b) => a.start - b.start);
                     this._previewSegment = serverPreviews.sort((a, b) => a.start - b.start);
 
-                    serverLoaded = (
+                    serverLoaded =
                         this._introSegment.length > 0 ||
                         this._outroSegment.length > 0 ||
                         this._recapSegment.length > 0 ||
-                        this._previewSegment.length > 0
-                    );
+                        this._previewSegment.length > 0;
 
                     if (serverLoaded) {
                         api.log.info(
@@ -489,7 +492,8 @@ const skipIntroPlugin = {
 
             // 2. Fallback Path A: Intro-Skipper v1 /Episode/{itemId}/Timestamps
             // Supported on Jellyfin <= 10.9 servers running early Intro-Skipper v1 forks.
-            const hasServerData = this._introSegment.length > 0 ||
+            const hasServerData =
+                this._introSegment.length > 0 ||
                 this._outroSegment.length > 0 ||
                 this._recapSegment.length > 0 ||
                 this._previewSegment.length > 0;
@@ -502,10 +506,12 @@ const skipIntroPlugin = {
                     // Helper to convert legacy float seconds into 64-bit Jellyfin ticks
                     const toSegment = (raw) => {
                         if (!raw || !(raw.End > 0)) return [];
-                        return [{
-                            start: Math.round(raw.Start * TICKS_PER_SECOND),
-                            end: Math.round(raw.End * TICKS_PER_SECOND)
-                        }];
+                        return [
+                            {
+                                start: Math.round(raw.Start * TICKS_PER_SECOND),
+                                end: Math.round(raw.End * TICKS_PER_SECOND)
+                            }
+                        ];
                     };
 
                     this._introSegment = toSegment(data?.Introduction);
@@ -513,7 +519,12 @@ const skipIntroPlugin = {
                     this._recapSegment = toSegment(data?.Recap);
                     this._previewSegment = toSegment(data?.Preview);
 
-                    if (this._introSegment.length > 0 || this._outroSegment.length > 0 || this._recapSegment.length > 0 || this._previewSegment.length > 0) {
+                    if (
+                        this._introSegment.length > 0 ||
+                        this._outroSegment.length > 0 ||
+                        this._recapSegment.length > 0 ||
+                        this._previewSegment.length > 0
+                    ) {
                         api.log.info(
                             `Skip Intro: loaded legacy timestamps from /Episode/${itemId}/Timestamps —`,
                             `intro=${this._introSegment.length > 0 ? 'yes' : 'no'}`,
@@ -538,10 +549,12 @@ const skipIntroPlugin = {
                     api.log.debug(`Skip Intro: checking legacy endpoint /Episode/${itemId}/IntroTimestamps`);
                     const legacyData = await api.serverPlugins.call(`/Episode/${itemId}/IntroTimestamps`);
                     if (legacyData?.Valid && legacyData.IntroEnd > 0) {
-                        this._introSegment = [{
-                            start: Math.round(legacyData.IntroStart * TICKS_PER_SECOND),
-                            end: Math.round(legacyData.IntroEnd * TICKS_PER_SECOND)
-                        }];
+                        this._introSegment = [
+                            {
+                                start: Math.round(legacyData.IntroStart * TICKS_PER_SECOND),
+                                end: Math.round(legacyData.IntroEnd * TICKS_PER_SECOND)
+                            }
+                        ];
                         api.log.info(
                             `Skip Intro: loaded legacy IntroTimestamps (${legacyData.IntroStart}s - ${legacyData.IntroEnd}s)`
                         );
@@ -589,22 +602,24 @@ const skipIntroPlugin = {
                     if (idx + 1 < sortedChapters.length) {
                         end = sortedChapters[idx + 1].StartPositionTicks;
                     } else {
-                        end = start + (120 * TICKS_PER_SECOND);
+                        end = start + 120 * TICKS_PER_SECOND;
                     }
 
                     // Check intro keywords
-                    const isIntro = c.MarkerType === 'IntroStart' || (c.Name && (
-                        c.Name.toLowerCase().includes('intro') ||
-                        c.Name.toLowerCase().includes('opening') ||
-                        /\bop\b/i.test(c.Name)
-                    ));
+                    const isIntro =
+                        c.MarkerType === 'IntroStart' ||
+                        (c.Name &&
+                            (c.Name.toLowerCase().includes('intro') ||
+                                c.Name.toLowerCase().includes('opening') ||
+                                /\bop\b/i.test(c.Name)));
 
                     // Check outro keywords
-                    const isCredits = c.MarkerType === 'Credits' || (c.Name && (
-                        c.Name.toLowerCase().includes('credit') ||
-                        c.Name.toLowerCase().includes('ending') ||
-                        /\bed\b/i.test(c.Name)
-                    ));
+                    const isCredits =
+                        c.MarkerType === 'Credits' ||
+                        (c.Name &&
+                            (c.Name.toLowerCase().includes('credit') ||
+                                c.Name.toLowerCase().includes('ending') ||
+                                /\bed\b/i.test(c.Name)));
 
                     // Check recap keywords
                     const isRecap = c.Name && c.Name.toLowerCase().includes('recap');
@@ -615,16 +630,19 @@ const skipIntroPlugin = {
                         if (durationMinutes >= 3) {
                             api.log.info(
                                 `Skip Intro: skipped mapping intro chapter [${c.Name || c.MarkerType}] ` +
-                                `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
+                                    `due to long duration: ${durationMinutes.toFixed(1)} minutes (>= 3m)`
                             );
                         } else {
                             chapterIntros.push({ start, end });
                         }
                     } else if (isCredits) {
-                        const creditsEnd = item.RunTimeTicks || (start + (300 * TICKS_PER_SECOND));
+                        const creditsEnd = item.RunTimeTicks || start + 300 * TICKS_PER_SECOND;
                         chapterOutros.push({ start, end: creditsEnd });
                     } else if (isRecap) {
-                        const recapEnd = idx + 1 < sortedChapters.length ? sortedChapters[idx + 1].StartPositionTicks : (start + (60 * TICKS_PER_SECOND));
+                        const recapEnd =
+                            idx + 1 < sortedChapters.length
+                                ? sortedChapters[idx + 1].StartPositionTicks
+                                : start + 60 * TICKS_PER_SECOND;
                         chapterRecaps.push({ start, end: recapEnd });
                     }
                 });
@@ -633,8 +651,8 @@ const skipIntroPlugin = {
                     // Local helper to merge segments without duplicate or overlapping time ranges
                     const mergeSegments = (serverSegs, chapterSegs) => {
                         const merged = [...serverSegs];
-                        chapterSegs.forEach(c => {
-                            const overlaps = merged.some(s => {
+                        chapterSegs.forEach((c) => {
+                            const overlaps = merged.some((s) => {
                                 const timeOverlap = Math.max(c.start, s.start) < Math.min(c.end, s.end);
                                 const closeStart = Math.abs(c.start - s.start) < 5 * TICKS_PER_SECOND;
                                 return timeOverlap || closeStart;

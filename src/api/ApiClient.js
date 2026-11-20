@@ -15,6 +15,10 @@ import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { i18n } from '../utils/i18n.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
+// Centralized platform info utility
+import { platformInfo } from '../utils/PlatformInfo.js';
+import { idleGate } from '../utils/IdleGate.js';
 
 const log = logger.create('ApiClient');
 
@@ -32,6 +36,220 @@ export class ServerUnreachableError extends Error {
 // API request timeout (ms)
 const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware (Tizen/WebOS)
 
+// Plugin Id of the Litefin server companion plugin (fixed in its Plugin.cs, without dashes)
+const LITEFIN_COMPANION_PLUGIN_ID = 'f5c68360ca474648b47c3da5f112aa8f';
+
+/**
+ * Returns a comma-separated string of rating fields to append to API requests
+ * when the card ratings feature is active. Returns an empty string when the
+ * preference is off so no extra bandwidth is ever wasted.
+ *
+ * Both CommunityRating (Jellyfin score) and CriticRating (Rotten Tomatoes %)
+ * are requested together because the user may switch sources in settings at
+ * any time without triggering a fresh API call — the data must already be
+ * in the payload.
+ *
+ * @returns {string} Comma-prefixed fields to splice into a Fields param, or ''
+ */
+function getRatingFields() {
+    return storage.getItem('pref:cardRatingsEnabled') === 'true'
+        ? ',CommunityRating,CriticRating'
+        : '';
+}
+
+/**
+ * Natural aspect ratios (height / width) for Jellyfin image types.
+ * Used to derive a bounded `maxHeight` whenever a caller only supplies
+ * `maxWidth`, so the server never streams an unbounded source texture that
+ * the 1080p TV WebView would have to allocate and downscale on the main thread.
+ */
+const IMAGE_ASPECT_RATIOS = {
+    Primary: 1.5, // 2:3 poster; taller artwork is downscaled, squarer art is untouched
+    Thumb: 9 / 16 // 16:9
+};
+
+/**
+ * Determine whether the host JavaScript environment provides native fetch cancellation.
+ * Modern Chromium engines (66+) support AbortSignal directly on window.fetch.
+ * Legacy TV platforms (Tizen 4.0 running Chromium 56, WebOS 4 running Chromium 53)
+ * lack signal support on fetch(); polyfilled AbortControllers dispatch events,
+ * but native fetch never cancels the network socket. This leaves stalled requests
+ * holding sockets open until the OS TCP timeout (~106s), exhausting Chromium's
+ * 6-connection pool and creating cascading navigation timeouts across the app.
+ */
+function isNativeFetchAbortSupported() {
+    try {
+        // In environments without XMLHttpRequest (e.g. Node.js unit tests), use fetch
+        if (typeof XMLHttpRequest === 'undefined') {
+            return true;
+        }
+        // Check if the Request prototype supports the signal property (Chrome 66+)
+        if (typeof Request === 'undefined' || !('signal' in Request.prototype)) {
+            return false;
+        }
+        // Verify global AbortController exists
+        if (typeof AbortController === 'undefined') {
+            return false;
+        }
+        // Verify AbortController is a native C++ constructor rather than a polyfill
+        return /\[native code\]/.test(Function.prototype.toString.call(AbortController));
+    } catch (_) {
+        return false;
+    }
+}
+
+// Cached evaluation of abort capabilities for the current runtime session
+const HAS_NATIVE_FETCH_ABORT = isNativeFetchAbortSupported();
+
+/**
+ * Execute an HTTP request via XMLHttpRequest for legacy browser runtimes.
+ * Unlike native fetch on Chromium < 66, XMLHttpRequest fully supports xhr.abort()
+ * and xhr.timeout, immediately terminating the underlying TCP socket at the
+ * browser engine level and releasing the connection slot back to the host pool.
+ *
+ * @param {string} url - Target endpoint URL
+ * @param {Object} fetchOptions - Standard fetch configuration (method, headers, body)
+ * @param {number} timeout - Request timeout threshold in milliseconds
+ * @param {AbortController} [controller] - Optional cancellation controller
+ * @returns {Promise<Object>} Response-compatible duck-typed object
+ */
+function executeXhrRequest(url, fetchOptions, timeout, controller) {
+    return new Promise((resolve, reject) => {
+        // Instantiate native XMLHttp request
+        const xhr = new XMLHttpRequest();
+        let settled = false;
+        let timeoutTimer = null;
+
+        // Clean-up and rejection helper for timeouts and manual cancellation
+        const handleAbort = () => {
+            if (settled) return;
+            settled = true;
+
+            // Clear secondary timeout timer
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+
+            // Immediately abort the hardware socket to release pool connection
+            try {
+                xhr.abort();
+            } catch (_) {}
+
+            // Build standard AbortError matching fetch timeout behavior
+            const timeoutErr = new Error(`Connection timed out after ${(timeout || REQUEST_TIMEOUT) / 1000}s`);
+            timeoutErr.name = 'AbortError';
+            reject(timeoutErr);
+        };
+
+        // Attach listener to external cancellation controller if present
+        if (controller && controller.signal) {
+            controller.signal.addEventListener('abort', handleAbort, { once: true });
+        }
+
+        // Open asynchronous HTTP connection
+        xhr.open(fetchOptions.method || 'GET', url, true);
+
+        // Populate request headers
+        if (fetchOptions.headers) {
+            for (const [key, val] of Object.entries(fetchOptions.headers)) {
+                if (val !== undefined && val !== null) {
+                    try {
+                        xhr.setRequestHeader(key, String(val));
+                    } catch (_) {}
+                }
+            }
+        }
+
+        // Configure socket timeout at native layer
+        if (timeout) {
+            try {
+                xhr.timeout = timeout;
+                xhr.ontimeout = handleAbort;
+            } catch (_) {}
+
+            // Fallback JavaScript timer in case xhr.timeout is unsupported or erratic
+            timeoutTimer = setTimeout(handleAbort, timeout);
+        }
+
+        // Handle successful HTTP response arrival
+        xhr.onload = () => {
+            if (settled) return;
+            settled = true;
+
+            // Clear timeout timer
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+
+            // Unbind abort listener
+            if (controller && controller.signal) {
+                controller.signal.removeEventListener('abort', handleAbort);
+            }
+
+            // Status 0 indicates connection abort or network rejection
+            if (xhr.status === 0) {
+                reject(new TypeError('Failed to fetch'));
+                return;
+            }
+
+            // Parse response headers into normalized case-insensitive map
+            const rawHeaders = xhr.getAllResponseHeaders() || '';
+            const headersMap = {};
+            const lines = rawHeaders.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const colonIndex = line.indexOf(':');
+                if (colonIndex > 0) {
+                    const key = line.slice(0, colonIndex).trim().toLowerCase();
+                    const val = line.slice(colonIndex + 1).trim();
+                    headersMap[key] = val;
+                }
+            }
+
+            const status = xhr.status;
+            const responseText = xhr.responseText || '';
+
+            // Return duck-typed object matching native fetch Response contract
+            const responseObj = {
+                status,
+                ok: status >= 200 && status < 300,
+                statusText: xhr.statusText || '',
+                headers: {
+                    get: (name) => headersMap[(name || '').toLowerCase()] || null
+                },
+                text: async () => responseText,
+                json: async () => JSON.parse(responseText)
+            };
+
+            resolve(responseObj);
+        };
+
+        // Handle physical network errors (DNS failures, connection refusals)
+        xhr.onerror = () => {
+            if (settled) return;
+            settled = true;
+
+            // Clear timeout timer
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+
+            // Unbind abort listener
+            if (controller && controller.signal) {
+                controller.signal.removeEventListener('abort', handleAbort);
+            }
+
+            reject(new TypeError('Failed to fetch'));
+        };
+
+        // Transmit request payload
+        xhr.send(fetchOptions.body || null);
+    });
+}
+
 // ============================================================================
 // ApiClient Class
 // ============================================================================
@@ -46,7 +264,7 @@ export class ApiClient {
         this._deviceId = null;
         this._deviceName = 'Litefin'; // Default, will be updated by AuthManager.init()
         this._clientName = 'Litefin';
-        this._clientVersion = __APP_VERSION__;
+        this._clientVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
 
         // Track retries to prevent infinite loops on 401
         this._retryingRequests = new Set();
@@ -63,6 +281,11 @@ export class ApiClient {
         // cached data when the server reports no change.
         this._etagCache = new Map();
         this._etagCacheMaxSize = 20;
+
+        // ── In-Flight Request Deduplication Promises ───────────────────────
+        // Prevents burst duplicate network requests during boot and navigation
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
     }
 
     // ========================================================================
@@ -151,6 +374,9 @@ export class ApiClient {
         this._hasLitefinServerPlugin = null;
         this._litefinPluginProbePromise = null;
 
+        // Synchronize active server URL with the custom headers manager
+        customHeaders.setActiveServer(this._serverUrl);
+
         log.info(`Server set to ${this._serverUrl}`);
     }
 
@@ -162,6 +388,11 @@ export class ApiClient {
     setAuth(accessToken, userId) {
         this._accessToken = accessToken;
         this._userId = userId;
+
+        // Reset user-scoped request promises
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
+
         state.set('user:authenticated', !!accessToken);
         log.info(`Authenticated as user ${userId}`);
     }
@@ -186,6 +417,11 @@ export class ApiClient {
     clearAuth() {
         this._accessToken = null;
         this._userId = null;
+
+        // Reset user-scoped request promises
+        this._userViewsPromise = null;
+        this._reportCapabilitiesPromise = null;
+
         state.set('user:authenticated', false);
         state.set('user:data', null);
 
@@ -211,6 +447,26 @@ export class ApiClient {
     clearEtagCache() {
         this._etagCache.clear();
         log.debug('ETag cache cleared');
+    }
+
+    /**
+     * Clear cached ETag entries for a specific media item.
+     * Prevents stale 304 Not Modified responses when item state (such as playback progress) changes.
+     *
+     * @param {string} itemId - The Jellyfin/Emby item identifier to purge
+     */
+    clearEtagCacheForItem(itemId) {
+        if (!itemId || typeof itemId !== 'string') return;
+        // Iterate through cached URLs and remove any entries matching the target item
+        for (const url of this._etagCache.keys()) {
+            if (
+                url.includes(`/Items/${itemId}`) ||
+                url.includes(`/Videos/${itemId}`) ||
+                url.includes(`/UserItems/${itemId}`)
+            ) {
+                this._etagCache.delete(url);
+            }
+        }
     }
 
     // ========================================================================
@@ -311,8 +567,8 @@ export class ApiClient {
             const endsWithSingleItemId = /\/[0-9a-f]{32}$/i.test(endpoint.replace(/\?.*$/, ''));
 
             const isItemsEndpoint =
-                !endsWithSingleItemId && (
-                    (endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
+                !endsWithSingleItemId &&
+                ((endpoint.includes('/Items') && !endpoint.includes('/Items/Thumbnails')) ||
                     endpoint.includes('/Latest') ||
                     endpoint.includes('/Resume') ||
                     endpoint.includes('/NextUp') ||
@@ -321,8 +577,7 @@ export class ApiClient {
                     endpoint.includes('/Episodes') ||
                     endpoint.includes('/Search/Hints') ||
                     endpoint.includes('/Persons') ||
-                    endpoint.includes('/MergedRows')
-                );
+                    endpoint.includes('/MergedRows'));
 
             if (isItemsEndpoint) {
                 const targetKey = fieldsKey || 'Fields';
@@ -382,6 +637,17 @@ export class ApiClient {
         };
 
         // ------------------------------------------------------------------
+        // Custom HTTP Headers (Reverse Proxy / Gateway Authentication)
+        // If the user has configured custom headers (e.g. Cloudflare Zero
+        // Trust, Pangolin, Authelia) for this server, attach them to all
+        // outbound requests that match the server's origin and base path.
+        // ------------------------------------------------------------------
+        const proxyHeaders = customHeaders.getHeadersForUrl(url, this._serverUrl);
+        if (proxyHeaders && typeof proxyHeaders === 'object') {
+            Object.assign(headers, proxyHeaders);
+        }
+
+        // ------------------------------------------------------------------
         // Accept-Language Header (Jellyfin 12+ Localization Middleware)
         // Passes the client's current UI language so that server messages,
         // localized metadata, genre descriptions, and scheduled task notifications
@@ -390,11 +656,6 @@ export class ApiClient {
         if (!headers['Accept-Language']) {
             const activeLang = i18n?.currentLang || (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
             headers['Accept-Language'] = `${activeLang},en;q=0.8`;
-        }
-
-        // Add If-None-Match header if we have a cached ETag for this URL
-        if (etagEntry && etagEntry.etag) {
-            headers['If-None-Match'] = etagEntry.etag;
         }
 
         if (!options.skipAuth) {
@@ -422,6 +683,21 @@ export class ApiClient {
             keepalive: options.keepalive
         };
 
+        // Forward cache mode if explicitly requested (e.g. 'no-cache', 'no-store')
+        if (options.cache) {
+            fetchOptions.cache = options.cache;
+        }
+
+        // Add If-None-Match header if we have a cached ETag for this URL.
+        // Guard: NEVER send If-None-Match when cache is set to 'no-store' or 'no-cache'.
+        // Sending If-None-Match on endpoints returning user data (like /Items/{id}) causes
+        // servers (such as Jellyfin) to respond with 304 Not Modified because Jellyfin calculates
+        // item ETags from DateLastSaved.Ticks, which does not change when UserData.PlaybackPositionTicks updates.
+        const isNoCache = fetchOptions.cache === 'no-store' || fetchOptions.cache === 'no-cache';
+        if (etagEntry && etagEntry.etag && !isNoCache) {
+            headers['If-None-Match'] = etagEntry.etag;
+        }
+
         // Add body for POST/PUT requests
         if (options.body !== undefined && options.body !== null) {
             if (options.body instanceof FormData) {
@@ -445,7 +721,7 @@ export class ApiClient {
             // environments where the Fetch specification disallowed signals on keepalive.
             const timeout = options.timeout || (options.keepalive ? 0 : REQUEST_TIMEOUT);
             const controller = new AbortController();
-            const timeoutId = timeout ? setTimeout(() => controller.abort(), timeout) : null;
+            let timeoutId = null;
             if (timeout) {
                 fetchOptions.signal = controller.signal;
             }
@@ -453,29 +729,55 @@ export class ApiClient {
             log.debug(`Fetching ${url} (timeout: ${timeout || 'none'}ms)...`);
             let response;
             try {
-                response = await fetch(url, fetchOptions);
-            } catch (fetchErr) {
-                /*
-                 * On Smart TVs and legacy web runtimes (such as Tizen 5.5 running Chromium 69),
-                 * cross-origin fetch calls with keepalive:true and non-simple headers (like Authorization
-                 * or Content-Type: application/json) trigger an immediate 'TypeError: Failed to fetch'
-                 * due to lack of CORS preflight support for keepalive in older browser engines.
-                 * If keepalive was active and threw a TypeError, fall back to a standard fetch without keepalive.
-                 */
-                if (fetchOptions.keepalive && fetchErr instanceof TypeError) {
-                    log.warn(`Fetch with keepalive failed (${fetchErr.message}); retrying without keepalive...`);
-                    delete fetchOptions.keepalive;
-                    if (!fetchOptions.signal && REQUEST_TIMEOUT) {
-                        const fallbackController = new AbortController();
-                        setTimeout(() => fallbackController.abort(), REQUEST_TIMEOUT);
-                        fetchOptions.signal = fallbackController.signal;
+                if (HAS_NATIVE_FETCH_ABORT) {
+                    // Modern browser engine (Chrome 66+) with native fetch AbortSignal support
+                    const executeFetch = async () => {
+                        try {
+                            return await fetch(url, fetchOptions);
+                        } catch (fetchErr) {
+                            /*
+                             * On Smart TVs and legacy web runtimes (such as Tizen 5.5 running Chromium 69),
+                             * cross-origin fetch calls with keepalive:true and non-simple headers (like Authorization
+                             * or Content-Type: application/json) trigger an immediate 'TypeError: Failed to fetch'
+                             * due to lack of CORS preflight support for keepalive in older browser engines.
+                             * If keepalive was active and threw a TypeError, fall back to a standard fetch without keepalive.
+                             */
+                            if (fetchOptions.keepalive && fetchErr instanceof TypeError) {
+                                log.warn(`Fetch with keepalive failed (${fetchErr.message}); retrying without keepalive...`);
+                                delete fetchOptions.keepalive;
+                                return await fetch(url, fetchOptions);
+                            }
+                            throw fetchErr;
+                        }
+                    };
+
+                    // On modern platforms, wrap fetch in Promise.race with an explicit timeout promise
+                    if (timeout) {
+                        const timeoutPromise = new Promise((_, reject) => {
+                            timeoutId = setTimeout(() => {
+                                try {
+                                    controller.abort();
+                                } catch (_) {}
+                                const timeoutErr = new Error(`Connection timed out after ${timeout / 1000}s`);
+                                timeoutErr.name = 'AbortError';
+                                reject(timeoutErr);
+                            }, timeout);
+                        });
+                        response = await Promise.race([executeFetch(), timeoutPromise]);
+                    } else {
+                        response = await executeFetch();
                     }
-                    response = await fetch(url, fetchOptions);
                 } else {
-                    throw fetchErr;
+                    // Legacy smart TV platform (Tizen 4.0 / WebOS 4) — execute via XMLHttpRequest
+                    // so xhr.abort() physically closes the underlying socket and frees Chromium's connection pool
+                    response = await executeXhrRequest(url, fetchOptions, timeout, controller);
+                }
+            } finally {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
                 }
             }
-            if (timeoutId) clearTimeout(timeoutId);
 
             // Handle 304 Not Modified — return cached response body
             if (response.status === 304 && etagEntry) {
@@ -524,7 +826,10 @@ export class ApiClient {
                 // a serialized JSON array or object and parse it accordingly.
                 if (typeof body === 'string' && body.length > 0) {
                     const trimmed = body.trim();
-                    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    if (
+                        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+                    ) {
                         try {
                             body = JSON.parse(trimmed);
                         } catch {
@@ -536,7 +841,8 @@ export class ApiClient {
 
             // Cache ETag for GET requests so subsequent calls can use
             // If-None-Match / 304 short-circuit when data hasn't changed.
-            if (method === 'GET') {
+            // Guard: Do not cache ETag entries if request explicitly requested fresh data.
+            if (method === 'GET' && !isNoCache) {
                 const etag = response.headers.get('ETag');
                 if (etag && body !== undefined && body !== null) {
                     if (this._etagCache.size >= this._etagCacheMaxSize) {
@@ -547,17 +853,43 @@ export class ApiClient {
                 }
             }
 
+            // Immediately abort any background Wake-on-LAN retry loop when
+            // health checks or user profile requests confirm the server is awake
+            if (_activeWolAbortController && (endpoint.includes('/System/Info/Public') || endpoint.includes('/Users/'))) {
+                cancelWakeOnLan();
+            }
+
             return body;
         } catch (error) {
             // Handle Network Errors (DNS, Connection Refused, Offline) or Timeout
             const isTimeout = error.name === 'AbortError';
             const isNetworkError = error instanceof TypeError;
 
+            // =========================================================================
+            // IDEMPOTENT GET STALE SOCKET AUTO-RECOVERY
+            // =========================================================================
+            // If an idempotent GET request timed out or failed on a stale socket (e.g.
+            // after long video playback or router conntrack idle timeouts), perform a
+            // single immediate retry on a fresh connection. Aborting the previous request
+            // closed the dead socket, allowing the retry to succeed instantly.
+            // =========================================================================
+            if ((isTimeout || isNetworkError) && !isRetry && method === 'GET' && !options._isWolTimeoutRetry) {
+                log.info(`GET ${endpoint} timed out or stalled on socket; retrying on fresh connection...`);
+                return this.request(endpoint, options, true);
+            }
+
             if (isTimeout || isNetworkError) {
                 const timeout = options.timeout || REQUEST_TIMEOUT;
-                const msg = isTimeout
+                let msg = isTimeout
                     ? `Connection timed out after ${timeout / 1000}s`
                     : `Server unreachable at ${this._serverUrl}`;
+
+                const activeProxyHeaders = customHeaders.getActiveHeaders();
+                const hasProxyHeaders = activeProxyHeaders && Object.keys(activeProxyHeaders).length > 0;
+
+                if (isNetworkError && hasProxyHeaders) {
+                    msg += ' (CORS or reverse proxy error)';
+                }
 
                 log.error(`${msg}:`, error.message);
 
@@ -571,11 +903,15 @@ export class ApiClient {
                 const wolMac = storage.getItem('pref:wolMacAddress');
 
                 if (wolTimeoutEnabled && wolMac && !options._isWolTimeoutRetry) {
-                    log.info(`Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`);
+                    log.info(
+                        `Request failed/timed out. Wake-on-LAN on timeout active. Broadcasting packet to ${wolMac}...`
+                    );
 
                     try {
                         // Send Wake-on-LAN Magic Packet
-                        sendWakeOnLan(wolMac).catch((wolErr) => log.warn('Failed to send WOL packet on timeout:', wolErr));
+                        sendWakeOnLan(wolMac).catch((wolErr) =>
+                            log.warn('Failed to send WOL packet on timeout:', wolErr)
+                        );
 
                         // Retry loop: probe server status every 3s (up to 25 attempts / ~90s if Extended Wait is active)
                         const extendedWait = storage.getItem('pref:enableWolExtendedWait') === 'true';
@@ -596,10 +932,16 @@ export class ApiClient {
                                 if (testRes.ok) {
                                     log.info('Server responded to status probe! Re-executing failed API request...');
                                     // Re-run original request with _isWolTimeoutRetry flag set to prevent recursion loops
-                                    return await this.request(endpoint, { ...options, _isWolTimeoutRetry: true }, isRetry);
+                                    return await this.request(
+                                        endpoint,
+                                        { ...options, _isWolTimeoutRetry: true },
+                                        isRetry
+                                    );
                                 }
                             } catch (probeErr) {
-                                log.debug(`Server status probe ${attempt}/${maxAttempts} failed — server still booting...`);
+                                log.debug(
+                                    `Server status probe ${attempt}/${maxAttempts} failed — server still booting...`
+                                );
                             }
                         }
                     } catch (wolCycleErr) {
@@ -607,7 +949,11 @@ export class ApiClient {
                     }
                 }
 
-                const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
+                const extraHint =
+                    isNetworkError && hasProxyHeaders
+                        ? ' If using Cloudflare Access, verify that CORS is enabled in your Zero Trust Application settings and that the custom headers are allowed.'
+                        : ' Please check your network and server status.';
+                const networkError = new ServerUnreachableError(`${msg}.${extraHint}`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;
             }
@@ -651,7 +997,10 @@ export class ApiClient {
                     let cleaned = (bodyText || '').trim();
                     if (cleaned.startsWith('<')) {
                         // Strip HTML markup and collapse whitespace
-                        cleaned = cleaned.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                        cleaned = cleaned
+                            .replace(/<[^>]*>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
                     }
                     if (cleaned) {
                         message = cleaned.length > 200 ? cleaned.slice(0, 200) + '…' : cleaned;
@@ -947,20 +1296,37 @@ export class ApiClient {
     async updateUserConfiguration(configuration) {
         if (this.isJF12Plus()) {
             // New JF12 canonical route — userId goes in the query string
-            return this.post(
-                `/Users/Configuration?userId=${encodeURIComponent(this._userId)}`,
-                configuration
-            );
+            return this.post(`/Users/Configuration?userId=${encodeURIComponent(this._userId)}`, configuration);
         }
         // Legacy path used by JF 10.10 / 10.11
         return this.post(`/Users/${this._userId}/Configuration`, configuration);
     }
 
     /**
-     * Get user's library views
+     * Get user's library views with in-flight request deduplication.
+     * Prevents multiple components (Sidebar, HomePage, MobileNav) from firing
+     * duplicate concurrent HTTP GET requests for the same user library data.
+     *
+     * @returns {Promise<any>} User views list
      */
     async getUserViews() {
-        return this.get(`/Users/${this._userId}/Views`);
+        /*
+         * If an identical request for the active user's views is already in-flight
+         * or resolved within the last few seconds, return the shared active promise.
+         */
+        if (this._userViewsPromise) {
+            return this._userViewsPromise;
+        }
+
+        // Dispatch GET request and store promise
+        this._userViewsPromise = this.get(`/Users/${this._userId}/Views`).finally(() => {
+            // Keep active for 2.5 seconds so rapid concurrent mounting components share payload
+            setTimeout(() => {
+                this._userViewsPromise = null;
+            }, 2500);
+        });
+
+        return this._userViewsPromise;
     }
 
     // ========================================================================
@@ -1038,8 +1404,10 @@ export class ApiClient {
         const defaults = {
             // Default item count per library row configured via user settings
             Limit: defaultLimit,
-            // Request tags, backdrop, and series metadata needed for home card representation
-            Fields: 'BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag',
+            // Request tags, backdrop, and series metadata needed for home card representation.
+            // Rating fields (CommunityRating/CriticRating) are appended when the card rating
+            // badge feature is enabled so the badge has the data it needs to render.
+            Fields: `BackdropImageTags,ParentBackdropImageTags,Tags,Status,EndDate,SeriesPrimaryImageTag${getRatingFields()}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -1074,8 +1442,11 @@ export class ApiClient {
             // Fetch items up to the user-selected row item limit
             Limit: defaultLimit,
             Recursive: true,
-            // Include Tags so game ROM items can be identified with platform badges and progress bar suppression
-            Fields: 'SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
+            // Request comprehensive metadata fields for card presentation.
+            // Includes SeriesPrimaryImageTag for fallback posters when episodes lack dedicated thumbnails.
+            // Includes MediaSources and MediaStreams for anime markers and audio badges.
+            // Rating fields are appended when the card rating badge feature is enabled.
+            Fields: `SeriesId,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams${getRatingFields()}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -1146,6 +1517,40 @@ export class ApiClient {
      *
      * When the Litefin server plugin is not installed, downstream callers
     /**
+     * Persist the companion plugin availability hint per server so cold-boot
+     * row prefetching knows whether /Litefin/MergedRows/ContinueAndNextUp can
+     * be used before the async /Litefin/Hero probe resolves.
+     * Uses the global serverPlugin:available: prefix so StorageService flushes
+     * it immediately and BackupTab excludes it from user backups.
+     *
+     * @param {boolean} isAvailable - Confirmed companion plugin state
+     * @private
+     */
+    _persistLitefinPluginAvailability(isAvailable) {
+        if (!this._serverUrl) return;
+        storage.setItem(`serverPlugin:available:litefin:${this._serverUrl}`, String(Boolean(isAvailable)));
+    }
+
+    /**
+     * Synchronously report whether the Litefin server companion plugin is known
+     * to be installed on the active server. Checks the live in-session probe
+     * result first, then falls back to the persisted server-scoped hint.
+     *
+     * @returns {boolean} True if companion plugin availability is confirmed or persisted
+     */
+    hasKnownLitefinPlugin() {
+        // Prefer the live in-session probe result whenever already resolved
+        if (this._hasLitefinServerPlugin !== null) {
+            return this._hasLitefinServerPlugin === true;
+        }
+        if (!this._serverUrl) {
+            return false;
+        }
+        // Fall back to the persisted per-server hint across cold boots
+        return storage.getItem(`serverPlugin:available:litefin:${this._serverUrl}`) === 'true';
+    }
+
+    /**
      * Checks if the Litefin companion server plugin is installed, enabled, and active on the Jellyfin server.
      * Caches the result after the initial check so downstream calls can
      * immediately bypass all /Litefin/* endpoints and seamlessly fall back to
@@ -1157,6 +1562,9 @@ export class ApiClient {
     async isLitefinPluginAvailable(force = false) {
         if (force) {
             this._hasLitefinServerPlugin = null;
+            if (this._serverUrl) {
+                storage.removeItem(`serverPlugin:available:litefin:${this._serverUrl}`);
+            }
         }
 
         // 1. Return cached evaluation immediately if already resolved
@@ -1171,19 +1579,23 @@ export class ApiClient {
 
         this._litefinPluginProbePromise = (async () => {
             try {
-                // Strategy A: Check admin installed plugins list if accessible
+                // Strategy A: Check admin installed plugins list if already initialized
                 try {
                     const { serverPluginClient } = await import('../plugins/ServerPluginClient.js');
-                    if (serverPluginClient && typeof serverPluginClient.getInstalledPlugins === 'function') {
+                    if (
+                        serverPluginClient &&
+                        typeof serverPluginClient.isInitialized === 'function' &&
+                        serverPluginClient.isInitialized()
+                    ) {
                         if (force) {
                             serverPluginClient.reset();
                         }
                         const adminList = await serverPluginClient.getInstalledPlugins();
                         if (Array.isArray(adminList)) {
                             const match = adminList.some((p) => {
-                                const name = (p.Name || p.name || '').toLowerCase();
-                                const id = (p.Id || p.id || '').toLowerCase();
-                                const matchesName = name.includes('litefin') || id.includes('litefin');
+                                // Match by GUID: the "Litefin Client" web plugin also has "litefin" in its name
+                                const id = (p.Id || p.id || '').replace(/-/g, '').toLowerCase();
+                                const matchesId = id === LITEFIN_COMPANION_PLUGIN_ID;
                                 const status = (p.Status || p.status || '').toString().toLowerCase();
                                 const isExplicitlyDisabled =
                                     status === 'disabled' ||
@@ -1191,11 +1603,15 @@ export class ApiClient {
                                     status === 'malfunctioned' ||
                                     status === 'notsupported' ||
                                     status === 'superseded';
-                                const isActive = !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
-                                return matchesName && isActive;
+                                const isActive =
+                                    !isExplicitlyDisabled && (!status || status === 'active' || status === 'restart');
+                                return matchesId && isActive;
                             });
                             this._hasLitefinServerPlugin = match;
-                            log.info(`Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`);
+                            this._persistLitefinPluginAvailability(match);
+                            log.info(
+                                `Litefin server companion plugin ${match ? 'detected & active' : 'not present or disabled'} via admin registry`
+                            );
                             return match;
                         }
                     }
@@ -1206,19 +1622,28 @@ export class ApiClient {
                 // Strategy B: Lightweight silent probe to /Litefin/Hero
                 log.debug('Probing Litefin server companion plugin presence...');
                 const probeResult = await this.get('/Litefin/Hero', { limit: 1 }, { silent: true, warnOnError: true });
-                this._hasLitefinServerPlugin = !!probeResult;
-                log.info('Litefin server companion plugin is installed and accessible');
-                return true;
+                // The Litefin Client web plugin answers unknown /Litefin/* paths with index.html
+                const isAvailable = Array.isArray(probeResult?.Items);
+                this._hasLitefinServerPlugin = isAvailable;
+                this._persistLitefinPluginAvailability(isAvailable);
+                log.info(
+                    `Litefin server companion plugin ${isAvailable ? 'is installed and accessible' : 'not found'}`
+                );
+                return isAvailable;
             } catch (err) {
                 // 404 indicates the plugin is not installed or disabled on this server
                 if (err.status === 404 || err.message?.includes('Not found') || err.message?.includes('404')) {
-                    log.info('Litefin server companion plugin is not installed or disabled — using native Jellyfin routes');
+                    log.info(
+                        'Litefin server companion plugin is not installed or disabled — using native Jellyfin routes'
+                    );
                     this._hasLitefinServerPlugin = false;
+                    this._persistLitefinPluginAvailability(false);
                     return false;
                 }
                 // 403 / 401 indicates endpoint exists on server but user is not authorized
                 if (err.status === 403 || err.status === 401) {
                     this._hasLitefinServerPlugin = true;
+                    this._persistLitefinPluginAvailability(true);
                     return true;
                 }
                 // Network or unexpected error — return false without permanently caching
@@ -1246,10 +1671,14 @@ export class ApiClient {
         if (!isAvailable) return null;
 
         try {
-            return await this.get('/Litefin/Items/Latest', {
-                parentIds: parentIds.join(','),
-                ...params
-            }, { warnOnError: true });
+            return await this.get(
+                '/Litefin/Items/Latest',
+                {
+                    parentIds: parentIds.join(','),
+                    ...params
+                },
+                { warnOnError: true, timeout: 6000 }
+            );
         } catch (e) {
             return null;
         }
@@ -1268,9 +1697,13 @@ export class ApiClient {
         if (!isAvailable) return null;
 
         try {
-            return await this.get('/Litefin/Items/Thumbnails', {
-                parentIds: parentIds.join(',')
-            }, { warnOnError: true });
+            return await this.get(
+                '/Litefin/Items/Thumbnails',
+                {
+                    parentIds: parentIds.join(',')
+                },
+                { warnOnError: true, timeout: 6000 }
+            );
         } catch (e) {
             return null;
         }
@@ -1300,7 +1733,11 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
+            // Request essential item metadata for next-up episode presentation.
+            // Includes SeriesPrimaryImageTag so landscape cards can fall back to the series poster if needed.
+            // Includes MediaSources, MediaStreams, and tags for audio/video badges and spoiler handling.
+            // CommunityRating is always included; CriticRating is appended when card rating badges are on.
+            Fields: `SeriesId,SeriesPrimaryImageTag,Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags,Genres,MediaSources,MediaStreams,Width,Height,UserData${storage.getItem('pref:cardRatingsEnabled') === 'true' ? ',CriticRating' : ''}`,
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -1369,12 +1806,29 @@ export class ApiClient {
      * @param {Object} [options] - Network request options
      */
     async getItem(itemId, params = {}, options = {}) {
+        /*
+         * Fetch item metadata with strict fresh cache policy.
+         * Jellyfin computes item ETags solely from DateLastSaved.Ticks, which does
+         * not update when user playback state changes (UserData.PlaybackPositionTicks).
+         * Suppressing cache-revalidation via 'no-store' prevents stale 304 responses
+         * and ensures the latest resume position and played flags are retrieved.
+         */
+        const itemOptions = {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                ...(options.headers || {})
+            },
+            ...options
+        };
+
         if (this.isJF12Plus()) {
             // New JF12 form — userId is a query param on the non-user route
-            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params }, options);
+            return this.get(`/Items/${itemId}`, { userId: this._userId, ...params }, itemOptions);
         }
         // Legacy path for JF 10.10 / 10.11
-        return this.get(`/Users/${this._userId}/Items/${itemId}`, params, options);
+        return this.get(`/Users/${this._userId}/Items/${itemId}`, params, itemOptions);
     }
 
     /**
@@ -1479,12 +1933,16 @@ export class ApiClient {
             ...options
         };
 
-        return this.get(`/Playlists/${playlistId}/Items`, {
-            UserId: this._userId,
-            Fields: 'UserData,RunTimeTicks',
-            EnableImageTypes: 'Primary,Backdrop,Thumb',
-            ...params
-        }, requestOptions);
+        return this.get(
+            `/Playlists/${playlistId}/Items`,
+            {
+                UserId: this._userId,
+                Fields: 'UserData,RunTimeTicks',
+                EnableImageTypes: 'Primary,Backdrop,Thumb',
+                ...params
+            },
+            requestOptions
+        );
     }
 
     /**
@@ -1583,9 +2041,13 @@ export class ApiClient {
     }
 
     async getSimilar(itemId, params = {}) {
+        const ratingFields = getRatingFields();
         const defaults = {
             UserId: this._userId,
-            Limit: 12
+            Limit: 12,
+            // Request rating fields when the card rating badge feature is enabled,
+            // so the similar-items row can render badges consistently.
+            ...(ratingFields ? { Fields: ratingFields.replace(/^,/, '') } : {})
         };
 
         return this.get(`/Items/${itemId}/Similar`, { ...defaults, ...params });
@@ -1602,7 +2064,8 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData',
+            // Include SeriesId, MediaSources, MediaStreams, Tags, and Genres for accurate anime marker and audio classification
+            Fields: 'Overview,RunTimeTicks,Chapters,MediaSources,MediaStreams,Width,Height,UserData,SeriesId,Tags,Genres',
             IsVirtualUnaired: false,
             IsMissing: false,
             Limit: 100,
@@ -1849,10 +2312,12 @@ export class ApiClient {
                 // Using clean names ensures uniform filtering across Jellyfin 10.x through 12.0+
                 // ------------------------------------------------------------------
                 const v2GenreNames = Array.isArray(v2.Genres)
-                    ? v2.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    ? v2.Genres.map((g) => (typeof g === 'object' && g ? g.Name || g.name || '' : g)).filter(Boolean)
                     : [];
                 const legacyGenreNames = Array.isArray(legacy.Genres)
-                    ? legacy.Genres.map((g) => (typeof g === 'object' && g ? (g.Name || g.name || '') : g)).filter(Boolean)
+                    ? legacy.Genres.map((g) => (typeof g === 'object' && g ? g.Name || g.name || '' : g)).filter(
+                          Boolean
+                      )
                     : [];
 
                 // Deduplicate genres while preserving encounter order
@@ -1866,9 +2331,9 @@ export class ApiClient {
                 // Return combined, normalized filter structure
                 return {
                     // List of genre names ready for UI display and pipe-delimited item queries
-                    Genres: combinedGenres.length > 0 ? combinedGenres : (legacy.Genres || []),
+                    Genres: combinedGenres.length > 0 ? combinedGenres : legacy.Genres || [],
                     // Deduplicated tags available across items in the library
-                    Tags: combinedTags.length > 0 ? combinedTags : (legacy.Tags || []),
+                    Tags: combinedTags.length > 0 ? combinedTags : legacy.Tags || [],
                     // Ratings and Years only exist on the legacy endpoint
                     OfficialRatings: legacy.OfficialRatings || [],
                     Years: legacy.Years || [],
@@ -2077,7 +2542,15 @@ export class ApiClient {
 
         // Map max constraints
         if (options.maxWidth) params.append('maxWidth', options.maxWidth);
-        if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        if (options.maxHeight) {
+            params.append('maxHeight', options.maxHeight);
+        } else if (options.maxWidth) {
+            // Derive a height bound from the image type when only a width is given
+            const aspectRatio = IMAGE_ASPECT_RATIOS[imageType];
+            if (aspectRatio) {
+                params.append('maxHeight', Math.round(options.maxWidth * aspectRatio));
+            }
+        }
 
         // Map fill constraints (contain style aspect preservation)
         if (options.fillWidth) params.append('fillWidth', options.fillWidth);
@@ -2320,11 +2793,31 @@ export class ApiClient {
     /**
      * Report device capabilities to the server
      * CRITICAL: Must be called after login to establish session
-     * Without this, the server won't track playback status
+     * Without this, the server won't track playback status.
+     * Includes in-flight deduplication to avoid firing duplicate 15KB payloads
+     * when platform adapters and auth initialization handshake concurrently.
+     *
      * @param {Object} capabilities - Device/app capabilities
+     * @returns {Promise<any>}
      */
     async reportCapabilities(capabilities) {
-        return this.post('/Sessions/Capabilities/Full', capabilities);
+        /*
+         * Deduplicate rapid back-to-back capability reporting. On TV platforms,
+         * hardware detection and session restoration run in parallel and both
+         * attempt to report capabilities within ~500ms of each other.
+         */
+        if (this._reportCapabilitiesPromise) {
+            return this._reportCapabilitiesPromise;
+        }
+
+        this._reportCapabilitiesPromise = this.post('/Sessions/Capabilities/Full', capabilities).finally(() => {
+            // Keep guard active for 4 seconds to absorb initial boot bursts
+            setTimeout(() => {
+                this._reportCapabilitiesPromise = null;
+            }, 4000);
+        });
+
+        return this._reportCapabilitiesPromise;
     }
 
     /**
@@ -2333,11 +2826,13 @@ export class ApiClient {
      */
     async uploadClientLog(name, data) {
         // Send raw text body, filename in query string
+        // Provide extended 60-second timeout budget to accommodate large telemetry bundles over TV WiFi
         const url = `/ClientLog/Document?name=${encodeURIComponent(name)}`;
         return this.post(url, data, {
             headers: {
                 'Content-Type': 'text/plain'
-            }
+            },
+            timeout: 60000
         });
     }
 
@@ -2618,6 +3113,8 @@ export class ApiClient {
 
             // Connection opened
             this._webSocket.onopen = () => {
+                // Reset reconnect attempt counter upon successful handshake
+                this._wsReconnectAttempts = 0;
                 log.info('WebSocket connected - user is now online');
                 eventBus.emit('websocket:connected');
 
@@ -2642,16 +3139,52 @@ export class ApiClient {
                 this._stopWebSocketKeepalive();
                 eventBus.emit('websocket:disconnected');
 
-                // Attempt to reconnect if we still have credentials and the app is visible
+                /*
+                 * ============================================================
+                 * Progressive WebSocket Exponential Reconnect Backoff
+                 * ============================================================
+                 * Prevents connection thrashing, CPU churn, and log spam on TV
+                 * devices when upstream reverse proxies (e.g. Cloudflare Zero Trust)
+                 * reject the W3C WebSocket handshake (HTTP 403 Forbidden).
+                 *
+                 * Backs off from 5s up to 60s max. Emits actionable diagnostic log
+                 * on persistent failure pointing user to bypass reverse proxy rules.
+                 * ============================================================
+                 */
                 if (this._serverUrl && this._accessToken && !document.hidden) {
-                    log.info('Scheduling WebSocket reconnect in 5 seconds...');
+                    // Increment consecutive reconnect failures
+                    this._wsReconnectAttempts = (this._wsReconnectAttempts || 0) + 1;
+
+                    // Calculate exponential delay (5s, 7.5s, 11s, 17s, 25s, 38s, up to 60s max)
+                    const baseDelay = 5000;
+                    const exponentialFactor = Math.pow(1.5, Math.min(this._wsReconnectAttempts - 1, 6));
+                    const delayMs = Math.min(60000, Math.round(baseDelay * exponentialFactor));
+                    const delaySec = Math.round(delayMs / 1000);
+
+                    // Throttle reconnect scheduling logs after the first few failures
+                    if (this._wsReconnectAttempts <= 3 || this._wsReconnectAttempts % 5 === 0) {
+                        log.info(
+                            `Scheduling WebSocket reconnect in ${delaySec} seconds (attempt ${this._wsReconnectAttempts})...`
+                        );
+                    }
+
+                    // Diagnostic guidance on persistent disconnection
+                    if (this._wsReconnectAttempts === 5) {
+                        log.warn(
+                            '[ApiClient] WebSocket handshake continuously failing. If using a reverse proxy or Cloudflare Access, ensure path /socket (or /embywebsocket) has a Bypass policy configured.'
+                        );
+                    }
+
+                    // Schedule next reconnect attempt
                     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
                     this._reconnectTimer = setTimeout(() => {
                         if (!this.isWebSocketConnected) {
-                            log.info('Attempting to reconnect WebSocket...');
+                            if (this._wsReconnectAttempts <= 3 || this._wsReconnectAttempts % 5 === 0) {
+                                log.info('Attempting to reconnect WebSocket...');
+                            }
                             this.openWebSocket();
                         }
-                    }, 5000);
+                    }, delayMs);
                 }
             };
 
@@ -2671,6 +3204,13 @@ export class ApiClient {
      */
     closeWebSocket() {
         this._stopWebSocketKeepalive();
+
+        // Reset reconnect attempts and clear any pending timer
+        this._wsReconnectAttempts = 0;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
 
         if (this._webSocket) {
             log.info('Closing WebSocket connection');
@@ -2925,7 +3465,7 @@ export class ApiClient {
  *     which makes subnet scanning unbearably slow on older platforms
  *   - XHR.timeout is a native hard-kill supported since Chrome 29
  */
-export function testServer(address, timeout = 1000, parentSignal = null) {
+export function testServer(address, timeout = 1000, parentSignal = null, headersOverride = null) {
     return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         let resolved = false;
@@ -2959,14 +3499,14 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         let abortTimer = setTimeout(() => {
             try {
                 xhr.abort();
-            } catch (_) { }
+            } catch (_) {}
             done(null);
         }, timeout);
 
         // Native timeout setting (supported natively in Chromium 29+)
         try {
             xhr.timeout = timeout;
-        } catch (_) { }
+        } catch (_) {}
 
         // If the parent discovery scan was cancelled, abort this probe too
         const onParentAbort = () => {
@@ -3023,6 +3563,25 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
         xhr.onerror = () => done(null);
 
         xhr.open('GET', `${address}/System/Info/Public`, /* async */ true);
+
+        // ====================================================================
+        // Custom Reverse Proxy Headers (Cloudflare Access / Pangolin)
+        // If specific headers are provided for this probe, or stored for this
+        // server address, apply them so discovery and connection succeed.
+        // ====================================================================
+        const probeHeaders = headersOverride || customHeaders.getNormalizedHeaders(address);
+        if (probeHeaders && typeof probeHeaders === 'object') {
+            for (const [headerKey, headerVal] of Object.entries(probeHeaders)) {
+                if (headerKey && headerVal) {
+                    try {
+                        xhr.setRequestHeader(headerKey, headerVal);
+                    } catch (_) {
+                        // Ignore XHR header errors on older Chromium engines
+                    }
+                }
+            }
+        }
+
         xhr.send();
     });
 }
@@ -3033,12 +3592,12 @@ export function testServer(address, timeout = 1000, parentSignal = null) {
 
 /**
  * Checks whether the current runtime environment is a Tauri application shell.
- * Returns true on Windows, macOS, Linux, and Android TV running via Tauri.
+ * Delegates to centralized platformInfo single source of truth.
  *
  * @returns {boolean} True if running under Tauri runtime.
  */
 function _isTauriRuntime() {
-    return typeof window !== 'undefined' && !!(window.__TAURI__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+    return platformInfo.isTauri;
 }
 
 /**
@@ -3304,7 +3863,7 @@ async function _discoverViaLunaService(onServerFound) {
                                 settled = true;
                                 try {
                                     request && request.cancel();
-                                } catch (_) { }
+                                } catch (_) {}
                                 resolve(foundServers);
                             }
                         }, DISCOVERY_WINDOW_MS);
@@ -3346,6 +3905,33 @@ async function _discoverViaLunaService(onServerFound) {
 }
 
 /**
+ * ============================================================================
+ * Wake-on-LAN Controller & Dispatch
+ * ============================================================================
+ */
+
+/**
+ * Active AbortController governing in-flight Wake-on-LAN companion service requests.
+ * Allows instant cancellation of the 6-attempt retry loop as soon as the Jellyfin
+ * server responds successfully to any request.
+ * @type {AbortController|null}
+ */
+let _activeWolAbortController = null;
+
+/**
+ * Immediately cancels any in-flight Wake-on-LAN requests and background HTTP proxy retries.
+ * Called automatically when server health checks (/System/Info/Public) or user authentication
+ * calls succeed, preventing redundant localhost:8123 network attempts.
+ */
+export function cancelWakeOnLan() {
+    if (_activeWolAbortController) {
+        log.info('Server confirmed awake — cancelling pending Wake-on-LAN retry loop');
+        _activeWolAbortController.abort();
+        _activeWolAbortController = null;
+    }
+}
+
+/**
  * Send Wake-on-LAN Magic Packet via background service
  * ============================================================================
  * Initiates a request to the local Node.js companion service to broadcast
@@ -3354,15 +3940,28 @@ async function _discoverViaLunaService(onServerFound) {
  * proxy is active.
  * ============================================================================
  * @param {string} macAddress - Target server MAC address (e.g., '00:11:22:33:44:55')
+ * @param {Object} [options={}] - Execution options
+ * @param {boolean} [options.urgent=false] - When true (e.g. server probe failed/timed out),
+ *                                           pre-launches companion service immediately.
  * @returns {Promise<boolean>} True if the magic packet was successfully dispatched
  */
-export async function sendWakeOnLan(macAddress) {
+export async function sendWakeOnLan(macAddress, options = {}) {
     if (!macAddress) {
         log.warn('Wake-on-LAN requested, but no MAC address was provided');
         return false;
     }
 
-    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress}`);
+    // Determine whether this WOL dispatch is actively required due to a failed probe
+    const isUrgent = options.urgent === true || options._isWolTimeoutRetry === true;
+
+    // Reset or instantiate active AbortController for this WOL lifecycle
+    if (_activeWolAbortController) {
+        _activeWolAbortController.abort();
+    }
+    _activeWolAbortController = new AbortController();
+    const abortSignal = _activeWolAbortController.signal;
+
+    log.info(`Initiating Wake-on-LAN command for MAC: ${macAddress} (urgent: ${isUrgent})`);
 
     // 1. Tauri platform: native Rust UDP Magic Packet broadcast
     if (_isTauriRuntime()) {
@@ -3379,7 +3978,13 @@ export async function sendWakeOnLan(macAddress) {
     }
 
     // 2. WebOS implementation: dispatch Luna request to the background service
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Must strictly verify webOS platform identity and PalmServiceBridge presence
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         log.info('Platform WebOS: Dispatching WOL request to Luna service org.litefin.app.service');
 
         const sendLunaRequest = () =>
@@ -3428,19 +4033,41 @@ export async function sendWakeOnLan(macAddress) {
     const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
 
     if (bgEnabled) {
-        // Pre-launch ytresolver background service on Tizen if needed
-        if (typeof tizen !== 'undefined') {
+        // Abort early if the server was already detected online
+        if (abortSignal.aborted) {
+            log.info('Wake-on-LAN cancelled prior to Tizen companion service dispatch');
+            return false;
+        }
+
+        // Helper function to launch the ytresolver companion service
+        const launchYtResolver = () => {
+            if (!platformInfo.isTizen || typeof tizen === 'undefined') return;
             try {
                 const appId = tizen.application.getCurrentApplication().appInfo.id;
                 const pkgId = appId.split('.')[0];
                 log.info(`Platform Tizen: Pre-launching ytresolver background service: ${pkgId}.ytresolver`);
                 tizen.application.launch(pkgId + '.ytresolver');
-
-                // Allow a brief 500ms delay for the service to bind port and start listening
-                await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (preLaunchErr) {
                 log.warn('Failed to pre-launch Tizen background service for WOL:', preLaunchErr);
             }
+        };
+
+        // Gate ytresolver companion service launch:
+        // When WOL is actively needed (probe failed/timed out), launch immediately.
+        // For general background pre-launches, defer behind idleGate so it does not
+        // contend with boot rendering or user navigation.
+        if (isUrgent) {
+            launchYtResolver();
+            // Allow a brief 500ms delay for the service to bind port and start listening
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+            idleGate.runWhenIdle(launchYtResolver, 5000, 0);
+        }
+
+        // Abort early if cancellation arrived during the startup delay
+        if (abortSignal.aborted) {
+            log.info('Wake-on-LAN cancelled prior to HTTP proxy request dispatch');
+            return false;
         }
 
         log.info('Dispatching WOL request to local HTTP proxy on port 8123');
@@ -3449,10 +4076,17 @@ export async function sendWakeOnLan(macAddress) {
         const httpRetryDelayMs = 600;
 
         for (let attempt = 1; attempt <= maxHttpRetries; attempt++) {
+            // Check abort signal before starting each attempt
+            if (abortSignal.aborted) {
+                log.info(`WOL HTTP retry loop aborted at attempt ${attempt}/${maxHttpRetries} (server already awake)`);
+                return false;
+            }
+
             try {
                 const res = await fetch(url, {
                     method: 'POST',
-                    timeout: 3000
+                    timeout: 3000,
+                    signal: abortSignal
                 });
                 const data = await res.json();
                 log.info(`Local HTTP WOL response received (attempt ${attempt}/${maxHttpRetries}):`, data);
@@ -3460,13 +4094,22 @@ export async function sendWakeOnLan(macAddress) {
                     return true;
                 }
             } catch (fetchErr) {
-                log.warn(`WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`, fetchErr.message || fetchErr);
+                if (abortSignal.aborted) {
+                    log.info(`WOL HTTP retry loop aborted during attempt ${attempt}/${maxHttpRetries}`);
+                    return false;
+                }
+                log.warn(
+                    `WOL request to local HTTP proxy attempt ${attempt}/${maxHttpRetries} failed (service cold-booting):`,
+                    fetchErr.message || fetchErr
+                );
                 if (attempt < maxHttpRetries) {
                     await new Promise((resolve) => setTimeout(resolve, httpRetryDelayMs));
                 }
             }
         }
-        log.error('All WOL request attempts to local HTTP proxy failed.');
+        if (!abortSignal.aborted) {
+            log.error('All WOL request attempts to local HTTP proxy failed.');
+        }
         return false;
     }
 
@@ -3489,12 +4132,18 @@ export function hasBackgroundDiscoveryService() {
     }
 
     // 2. WebOS Luna Service check
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Validate that the app is actually running on webOS and has native service bridge access
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         return true;
     }
 
     // 3. Tizen HTTP Proxy / Discovery Service check
-    if (typeof tizen !== 'undefined') {
+    if (platformInfo.isTizen && typeof tizen !== 'undefined') {
         try {
             const bgEnabled = storage.getItem('player:enableBackgroundService') !== 'false';
             return bgEnabled;
@@ -3519,9 +4168,10 @@ export function hasBackgroundDiscoveryService() {
 export async function discoverServers(onProgress = null, onServerFound = null, options = {}) {
     // Parse options object or boolean flag for backwards compatibility
     const isManual = typeof options === 'object' && options !== null ? !!options.isManual : false;
-    const allowHttpFallback = typeof options === 'object' && options !== null && 'allowHttpFallback' in options
-        ? !!options.allowHttpFallback
-        : isManual;
+    const allowHttpFallback =
+        typeof options === 'object' && options !== null && 'allowHttpFallback' in options
+            ? !!options.allowHttpFallback
+            : isManual;
 
     // Cancel any existing scan first
     cancelDiscovery();
@@ -3595,7 +4245,13 @@ export async function discoverServers(onProgress = null, onServerFound = null, o
      * to the standard HTTP scan below.
      * =========================================================================
      */
-    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
+    // Check for webOS platform identity and PalmServiceBridge before dispatching Luna discovery
+    if (
+        platformInfo.isWebOS &&
+        typeof window.PalmServiceBridge !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        window.webOS.service
+    ) {
         log.info('WebOS detected — trying Luna discovery service first...');
 
         const lunaServers = await _discoverViaLunaService(onServerFound);
@@ -3633,7 +4289,7 @@ export async function discoverServers(onProgress = null, onServerFound = null, o
      * the user still gets discovery — just slower.
      * =========================================================================
      */
-    if (typeof tizen !== 'undefined') {
+    if (platformInfo.isTizen && typeof tizen !== 'undefined') {
         const { PlayerSettings } = await import('../utils/PlayerSettings.js');
         const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
 

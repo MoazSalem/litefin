@@ -190,6 +190,27 @@ class Toast {
             }
 
             /* ============================================================ */
+            /* Toast Content Replacement Pulse Animation                    */
+            /* ============================================================ */
+            /* Subtle spring micro-interaction to acknowledge state changes */
+            /* without re-sliding from off-screen or stacking duplicate UI  */
+            @-webkit-keyframes toast-pulse {
+                0% { -webkit-transform: scale(1); }
+                35% { -webkit-transform: scale(1.04); }
+                100% { -webkit-transform: scale(1); }
+            }
+            @keyframes toast-pulse {
+                0% { transform: scale(1); }
+                35% { transform: scale(1.04); }
+                100% { transform: scale(1); }
+            }
+
+            .toast.toast-pulse {
+                -webkit-animation: toast-pulse 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                animation: toast-pulse 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            }
+
+            /* ============================================================ */
             /* Toast Icon                                                   */
             /* ============================================================ */
             .toast-icon {
@@ -220,19 +241,99 @@ class Toast {
      * @param {string} message - Message to display
      * @param {number} [duration=5000] - Auto-dismiss duration in ms (0 = no auto-dismiss)
      * @param {Object} [options] - Additional options
+     * @param {string} [options.id] - Identifier to update an existing toast in-place
+     * @param {boolean} [options.replace] - Replace active toast in-place instead of stacking
      * @param {string} [options.icon] - SVG icon HTML
      */
     show(message, duration = 5000, options = {}) {
         this._ensureContainer();
 
-        // Remove oldest toast if at max
+        /*
+         * ====================================================================
+         * IN-PLACE TOAST REPLACEMENT & DEDUPLICATION
+         * ====================================================================
+         * If an existing toast matches options.id, or if options.replace is true
+         * and an active toast already exists, update the message and icon in-place
+         * rather than stacking a new pill on screen. Resets the dismissal timer
+         * and triggers a fluid micro-animation pulse to signal the change.
+         * ====================================================================
+         */
+        let existingToast = null;
+        if (options.id) {
+            // Find existing non-exiting toast with matching ID
+            existingToast = this._toasts.find((t) => t._toastId === options.id && !t.classList.contains('toast-exit'));
+        } else if (options.replace && this._toasts.length > 0) {
+            // Pick most recent active toast for replacement
+            existingToast = this._toasts.find((t) => !t.classList.contains('toast-exit'));
+        }
+
+        if (existingToast) {
+            // Cancel active auto-dismiss timer on the existing element
+            if (existingToast._timeoutId) {
+                clearTimeout(existingToast._timeoutId);
+                existingToast._timeoutId = null;
+            }
+
+            // If options.replace is enabled, purge any other stacked toasts
+            if (options.replace) {
+                for (const otherToast of this._toasts) {
+                    if (otherToast !== existingToast && !otherToast.classList.contains('toast-exit')) {
+                        this._removeToast(otherToast);
+                    }
+                }
+            }
+
+            // Update icon if explicitly provided
+            if (options.icon) {
+                let iconEl = existingToast.querySelector('.toast-icon');
+                if (!iconEl) {
+                    iconEl = document.createElement('div');
+                    iconEl.className = 'toast-icon';
+                    existingToast.insertBefore(iconEl, existingToast.firstChild);
+                }
+                iconEl.innerHTML = options.icon;
+            }
+
+            // Update text content directly without DOM recreation
+            const textEl = existingToast.querySelector('.toast-text');
+            if (textEl) {
+                textEl.textContent = message;
+            }
+
+            // Retrigger spring pulse animation for tactile visual confirmation
+            existingToast.classList.remove('toast-pulse');
+            void existingToast.offsetWidth; // Force DOM reflow to restart CSS animation
+            existingToast.classList.add('toast-pulse');
+
+            // Re-arm auto-dismiss timer with the updated duration
+            if (duration > 0) {
+                existingToast._timeoutId = setTimeout(() => {
+                    this._removeToast(existingToast);
+                }, duration);
+            }
+
+            return existingToast;
+        }
+
+        // Remove oldest toast if at max capacity
         if (this._toasts.length >= this._maxToasts) {
             this._removeToast(this._toasts[0]);
+        }
+
+        // If replace mode is requested, dismiss any existing toasts
+        if (options.replace && this._toasts.length > 0) {
+            for (const t of this._toasts) {
+                if (!t.classList.contains('toast-exit')) {
+                    this._removeToast(t);
+                }
+            }
         }
 
         // Create toast element
         const toastEl = document.createElement('div');
         toastEl.className = 'toast';
+        toastEl._toastId = options.id || null;
+        toastEl._timeoutId = null;
 
         // ================================================================
         // TIZEN FIX: Apply inline styles directly to ensure visibility
@@ -279,7 +380,7 @@ class Toast {
 
         // Auto-dismiss after duration
         if (duration > 0) {
-            setTimeout(() => {
+            toastEl._timeoutId = setTimeout(() => {
                 this._removeToast(toastEl);
             }, duration);
         }
@@ -294,6 +395,12 @@ class Toast {
      */
     _removeToast(toastEl) {
         if (!toastEl || !toastEl.parentNode) return;
+
+        // Clear any running timer on this element
+        if (toastEl._timeoutId) {
+            clearTimeout(toastEl._timeoutId);
+            toastEl._timeoutId = null;
+        }
 
         // Add exit animation class
         toastEl.classList.add('toast-exit');

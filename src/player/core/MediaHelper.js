@@ -14,6 +14,7 @@
 import { storage } from '../../utils/StorageService.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { state } from '../../core/StateManager.js';
+import { customHeaders } from '../../utils/CustomHeaders.js';
 import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('MediaHelper');
@@ -22,6 +23,11 @@ const log = logger.create('MediaHelper');
 const MAX_LRU_ENTRIES = 50;
 // Storage key indexing all tracked entities in Least-Recently-Used order
 const LRU_INDEX_KEY = 'track:lru_index';
+
+// HLS manifest polling: total budget (wall clock) and per-request timeout
+const MANIFEST_POLL_BUDGET_MS = 15000;
+const MANIFEST_POLL_INTERVAL_MS = 500;
+const MANIFEST_REQUEST_TIMEOUT_MS = 5000;
 
 export const MediaHelper = {
     /**
@@ -365,10 +371,47 @@ export const MediaHelper = {
             }
         }
 
+        // A bitrate limit (e.g. a lower quality picked in the OSD) re-encodes the
+        // video with only ContainerBitrateExceedsLimit as the reason, and with
+        // the source codec still in VideoCodec
+        if (isVideoDirect && this.isVideoOverTranscodeLimits(mediaSource)) {
+            isVideoDirect = false;
+        }
+
         return {
             isVideoDirect,
             isAudioDirect
         };
+    },
+
+    /**
+     * Whether the source video exceeds the limits its transcoding URL sets, so
+     * the server re-encodes it instead of copying it. The server copies video
+     * only when it fits them (EncodingHelper.CanStreamCopyVideo). Every
+     * transcoding URL carries a VideoBitrate (the bitrate limit minus the
+     * audio), remuxes included, so only a source above it counts. Unknown
+     * source values are not counted, so a remux is never labelled a transcode
+     * on a guess.
+     *
+     * @param {Object} mediaSource
+     * @returns {boolean}
+     */
+    isVideoOverTranscodeLimits(mediaSource) {
+        const url = mediaSource?.TranscodingUrl;
+        const video = mediaSource?.MediaStreams?.find((s) => s.Type === 'Video');
+        if (!url || !video) return false;
+
+        const limit = (name) => {
+            const match = new RegExp(`[?&]${name}=(\\d+)`, 'i').exec(url);
+            return match ? Number(match[1]) : null;
+        };
+        const exceeds = (value, max) => max !== null && value > 0 && value > max;
+
+        return (
+            exceeds(video.BitRate, limit('VideoBitrate')) ||
+            exceeds(video.Width, limit('MaxWidth')) ||
+            exceeds(video.Height, limit('MaxHeight'))
+        );
     },
 
 
@@ -380,6 +423,20 @@ export const MediaHelper = {
     isHls(mediaSource) {
         const protocol = mediaSource?.TranscodingSubProtocol?.toLowerCase();
         return protocol === 'hls' || (mediaSource?.TranscodingUrl && mediaSource.TranscodingUrl.includes('.m3u8'));
+    },
+
+    /**
+     * Start position baked into a progressive (non-HLS) transcode URL. HLS
+     * playlists cover the whole timeline, so the server leaves the start out
+     * of their URL and their PlaybackInfo does not depend on it.
+     * @param {Object} mediaSource
+     * @returns {number|null} Ticks (0 when the URL names none), or null when
+     *   the source has no progressive transcoding URL
+     */
+    getProgressiveTranscodeStartTicks(mediaSource) {
+        if (!mediaSource?.TranscodingUrl || this.isHls(mediaSource)) return null;
+        const match = /[?&]StartTimeTicks=(\d+)/i.exec(mediaSource.TranscodingUrl);
+        return match ? Number(match[1]) : 0;
     },
 
     /**
@@ -595,46 +652,117 @@ export const MediaHelper = {
     },
 
     /**
+     * fetch() that gives up after timeoutMs.
+     *
+     * A server that accepts the connection and then stalls (busy NAS, tunnel
+     * hiccup) otherwise holds the request until the TV's TCP timeout. On
+     * timeout the returned promise rejects with an Error named 'TimeoutError'
+     * (not 'AbortError', which callers treat as a cancel) and the request is
+     * aborted where AbortController is native. The timeout also covers `read`,
+     * which consumes the response (e.g. response => response.json()), so a body
+     * that stops streaming is caught too.
+     *
+     * @param {string} url
+     * @param {Object} [init] - fetch() options
+     * @param {number} timeoutMs - 0 for no timeout
+     * @param {Function} [read] - (response) => value or promise; defaults to the response
+     * @returns {Promise<*>} What `read` returns
+     */
+    async fetchWithTimeout(url, init = {}, timeoutMs = 0, read = (response) => response) {
+        // Resolve target server URL from application state
+        const serverUrl = state.get('server:url');
+
+        // Check if destination matches configured server and retrieve custom proxy headers
+        const proxyHeaders = customHeaders.getHeadersForUrl(url, serverUrl);
+        const mergedInit = Object.assign({}, init);
+
+        // Merge proxy headers with caller headers if applicable
+        if (proxyHeaders && typeof proxyHeaders === 'object' && Object.keys(proxyHeaders).length > 0) {
+            mergedInit.headers = Object.assign({}, mergedInit.headers, proxyHeaders);
+        }
+
+        const request = (signal) => fetch(url, signal ? Object.assign({}, mergedInit, { signal }) : mergedInit).then(read);
+        if (!timeoutMs) return request(null);
+
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        let timer = null;
+        const timeout = new Promise((resolve, reject) => {
+            timer = setTimeout(() => {
+                const error = new Error(`Request timed out after ${timeoutMs} ms`);
+                error.name = 'TimeoutError';
+                // Reject first so the timeout, not the abort, settles the race
+                reject(error);
+                if (controller) {
+                    try {
+                        controller.abort();
+                    } catch (e) {
+                        // polyfilled controller without abort support
+                    }
+                }
+            }, timeoutMs);
+        });
+
+        try {
+            return await Promise.race([request(controller && controller.signal), timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
+    },
+
+    /**
      * Poll an HLS manifest URL until the server writes #EXTM3U.
      * Prevents backends from opening/loading a URL that the transcoder
      * hasn't started writing yet, which causes unrecoverable decoder errors
      * on some Smart TV platforms.
      *
+     * Polls every 500 ms for at most 15 s of wall-clock time; each request
+     * times out after 5 s, so a stalled server cannot stretch the budget.
+     * A client error (4xx: unknown item or play session, no access) does not
+     * go away by asking again: polling stops at once and the load reports it.
+     * Server errors (5xx) and network failures are retried within the budget.
+     *
      * @param {string} url - HLS playlist URL
      * @param {Function} [shouldAbort] - Optional callback; return true to stop polling
-     * @returns {Promise<void>} Resolves when manifest is ready or timeout reached
+     * @returns {Promise<void>} Resolves when manifest is ready, on a client error or when the budget runs out
      */
     async pollHlsManifest(url, shouldAbort) {
         if (!url || !url.includes('.m3u8')) return;
 
-        const maxRetries = 30;
-        const delayMs = 500;
+        const startedAt = Date.now();
+        const deadline = startedAt + MANIFEST_POLL_BUDGET_MS;
 
         log.info(`Polling HLS manifest: ${url}`);
 
-        for (let i = 0; i < maxRetries; i++) {
+        while (Date.now() < deadline) {
             if (typeof shouldAbort === 'function' && shouldAbort()) {
                 log.info('HLS polling aborted');
                 return;
             }
 
             try {
-                const response = await fetch(url, { method: 'GET' });
-                if (response.ok) {
-                    const text = await response.text();
-                    if (text && text.includes('#EXTM3U')) {
-                        log.info(`HLS manifest ready after ${i * delayMs}ms`);
-                        return;
-                    }
+                const requestTimeout = Math.max(1, Math.min(MANIFEST_REQUEST_TIMEOUT_MS, deadline - Date.now()));
+                const answer = await MediaHelper.fetchWithTimeout(url, { method: 'GET' }, requestTimeout, (response) =>
+                    response.ok ? response.text().then((text) => ({ text })) : { status: response.status }
+                );
+                if (answer.text && answer.text.includes('#EXTM3U')) {
+                    log.info(`HLS manifest ready after ${Date.now() - startedAt}ms`);
+                    return;
+                }
+                // 408 and 429 ask the client to try again later
+                const status = answer.status;
+                if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+                    log.warn(`HLS manifest request failed with HTTP ${status} — not polling further`);
+                    return;
                 }
             } catch (e) {
-                // Server may still be starting up — retry
+                // Server may still be starting up (or the request timed out) — retry
             }
 
-            await new Promise(resolve => setTimeout(resolve, delayMs));
+            if (Date.now() >= deadline) break;
+            await new Promise(resolve => setTimeout(resolve, MANIFEST_POLL_INTERVAL_MS));
         }
 
-        log.warn(`HLS manifest polling timed out after ${maxRetries * delayMs}ms — proceeding`);
+        log.warn(`HLS manifest polling timed out after ${Date.now() - startedAt}ms — proceeding`);
     },
 
     // ========================================================================

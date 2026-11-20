@@ -9,12 +9,14 @@
 
 import { api } from '../api/index.js';
 import { escapeHtml } from './Utils.js';
+import { seerrCardState } from '../api/seerrNormalize.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
 import { storage } from './StorageService.js';
 import { shouldShowScore } from './visibility.js';
 import { detailsIcons, getStaticIcon } from './Icons.js';
 import { platformInfo } from './PlatformInfo.js';
+import { animeMarkerService } from './AnimeMarkerService.js';
 
 class CardRenderer {
     /**
@@ -26,6 +28,163 @@ class CardRenderer {
      */
     static _htmlCache = new Map();
     static _htmlCacheKey = null;
+    static _markerListenerAttached = false;
+
+    /**
+     * In-memory cache of recent media item objects keyed by normalized item ID and raw ID.
+     * Retains item metadata (MediaStreams, Tags, SeriesId, etc.) across render cycles
+     * so that asynchronous background updates (such as anime marker and audio stream resolution)
+     * can dynamically re-evaluate badges without requiring redundant server roundtrips.
+     * Bounded to a strict capacity limit to prevent memory bloat on low-memory TV environments.
+     *
+     * @type {Map<string, Object>}
+     * @private
+     */
+    static _itemCache = new Map();
+    static _MAX_ITEM_CACHE_CAPACITY = 500;
+
+    /**
+     * Lazily binds anime marker cache invalidation and live DOM badge patching
+     * to prevent TDZ circular evaluation issues.
+     */
+    static _initMarkerListener() {
+        if (!CardRenderer._markerListenerAttached && typeof animeMarkerService?.onMarkersLoaded === 'function') {
+            CardRenderer._markerListenerAttached = true;
+            animeMarkerService.onMarkersLoaded((seriesId, parsedData) => {
+                CardRenderer.clearCache();
+                CardRenderer._updateRenderedCards(seriesId, parsedData);
+            });
+        }
+    }
+
+    /**
+     * Dynamically patches rendered cards in the active DOM matching a series ID
+     * once companion marker classifications finish loading asynchronously.
+     * Guarantees that Content (Filler, Mixed Canon/Filler, Recap) and Audio (Subbed,
+     * Dubbed, Subbed/Dubbed) badges appear on screen immediately without requiring
+     * a page navigation cycle or full page reload.
+     *
+     * @param {string} seriesId - Jellyfin series identifier (raw or normalized)
+     * @param {Object} parsedData - Parsed markers containing episode mappings and match flags
+     * @private
+     */
+    static _updateRenderedCards(seriesId, parsedData) {
+        // Fast-path guard: ignore empty parameters or non-browser environments
+        if (!seriesId || !parsedData || typeof document === 'undefined') return;
+
+        // Standardize target series identifier for consistent DOM comparison
+        const targetSeriesId = animeMarkerService.normalizeId(seriesId);
+        if (!targetSeriesId) return;
+
+        // Query cards matching either normalized or raw series ID attribute
+        let cards = document.querySelectorAll(
+            `button[data-series-id="${targetSeriesId}"], button[data-series-id="${seriesId}"]`
+        );
+
+        // Fallback sweep: if no exact attribute match found, scan all buttons with series IDs or cached item references
+        if (!cards || cards.length === 0) {
+            const candidates = document.querySelectorAll('button[data-item-id]');
+            const matched = [];
+            for (let i = 0; i < candidates.length; i++) {
+                const btn = candidates[i];
+                const attr = btn.getAttribute('data-series-id') || btn.getAttribute('data-raw-series-id');
+                if (attr && animeMarkerService.normalizeId(attr) === targetSeriesId) {
+                    matched.push(btn);
+                    continue;
+                }
+                const itemId = btn.getAttribute('data-item-id');
+                if (itemId) {
+                    const cachedItem = CardRenderer._itemCache.get(animeMarkerService.normalizeId(itemId)) || CardRenderer._itemCache.get(itemId);
+                    if (cachedItem?.SeriesId && animeMarkerService.normalizeId(cachedItem.SeriesId) === targetSeriesId) {
+                        matched.push(btn);
+                    }
+                }
+            }
+            cards = matched;
+        }
+
+        if (!cards || cards.length === 0) return;
+
+        // --------------------------------------------------------------------
+        // User Preference Guard: Anime & Audio Classification Badges
+        // --------------------------------------------------------------------
+        // Features are disabled by default; check if either content or audio badges are enabled.
+        // --------------------------------------------------------------------
+        const showContent = storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+            (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+        const showAudio = storage.getItem('pref:showAudioBadges') === 'true' ||
+            (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+
+        if (!showContent && !showAudio) return;
+
+        cards.forEach((card) => {
+            const itemId = card.getAttribute('data-item-id');
+            const itemType = card.getAttribute('data-item-type') || card.getAttribute('data-type');
+            if (!itemId || (itemType && itemType !== 'Episode')) return;
+
+            // Target card image container where badges are anchored
+            const cardImage = card.querySelector('.card-image') || card;
+            if (!cardImage) return;
+
+            // Retrieve original media item object from cache
+            const normalizedEpId = animeMarkerService.normalizeId(itemId);
+            let item = CardRenderer._itemCache.get(normalizedEpId) || CardRenderer._itemCache.get(itemId);
+
+            // Construct lightweight fallback model if item was evicted from memory
+            if (!item) {
+                item = {
+                    Id: itemId,
+                    SeriesId: targetSeriesId,
+                    Type: itemType || 'Episode'
+                };
+            }
+
+            // Fast guard: ensure item is verified as anime
+            if (!animeMarkerService.isAnime(item, parsedData)) return;
+
+            // Resolve all applicable episode badges according to active user preferences
+            const pills = animeMarkerService.getEpisodePills(item, parsedData, {
+                showContentBadges: showContent,
+                showAudioBadges: showAudio
+            });
+
+            // Locate existing anime pill container if already mounted
+            let pillsRow =
+                card.querySelector('.card-anime-pills') ||
+                (cardImage.querySelector && cardImage.querySelector('.card-anime-pills'));
+
+            if (!pills || pills.length === 0) {
+                if (pillsRow) {
+                    if (typeof pillsRow.remove === 'function') {
+                        pillsRow.remove();
+                    } else if (pillsRow.parentNode) {
+                        pillsRow.parentNode.removeChild(pillsRow);
+                    }
+                }
+                return;
+            }
+
+            if (!pillsRow) {
+                pillsRow = document.createElement('div');
+                pillsRow.className = 'anime-pills-row card-anime-pills';
+                const container = card.querySelector('.card-title-row') || cardImage;
+                container.appendChild(pillsRow);
+            } else {
+                pillsRow.textContent = '';
+                if (pillsRow.innerHTML !== undefined) {
+                    pillsRow.innerHTML = '';
+                }
+            }
+
+            pills.forEach((pill) => {
+                const span = document.createElement('span');
+                span.className = `anime-pill anime-pill-${pill.type}`;
+                span.setAttribute('data-pill-id', pill.id);
+                span.textContent = pill.label;
+                pillsRow.appendChild(span);
+            });
+        });
+    }
 
     /**
      * Clear the HTML output cache. Call this when items, viewMode, columns,
@@ -34,6 +193,59 @@ class CardRenderer {
     static clearCache() {
         this._htmlCache.clear();
         this._htmlCacheKey = null;
+        this._prefs = null;
+    }
+
+    /**
+     * Card preferences, read once per render pass. A row or grid renders all
+     * its cards in one synchronous loop; reading each preference per card
+     * cost 6 storage reads per card on a cache hit and about 18 on a miss,
+     * each parsing the whole settings object when settings are per user.
+     * The snapshot is dropped when the current task ends and by clearCache().
+     */
+    static _prefs = null;
+
+    static _getPrefs() {
+        if (CardRenderer._prefs) return CardRenderer._prefs;
+        const prefs = {
+            libraryThumbMode: storage.getItem('pref:libraryThumbMode') || 'off',
+            preferBackdrops: storage.getItem('pref:preferBackdropsOverThumbs') === 'true',
+            globalBlurHashDisabled: storage.getItem('litefin:disableBlurhash') === 'true',
+            libraryBlurHashDisabled: storage.getItem('pref:disableLibraryBlurhash') !== 'false',
+            // Raw values: part of the HTML cache key as stored
+            hideLibraryLabels: storage.getItem('pref:hideLibraryLabels'),
+            cardLabelStyle: storage.getItem('pref:cardLabelStyle'),
+            preferEpisodeImages: storage.getItem('pref:preferEpisodeImagesLocal') === 'true',
+            hideProgressBar: storage.getItem('pref:hideProgressBar') === 'true',
+            hideEpisodeCounts: storage.getItem('pref:hideEpisodeCounts') === 'true',
+            showMediaSourceCounts: storage.getItem('pref:showMediaSourceCounts') !== 'false',
+            useEpisodeBadges: storage.getItem('pref:useEpisodeBadges') !== 'false',
+            useSeasonBadges: storage.getItem('pref:useSeasonBadges') === 'true',
+            swapEpisodeTitles: storage.getItem('pref:swapEpisodeTitles') === 'true',
+            showFavoriteBadges: storage.getItem('pref:showFavoriteBadges') === 'true',
+            showQualityBadges: storage.getItem('pref:showQualityBadges') === 'true',
+            // On-artwork rating badge (disabled by default; the source list grows with MDBList later)
+            cardRatingsEnabled: storage.getItem('pref:cardRatingsEnabled') === 'true',
+            cardRatingSource: storage.getItem('pref:cardRatingSource') || 'community',
+            cardRatingIcon: storage.getItem('pref:cardRatingIcon') || 'star',
+            // Anime content badges (Filler/Mixed/Recap) - disabled by default
+            showAnimeContentBadges: storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+                (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true'),
+            // Audio classification badges (Subbed/Dubbed) - disabled by default
+            showAudioBadges: storage.getItem('pref:showAudioBadges') === 'true' ||
+                (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true')
+        };
+        // Each of these shapes the markup the HTML cache keeps, so all of them are
+        // part of its key: a changed setting rebuilds the cards once
+        prefs.markupKey = Object.keys(prefs)
+            .map((name) => prefs[name])
+            .join('|');
+        CardRenderer._prefs = prefs;
+        // A setting changed later (in another task) is picked up by the next render pass
+        Promise.resolve().then(() => {
+            if (CardRenderer._prefs === prefs) CardRenderer._prefs = null;
+        });
+        return prefs;
     }
 
     /**
@@ -176,6 +388,38 @@ class CardRenderer {
     }
 
     /**
+     * ========================================================================
+     * Generate Favorite Badge HTML (Heart Icon)
+     * ========================================================================
+     * Inspects UserData to verify if the media item is flagged as a favorite.
+     * Controlled by the 'pref:showFavoriteBadges' user preference switch.
+     * Positioned at the bottom-left corner of the card artwork.
+     * ========================================================================
+     * @param {Object} item - Media item payload with UserData
+     * @returns {string} Badge markup string or empty string
+     */
+    static getFavoriteBadgeHtml(item) {
+        // Guard check for missing payload or uninitialized UserData metadata
+        if (!item || !item.UserData || !item.UserData.IsFavorite) {
+            return '';
+        }
+
+        // Verify if user preference permits favorite badges (off by default)
+        if (!CardRenderer._getPrefs().showFavoriteBadges) {
+            return '';
+        }
+
+        // Render sleek heart icon badge matching the universal design system
+        return `
+            <div class="favorite-badge" title="${escapeHtml(i18n.t('Favorite'))}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+            </div>
+        `;
+    }
+
+    /**
      * Generate Quality (Resolution/HDR) Badge HTML
      * @param {Object} item
      * @returns {string} HTML string
@@ -184,8 +428,7 @@ class CardRenderer {
         if (!item) return '';
         // Game ROMs do not have video resolution/HDR streams
         if (CardRenderer.isGame(item)) return '';
-        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
-        if (!showQualityBadges) return '';
+        if (!CardRenderer._getPrefs().showQualityBadges) return '';
 
         let width = item.Width;
         let height = item.Height;
@@ -317,6 +560,140 @@ class CardRenderer {
     }
 
     /**
+     * ========================================================================
+     * On-Artwork Rating Badge Eligibility
+     * ========================================================================
+     * Items without a conventional score (live TV, discovery placeholders,
+     * people, genre/studio cards) are excluded so card artwork stays clean
+     * and no misleading rating is ever displayed.
+     * ========================================================================
+     * @param {Object} item - Jellyfin media item
+     * @returns {boolean} True when the item can carry a rating badge
+     */
+    static isRatingEligible(item) {
+        if (!item || !item.Id) return false;
+        if (item._isGenreCard || item._isStudioCard || item._isNetworkCard || item._hideCardLabels) return false;
+        if (item.Type === 'TvChannel' || item.Type === 'Program') return false;
+
+        const type = item.Type || (item.MediaType === 'Video' ? 'Video' : '');
+        return (
+            type === 'Movie' ||
+            type === 'Series' ||
+            type === 'Episode' ||
+            type === 'Season' ||
+            type === 'Video' ||
+            type === 'MusicVideo' ||
+            type === 'BoxSet'
+        );
+    }
+
+    /**
+     * Generate the on-artwork rating badge HTML for a media card.
+     *
+     * Synchronous sources only (Jellyfin CommunityRating / CriticRating).
+     * MDBList providers are resolved asynchronously in a later phase and will
+     * patch this same placeholder in place, so the emitted markup is kept
+     * stable and CardRenderer._htmlCache remains valid when a score arrives.
+     *
+     * @param {Object} item - Jellyfin media item
+     * @param {Object} [options={}] - Render options
+     * @returns {string} Badge markup string or empty string
+     */
+    static getCardRatingBadgeHtml(item, options = {}) {
+        const prefs = CardRenderer._getPrefs();
+        if (!prefs.cardRatingsEnabled) return '';
+        // List view already renders .card-meta-score inside the meta row.
+        if (options.showMeta) return '';
+        if (!CardRenderer.isRatingEligible(item)) return '';
+        if (!shouldShowScore(item)) return '';
+
+        const source = prefs.cardRatingSource === 'critic' ? 'critic' : 'community';
+        const iconMode = prefs.cardRatingIcon || 'star';
+        const raw = source === 'critic' ? item.CriticRating : item.CommunityRating;
+        const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '';
+
+        const text = source === 'critic' ? `${Math.round(value)}%` : value.toFixed(1);
+        const tooltip =
+            source === 'critic'
+                ? `${i18n.t('CardRatingCritic')}: ${text}`
+                : `${i18n.t('CardRatingCommunity')}: ${text}`;
+
+        // 'none' omits the glyph entirely; 'source' picks the provider icon
+        // (tomato for critic, star for community); 'star' is the free default.
+        let iconHtml = '';
+        if (iconMode !== 'none') {
+            iconHtml =
+                source === 'critic' && iconMode === 'source'
+                    ? detailsIcons.rottenTomatoesFresh
+                    : detailsIcons.ratingStar;
+        }
+
+        return `
+            <div class="card-rating-badge card-rating-badge--${source}" data-rating-for="${item.Id}" data-rating-source="${source}" data-rating-state="ready" title="${escapeHtml(tooltip)}">
+                ${iconHtml}<span class="card-rating-value">${text}</span>
+            </div>
+        `;
+    }
+
+    /**
+     * Generate Anime Marker and Audio Badges HTML for a media card item.
+     * Evaluates content classification (Filler, Mixed, Recap) and
+     * audio language tracks (Subbed, Dubbed, Subbed/Dubbed).
+     *
+     * @param {Object} item - Jellyfin item (Episode or Movie)
+     * @param {Object} [options={}] - Optional marker options
+     * @returns {string} HTML string of rendered badges
+     */
+    static getAnimeBadgeHtml(item, options = {}) {
+        if (!item) return '';
+
+        // --------------------------------------------------------------------
+        // Evaluate User Settings: Anime Content Badges & Audio Badges
+        // --------------------------------------------------------------------
+        // Both settings default to disabled; check explicit user preferences.
+        // --------------------------------------------------------------------
+        const showContent = storage.getItem('pref:showAnimeContentBadges') === 'true' ||
+            (storage.getItem('pref:showAnimeContentBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+        const showAudio = storage.getItem('pref:showAudioBadges') === 'true' ||
+            (storage.getItem('pref:showAudioBadges') === null && storage.getItem('pref:showAnimeMarkers') === 'true');
+
+        if (!showContent && !showAudio) return '';
+
+        // Badges are relevant for episodes and movies
+        if (item.Type !== 'Episode' && item.Type !== 'Movie') {
+            return '';
+        }
+
+        let seriesMarkers = options.seriesMarkers;
+        if (!seriesMarkers && item.SeriesId) {
+            seriesMarkers = animeMarkerService.getCachedSeriesMarkers(item.SeriesId);
+            // If markers are not yet in memory, trigger a background fetch so subsequent
+            // renders or page navigations have immediate access to content classifications
+            if (!seriesMarkers) {
+                animeMarkerService.fetchSeriesMarkers(item.SeriesId).catch(() => {});
+            }
+        }
+
+        // Fast guard: ensure media is verified as anime before attempting badge resolution
+        if (!animeMarkerService.isAnime(item, seriesMarkers, options)) {
+            return '';
+        }
+
+        const pills = animeMarkerService.getEpisodePills(item, seriesMarkers, {
+            ...options,
+            showContentBadges: showContent,
+            showAudioBadges: showAudio
+        });
+        if (!pills || pills.length === 0) return '';
+
+        return animeMarkerService.renderPillsHtml(pills, {
+            compact: true,
+            className: 'card-anime-pills'
+        });
+    }
+
+    /**
      * Create HTML string for a media card
      * @param {Object} item - The Jellyfin item object
      * @param {Object} options - Rendering options
@@ -332,11 +709,11 @@ class CardRenderer {
         const isExpanded = mediaLayout === 'expanded';
         const isModernPosters = mediaLayout === 'modern-posters';
         const isExpanding = mediaLayout === 'expanding';
-        const isModernOrExpanded = isModern || isExpanded || isModernPosters || isExpanding;
 
-        const libraryThumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+        const prefs = CardRenderer._getPrefs();
+        const libraryThumbMode = prefs.libraryThumbMode;
         const isDynamicThumb = (type === 'library' && libraryThumbMode !== 'off') || Boolean(item._dynamicThumbUrl);
-        const preferBackdrops = storage.getItem('pref:preferBackdropsOverThumbs') === 'true';
+        const preferBackdrops = prefs.preferBackdrops;
 
         // ------------------------------------------------------------------
         // HTML OUTPUT CACHE
@@ -348,17 +725,46 @@ class CardRenderer {
         // ------------------------------------------------------------------
         // Evaluate BlurHash disable flags for cache invalidation
         // Ensures that whenever user flips global or library blurhash toggles, cached cards flush immediately
-        const isGlobalBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
-        const isLibraryBlurHashDisabledPref = storage.getItem('pref:disableLibraryBlurhash') !== 'false';
+        const isGlobalBlurHashDisabled = prefs.globalBlurHashDisabled;
+        const isLibraryBlurHashDisabledPref = prefs.libraryBlurHashDisabled;
 
-        // Incorporate every layout, dimension, and performance preference into the cache key
-        const cacheKey = `${mediaLayout}|${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}|${item._dynamicThumbUrl || ''}|${libraryThumbMode}|${storage.getItem('pref:hideLibraryLabels')}|${storage.getItem('pref:cardLabelStyle')}|${preferBackdrops}|${isGlobalBlurHashDisabled}|${isLibraryBlurHashDisabledPref}`;
+        // Incorporate every layout, dimension, and performance preference into the cache key.
+        // markupKey adds the card settings not spelled out here (favorite and quality
+        // badges, anime/audio markers, progress bar, counts...): without them, turning on
+        // Show Favorite Badges showed no heart until something else cleared the cache
+        const cacheKey = `${mediaLayout}|${isLandscape}|${type}|${contextType}|${isGrid}|${cardWidth}|${options.showMeta}|${item._dynamicThumbUrl || ''}|${libraryThumbMode}|${prefs.hideLibraryLabels}|${prefs.cardLabelStyle}|${preferBackdrops}|${isGlobalBlurHashDisabled}|${isLibraryBlurHashDisabledPref}|${prefs.markupKey}`;
         if (CardRenderer._htmlCacheKey !== cacheKey) {
             CardRenderer._htmlCache.clear();
             CardRenderer._htmlCacheKey = cacheKey;
         }
+
+        CardRenderer._initMarkerListener();
         const itemId = item.Id;
-        const cached = CardRenderer._htmlCache.get(itemId);
+
+        // Cache media item reference to support dynamic background badge updates
+        if (item && itemId) {
+            // Maintain bounded capacity via FIFO eviction
+            if (CardRenderer._itemCache.size >= CardRenderer._MAX_ITEM_CACHE_CAPACITY) {
+                const oldestKey = CardRenderer._itemCache.keys().next().value;
+                CardRenderer._itemCache.delete(oldestKey);
+            }
+            const normalizedEpId = animeMarkerService.normalizeId(itemId);
+            CardRenderer._itemCache.set(normalizedEpId, item);
+            if (itemId !== normalizedEpId) {
+                CardRenderer._itemCache.set(itemId, item);
+            }
+        }
+
+        // Incorporate marker state into the item cache key to prevent stale renders
+        // when series markers finish resolving asynchronously in the background
+        const seriesMarkers = options.seriesMarkers || (item.SeriesId ? animeMarkerService.getCachedSeriesMarkers(item.SeriesId) : null);
+        const markerCount = seriesMarkers?.episodes ? Object.keys(seriesMarkers.episodes).length : '0';
+        const isAnimeFlag = seriesMarkers ? (seriesMarkers.matched || seriesMarkers.isAnime ? '1' : '0') : '0';
+        const itemCacheKey = `${itemId}:${markerCount}:${isAnimeFlag}`;
+        // A card with a running Seerr download must not be served from (or stored in)
+        // the HTML cache, otherwise the spinner would outlive the download.
+        const hasSeerrDownloads = Array.isArray(item._downloads) && item._downloads.length > 0;
+        const cached = hasSeerrDownloads ? undefined : CardRenderer._htmlCache.get(itemCacheKey);
         if (cached !== undefined) return cached;
 
         let imageUrl = '';
@@ -376,6 +782,19 @@ class CardRenderer {
                 if (scaleFactor !== null) {
                     getUrlOptions = { ...getUrlOptions, maxWidth: Math.round(cardWidth * scaleFactor) };
                 }
+            }
+            /*
+             * Bound the decoded texture on both axes. Poster slots are 2:3 and
+             * landscape slots 16:9; deriving maxHeight from the final width
+             * (after the card override above) prevents the server from sending a
+             * taller source than the card can ever display.
+             */
+            if (!getUrlOptions.maxHeight && getUrlOptions.maxWidth) {
+                const aspectRatio = imageType === 'Primary' ? 1.5 : 9 / 16;
+                getUrlOptions = {
+                    ...getUrlOptions,
+                    maxHeight: Math.round(getUrlOptions.maxWidth * aspectRatio)
+                };
             }
             return api.getImageUrl(id, imageType, getUrlOptions);
         };
@@ -546,46 +965,122 @@ class CardRenderer {
             const params = imageService.getParams('card-backdrop', contextType);
 
             if (item.Type === 'Episode') {
-                // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
-                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                /*
+                 * ====================================================================
+                 * Episode Image Resolution Strategy (Landscape Media Rows)
+                 * ====================================================================
+                 * Handles artwork lookup for episode cards rendered in widescreen 16:9
+                 * horizontal rows (such as Continue Watching, Next Up, and latest items).
+                 *
+                 * Artwork Selection Hierarchy:
+                 * 1. Episode Primary Screenshot (skipped when spoiler prevention is on)
+                 * 2. Series Landscape Thumb (16:9 widescreen logo artwork)
+                 * 3. Season Landscape Thumb (Parent season artwork)
+                 * 4. Episode Backdrop (item-level background art)
+                 * 5. Season Backdrop (Parent season backdrop)
+                 * 6. Series Backdrop (Show-level background art)
+                 * 7. Series Primary Poster (spoiler-free preferred poster artwork)
+                 * 8. Episode Primary Screenshot (fallback when no series art is found)
+                 * 9. Ultimate Fallback: Series Primary Poster (center-cropped via CSS)
+                 * ====================================================================
+                 */
+
+                // Retrieve user spoiler prevention preference (default: hide episode thumbnails)
+                const preferEpisodeImages = prefs.preferEpisodeImages;
                 const isSpoilerFree = !preferEpisodeImages && ['nextUp', 'upcoming', 'resume'].includes(contextType);
 
-                // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
-                // If spoiler free, skip Primary logic unless nothing else exists
-                if (!isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
+                // Availability checks across all possible artwork tiers
+                const hasEpisodePrimary = Boolean(item.ImageTags && item.ImageTags.Primary);
+                const hasSeriesThumb = Boolean(item.SeriesThumbImageTag && item.SeriesId);
+                const hasParentThumb = Boolean(item.ParentThumbItemId && item.ParentThumbImageTag);
+
+                // Ensure backdrop image arrays are populated before generating URLs to prevent 404 network errors
+                const hasBackdrop = Boolean(item.BackdropImageTags && item.BackdropImageTags.length > 0);
+                const hasParentBackdrop = Boolean(
+                    (item.ParentBackdropItemId || item.SeriesId) &&
+                    item.ParentBackdropImageTags &&
+                    item.ParentBackdropImageTags.length > 0
+                );
+                const hasSeriesBackdrop = Boolean(
+                    item.SeriesId &&
+                    item.SeriesBackdropImageTags &&
+                    item.SeriesBackdropImageTags.length > 0
+                );
+
+                // Check for available series-level primary poster
+                const hasSeriesPrimary = Boolean(item.SeriesId && item.SeriesPrimaryImageTag);
+
+                // Priority 1: When spoiler prevention is inactive, prefer episode thumbnail still
+                if (!isSpoilerFree && hasEpisodePrimary) {
                     imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
                     });
-                } else if (item.SeriesThumbImageTag && item.SeriesId) {
+                }
+                // Priority 2: Dedicated widescreen 16:9 series thumbnail
+                else if (hasSeriesThumb) {
                     imageUrl = _imgUrl(item.SeriesId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.SeriesThumbImageTag
                     });
-                } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+                }
+                // Priority 3: Dedicated season widescreen 16:9 thumbnail
+                else if (hasParentThumb) {
                     imageUrl = _imgUrl(item.ParentThumbItemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ParentThumbImageTag
                     });
-                } else if (item.ParentBackdropItemId) {
-                    imageUrl = _imgUrl(item.ParentBackdropItemId, 'Backdrop', {
+                }
+                // Priority 4: High-resolution widescreen backdrops (Episode level)
+                else if (hasBackdrop) {
+                    imageUrl = _imgUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.BackdropImageTags[0]
                     });
-                } else if (item.SeriesId) {
+                }
+                // Priority 5: Parent season backdrop (verified tag existence avoids broken requests)
+                else if (hasParentBackdrop) {
+                    imageUrl = _imgUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ParentBackdropImageTags[0]
+                    });
+                }
+                // Priority 6: Parent series backdrop (verified tag existence avoids broken requests)
+                else if (hasSeriesBackdrop) {
                     imageUrl = _imgUrl(item.SeriesId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.SeriesBackdropImageTags[0]
                     });
-                } else if (isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
-                    // Fallback to primary if forced but nothing else found
+                }
+                // Priority 7: Spoiler-free mode prefers Series Primary Poster over revealing screenshots
+                else if (isSpoilerFree && hasSeriesPrimary) {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.SeriesPrimaryImageTag
+                    });
+                }
+                // Priority 8: Episode primary screenshot fallback if spoiler-free had no show artwork
+                else if (hasEpisodePrimary) {
                     imageUrl = _imgUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
                         tag: item.ImageTags.Primary
+                    });
+                }
+                // Priority 9: Ultimate Fallback — Parent Series Primary Poster
+                // Cropped horizontally with object-fit: cover in CSS to fill landscape card bounds
+                else if (item.SeriesId) {
+                    imageUrl = _imgUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        ...(item.SeriesPrimaryImageTag ? { tag: item.SeriesPrimaryImageTag } : {})
                     });
                 }
             } else if (type === 'library') {
@@ -706,7 +1201,7 @@ class CardRenderer {
                 const params = imageService.getParams('thumb', contextType);
 
                 // Spoiler Prevention for Episodes
-                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                const preferEpisodeImages = prefs.preferEpisodeImages;
                 if (!preferEpisodeImages && item.Type === 'Episode' && item.SeriesId) {
                     // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
                     if (item.SeriesPrimaryImageTag) {
@@ -830,50 +1325,110 @@ class CardRenderer {
 
         // --- 2. Overlays (Progress & Badges) ---
 
-        // --- Resume Progress Bar ---
-        //
+        // ====================================================================
+        // --- Resume Playback Progress Bar ---
+        // ====================================================================
         // Renders the playback progress indicator along the bottom of the card artwork.
         // Controlled by user preference 'pref:hideProgressBar' (defaults to shown/false).
+        // --------------------------------------------------------------------
+        // Progress bars are strictly intended for playable media in active progress:
+        // - In-progress movies and episodes (e.g. paused midway).
+        // - Excludes container types (Series, Seasons, BoxSets, Playlists, Folders)
+        //   which may carry aggregate watched episode statistics in PlayedPercentage.
+        // - Excludes completed items (UserData.Played === true or progress >= 100%).
+        // ====================================================================
         let progressHtml = '';
-        const hideProgressBar = storage.getItem('pref:hideProgressBar') === 'true';
+        const hideProgressBar = prefs.hideProgressBar;
 
-        // Only construct and mount the progress element if playback progress exists and user hasn't hidden it
+        // --------------------------------------------------------------------
+        // Playable Media Validation
+        // --------------------------------------------------------------------
+        // Container items (series, seasons, box sets, folders) do not possess a
+        // single playback timeline. We restrict progress bar rendering to individual
+        // episodic or standalone video entities.
+        // --------------------------------------------------------------------
+        const isPlayableMedia =
+            item &&
+            !item.IsFolder &&
+            (item.Type === 'Episode' ||
+                item.Type === 'Movie' ||
+                item.Type === 'Video' ||
+                item.Type === 'MusicVideo' ||
+                item.Type === 'Trailer' ||
+                item.Type === 'Recording' ||
+                (!item.Type && item.MediaType === 'Video'));
+
+        // --------------------------------------------------------------------
+        // Playback Position Metadata Detection
+        // --------------------------------------------------------------------
+        // Detect either exact playback ticks with total duration or a reported
+        // playback percentage from server UserData.
+        // --------------------------------------------------------------------
+        const hasPlaybackTicks = Boolean(item?.UserData?.PlaybackPositionTicks && item?.RunTimeTicks);
+        const hasPlayedPercentage = item?.UserData?.PlayedPercentage != null && item.UserData.PlayedPercentage > 0;
+
         if (
             !hideProgressBar &&
+            isPlayableMedia &&
             !CardRenderer.isGame(item) &&
-            item.UserData?.PlaybackPositionTicks &&
-            item.RunTimeTicks
+            (hasPlaybackTicks || hasPlayedPercentage)
         ) {
-            // Calculate playback percentage completed
-            const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            progressHtml = `
-                <div class="card-progress-container">
-                    <progress class="card-progress" value="${progress}" max="100"></progress>
-                </div>
-            `;
+            // -----------------------------------------------------------------
+            // Percentage Calculation & Completed State Evaluation
+            // -----------------------------------------------------------------
+            // Calculate playback percentage completed. When playback ticks exist,
+            // compute the exact mathematical ratio against total runtime.
+            // -----------------------------------------------------------------
+            const rawProgress = hasPlaybackTicks
+                ? (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100
+                : item.UserData.PlayedPercentage;
+
+            // An item is considered completed if flagged as Played in UserData
+            // or if the calculated progress rounds to 100% or greater.
+            const isCompleted = Boolean(item.UserData?.Played) || Math.round(rawProgress) >= 100;
+
+            // Only mount the progress bar if the item is genuinely in progress (< 100% and unplayed)
+            if (!isCompleted && rawProgress > 0) {
+                const progress = Math.min(Math.max(Math.round(rawProgress), 1), 99);
+                progressHtml = `
+                    <div class="card-progress-container">
+                        <progress class="card-progress" value="${progress}" max="100"></progress>
+                    </div>
+                `;
+            }
         }
 
-        // --- Unplayed Count Badge ---
-        //
-        // Generates the circular badge on the top-right of media cards.
-        // On series and seasons, this indicates the total unplayed episode count.
-        // It is optional and can be disabled via preferences to declutter the UI.
-        let badgeHtml = '';
-
-        // Fetch user preferences for badges
-        const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
-        const showMediaSourceCounts = storage.getItem('pref:showMediaSourceCounts') !== 'false';
-
-        // Only render the unplayed count badge if the user hasn't explicitly disabled it
+        // ====================================================================
+        // --- 1. Top-Right Badges: Unplayed Episodes Count ---
+        // ====================================================================
+        // Generates the circular unplayed badge positioned on the top-right of series/season cards.
+        // Can be disabled via user preferences ('pref:hideEpisodeCounts').
+        let unplayedCountBadgeHtml = '';
+        const hideEpisodeCounts = prefs.hideEpisodeCounts;
         if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
-            badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
-        } else if (showMediaSourceCounts && item.MediaSourceCount > 1) {
-            // Render media source version count badge (e.g. for items with multiple versions like Movies/Episodes)
-            badgeHtml = `<div class="count-badge media-source-count-badge">${item.MediaSourceCount}</div>`;
+            unplayedCountBadgeHtml = `<div class="count-badge unplayed-count-badge">${item.UserData.UnplayedItemCount}</div>`;
         }
+
+        // ====================================================================
+        // --- 2. Bottom-Left Badges: Media Source Versions Count ---
+        // ====================================================================
+        // Displays the number of available video streams or multi-version releases (e.g. 4K, 1080p, cuts).
+        // Unified position: bottom-left corner of the card artwork.
+        let versionCountBadgeHtml = '';
+        const showMediaSourceCounts = prefs.showMediaSourceCounts;
+        if (showMediaSourceCounts && item.MediaSourceCount > 1) {
+            versionCountBadgeHtml = `<div class="version-badge media-source-count-badge">${item.MediaSourceCount}</div>`;
+        }
+
+        // ====================================================================
+        // --- 3. Bottom-Left Badges: Favorite Indicator ---
+        // ====================================================================
+        // Displays a heart badge when an item is marked as favorite in Jellyfin.
+        // Sits at the bottom-left corner, positioned next to version count if versions are present.
+        const favoriteBadgeHtml = CardRenderer.getFavoriteBadgeHtml(item);
 
         // Played Badge (Check Mark)
-        let playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(item);
+        const playedBadgeHtml = CardRenderer.getPlayedBadgeHtml(item);
 
         // Video Badge (Center Play Icon)
         let videoBadgeHtml = '';
@@ -894,20 +1449,15 @@ class CardRenderer {
         // Retrieve Episode & Season Badge preferences from local storage.
         // Episode badges default to true, Season badges default to false (off).
         // -------------------------------------------------------------
-        const useEpisodeBadges = storage.getItem('pref:useEpisodeBadges') !== 'false';
-        const useSeasonBadges = storage.getItem('pref:useSeasonBadges') === 'true';
+        const useEpisodeBadges = prefs.useEpisodeBadges;
+        const useSeasonBadges = prefs.useSeasonBadges;
 
         // -------------------------------------------------------------
         // Check item type and build appropriate badge markup if allowed.
         // For recently added cards, episode identifiers are rendered in the subtitle line,
         // so we suppress the badge overlay to maintain a clean card presentation.
         // -------------------------------------------------------------
-        if (
-            item.Type === 'Episode' &&
-            item.IndexNumber !== undefined &&
-            useEpisodeBadges &&
-            contextType !== 'latest'
-        ) {
+        if (item.Type === 'Episode' && item.IndexNumber !== undefined && useEpisodeBadges && contextType !== 'latest') {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             episodeBadgeHtml = `<div class="episode-badge">S${s}E${e}</div>`;
@@ -916,7 +1466,7 @@ class CardRenderer {
         }
 
         // Quality Badge (Resolution/HDR)
-        let qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
+        const qualityBadgeHtml = CardRenderer.getQualityBadgeHtml(item);
 
         let seerrTypeBadgeHtml = '';
         let seerrBadgeHtml = '';
@@ -937,19 +1487,17 @@ class CardRenderer {
             }
         }
 
-        if (item._seerrStatus !== undefined && item._seerrStatus !== null) {
-            const isRequested =
-                item._seerrStatus === 2 ||
-                item._seerrStatus === 3 ||
-                (item._requestId && item._seerrStatus !== 5 && item._seerrStatus !== 4);
-            const isPartial = item._seerrStatus === 4;
-            const isAvailable = item._seerrStatus === 5;
-
-            if (isRequested) {
+        // Top-right status icon; the rules live in seerrCardState
+        const seerrState = seerrCardState(item);
+        if (seerrState) {
+            if (seerrState === 'downloading') {
+                // Mirrors Seerr's mini status badge: a spinner replaces the clock while downloading
+                seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested seerr-card-icon--downloading" title="${escapeHtml(i18n.t('SeerrStatusDownloading'))}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8"></path></svg></div>`;
+            } else if (seerrState === 'requested') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--requested" title="Requested"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"></path></svg></div>`;
-            } else if (isPartial) {
+            } else if (seerrState === 'partial') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--partial" title="Partially Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M5.25 12a.75.75 0 0 1 .75-.75h12a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"></path></svg></div>`;
-            } else if (isAvailable) {
+            } else if (seerrState === 'available') {
                 seerrBadgeHtml = `<div class="seerr-card-icon seerr-card-icon--available" title="Available"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd"></path></svg></div>`;
             }
         }
@@ -965,7 +1513,7 @@ class CardRenderer {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             const episodeCode = `S${s}E${e}`;
-            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') === 'true';
+            const swapEpisodeTitles = prefs.swapEpisodeTitles;
 
             // Check if this episode is rendered within a "Recently Added" context.
             // Following standard representation, display the parent series name
@@ -1126,9 +1674,14 @@ class CardRenderer {
             subtitleText = parts.join(' · ');
         }
 
+        // Server-provided secondary line (e.g. Home Screen Sections "Upcoming" countdown)
+        if (item._subtitleOverride) {
+            subtitleText = item._subtitleOverride;
+        }
+
         // --- 3.4. Label Visibility Styles & Special Card Overrides ---
-        const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard) {
+        const cardLabelStyle = prefs.cardLabelStyle || 'default';
+        if (item._isStudioCard || item._isNetworkCard || item._isGenreCard || item._hideCardLabels) {
             titleText = '';
             subtitleText = '';
         } else if (!options.showMeta) {
@@ -1161,6 +1714,29 @@ class CardRenderer {
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card.
         // In Expanded Posters layout, person cards (cast/crew/guest stars) render as square (1:1) cards.
         if (type === 'square' || type === 'artist' || (isExpanded && type === 'person')) cssClass = 'media-card square';
+
+        // -------------------------------------------------------------
+        // PROGRESS MARKER CLASS
+        // -------------------------------------------------------------
+        // When active playback progress exists on the card, we attach 'has-progress'.
+        // This enables styling hooks (such as shifting bottom badges upward) to prevent
+        // visual collisions with the floating progress bar track.
+        // -------------------------------------------------------------
+        if (progressHtml) {
+            cssClass += ' has-progress';
+        }
+
+        // -------------------------------------------------------------
+        // BOTTOM BADGES MARKER CLASS
+        // -------------------------------------------------------------
+        // If bottom badges exist on this item (Watched, Versions count, or Favorite),
+        // we attach 'has-bottom-badges'. This allows layouts with integrated artwork labels
+        // (such as Expanding mode) to elevate the title and subtitle above the badges.
+        // -------------------------------------------------------------
+        const hasBottomBadges = !!(playedBadgeHtml || versionCountBadgeHtml || favoriteBadgeHtml);
+        if (hasBottomBadges) {
+            cssClass += ' has-bottom-badges';
+        }
 
         // Live TV Channel card classification
         if (item.Type === 'TvChannel') {
@@ -1317,7 +1893,7 @@ class CardRenderer {
             : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials, isLibrary: type === 'library' })}`;
         const finalContextType = contextType || item.Type;
 
-        const hideLibraryLabelsPref = storage.getItem('pref:hideLibraryLabels') === 'true';
+        const hideLibraryLabelsPref = prefs.hideLibraryLabels === 'true';
 
         // Outside label hiding logic for library cards:
         // - Hide if user enabled 'pref:hideLibraryLabels'
@@ -1393,33 +1969,73 @@ class CardRenderer {
         const expansionClass = canExpand ? ' has-expansion' : '';
 
         const gameBadgeHtml = CardRenderer.getGameBadgeHtml(item);
+        const animeBadgeHtml = CardRenderer.getAnimeBadgeHtml(item, options);
+        const ratingBadgeHtml = CardRenderer.getCardRatingBadgeHtml(item, options);
 
         /*
          * ====================================================================
          * Metadata Badge Container
          * ====================================================================
-         * Groups overlay metadata badges (watched state, episode index, quality,
-         * game/seerr flags). videoBadgeHtml is excluded here because it is a
-         * centered play button rendered exclusively within the card-image frame.
+         * Assembles unified badges across all media row layouts:
+         * - Top Left: Episode code (SxxExx)
+         * - Top Right: Video Quality (4K, 1080p, HDR) or Unplayed Episodes count
+         * - Bottom Left: Version count, Favorite badge (heart icon), anime/audio markers
+         * - Bottom Right: Watched indicator (played checkmark)
+         * - Outside overlays: Seerr request/type chips
          * ====================================================================
          */
+        // Rank badge for ordered rows (Home Screen Sections "Top Ten")
+        const rankBadgeHtml = item._rank ? `<div class="card-rank-badge">${parseInt(item._rank, 10)}</div>` : '';
+
         const badgeContainer = `
-            ${badgeHtml}
-            ${playedBadgeHtml}
+            ${rankBadgeHtml}
             ${episodeBadgeHtml}
+            ${unplayedCountBadgeHtml}
             ${qualityBadgeHtml}
             ${gameBadgeHtml}
+            ${versionCountBadgeHtml}
+            ${favoriteBadgeHtml}
+            ${playedBadgeHtml}
             ${seerrTypeBadgeHtml}
             ${seerrBadgeHtml}
+            ${animeBadgeHtml}
+            ${ratingBadgeHtml}
         `;
 
+        /*
+         * On artwork, corner badges are grouped in flex rows. Fixed offsets
+         * cannot clear neighbours whose text width varies (SxxExx, quality),
+         * so the wrappers let each badge take its natural width and keep the
+         * rating beside its neighbour. The list view above keeps the original
+         * flat badgeContainer markup.
+         */
+        const hasTopLeftBadge = !!(rankBadgeHtml || episodeBadgeHtml);
+        const topLeftGroupHtml = hasTopLeftBadge
+            ? `<div class="card-top-left-badges">${rankBadgeHtml}${episodeBadgeHtml}${ratingBadgeHtml}</div>`
+            : ratingBadgeHtml;
+        const hasTopRightBadge = !!(unplayedCountBadgeHtml || qualityBadgeHtml || gameBadgeHtml || seerrBadgeHtml);
+        const topRightGroupHtml = hasTopRightBadge
+            ? `<div class="card-top-right-badges">${unplayedCountBadgeHtml}${qualityBadgeHtml}${gameBadgeHtml}${seerrBadgeHtml}</div>`
+            : '';
+        const artworkBadgeContainer = `
+            ${versionCountBadgeHtml}
+            ${favoriteBadgeHtml}
+            ${playedBadgeHtml}
+            ${seerrTypeBadgeHtml}
+            ${animeBadgeHtml}
+            ${topLeftGroupHtml}
+            ${topRightGroupHtml}
+        `;
+
+        const seriesIdAttr = item.SeriesId ? animeMarkerService.normalizeId(item.SeriesId) : '';
+
         const html = `
-            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-series-id="${item.SeriesId || ''}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-series-id="${seriesIdAttr}" data-raw-series-id="${item.SeriesId || ''}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" data-media-type="${item._mediaType || ''}" data-tmdb-id="${item._tmdbId || ''}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}
                     ${videoBadgeHtml}
-                    ${!options.showMeta ? badgeContainer : ''}
+                    ${!options.showMeta ? artworkBadgeContainer : ''}
                     ${
                         showInside
                             ? `
@@ -1465,7 +2081,7 @@ class CardRenderer {
         `;
 
         // Cache the output for reuse during this render context
-        CardRenderer._htmlCache.set(itemId, html);
+        if (!hasSeerrDownloads) CardRenderer._htmlCache.set(itemCacheKey, html);
         return html;
     }
 

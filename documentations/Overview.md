@@ -12,7 +12,7 @@ To ensure zero compromise between legacy hardware efficiency and modern platform
 
 Outputs 4 specialized tiers per platform (8 builds total) orchestrated via Webpack and Gulp:
 
-- **Modern Build**: Targets recent high-end sets (Tizen 6.5+, webOS 22+ / 6.0+). No transpilation, leveraging pure ES6+ and full WebAssembly.
+- **Modern Build**: Targets recent high-end sets (Tizen 6.5+, webOS 22+). No transpilation, leveraging pure ES6+ and full WebAssembly.
 - **Normal Build**: Targets mid-tier smart TVs (Tizen 5.0+, webOS 4.5+). Partial transpilation for broad Chromium 63+ compatibility.
 - **Legacy Build**: Targets mid-lifecycle hardware (Tizen 3.0+, webOS 3.5+). Full ES5 transpilation for Chromium 47 engines.
 - **Ultra-Legacy Build**: Support for vintage hardware (Tizen 2.3/2.4, webOS 1.0–3.0 / Chromium 32). Heavy polyfills, `style-loader` inline CSS (bypassing `file://` CORS restrictions), and fallback logging.

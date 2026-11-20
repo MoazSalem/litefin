@@ -43,6 +43,20 @@
 }
 
 /* Static theme overrides for placeholder skeleton cards.
+   ────────────────────────────────────────────────────────────────────────
+   Skeleton cards are focusable while their row is loading (instant D-pad
+   crossing at the row boundary). Keep the focus treatment minimal so a
+   placeholder rectangle reads as loading, not as a real focused card. */
+.media-row--skeleton .media-card.focused {
+    transform: none;
+    -webkit-transform: none;
+}
+
+.media-row--skeleton .media-card.focused .card-image {
+    border-color: var(--jf-focus-border-color);
+    opacity: 0.6;
+}
+/* Static theme overrides for placeholder skeleton cards.
    Eliminates the need to dynamically inject and remove inline style tags at runtime. */
 .media-row--skeleton .card-image,
 .media-row--skeleton .skeleton-image,
@@ -82,9 +96,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-tr
     padding-right: 72px;
 }
 
-[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
-[dir="rtl"] html[data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
-[dir="rtl"] html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
+html[dir="rtl"][data-layout-media-rows="modern"] .media-row--skeleton .row-items-track,
+html[dir="rtl"][data-layout-media-rows="expanded"] .media-row--skeleton .row-items-track,
+html[dir="rtl"][data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }
@@ -109,25 +123,36 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .row-items-tr
  * --card-expanded-width, --card-margin) that scale with user settings.
  * We override classic skeletons with high-specificity modern selectors.
  */
+/*
+ * High-specificity modern skeleton overrides with resilient fallback metrics.
+ * On legacy runtimes (Chromium < 49), bare variable lookups without defaults
+ * will cause older CSS parsers to invalidate and drop the entire rule declaration,
+ * causing loading placeholders to collapse horizontally or vertically before JS sets them.
+ */
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card {
-    width: var(--card-width) !important;
-    height: var(--card-height) !important;
-    margin-right: var(--card-margin) !important;
+    /* Fallback width matches classic poster card default */
+    width: var(--card-width, 240px) !important;
+    /* Fallback height provides consistent vertical baseline */
+    height: var(--card-height, 360px) !important;
+    /* Margin spacing fallback maintains horizontal grid separation */
+    margin-right: var(--card-margin, 24px) !important;
     margin-left: 0 !important;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.landscape,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.landscape,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.landscape {
+    /* Resilient landscape aspect ratio width preserves 16:9 banner dimensions */
     width: var(--card-expanded-width, var(--card-landscape-width, 400px)) !important;
 }
 
 html[data-layout-media-rows="modern"] .media-row--skeleton .media-card.square,
 html[data-layout-media-rows="expanded"] .media-row--skeleton .media-card.square,
 html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.square {
-    width: var(--card-square-width) !important;
+    /* Square skeleton fallback maintains 1:1 ratio width */
+    width: var(--card-square-width, 240px) !important;
 }
 
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
@@ -147,6 +172,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
 .media-row {
     /* Balanced margin prevents preceding row subtitle peek-through */
     margin-bottom: 28px;
+    /* Isolate row layout, style, and paint work so scrolling or late image
+       decode commits in one row never trigger page-wide style invalidation */
+    contain: layout style paint;
     /* GPU layer for the row itself — enables composited scrolling of the parent */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -343,8 +371,15 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
     padding: 12px 4px 0 4px;
 }
 
+/*
+ * Media Card Title & Subtitle Styling
+ * Text colors and scaled font calculations include robust static fallbacks
+ * to maintain typography hierarchy even if CSS variables are uninitialized.
+ */
 .card-title {
-    color: var(--jf-text-primary);
+    /* Primary text color with high-contrast white fallback */
+    color: var(--jf-text-primary, #ffffff);
+    /* Scaled title font size computation */
     font-size: calc(1.2rem * var(--card-title-font-scale, 1));
     font-weight: 600;
     margin: 0;
@@ -355,7 +390,9 @@ html[data-layout-media-rows="modern-posters"] .media-row--skeleton .media-card.s
 }
 
 .card-subtitle {
-    color: var(--jf-text-secondary);
+    /* Secondary text color with subdued gray fallback */
+    color: var(--jf-text-secondary, #aaaaaa);
+    /* Scaled subtitle font size computation */
     font-size: calc(1rem * var(--card-title-font-scale, 1));
     margin: 6px 0 0;
     text-align: center;
@@ -491,3 +528,87 @@ html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
     color: #000;
 }
 
+
+/* =========================================================================
+ * Rank Badge (Home Screen Sections "Top Ten")
+ * =========================================================================
+ * Mirrors .episode-badge placement. Static fallbacks keep it readable before
+ * the CSS variables ponyfill runs on legacy engines; no flex gap, no will-change.
+ * ========================================================================= */
+.card-rank-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 8;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 8px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    border-radius: 6px;
+    border-radius: var(--jf-border-radius, 6px);
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 40px;
+    text-align: center;
+}
+
+/* =========================================================================
+ * Media Card Anime Badges (Home Screen Row Integration)
+ * =========================================================================
+ * Loaded synchronously with home.css so initial home page paints never
+ * suffer from missing pill styling or progress bar overlapping before the
+ * asynchronous modern interface bundle chunk finishes downloading.
+ * ========================================================================= */
+
+/* Resting position for modern media cards */
+html[data-media-rows-family="modern"] .card-anime-pills {
+    bottom: 22px;
+    left: 22px;
+    right: auto;
+}
+
+/* Sibling offset when preceded by version count or favorite badge */
+html[data-media-rows-family="modern"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .favorite-badge ~ .card-anime-pills {
+    left: 74px;
+}
+
+/* Dual offset when preceded by both version count and favorite heart */
+html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 126px;
+}
+
+/* Progress bar clearance: elevate badge above floating progress track (bottom: 20px) */
+html[data-layout-media-rows="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanded"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanded"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .anime-pills-row.card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 38px !important;
+}
+
+/* Expanding layout: elevate above inside text block on landscape and square cards */
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square .card-anime-pills {
+    bottom: 112px;
+    left: 30px;
+    right: auto;
+}
+
+/* Expanding layout progress elevation */
+html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .card-anime-pills {
+    bottom: 122px;
+}

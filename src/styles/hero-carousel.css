@@ -61,8 +61,13 @@
     min-height: 500px;
     overflow: hidden;
     touch-action: pan-y;
-    /* Promote to its own GPU composite layer */
+    /* Pin compositor layer so Chromium preserves GPU backing across offscreen/onscreen scroll cycles */
+    will-change: transform;
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    contain: layout style paint;
 }
 
 .hero-carousel-container.compact .hero-carousel {
@@ -101,6 +106,10 @@
     height: 100%;
     opacity: 0;
     z-index: 1;
+    /* Only the active slide handles hit-testing so idle-warmed neighbors stay inert */
+    pointer-events: none;
+    /* Isolate slide layout & style recalcs (e.g. logo aspect height adjustments) */
+    contain: layout style;
     transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: flex-end;
@@ -114,13 +123,29 @@
      * Outer container retains overflow: hidden, keeping boundaries clean on GPU.
      */
     overflow: visible;
+    /* Keep opacity layer promoted across all stacked slides so toggling .active never triggers layerize. */
     transform: translateZ(0);
+    will-change: opacity;
 }
 
 .hero-item.active {
     opacity: 1;
     z-index: 2;
-    will-change: opacity;
+    pointer-events: auto;
+    transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/*
+ * Transient idle-only GPU warm state: elevates an inactive slide just above
+ * zero opacity (invisible in 8-bit color) behind the active slide for two frames
+ * so Chromium uploads scaled backdrop textures and rasterizes .hero-content
+ * ahead of its first goTo() transition, then immediately detaches again.
+ */
+.hero-item.hero-item--gpu-warm {
+    opacity: 0.001;
+    z-index: 0;
+    pointer-events: none;
+    transition: none;
 }
 
 /* ============================================================================
@@ -134,11 +159,33 @@
     width: 100%;
     height: 100%;
     z-index: -1;
+    overflow: hidden;
     background-size: cover;
     background-position: top;
     background-repeat: no-repeat;
     /* Isolate the backdrop's own GPU layer for the Ken Burns animation */
     transform: translateZ(0);
+}
+
+/* Live decoded <img> element swapped onto only the active (or crossfading) slide */
+.hero-backdrop-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+    pointer-events: none;
+}
+
+.hero-carousel-container.compact .hero-backdrop-img {
+    object-position: 50% 20%;
+}
+
+.hero-carousel-container.immersive .hero-backdrop-img {
+    object-position: center 15%;
 }
 
 /*
@@ -247,23 +294,28 @@
                 opacity 800ms ease;
     -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
                         opacity 800ms ease;
+    /* Promote content stack statically rather than on .active toggle to prevent GPU layer churn. */
+    will-change: transform, opacity;
 }
 
 .hero-item.active .hero-content {
     opacity: 1;
     transform: translateY(0);
     -webkit-transform: translateY(0);
-    will-change: transform, opacity;
 }
 
 /* ============================================================================
    Ken Burns effect — only when explicitly enabled via .with-zoom
    ============================================================================ */
 
+/* Pre-promote zoomable backdrops statically so adding .active never creates layers mid-fade. */
+.hero-carousel-container.with-zoom .hero-backdrop {
+    will-change: transform;
+}
+
 .hero-carousel-container.with-zoom .hero-item.active .hero-backdrop {
     -webkit-animation: hero-ken-burns 12000ms linear forwards;
     animation: hero-ken-burns 12000ms linear forwards;
-    will-change: transform;
 }
 
 .hero-carousel-container:not(.with-zoom) .hero-backdrop {
@@ -290,6 +342,8 @@
     margin-bottom: 24px;
     display: flex;
     align-items: flex-end;
+    /* Isolate logo layout & styling so swapping/decoding a logo never invalidates the slide backdrop */
+    contain: layout style;
 }
 
 .hero-logo {
@@ -401,9 +455,9 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
     margin-right: 12px;
-    /* width + background are cheap GPU ops — short duration for responsiveness */
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                background 0.2s ease;
+    /* Only animate background color on active dot switches; transitioning width
+     * forces flexbox layout recalculation across .hero-indicators for 300ms after goTo(). */
+    transition: background 0.2s ease;
     overflow: hidden;
 }
 
@@ -1038,11 +1092,42 @@
     transform: translateZ(0);
 
     /*
+     * -------------------------------------------------------------------------
      * Horizontal Alpha Masking:
      * Feathers the left edge of the backdrop image into the typography side.
      * The vertical bottom fade is handled universally on the parent (.hero-item),
-     * avoiding multi-mask compositing bugs across different TV browser engines.
+     * avoiding multi-mask compositing bugs across different TV browser engines
+     * (e.g. Chromium 69 on Tizen 5.5 where -webkit-mask-composite: source-in
+     * clears the destination buffer and renders the entire backdrop invisible).
+     * -------------------------------------------------------------------------
      */
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    );
+}
+
+.hero-carousel-container.immersive-performance.compact .hero-backdrop {
     -webkit-mask-image: linear-gradient(
         to right,
         transparent 0%,
@@ -1073,6 +1158,33 @@
     /* Mirrored horizontal alpha mask for RTL reading direction */
     right: auto;
     left: 0;
+    -webkit-mask-image: linear-gradient(
+        to left,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    );
+    mask-image: linear-gradient(
+        to left,
+        transparent 0%,
+        rgba(0, 0, 0, 0.02) 8%,
+        rgba(0, 0, 0, 0.10) 18%,
+        rgba(0, 0, 0, 0.26) 30%,
+        rgba(0, 0, 0, 0.48) 44%,
+        rgba(0, 0, 0, 0.70) 58%,
+        rgba(0, 0, 0, 0.86) 70%,
+        rgba(0, 0, 0, 0.96) 82%,
+        black 92%
+    );
+}
+
+[dir="rtl"] .hero-carousel-container.immersive-performance.compact .hero-backdrop {
     -webkit-mask-image: linear-gradient(
         to left,
         transparent 0%,
@@ -1247,7 +1359,7 @@
  * Guarantees that no theme paints an artificial black gradient over the bottom row cards.
  */
 
-/* Standard widescreen - Universal Across All Themes */
+/* Standard widescreen - Immersive & Immersive-Performance Themes */
 .hero-carousel-container.immersive:not(.compact) .hero-item,
 .hero-carousel-container.immersive-performance:not(.compact) .hero-item {
     -webkit-mask-image: linear-gradient(
@@ -1270,7 +1382,7 @@
     );
 }
 
-/* Compact widescreen - Universal Across All Themes */
+/* Compact widescreen - Immersive & Immersive-Performance Themes */
 .hero-carousel-container.immersive.compact .hero-item,
 .hero-carousel-container.immersive-performance.compact .hero-item {
     -webkit-mask-image: linear-gradient(

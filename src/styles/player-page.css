@@ -196,6 +196,10 @@ body.lyrics-active .audio-player-center {
     z-index: 3;
 }
 
+/*
+ * Track name title typography
+ * Inherits and utilizes the globally configured Litefin UI font family
+ */
 .audio-title {
     font-size: 32px;
     font-weight: 700;
@@ -205,9 +209,14 @@ body.lyrics-active .audio-player-center {
     text-overflow: ellipsis;
     text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
     letter-spacing: -0.5px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Respect global UI font preference configured in overall settings */
+    font-family: var(--jf-font-family, sans-serif);
 }
 
+/*
+ * Track metadata subtitle typography (artist, album, and release year)
+ * Inherits and utilizes the globally configured Litefin UI font family
+ */
 .audio-subtitle {
     font-size: 20px;
     font-weight: 500;
@@ -217,7 +226,8 @@ body.lyrics-active .audio-player-center {
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* Respect global UI font preference configured in overall settings */
+    font-family: var(--jf-font-family, sans-serif);
 }
 
 /* ==========================================================================
@@ -589,7 +599,12 @@ html[data-light-music-player="true"] .audio-subtitle {
     left: 10%;
     right: 10%;
     text-align: center;
-    z-index: 40;
+    /*
+     * Elevate subtitle overlay above OSD controls and background gradient (100)
+     * while staying safely below interactive overlay modals (1000+).
+     * Maintains full contrast and luminance without obscuring controls.
+     */
+    z-index: 150;
     pointer-events: none;
 
     /*
@@ -618,16 +633,39 @@ html[data-light-music-player="true"] .audio-subtitle {
     transition: padding 0.38s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Secondary Subtitle (Top) */
-.subtitle-overlay.secondary {
-    bottom: auto;
-    top: 10%;
-    -webkit-transform-origin: top center;
-    transform-origin: top center;
+/* Stacking wrapper for concurrent subtitle cues */
+.subtitle-cue {
+    display: block;
+    text-align: center;
 }
 
-.subtitle-overlay.secondary .subtitle-line {
-    opacity: 0.9;
+.subtitle-cue + .subtitle-cue {
+    margin-top: 6px;
+}
+
+/* ==========================================================================
+ * Secondary Subtitle Container & Line Styling
+ * ==========================================================================
+ * Positions the secondary subtitle overlay near the top of the viewport by
+ * default with an anchored transform origin for smooth scaling and dodging.
+ *
+ * Visual Presentation & Opacity:
+ * Secondary subtitles inherit identical visual styling (brightness, hue,
+ * font weight, drop shadow blur/opacity, outline strokes, and text color)
+ * directly from the primary subtitle appearance settings.
+ *
+ * We intentionally avoid setting a diminished opacity (such as 0.9) on the
+ * secondary .subtitle-line element so that its luminance, chromaticity,
+ * and text-shadow depth remain fully consistent with the primary subtitle.
+ * ========================================================================== */
+.subtitle-overlay.secondary {
+    /* Clear bottom pin from base subtitle-overlay */
+    bottom: auto;
+    /* Baseline top offset for standard placement */
+    top: 10%;
+    /* Anchor scaling transitions to top center */
+    -webkit-transform-origin: top center;
+    transform-origin: top center;
 }
 
 /* ==========================================================================
@@ -661,6 +699,8 @@ html[data-light-music-player="true"] .audio-subtitle {
 .subtitle-overlay.secondary:not(.pos-bottom),
 .player-page .subtitle-overlay.pos-top,
 .player-container ~ .subtitle-overlay.pos-top {
+    bottom: auto;
+    top: 10%;
     -webkit-transform-origin: top center;
     transform-origin: top center;
 }
@@ -728,6 +768,33 @@ html[data-light-music-player="true"] .audio-subtitle {
 .player-page.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line,
 .player-container.osd-active.has-dual-subtitles:not(.osd-dodging-disabled) .subtitle-line {
     padding: 6px 13px !important;
+}
+
+/* ==========================================================================
+ * Dynamic Subtitle Shift Luminance & Opacity Protection
+ * ==========================================================================
+ * When on-screen playback controls become active, the OSD container renders
+ * a semi-transparent dark gradient backdrop (z-index: 100) across the bottom.
+ *
+ * To guarantee that shifted text subtitles maintain pristine luminance,
+ * clear white hue, and high contrast against the active playback controls,
+ * the subtitle overlay containers are elevated to z-index: 150 and explicitly
+ * pinned to full 1.0 opacity. This completely prevents the OSD gradient from
+ * dimming or graying out the text.
+ * ========================================================================== */
+.player-page.osd-active .subtitle-overlay,
+.player-page.osd-active .subtitle-overlay.secondary,
+.player-container.osd-active ~ .subtitle-overlay,
+.player-container.osd-active ~ .subtitle-overlay.secondary {
+    z-index: 150 !important;
+    opacity: 1 !important;
+}
+
+.player-page.osd-active .subtitle-overlay .subtitle-line,
+.player-page.osd-active .subtitle-overlay.secondary .subtitle-line,
+.player-container.osd-active ~ .subtitle-overlay .subtitle-line,
+.player-container.osd-active ~ .subtitle-overlay.secondary .subtitle-line {
+    opacity: 1 !important;
 }
 
 /* ==========================================================================
@@ -831,8 +898,8 @@ html[data-layout-tier="ultra-legacy"] .subtitle-overlay {
     left: 10% !important;
     right: 10% !important;
     width: auto !important;
-    /* Elevate above video (0) and below OSD (100) */
-    z-index: 50 !important;
+    /* Elevate above video (0) and OSD background gradient (100) */
+    z-index: 150 !important;
     pointer-events: none !important;
     text-align: center !important;
     -webkit-transform-origin: bottom center !important;

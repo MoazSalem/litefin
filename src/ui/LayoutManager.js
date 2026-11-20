@@ -38,11 +38,67 @@ const THEME_MODES = {
     BLACK: 'black',
     TINTED: 'tinted',
     TINTED_LIGHT: 'tinted-light',
-    AMBIENT: 'ambient'
+    AMBIENT: 'ambient',
+    EMBER: 'ember',
+    SUNSET: 'sunset',
+    FROST: 'frost',
+    PAPER: 'paper',
+    NOCTURNE: 'nocturne',
+    ABYSS: 'abyss',
+    CYBERPUNK: 'cyberpunk'
 };
 
 // Default Theme Color (Litefin Purple Blue)
 const DEFAULT_THEME_COLOR = '#6b6ede';
+
+/*
+ * Unique default accent color per artistic theme mode.
+ * Applied automatically when the user selects the mode, unless they have
+ * manually customized the theme color themselves.
+ */
+const DEFAULT_MODE_COLORS = {
+    [THEME_MODES.EMBER]: '#e8853c', // burnt amber — candlelit flame
+    [THEME_MODES.SUNSET]: '#ff7a54', // sunset coral — low sun bloom
+    [THEME_MODES.FROST]: '#3d9be9', // glacial blue — icy daylight
+    [THEME_MODES.PAPER]: '#8a5a33', // sepia ink — old print
+    [THEME_MODES.NOCTURNE]: '#d8b25c', // projector tungsten — booth keylight
+    [THEME_MODES.ABYSS]: '#35d0cc', // bioluminescent teal — deep-sea lure
+    [THEME_MODES.CYBERPUNK]: '#ff2d78' // neon hot magenta — night-city sign
+};
+
+// ============================================================================
+// LAZY THEME STYLESHEETS
+// ============================================================================
+// The 12 static theme palettes no longer ride the boot bundle (~125KB of CSS
+// for a palette the user will never select). Only the active mode's palette
+// is fetched as an async CSS chunk the first time its mode is applied (boot
+// init or a settings switch); already-fetched palettes stay resident and the
+// CssVarsPolyfill re-resolves them on later switches via its per-tag
+// template cache.
+//
+// On legacy engines (Chromium 38-47) this is visually lossless: the full
+// derived --jf-* palette is generated per mode into
+// #litefin-dynamic-theme-vars by _applyDynamicTheme(), and the polyfill
+// resolves the newly injected theme tag against it via
+// ensureStylesResolved(). 'tinted-light' shares tinted.css - its light
+// surface deltas are generated dynamically, and unused dark.css (the only
+// theme file with :root rules) is not part of this map.
+const THEME_STYLE_IMPORTS = {
+    [THEME_MODES.CLASSIC_DARK]: () => import(/* webpackChunkName: "theme-classic-dark" */ '../themes/classic-dark.css'),
+    [THEME_MODES.CLASSIC_LIGHT]: () =>
+        import(/* webpackChunkName: "theme-classic-light" */ '../themes/classic-light.css'),
+    [THEME_MODES.BLACK]: () => import(/* webpackChunkName: "theme-black" */ '../themes/black.css'),
+    [THEME_MODES.TINTED]: () => import(/* webpackChunkName: "theme-tinted" */ '../themes/tinted.css'),
+    [THEME_MODES.TINTED_LIGHT]: () => import(/* webpackChunkName: "theme-tinted" */ '../themes/tinted.css'),
+    [THEME_MODES.AMBIENT]: () => import(/* webpackChunkName: "theme-ambient" */ '../themes/ambient.css'),
+    [THEME_MODES.EMBER]: () => import(/* webpackChunkName: "theme-ember" */ '../themes/ember.css'),
+    [THEME_MODES.SUNSET]: () => import(/* webpackChunkName: "theme-sunset" */ '../themes/sunset.css'),
+    [THEME_MODES.FROST]: () => import(/* webpackChunkName: "theme-frost" */ '../themes/frost.css'),
+    [THEME_MODES.PAPER]: () => import(/* webpackChunkName: "theme-paper" */ '../themes/paper.css'),
+    [THEME_MODES.NOCTURNE]: () => import(/* webpackChunkName: "theme-nocturne" */ '../themes/nocturne.css'),
+    [THEME_MODES.ABYSS]: () => import(/* webpackChunkName: "theme-abyss" */ '../themes/abyss.css'),
+    [THEME_MODES.CYBERPUNK]: () => import(/* webpackChunkName: "theme-cyberpunk" */ '../themes/cyberpunk.css')
+};
 
 class LayoutManager {
     constructor() {
@@ -56,7 +112,13 @@ class LayoutManager {
         this._layout = LAYOUT.CLASSIC;
 
         // Granular layout settings
-        this._mediaRowsLayout = 'classic';
+        /*
+         * Active media rows presentation layout.
+         * Sets default horizontal card row arrangement to 'modern'.
+         * Provides sleek translucent styling and optimized card proportions by default.
+         * Can be overridden by persistent user preference or legacy migration flags.
+         */
+        this._mediaRowsLayout = 'modern';
         this._loginPageLayout = 'classic';
         /*
          * Active sidebar layout configuration (e.g., 'modern-collapsed').
@@ -76,6 +138,15 @@ class LayoutManager {
         // Black (OLED) is the default — zero compositing, pure black pixels, maximum performance.
         this._themeMode = THEME_MODES.BLACK;
 
+        // In-flight/resolved palette chunk imports, keyed by theme mode.
+        // Guarantees a single fetch per palette across repeated setThemeMode
+        // calls (boot init always runs one; settings switches run more).
+        this._themeStylePromises = {};
+
+        // In-flight/resolved modern interface layer chunk (modern/bundle.css).
+        // Single fetch across the three layout setters that may require it.
+        this._modernStylesPromise = null;
+
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
 
@@ -85,6 +156,14 @@ class LayoutManager {
          * background shade for an elevated, higher-contrast luminous aesthetic.
          */
         this._lighterBackground = false;
+
+        /*
+         * Signature Accent override for the artistic theme modes.
+         * When enabled on a supported mode (ember, sunset, frost, paper),
+         * the active accent is replaced with that mode's unique signature color.
+         * Defaults to false (off).
+         */
+        this._signatureAccent = false;
 
         // Current font
         this._uiFont = 'default';
@@ -97,6 +176,18 @@ class LayoutManager {
 
         // Card label text scale multiplier
         this._cardLabelScale = 1.0;
+
+        /*
+         * Card Label Typography Alignment State
+         * Tracks text alignment for titles and subtitles beneath media cards ('start', 'center', 'end').
+         */
+        this._cardLabelAlign = 'start';
+
+        /*
+         * Card Label Display Presentation Style
+         * Controls label visibility and clamp limits ('default', 'titleOnly', 'titleOnly2Lines', 'hidden').
+         */
+        this._cardLabelStyle = 'default';
 
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
@@ -152,6 +243,9 @@ class LayoutManager {
         // Sidebar logo icon color: 'icon-colors', 'follow-theme', 'white', 'black'
         this._sidebarLogoColor = 'icon-colors';
 
+        // Sidebar icon shadows: true / false (default: false for flat, unified look)
+        this._sidebarIconShadows = false;
+
         // OSD Custom Button & Focus Border styles (overrides global)
         this._osdButtonStyle = 'follow-global';
         this._osdFocusBorderStyle = 'follow-global';
@@ -188,16 +282,25 @@ class LayoutManager {
         this._displayScale = storage.getItem('pref:displayScale') || 'auto';
     }
 
-
     /**
      * Initialize layout manager
      */
     init() {
-        // Load saved preferences
+        /*
+         * ---------------------------------------------------------------------
+         * Horizontal Media Rows Layout Configuration
+         * ---------------------------------------------------------------------
+         * Load user preference for media rows display styling from storage.
+         * If no explicit preference exists under 'pref:mediaRowsLayout', check
+         * backward-compatibility keys ('pref:modernMediaRows' or 'litefin:layout').
+         * When neither key specifies an explicit legacy classic preference ('false'/'classic'),
+         * default all fresh installs and unconfigured profiles to 'modern'.
+         */
         let savedMediaRowsLayout = storage.getItem('pref:mediaRowsLayout');
         if (!savedMediaRowsLayout) {
             const legacy = storage.getItem('pref:modernMediaRows') || storage.getItem('litefin:layout');
-            savedMediaRowsLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
+            // Preserve explicit classic preference if legacy flag was false or classic; otherwise modern
+            savedMediaRowsLayout = legacy === 'false' || legacy === 'classic' ? 'classic' : 'modern';
         }
 
         let savedLoginPageLayout = storage.getItem('pref:loginPageLayout');
@@ -216,15 +319,15 @@ class LayoutManager {
          * SIDEBAR LAYOUT CONFIGURATION & DEFAULT SELECTION
          * ---------------------------------------------------------------------
          * Load saved sidebar navigation layout preference from persistent storage.
-         * Ultra-legacy hardware (Chrome <47 / Tizen 2.x / c26 quirks) defaults
-         * gracefully to the lightweight 'classic' sidebar layout for maximum
-         * performance and compatibility, but users can freely select other
-         * modern or floating layout modes in Settings.
-         * Modern and legacy tiers default to 'modern-collapsed'.
+         * All hardware tiers (modern, legacy, and ultra-legacy) default
+         * to 'modern-collapsed' for a sleek, responsive, and unified navigation
+         * experience across all targets, while users remain free to choose any
+         * alternative layout mode (classic, floating buttons, etc.) in Settings.
+         *
          * ---------------------------------------------------------------------
          */
-        const isUltraLegacy = platformInfo.layoutTier === 'ultra-legacy';
-        const defaultSidebarLayout = isUltraLegacy ? 'classic' : 'modern-collapsed';
+        // Default sidebar navigation layout across all platforms and hardware tiers
+        const defaultSidebarLayout = 'modern-collapsed';
         const savedSidebarLayout = storage.getItem('pref:sidebarLayoutMode') || defaultSidebarLayout;
 
         // Load saved theme mode
@@ -238,6 +341,10 @@ class LayoutManager {
 
         log.info(`Loading theme: savedMode="${savedThemeMode}" -> initialMode="${initialMode}"`);
 
+        /*
+         * Fallback chain for the saved theme color: user-picked color, then
+         * the global default.
+         */
         const savedThemeColor = storage.getItem('litefin:themeColor') || this._themeColor;
         /*
          * Load saved lighter background preference (only applies to tinted and classic modes).
@@ -250,14 +357,11 @@ class LayoutManager {
 
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
-        const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
         /*
          * Retrieve user preference for loading indicator animation aesthetic.
-         * If litefin:loaderStyle is not set, fallback seamlessly to legacy simpleLoader
-         * boolean preference ('ring' when true, otherwise 'dots').
          * Default is 'ring' (Rotating Ring) — the most CPU/GPU-efficient option.
          */
-        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || (savedSimpleLoader ? 'ring' : 'ring');
+        const savedLoaderStyle = storage.getItem('litefin:loaderStyle') || 'ring';
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         /*
          * Disable BlurHash in Library preference.
@@ -284,6 +388,11 @@ class LayoutManager {
         const savedSidebarUnselectedColor = storage.getItem('litefin:sidebarUnselectedColor') || 'grey';
         const savedSidebarSelectedColor = storage.getItem('litefin:sidebarSelectedColor') || 'white';
         const savedSidebarLogoColor = storage.getItem('litefin:sidebarLogoColor') || 'icon-colors';
+        const savedSidebarIconShadows =
+            storage.getItem('litefin:sidebarIconShadows') === 'true' ||
+            storage.getItem('pref:sidebarIconShadows') === 'true' ||
+            storage.getItem('litefin:sidebarIconShadows') === 'shadow' ||
+            storage.getItem('pref:sidebarIconShadows') === 'shadow';
         const savedOsdButtonStyle = storage.getItem('litefin:osdButtonStyle') || 'follow-global';
         const savedOsdFocusBorderStyle = storage.getItem('litefin:osdFocusBorderStyle') || 'follow-global';
         const savedOsdButtonShape = storage.getItem('litefin:osdButtonShape') || 'circle';
@@ -305,6 +414,10 @@ class LayoutManager {
         this.setThemeColor(savedThemeColor, false);
         // Apply lighter background configuration without extra persistence cycle
         this.setLighterBackground(savedLighterBackground, false);
+
+        // Load saved signature accent override preference
+        const savedSignatureAccent = storage.getItem('litefin:signatureAccent') === 'true';
+        this.setSignatureAccent(savedSignatureAccent, false);
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
@@ -332,6 +445,7 @@ class LayoutManager {
         this.setSidebarUnselectedColor(savedSidebarUnselectedColor, false);
         this.setSidebarSelectedColor(savedSidebarSelectedColor, false);
         this.setSidebarLogoColor(savedSidebarLogoColor, false);
+        this.setSidebarIconShadows(savedSidebarIconShadows, false);
         this.setOsdButtonStyle(savedOsdButtonStyle, false);
         this.setOsdFocusBorderStyle(savedOsdFocusBorderStyle, false);
         this.setOsdButtonShape(savedOsdButtonShape, false);
@@ -342,12 +456,12 @@ class LayoutManager {
 
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
-        document.documentElement.setAttribute('data-card-label-style', savedCardLabelStyle);
+        this.setCardLabelStyle(savedCardLabelStyle, false);
 
         // Load saved card label alignment and stamp it on the root HTML element
         // Alignment defaults to 'start' now for cleaner card typography alignment.
         const savedCardLabelAlign = storage.getItem('pref:cardLabelAlign') || 'start';
-        document.documentElement.setAttribute('data-card-label-align', savedCardLabelAlign);
+        this.setCardLabelAlign(savedCardLabelAlign, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -381,6 +495,23 @@ class LayoutManager {
             window.addEventListener('orientationchange', handleViewportChange, { passive: true });
             if (window.screen?.orientation?.addEventListener) {
                 window.screen.orientation.addEventListener('change', handleViewportChange);
+            }
+        }
+
+        /*
+         * ====================================================================
+         * SETTINGS RESTORATION COMPLETION
+         * ====================================================================
+         * Mark settings as loaded on both the documentElement and body.
+         * This unblocks the startup splash loading spinner, ensuring it only
+         * becomes visible once the user's chosen animation style (e.g., ring,
+         * orbit, dots) and active theme tokens have taken effect.
+         * ====================================================================
+         */
+        if (typeof document !== 'undefined' && document.documentElement) {
+            document.documentElement.setAttribute('data-settings-loaded', 'true');
+            if (document.body) {
+                document.body.classList.add('settings-loaded');
             }
         }
 
@@ -424,6 +555,24 @@ class LayoutManager {
     setMediaRowsLayout(layout, save = true) {
         this._mediaRowsLayout = layout;
         document.documentElement.setAttribute('data-layout-media-rows', layout);
+        /*
+         * Stamp the coarse disjoint "family" attributes used by CSS variant
+         * guards (identical specificity to the variant guards they replace):
+         *   family  = {modern, expanded, modern-posters, expanding} (non-classic)
+         *   cards   = {modern, modern-posters}
+         *   wide    = {expanded, expanding}
+         *   posters = {modern-posters, expanding}
+         * Removed outside the respective family so no rule can over-match.
+         */
+        const rootEl = document.documentElement;
+        rootEl.setAttribute('data-media-rows-family', layout === 'classic' ? 'classic' : 'modern');
+        const stampIf = (cond, attr) => {
+            if (cond) rootEl.setAttribute(attr, 'modern');
+            else rootEl.removeAttribute(attr);
+        };
+        stampIf(layout === 'modern' || layout === 'modern-posters', 'data-media-rows-cards');
+        stampIf(layout === 'expanded' || layout === 'expanding', 'data-media-rows-wide');
+        stampIf(layout === 'modern-posters' || layout === 'expanding', 'data-media-rows-posters');
         state.set('app:layout', layout, true);
         if (save) {
             storage.setItem('pref:mediaRowsLayout', layout);
@@ -432,10 +581,15 @@ class LayoutManager {
         // Both 'modern' (expanding), 'expanded' (static widescreen), and 'modern-posters' media rows utilize
         // dark translucent card backgrounds and bottom overlay labels, requiring the dark badge style.
         if (this._badgeStyle === 'auto') {
-            const resolvedStyle = (layout === 'modern' || layout === 'expanded' || layout === 'modern-posters' || layout === 'expanding') ? 'dark' : 'tinted';
+            const resolvedStyle =
+                layout === 'modern' || layout === 'expanded' || layout === 'modern-posters' || layout === 'expanding'
+                    ? 'dark'
+                    : 'tinted';
             document.documentElement.setAttribute('data-badge-style', resolvedStyle);
         }
         CardRenderer.clearCache();
+        // Modern row variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
         eventBus.emit('mediaRowsLayout:changed', { layout });
     }
 
@@ -449,6 +603,8 @@ class LayoutManager {
         if (save) {
             storage.setItem('pref:loginPageLayout', layout);
         }
+        // Modern login variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
         eventBus.emit('loginPageLayout:changed', { layout });
     }
 
@@ -495,6 +651,125 @@ class LayoutManager {
     }
 
     /**
+     * Retrieve the configured global default library view mode.
+     * When no individual library preference exists, libraries default
+     * to this presentation style (e.g. 'poster', 'small-poster', 'thumb', 'banner', 'list').
+     *
+     * @returns {string} The active default view mode identifier.
+     * @public
+     */
+    getDefaultLibraryViewMode() {
+        // Supported layout view modes in Litefin
+        const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
+
+        // Retrieve stored user preference with fallback to standard 'poster'
+        const saved = storage.getItem('pref:defaultLibraryViewMode');
+        return validModes.includes(saved) ? saved : 'poster';
+    }
+
+    /**
+     * Persist the user-selected global default library view mode.
+     * Updates reactive app state and emits change events across EventBus.
+     *
+     * @param {string} mode - Selected view mode ('poster', 'small-poster', 'thumb', etc.)
+     * @param {boolean} [save=true] - Whether to write the value to persistent storage
+     * @public
+     */
+    setDefaultLibraryViewMode(mode, save = true) {
+        // Validate against known layout identifiers
+        const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
+        const targetMode = validModes.includes(mode) ? mode : 'poster';
+
+        // Persist preference to local storage when requested
+        if (save) {
+            storage.setItem('pref:defaultLibraryViewMode', targetMode);
+        }
+
+        // Update state manager for real-time reactivity
+        state.set('pref:defaultLibraryViewMode', targetMode, true);
+
+        // Notify active subscribers and listeners
+        log.info(`Default library view mode updated to: ${targetMode}`);
+        eventBus.emit('pref:defaultLibraryViewMode:changed', targetMode);
+    }
+
+    /**
+     * Retrieve the configured default column count (items per row) for a specific view mode.
+     *
+     * @param {string} [mode] - Layout mode to inspect (defaults to current default view mode)
+     * @returns {number} Default number of grid columns for the mode
+     * @public
+     */
+    getDefaultLibraryGridColumns(mode) {
+        // Resolve target view mode
+        const effectiveMode = mode || this.getDefaultLibraryViewMode();
+
+        // Standard column options map matching LibraryPage capabilities
+        const colOptionsMap = {
+            poster: [4, 5, 6, 7],
+            'small-poster': [8, 9, 10, 12],
+            thumb: [3, 4, 5, 6],
+            banner: [2, 3, 4, 5],
+            list: [1]
+        };
+
+        // Check if mode has custom default columns configured
+        const savedModeCols = parseInt(storage.getItem(`pref:defaultLibraryGridColumns:${effectiveMode}`), 10);
+        const validOpts = colOptionsMap[effectiveMode] || [];
+        if (validOpts.includes(savedModeCols)) {
+            return savedModeCols;
+        }
+
+        // Check generic setting fallback if matching default view mode
+        const genericCols = parseInt(storage.getItem('pref:defaultLibraryGridColumns'), 10);
+        if (validOpts.includes(genericCols)) {
+            return genericCols;
+        }
+
+        // Fall back to Litefin standard defaults per mode
+        switch (effectiveMode) {
+            case 'small-poster':
+                return 9;
+            case 'thumb':
+                return 4;
+            case 'banner':
+                return 3;
+            case 'list':
+                return 1;
+            case 'poster':
+            default:
+                return 7;
+        }
+    }
+
+    /**
+     * Persist user-selected default column count for a view mode.
+     *
+     * @param {number|string} columns - Desired column count
+     * @param {string} [mode] - Mode identifier to save for (defaults to current default mode)
+     * @param {boolean} [save=true] - Whether to persist to storage
+     * @public
+     */
+    setDefaultLibraryGridColumns(columns, mode, save = true) {
+        // Normalize column count to integer
+        const count = parseInt(columns, 10);
+        if (isNaN(count)) return;
+
+        // Resolve mode
+        const effectiveMode = mode || this.getDefaultLibraryViewMode();
+
+        // Write to storage keys
+        if (save) {
+            storage.setItem(`pref:defaultLibraryGridColumns:${effectiveMode}`, count);
+            storage.setItem('pref:defaultLibraryGridColumns', count);
+        }
+
+        // Emit change event
+        log.info(`Default columns for ${effectiveMode} updated to: ${count}`);
+        eventBus.emit('pref:defaultLibraryGridColumns:changed', { mode: effectiveMode, columns: count });
+    }
+
+    /**
      * Returns the currently active sidebar navigation layout mode.
      * @returns {string} The active sidebar layout identifier (e.g. 'classic').
      */
@@ -516,10 +791,36 @@ class LayoutManager {
         // Stamp root element attribute for pure CSS layout branching
         document.documentElement.setAttribute('data-layout-sidebar', layout);
 
+        /*
+         * Stamp the coarse disjoint "family" attributes used by CSS variant
+         * guards. These duplicate an entire variant UNION in one short selector
+         * (html[data-sidebar-family="modern"] == the union of the
+         * modern / modern-collapsed / floating-buttons / floating-island
+         * guards) with identical specificity. Classic keeps outputting
+         * 'classic' so partial guards such as ^="modern" stay unambiguous.
+         * 'expandable' = {modern, modern-collapsed}, 'floating' = the two
+         * floating modes; absent (removed) outside the family.
+         */
+        const rootEl = document.documentElement;
+        rootEl.setAttribute('data-sidebar-family', layout === 'classic' ? 'classic' : 'modern');
+        if (layout === 'modern' || layout === 'modern-collapsed') {
+            rootEl.setAttribute('data-sidebar-expandable', 'modern');
+        } else {
+            rootEl.removeAttribute('data-sidebar-expandable');
+        }
+        if (layout === 'floating-buttons' || layout === 'floating-island') {
+            rootEl.setAttribute('data-sidebar-floating', 'modern');
+        } else {
+            rootEl.removeAttribute('data-sidebar-floating');
+        }
+
         // Persist preference to storage if enabled
         if (save) {
             storage.setItem('pref:sidebarLayoutMode', layout);
         }
+
+        // Modern sidebar variants are styled by the lazy modern layer chunk
+        this.ensureModernStyles();
 
         // Notify navigation components of layout modification
         eventBus.emit('sidebarLayout:changed', { layout });
@@ -540,7 +841,11 @@ class LayoutManager {
      * @returns {boolean} True if sidebar layout is collapsed/floating mode.
      */
     isModernCollapsedSidebarLayout() {
-        return this._sidebarLayout === 'modern-collapsed' || this._sidebarLayout === 'floating-buttons' || this._sidebarLayout === 'floating-island';
+        return (
+            this._sidebarLayout === 'modern-collapsed' ||
+            this._sidebarLayout === 'floating-buttons' ||
+            this._sidebarLayout === 'floating-island'
+        );
     }
 
     /**
@@ -577,6 +882,12 @@ class LayoutManager {
 
         document.documentElement.setAttribute('data-theme-mode', mode);
 
+        // Fetch the static palette for this mode (async chunk; no-op when
+        // already fetched). The dynamic derived variables below apply
+        // immediately regardless - the palette chunk only adds the mode's
+        // static --jf-* declarations and selector-specific styling.
+        this.loadThemeStyles(mode);
+
         // Apply dynamic styles
         this._applyDynamicTheme();
 
@@ -592,6 +903,76 @@ class LayoutManager {
             log.info(`Theme mode changed to "${mode}"`);
             eventBus.emit('themeMode:changed', { mode, previousMode: oldMode });
         }
+    }
+
+    /**
+     * Ensure the static palette stylesheet for a theme mode is loaded.
+     *
+     * Kicks the async CSS chunk import for the mode's theme file exactly once
+     * (repeated calls return the same promise). When the chunk resolves, the
+     * newly injected <style> tag is adopted by the CssVarsPolyfill so its
+     * var() references resolve on legacy engines before the next repaint.
+     * No-op for modes without a palette file.
+     * @param {string} mode Theme mode constant
+     * @returns {Promise<void>|undefined}
+     */
+    loadThemeStyles(mode) {
+        const importer = THEME_STYLE_IMPORTS[mode];
+        if (!importer) return undefined;
+
+        if (!this._themeStylePromises[mode]) {
+            this._themeStylePromises[mode] = importer()
+                .then(() => {
+                    // Adopt the freshly injected palette tag (legacy engines
+                    // only; no-op when native CSS custom properties exist).
+                    cssVarsPolyfill.ensureStylesResolved();
+                    log.debug(`Theme palette loaded: "${mode}"`);
+                })
+                .catch((err) => {
+                    // Allow retry on a later setThemeMode call
+                    this._themeStylePromises[mode] = null;
+                    log.warn(`Theme palette chunk failed for "${mode}":`, err);
+                });
+        }
+
+        return this._themeStylePromises[mode];
+    }
+
+    /**
+     * Ensure the modern interface layer stylesheet is loaded.
+     *
+     * The six modern/*.css layers (~204KB source) are attribute-gated by three
+     * independent layout dimensions (sidebar family, media-rows family, login
+     * page layout). When every dimension is 'classic' the rules could never
+     * match, so the chunk is not fetched at all; otherwise it loads once as an
+     * async CSS chunk instead of riding the boot bundle. Classic->modern
+     * runtime switches trigger the fetch; the styles stay resident after.
+     * @returns {Promise<void>|undefined}
+     */
+    ensureModernStyles() {
+        const needsModern =
+            this._sidebarLayout !== 'classic' ||
+            this._mediaRowsLayout !== 'classic' ||
+            this._loginPageLayout !== 'classic';
+
+        if (!needsModern) return undefined;
+
+        if (!this._modernStylesPromise) {
+            this._modernStylesPromise = import(/* webpackChunkName: "modern-css" */ '../styles/modern/bundle.css')
+                .then(() => {
+                    // Adopt the freshly injected layer tags (legacy engines
+                    // only; no-op when native CSS custom properties exist).
+                    cssVarsPolyfill.ensureStylesResolved();
+                    log.debug('Modern interface styles loaded');
+                })
+                .catch((err) => {
+                    // Allow retry on a later layout change
+                    this._modernStylesPromise = null;
+                    log.warn('Modern styles chunk failed:', err);
+                });
+        }
+
+        return this._modernStylesPromise;
     }
 
     /**
@@ -624,8 +1005,19 @@ class LayoutManager {
     }
 
     _applyDynamicTheme() {
-        const accents = themeUtils.getAccentVariants(this._themeColor);
-        const contrastColor = themeUtils.getContrastColor(this._themeColor);
+        /*
+         * Resolve the effective accent color.
+         * When the Signature Accent override is enabled and the active theme
+         * mode has a dedicated signature color, it replaces the user theme
+         * color for all dynamically derived accent variables.
+         */
+        let effectiveColor = this._themeColor;
+        if (this._signatureAccent && DEFAULT_MODE_COLORS[this._themeMode]) {
+            effectiveColor = DEFAULT_MODE_COLORS[this._themeMode];
+        }
+
+        const accents = themeUtils.getAccentVariants(effectiveColor);
+        const contrastColor = themeUtils.getContrastColor(effectiveColor);
         const contrastRgb = themeUtils.hexToRgb(contrastColor);
         const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
 
@@ -633,8 +1025,8 @@ class LayoutManager {
         // If the accent color is "bright" (Luminance > 0.4), the calculated contrast color
         // (normally for text) is very dark. Since most themes are dark, a dark focus border
         // would be invisible. We use a soft light variant for focus borders in these cases.
-        const isBrightAccent = themeUtils.isBright(this._themeColor);
-        const focusBorderColor = isBrightAccent ? themeUtils.getSoftLight(this._themeColor) : contrastColor;
+        const isBrightAccent = themeUtils.isBright(effectiveColor);
+        const focusBorderColor = isBrightAccent ? themeUtils.getSoftLight(effectiveColor) : contrastColor;
 
         // Remove any inline flash-prevention variables injected by index.html
         // so that our dynamic stylesheet (which has lower specificity than inline style)
@@ -664,13 +1056,71 @@ class LayoutManager {
             --jf-button-border-focus: ${focusBorderColor};
             --jf-focus-border-color: ${accents.accent};`;
 
+        // 1.25. Set Semantic Button & Control Defaults per Theme Mode
+        // Ensures that CssVarsPolyfill captures the active mode's exact button and control styling.
+        const isLightMode =
+            this._themeMode === THEME_MODES.CLASSIC_LIGHT ||
+            this._themeMode === THEME_MODES.FROST ||
+            this._themeMode === THEME_MODES.PAPER ||
+            this._themeMode === THEME_MODES.TINTED_LIGHT;
+        const buttonBg = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.09)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.07)'
+                  : '#eeeeee'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#222222'
+              : 'rgba(255, 255, 255, 0.10)';
+        const buttonHover = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.16)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.14)'
+                  : '#e0e0e0'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#2a2a2a'
+              : 'rgba(255, 255, 255, 0.20)';
+        const inputBg = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.06)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.05)'
+                  : '#f0f0f0'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#181818'
+              : 'rgba(255, 255, 255, 0.08)';
+        const inputBorder = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? 'rgba(27, 44, 56, 0.16)'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? 'rgba(51, 42, 31, 0.16)'
+                  : '#dddddd'
+            : this._themeMode === THEME_MODES.BLACK
+              ? '#222222'
+              : 'rgba(255, 255, 255, 0.15)';
+        const errorColor = isLightMode
+            ? this._themeMode === THEME_MODES.FROST
+                ? '#e25746'
+                : this._themeMode === THEME_MODES.PAPER
+                  ? '#bf5040'
+                  : '#d32f2f'
+            : '#f44336';
+
+        dynamicCss += `
+            --jf-button-bg: ${buttonBg};
+            --jf-button-hover: ${buttonHover};
+            --jf-input-bg: ${inputBg};
+            --jf-input-border: ${inputBorder};
+            --jf-error: ${errorColor};`;
+
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
         if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
             /*
              * Light Tinted mode applies warm cream / champagne typography tailored
              * to harmonize with the elevated tinted background shade.
              */
-            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            const tints = themeUtils.getTintedLightColors(effectiveColor);
             dynamicCss += `
             --jf-text-primary: ${tints.textPrimary};
             --jf-text-secondary: ${tints.textSecondary};
@@ -681,10 +1131,56 @@ class LayoutManager {
             --text-muted: var(--jf-text-secondary);`;
         } else if (this._themeMode !== THEME_MODES.TINTED) {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
+            // Per-mode text palettes; defaults cover neutral dark canvas modes.
+            let textPrimary = '#ffffff';
+            let textSecondary = 'rgba(255, 255, 255, 0.8)';
+            let textTertiary = '#666666';
+
+            if (isLight) {
+                textPrimary = '#101010';
+                textSecondary = '#666666';
+                textTertiary = '#888888';
+            } else if (this._themeMode === THEME_MODES.EMBER) {
+                // Warm firelight-white typography for the candlelit canvas.
+                textPrimary = '#fff4ea';
+                textSecondary = 'rgba(255, 235, 214, 0.78)';
+                textTertiary = 'rgba(255, 220, 190, 0.55)';
+            } else if (this._themeMode === THEME_MODES.SUNSET) {
+                // Rosy dusk-white typography for the sunset gradient canvas.
+                textPrimary = '#ffffff';
+                textSecondary = 'rgba(255, 228, 220, 0.8)';
+                textTertiary = 'rgba(255, 228, 220, 0.55)';
+            } else if (this._themeMode === THEME_MODES.FROST) {
+                // Dark slate typography on the glacier light canvas.
+                textPrimary = '#1b2c38';
+                textSecondary = '#466171';
+                textTertiary = '#7d96a6';
+            } else if (this._themeMode === THEME_MODES.PAPER) {
+                // Warm ink typography on the parchment canvas.
+                textPrimary = '#332a1f';
+                textSecondary = '#5d5245';
+                textTertiary = '#8a7d6a';
+            } else if (this._themeMode === THEME_MODES.NOCTURNE) {
+                // Celluloid white typography, warm silver secondaries.
+                textPrimary = '#f6f2ea';
+                textSecondary = 'rgba(230, 224, 210, 0.76)';
+                textTertiary = 'rgba(214, 210, 196, 0.54)';
+            } else if (this._themeMode === THEME_MODES.ABYSS) {
+                // Brine-white typography with cold-sea secondaries.
+                textPrimary = '#eff7f6';
+                textSecondary = 'rgba(218, 240, 238, 0.74)';
+                textTertiary = 'rgba(196, 224, 224, 0.52)';
+            } else if (this._themeMode === THEME_MODES.CYBERPUNK) {
+                // Neon-lit white typography, violet-cool secondaries.
+                textPrimary = '#f2f4ff';
+                textSecondary = 'rgba(228, 222, 245, 0.76)';
+                textTertiary = 'rgba(206, 202, 228, 0.52)';
+            }
+
             dynamicCss += `
-            --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
-            --jf-text-secondary: ${isLight ? '#666666' : 'rgba(255, 255, 255, 0.8)'};
-            --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
+            --jf-text-primary: ${textPrimary};
+            --jf-text-secondary: ${textSecondary};
+            --jf-text-tertiary: ${textTertiary};
             
             --text-primary: var(--jf-text-primary);
             --text-secondary: var(--jf-text-secondary);
@@ -699,7 +1195,7 @@ class LayoutManager {
 
         // 2. Apply background variables based on theme mode
         if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
-            const tints = themeUtils.getTintedLightColors(this._themeColor);
+            const tints = themeUtils.getTintedLightColors(effectiveColor);
             /*
              * Light Tinted theme provides an elevated, luminous background (~26% lightness)
              * with crisp card elevation and rich tint characteristics (e.g., mocha/brown).
@@ -724,7 +1220,7 @@ class LayoutManager {
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${bg};`;
         } else if (this._themeMode === THEME_MODES.TINTED) {
-            const tints = themeUtils.getTintedColors(this._themeColor);
+            const tints = themeUtils.getTintedColors(effectiveColor);
             /*
              * In Tinted mode, swapping background and background-alt provides
              * a noticeably lighter canvas while keeping the deeper tint on complementary bars.
@@ -763,6 +1259,96 @@ class LayoutManager {
             --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
             --jf-divider: rgba(255, 255, 255, 0.06);
             --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
+        } else if (this._themeMode === THEME_MODES.EMBER) {
+            // Candlelit warm night: roasted brown-black canvas with
+            // firelight-tinted glass surfaces that let the ember glow bleed.
+            dynamicCss += `
+            --jf-background: #0d0906;
+            --jf-background-rgb: 13, 9, 6;
+            --jf-background-alt: #150d07;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(255, 158, 84, 0.05);
+            --jf-card-bg: rgba(255, 158, 84, 0.08);
+            --jf-card-bg-hover: rgba(255, 158, 84, 0.17);
+            --jf-divider: rgba(255, 158, 84, 0.13);
+            --jf-navbar-bg: rgba(10, 7, 5, 0.85);`;
+        } else if (this._themeMode === THEME_MODES.SUNSET) {
+            // Gradient dusk: twilight plum canvas with rose-tinted glass
+            // surfaces layered over the sunset sweep.
+            dynamicCss += `
+            --jf-background: #1c142e;
+            --jf-background-rgb: 28, 20, 46;
+            --jf-background-alt: #241938;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(255, 148, 108, 0.06);
+            --jf-card-bg: rgba(255, 148, 108, 0.09);
+            --jf-card-bg-hover: rgba(255, 148, 108, 0.18);
+            --jf-divider: rgba(255, 148, 108, 0.14);
+            --jf-navbar-bg: rgba(18, 12, 34, 0.78);`;
+        } else if (this._themeMode === THEME_MODES.FROST) {
+            // Icy light mode: glacier white-to-pale-ice gradient canvas
+            // with cool translucent frost surfaces.
+            dynamicCss += `
+            --jf-background: #e8f1f6;
+            --jf-background-rgb: 232, 241, 246;
+            --jf-background-alt: #dde9f1;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(255, 255, 255, 0.72);
+            --jf-card-bg: #ffffff;
+            --jf-card-bg-hover: #f0f7fb;
+            --jf-divider: rgba(100, 140, 165, 0.18);
+            --jf-navbar-bg: rgba(248, 252, 254, 0.82);`;
+        } else if (this._themeMode === THEME_MODES.PAPER) {
+            // Warm sepia reading mode: parchment canvas with soft paper tones.
+            dynamicCss += `
+            --jf-background: #f2ead9;
+            --jf-background-rgb: 242, 234, 217;
+            --jf-background-alt: #e9dfca;
+            --sidebar-bg: transparent;
+            --jf-surface: #faf5ea;
+            --jf-card-bg: #f9f3e6;
+            --jf-card-bg-hover: #fdf9f0;
+            --jf-divider: rgba(122, 100, 70, 0.2);
+            --jf-navbar-bg: rgba(246, 240, 228, 0.88);`;
+        } else if (this._themeMode === THEME_MODES.NOCTURNE) {
+            // Projection booth: steel-to-ink canvas with silver-film glass
+            // surfaces and splice hairlines so the beam light bleeds.
+            dynamicCss += `
+            --jf-background: #0c0e13;
+            --jf-background-rgb: 12, 14, 19;
+            --jf-background-alt: #12151d;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(214, 224, 240, 0.045);
+            --jf-card-bg: rgba(214, 224, 240, 0.07);
+            --jf-card-bg-hover: rgba(214, 224, 240, 0.16);
+            --jf-divider: rgba(214, 224, 240, 0.14);
+            --jf-navbar-bg: rgba(9, 11, 16, 0.85);`;
+        } else if (this._themeMode === THEME_MODES.ABYSS) {
+            // Deep sea: pressure canvas with current-blur glass surfaces
+            // layered over the lure glow.
+            dynamicCss += `
+            --jf-background: #06111c;
+            --jf-background-rgb: 6, 17, 28;
+            --jf-background-alt: #03101a;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(140, 220, 215, 0.04);
+            --jf-card-bg: rgba(140, 220, 215, 0.07);
+            --jf-card-bg-hover: rgba(140, 220, 215, 0.15);
+            --jf-divider: rgba(140, 220, 215, 0.13);
+            --jf-navbar-bg: rgba(4, 10, 16, 0.82);`;
+        } else if (this._themeMode === THEME_MODES.CYBERPUNK) {
+            // Night city: violet-ink canvas with neon-tinted glass surfaces
+            // layered under the sign blooms and scanline raster.
+            dynamicCss += `
+            --jf-background: #0a0713;
+            --jf-background-rgb: 10, 7, 19;
+            --jf-background-alt: #100b1e;
+            --sidebar-bg: transparent;
+            --jf-surface: rgba(150, 120, 255, 0.045);
+            --jf-card-bg: rgba(150, 120, 255, 0.07);
+            --jf-card-bg-hover: rgba(150, 120, 255, 0.16);
+            --jf-divider: rgba(150, 120, 255, 0.13);
+            --jf-navbar-bg: rgba(7, 5, 14, 0.86);`;
         } else if (this._themeMode === THEME_MODES.BLACK) {
             /*
              * True Pitch Black canvas for OLED displays.
@@ -838,13 +1424,27 @@ class LayoutManager {
             // Resolve the exact background color for the current theme mode
             let resolvedBg = '#101010';
             if (this._themeMode === THEME_MODES.TINTED_LIGHT) {
-                const tints = themeUtils.getTintedLightColors(this._themeColor);
+                const tints = themeUtils.getTintedLightColors(effectiveColor);
                 resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
             } else if (this._themeMode === THEME_MODES.TINTED) {
-                const tints = themeUtils.getTintedColors(this._themeColor);
+                const tints = themeUtils.getTintedColors(effectiveColor);
                 resolvedBg = this._lighterBackground ? tints.backgroundAlt : tints.background;
             } else if (this._themeMode === THEME_MODES.AMBIENT) {
                 resolvedBg = '#0a0b0c';
+            } else if (this._themeMode === THEME_MODES.EMBER) {
+                resolvedBg = '#0d0906';
+            } else if (this._themeMode === THEME_MODES.SUNSET) {
+                resolvedBg = '#1c142e';
+            } else if (this._themeMode === THEME_MODES.FROST) {
+                resolvedBg = '#e8f1f6';
+            } else if (this._themeMode === THEME_MODES.PAPER) {
+                resolvedBg = '#f2ead9';
+            } else if (this._themeMode === THEME_MODES.NOCTURNE) {
+                resolvedBg = '#0c0e13';
+            } else if (this._themeMode === THEME_MODES.ABYSS) {
+                resolvedBg = '#06111c';
+            } else if (this._themeMode === THEME_MODES.CYBERPUNK) {
+                resolvedBg = '#0a0713';
             } else if (this._themeMode === THEME_MODES.BLACK) {
                 resolvedBg = '#000000';
             } else if (this._themeMode === THEME_MODES.CLASSIC_LIGHT) {
@@ -978,6 +1578,55 @@ class LayoutManager {
         eventBus.emit('lighterBackground:changed', { enabled: this._lighterBackground });
     }
 
+    /**
+     * Returns whether the signature accent override is active.
+     * @returns {boolean} True when the active mode's signature color replaces the user theme color.
+     */
+    getSignatureAccent() {
+        return this._signatureAccent;
+    }
+
+    /**
+     * Returns the unique signature color of a theme mode or null.
+     *
+     * @param {string} [mode] - Theme mode to inspect (defaults to the active mode)
+     * @returns {string|null} Signature hex color, or null when the mode has none
+     * @public
+     */
+    getSignatureColor(mode) {
+        const targetMode = mode || this._themeMode;
+        return DEFAULT_MODE_COLORS[targetMode] || null;
+    }
+
+    /**
+     * Sets and activates the signature accent override for the artistic theme modes.
+     * When enabled on a supported mode, the active accent color is replaced with
+     * that mode's unique signature color while rendering.
+     *
+     * @param {boolean} enabled - Whether the signature accent override is active
+     * @param {boolean} [save=true] - Whether to persist this preference in storage
+     */
+    setSignatureAccent(enabled, save = true) {
+        // Update in-memory state
+        this._signatureAccent = !!enabled;
+
+        // Stamp data attribute for optional CSS scoping
+        document.documentElement.setAttribute('data-signature-accent', this._signatureAccent ? 'true' : 'false');
+
+        // Persist preference to storage if requested
+        if (save) {
+            storage.setItem('litefin:signatureAccent', this._signatureAccent ? 'true' : 'false');
+        }
+
+        // Re-calculate and inject active theme stylesheet variables
+        this._applyDynamicTheme();
+
+        log.info(`Signature accent override updated: ${this._signatureAccent}`);
+
+        // Notify UI listeners of state alteration
+        eventBus.emit('signatureAccent:changed', { enabled: this._signatureAccent });
+    }
+
     // Font and Rounded Corners helpers (Existing logic maintained)
     getUiFont() {
         return this._uiFont;
@@ -1092,6 +1741,81 @@ class LayoutManager {
 
     /**
      * ========================================================================
+     * Card Typography Alignment Engine
+     * ========================================================================
+     * Updates card label alignment on document root and persists preference.
+     * Stamps 'data-card-label-align' onto the document root element, enabling
+     * CSS-based alignment for titles and subtitles across all media card layouts.
+     *
+     * @param {string} align - Alignment value ('start', 'center', or 'end')
+     * @param {boolean} [save=true] - Whether to persist to persistent storage
+     */
+    setCardLabelAlign(align, save = true) {
+        // Fall back to clean 'start' alignment when no valid string is supplied
+        const normalized = align || 'start';
+        this._cardLabelAlign = normalized;
+
+        // Apply attribute to document root for immediate CSS rule matching
+        document.documentElement.setAttribute('data-card-label-align', normalized);
+
+        // Persist setting to local preferences if requested
+        if (save) {
+            storage.setItem('pref:cardLabelAlign', normalized);
+        }
+
+        // Notify active grid views and observers of alignment adjustment
+        eventBus.emit('cardLabelAlign:changed', { align: normalized });
+    }
+
+    /**
+     * Retrieves currently configured card label alignment mode.
+     * @returns {string} 'start', 'center', or 'end'
+     */
+    getCardLabelAlign() {
+        return this._cardLabelAlign;
+    }
+
+    /**
+     * ========================================================================
+     * Card Label Display Style Controller
+     * ========================================================================
+     * Controls whether titles and subtitles are rendered, hidden, or clamped.
+     * Stamps 'data-card-label-style' onto the root element and purges the
+     * synchronous HTML markup cache to force fresh card generation.
+     *
+     * @param {string} style - Display mode ('default', 'titleOnly', 'titleOnly2Lines', 'hidden')
+     * @param {boolean} [save=true] - Whether to persist to persistent storage
+     */
+    setCardLabelStyle(style, save = true) {
+        // Default to standard dual-line metadata view
+        const normalized = style || 'default';
+        this._cardLabelStyle = normalized;
+
+        // Apply attribute to document root for structural stylesheet overrides
+        document.documentElement.setAttribute('data-card-label-style', normalized);
+
+        // Persist mode to local storage
+        if (save) {
+            storage.setItem('pref:cardLabelStyle', normalized);
+        }
+
+        // Clear card template cache so new card renders adapt immediately
+        CardRenderer.clearCache();
+
+        // Broadcast change event across application message bus
+        eventBus.emit('cardLabelStyle:changed', { style: normalized });
+    }
+
+    /**
+     * Retrieves currently configured card label display style.
+     * @returns {string}
+     */
+    getCardLabelStyle() {
+        return this._cardLabelStyle;
+    }
+
+    /**
+     * ========================================================================
      * Display Scaling Engine
      * ========================================================================
      * Manages global viewport zoom scaling across web, desktop, and TV targets.
@@ -1157,7 +1881,7 @@ class LayoutManager {
         const isNativeTv = platformInfo.isTv;
 
         // Resolve user display scale multiplier from settings ('auto' => 1.0, '0.8' => 0.8, etc.)
-        const userMultiplier = this._displayScale === 'auto' ? 1.0 : (parseFloat(this._displayScale) || 1.0);
+        const userMultiplier = this._displayScale === 'auto' ? 1.0 : parseFloat(this._displayScale) || 1.0;
 
         if (isNativeTv) {
             // Television panels run natively at 1:1 scale unless user sets manual factor
@@ -1479,6 +2203,54 @@ class LayoutManager {
         eventBus.emit('sidebarLogoColor:changed', { color });
     }
 
+    /**
+     * =========================================================================
+     * SIDEBAR ICON SHADOWS CONFIGURATION
+     * =========================================================================
+     * Retrieves whether drop shadows are currently enabled for all icons
+     * rendered inside the primary sidebar navigation container.
+     *
+     * @returns {boolean} True if icon shadows are enabled, false if flat.
+     * =========================================================================
+     */
+    getSidebarIconShadows() {
+        return Boolean(this._sidebarIconShadows);
+    }
+
+    /**
+     * =========================================================================
+     * Set Sidebar Icon Shadows
+     * =========================================================================
+     * Configures whether drop shadows should be displayed across all sidebar
+     * icons including navigation buttons, brand header logo, back button capsule,
+     * and user profile avatar.
+     *
+     * @param {boolean|string} enabled - Desired shadow state ('true'/'shadow'/boolean)
+     * @param {boolean} [save=true] - Whether to persist choice to local storage
+     * =========================================================================
+     */
+    setSidebarIconShadows(enabled, save = true) {
+        // Resolve boolean state from boolean or string value
+        const isEnabled = enabled === true || enabled === 'true' || enabled === 'shadow';
+        this._sidebarIconShadows = isEnabled;
+
+        // Apply attribute to root document element for reactive CSS rules
+        document.documentElement.setAttribute('data-sidebar-icon-shadows', isEnabled ? 'true' : 'false');
+
+        // Persist preference to persistent local storage when requested
+        if (save) {
+            storage.setItem('litefin:sidebarIconShadows', isEnabled ? 'true' : 'false');
+            storage.setItem('pref:sidebarIconShadows', isEnabled ? 'true' : 'false');
+            storage.flush();
+        }
+
+        log.info(`Sidebar icon shadows set to: ${isEnabled}`);
+
+        // Broadcast notifications across event bus for live reactive components
+        eventBus.emit('sidebarIconShadows:changed', { enabled: isEnabled });
+        eventBus.emit('pref:sidebarIconShadows', isEnabled);
+    }
+
     getOsdButtonStyle() {
         return this._osdButtonStyle;
     }
@@ -1721,7 +2493,9 @@ class LayoutManager {
             'push-pulse',
             'horizontal-dots',
             'pulsing-grid'
-        ].includes(style) ? style : 'dots';
+        ].includes(style)
+            ? style
+            : 'dots';
         this._loaderStyle = validStyle;
 
         // Stamp active loader style attribute onto root element for scoped CSS targeting
@@ -1964,11 +2738,11 @@ class LayoutManager {
      */
     _applyHeroVignetteVariables() {
         /*
-         * Default alpha values for level 70 
+         * Default alpha values for level 70
          * Produces a clean ~0.72 start alpha and 0.40 mid-curve.
          */
         let startAlpha = 0.72;
-        let midAlpha = 0.40;
+        let midAlpha = 0.4;
         let endAlpha = 0.0;
 
         /*
@@ -1998,13 +2772,13 @@ class LayoutManager {
                     midAlpha = 0.52;
                 } else if (parsed >= 70) {
                     startAlpha = 0.72;
-                    midAlpha = 0.40;
+                    midAlpha = 0.4;
                 } else {
                     /*
                      * Proportional linear scaling for lower ranges (10% - 60%)
                      */
-                    startAlpha = Math.min(Math.max(parsed / 100, 0), 0.70);
-                    midAlpha = parseFloat((startAlpha * 0.50).toFixed(3));
+                    startAlpha = Math.min(Math.max(parsed / 100, 0), 0.7);
+                    midAlpha = parseFloat((startAlpha * 0.5).toFixed(3));
                 }
                 endAlpha = 0.0;
             }

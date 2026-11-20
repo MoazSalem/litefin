@@ -11,6 +11,8 @@
  * ============================================================================
  */
 
+import { tmdbImage, tmdbUrl } from '../api/seerrNormalize.js';
+
 export const SEERR_MOVIE_GENRE_IMAGES = {
     28: 'https://image.tmdb.org/t/p/w1280_filter(duotone,991B1B,FCA5A5)/84FEpVVbSKYvKXDZJDZXOKBxCEm.jpg',
     12: 'https://image.tmdb.org/t/p/w1280_filter(duotone,480c8b,a96bef)/8sSKdEmlmqF4kJUd28SqthXC4yZ.jpg',
@@ -93,6 +95,9 @@ export const TV_GENRES_FALLBACK = [
     { id: 37, name: 'Western' }
 ];
 
+// Studio and network logos are shown as light duotone cards
+const LOGO_SIZE = 'w780_filter(duotone,ffffff,bababa)';
+
 export const MOVIE_STUDIOS = [
     { id: 2, name: 'Disney', logo: 'wdrCwmRnLFJhEoH8GSfymY85KHT.png' },
     { id: 127928, name: '20th Century', logo: 'h0rjX5vjW5r8yEnUBStFarjcLT4.png' },
@@ -134,7 +139,7 @@ export function buildGenreSliderItems(rawList, mediaType = 'movie') {
             if (!g || !g.id) return null;
             const customImage = imagesMap[g.id];
             const backdrop = g.backdrops?.[0] || g.backdropPath || '';
-            const imageUrl = customImage || (backdrop ? `https://image.tmdb.org/t/p/w780${backdrop}` : '');
+            const imageUrl = customImage ? tmdbImage(customImage) : tmdbUrl('w780', backdrop);
 
             return {
                 Id: `seerr-genre-${mediaType}-${g.id}`,
@@ -159,7 +164,7 @@ export function buildStudioItems() {
         Id: `seerr-studio-${s.id}`,
         Name: s.name,
         Type: 'Folder',
-        _imageUrl: s.logo ? `https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/${s.logo}` : '',
+        _imageUrl: tmdbUrl(LOGO_SIZE, s.logo),
         _studioId: s.id,
         _isStudioCard: true
     }));
@@ -174,7 +179,7 @@ export function buildNetworkItems() {
         Id: `seerr-network-${n.id}`,
         Name: n.name,
         Type: 'Folder',
-        _imageUrl: n.logo ? `https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/${n.logo}` : '',
+        _imageUrl: tmdbUrl(LOGO_SIZE, n.logo),
         _networkId: n.id,
         _isNetworkCard: true
     }));

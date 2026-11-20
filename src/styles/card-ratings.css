@@ -1,0 +1,119 @@
+/**
+ * ============================================================================
+ * Litefin - Media Card Rating Badge
+ * ============================================================================
+ * On-artwork score badge. Geometry mirrors the existing card badges
+ * (.episode-badge / .quality-badge) and the visible skin comes from the shared
+ * `html[data-badge-style="tinted"|"dark"]` rules in base.css.
+ *
+ * Position: top-left, BESIDE the SxxExx / rank badge. Corner badges are emitted
+ * inside flex wrappers so each takes its natural width — a fixed offset cannot
+ * clear a neighbour whose text length varies (e.g. S1E12 vs S1E3).
+ * ============================================================================
+ */
+
+.card-rating-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 40px;
+    height: 40px;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    border-radius: var(--jf-border-radius, 6px);
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-rating-badge svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+}
+
+.card-rating-value {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------------------
+   Top-left badge row: episode code (SxxExx) / rank, then the rating badge.
+   ---------------------------------------------------------------------------- */
+.card-top-left-badges {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.card-top-left-badges > * {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+}
+
+html[data-media-rows-family="modern"] .card-top-left-badges {
+    top: 22px;
+    left: 22px;
+}
+
+/* ----------------------------------------------------------------------------
+   Top-right badge row (count / quality / game / Seerr). The rating badge no
+   longer lives here, but the wrapper keeps those badges on one aligned row.
+   ---------------------------------------------------------------------------- */
+.card-top-right-badges {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 8;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.card-top-right-badges > * {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+}
+
+html[data-media-rows-family="modern"] .card-top-right-badges {
+    top: 22px;
+    right: 22px;
+}
+
+/* ----------------------------------------------------------------------------
+   Modern family (modern / expanded / modern-posters / expanding)
+   Match the quality badge geometry: 40px tall, 22px inset, 10px radius.
+   ---------------------------------------------------------------------------- */
+html[data-media-rows-family="modern"] .card-rating-badge {
+    top: 22px;
+    left: 22px;
+    min-width: 0;
+    height: 40px;
+    padding: 5px 14px;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    letter-spacing: 0.5px;
+}
+
+/* A card with no episode/rank badge keeps the rating at the absolute corner. */

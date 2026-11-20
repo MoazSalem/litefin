@@ -9,6 +9,7 @@
 
 import { PgsRenderer } from 'libpgs';
 import { logger } from '../../utils/Logger.js';
+import PlayerSettings from '../../utils/PlayerSettings.js';
 
 const log = logger.create('PGSRenderer');
 
@@ -21,14 +22,16 @@ class PGSRenderer {
      * @param {HTMLElement} context.container - The container to append the canvas to
      * @param {string} context.subUrl - The URL to the .sup subtitle file
      * @param {number} [context.timeOffset=0] - Time offset in seconds
+     * @param {boolean} [context.isHdr=false] - Whether active stream is HDR/Dolby Vision
      */
-    constructor({ track, videoElement, container, subUrl, subBuffer, timeOffset = 0 }) {
+    constructor({ track, videoElement, container, subUrl, subBuffer, timeOffset = 0, isHdr = false }) {
         this.track = track;
         this._video = videoElement;
         this._container = container;
         this._url = subUrl || null;           // Fallback URL for non-TV / legacy path
         this._subBuffer = subBuffer || null;  // Pre-fetched binary, preferred on Tizen
         this._timeOffset = timeOffset;
+        this._isHdr = Boolean(isHdr);        // Stream dynamic range indicator
         this._renderer = null;
         this._canvas = null;
         this._canvasWrapper = null;
@@ -81,6 +84,9 @@ class PGSRenderer {
 
         this._canvasWrapper.appendChild(this._canvas);
         this._container.appendChild(this._canvasWrapper);
+
+        // Apply hardware-accelerated transparency based on active dynamic range
+        this._applyOpacity();
 
         const config = {
             video: this._video, // null for AVPlay; libpgs is OK without a video element
@@ -195,6 +201,42 @@ class PGSRenderer {
         }
     }
 
+
+    /**
+     * Compute and apply the configured transparency level to the wrapper element.
+     * Selects between SDR and HDR opacity preference based on active stream dynamic range.
+     * @private
+     */
+    _applyOpacity() {
+        // Guard against calls before wrapper is mounted or after disposal
+        if (!this._canvasWrapper) return;
+
+        // Determine setting key based on active playback stream dynamic range
+        const settingKey = this._isHdr ? 'subtitlePgsOpacityHdr' : 'subtitlePgsOpacity';
+        const fallbackOpacity = this._isHdr ? 70 : 100;
+
+        // Retrieve user setting with safety fallback (clamped 0 to 100)
+        const opacityPercent = PlayerSettings.get(settingKey) ?? fallbackOpacity;
+        const normalizedOpacity = Math.max(0, Math.min(100, Number(opacityPercent))) / 100;
+
+        // Update wrapper CSS opacity directly for GPU-accelerated layer blending
+        this._canvasWrapper.style.opacity = String(normalizedOpacity);
+        log.debug(`PGS subtitle opacity applied: ${normalizedOpacity} (isHdr: ${this._isHdr}, key: ${settingKey})`);
+    }
+
+    /**
+     * Dynamically update opacity when HDR status or user preferences change.
+     * @param {boolean} [isHdr] - Optional updated HDR status
+     */
+    updateOpacity(isHdr) {
+        // Update cached stream range state if explicitly supplied
+        if (typeof isHdr === 'boolean') {
+            this._isHdr = isHdr;
+        }
+
+        // Apply updated opacity style
+        this._applyOpacity();
+    }
 
     /**
      * Update the time offset

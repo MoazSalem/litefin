@@ -12,7 +12,7 @@ test('JellyfinPlayer: DirectPlay failure transcode escalation structure and inte
         'utf8'
     );
     const settingsPageSource = readFileSync(
-        new URL('../src/pages/SettingsPage.js', import.meta.url),
+        new URL('../src/pages/settings/SettingsPage.js', import.meta.url),
         'utf8'
     );
 

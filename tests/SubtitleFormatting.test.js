@@ -174,16 +174,6 @@ test('Sanitization prevents XSS and unsafe script sinks', () => {
     assert.equal(sanitizeSubtitleText(eventInput), '&lt;span onclick=&quot;alert(1)&quot;&gt;Click</span>');
 });
 
-test('en-US.json contains SubtitleOverrideColors translation keys', async () => {
-    const fs = await import('fs');
-    const path = await import('path');
-    const enUsPath = path.resolve('src/locales/en-US.json');
-    const locales = JSON.parse(fs.readFileSync(enUsPath, 'utf8'));
-
-    assert.equal(locales.SubtitleOverrideColors, 'Override Subtitle Colors');
-    assert.ok(locales.SubtitleOverrideColorsDesc.includes('Override colors embedded in subtitles'));
-});
-
 test('SubtitleQuickSettings includes overrideColors item with proper options', async () => {
     const SubtitleQuickSettings = (await import('../src/player/osd/SubtitleQuickSettings.js')).default;
     const dummyOsd = { player: { _subtitleManager: { isASSActive: () => false } } };

@@ -31,10 +31,7 @@ export function formatDate(date, options = {}) {
         // 1. Short Month Format (e.g. "Aug 28" or "Aug 28, 2026")
         // --------------------------------------------------------------------
         if (style === 'short') {
-            const months = [
-                'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-            ];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const monthName = months[d.getMonth()];
             const day = d.getDate();
             const year = d.getFullYear();

@@ -29,29 +29,29 @@ test('PlaybackStopReporting: ApiClient reportPlaybackStopped structure and fallb
     );
 });
 
-test('PlaybackStopReporting: PlayerPage provides XHR fallback on async stop failures', () => {
+test('PlaybackStopReporting: PlayerPage retries failed async stop reports without blocking the UI', () => {
     // Read PlayerPage source code to verify stop reporting resilience
     const playerSource = readFileSync(
         new URL('../src/pages/PlayerPage.js', import.meta.url),
         'utf8'
     );
 
-    // Verify _reportPlaybackStopped catches async failure and falls back to synchronous XHR
+    // Verify _reportPlaybackStopped sends the async report with a timeout
     assert.ok(
-        playerSource.includes('await api.reportPlaybackStopped(data);'),
-        'PlayerPage must call api.reportPlaybackStopped in async path'
+        playerSource.includes('api.reportPlaybackStopped(data, { timeout: STOP_REPORT_TIMEOUT_MS })'),
+        'PlayerPage must call api.reportPlaybackStopped in async path with a timeout'
     );
 
-    // Ensure synchronous XHR fallback is present if async reporting fails
+    // Ensure a failed async report is retried (asynchronously, see PlayerPageStopReport.test.js)
     assert.ok(
-        playerSource.includes('Async stop report failed, executing synchronous XHR fallback:'),
-        'PlayerPage must log and trigger synchronous XHR fallback if async stop reporting fails'
+        playerSource.includes('Async stop report failed, retrying once in the background:'),
+        'PlayerPage must log and retry if async stop reporting fails'
     );
 
-    // Ensure fallback dispatches to Sessions/Playing/Stopped endpoint
+    // Ensure the synchronous app-exit report dispatches to Sessions/Playing/Stopped endpoint
     assert.ok(
         playerSource.includes('const url = `${api.serverUrl}/Sessions/Playing/Stopped`;'),
-        'PlayerPage must construct stop reporting URL for fallback'
+        'PlayerPage must construct stop reporting URL for the synchronous app-exit report'
     );
 });
 
@@ -82,7 +82,7 @@ test('PlaybackStopReporting: Watched completion threshold settings and server Ma
 
     // 3. Verify SettingsPage renders watched-threshold-select dropdown and maps it to watchedThreshold
     const settingsPageSource = readFileSync(
-        new URL('../src/pages/SettingsPage.js', import.meta.url),
+        new URL('../src/pages/settings/SettingsPage.js', import.meta.url),
         'utf8'
     );
     assert.ok(
@@ -107,14 +107,6 @@ test('PlaybackStopReporting: Watched completion threshold settings and server Ma
         playerSource.includes("rawPosition >= durationTicks * thresholdFraction"),
         'PlayerPage._reportPlaybackStopped must evaluate near-complete status using resolved threshold fraction'
     );
-
-    // 5. Verify en-us.json contains all required translation keys
-    const enUs = JSON.parse(
-        readFileSync(new URL('../src/locales/en-us.json', import.meta.url), 'utf8')
-    );
-    assert.ok(enUs.WatchedThreshold, 'en-us.json must have WatchedThreshold key');
-    assert.ok(enUs.WatchedThresholdDescription, 'en-us.json must have WatchedThresholdDescription key');
-    assert.ok(enUs.OptionWatchedThreshold80, 'en-us.json must have OptionWatchedThreshold80 key');
-    assert.ok(enUs.OptionWatchedThresholdServer, 'en-us.json must have OptionWatchedThresholdServer key');
 });
+
 

@@ -10,6 +10,7 @@
     },
     "globals": {
         "__APP_VERSION__": "readonly",
+        "__I18N_KEYS__": "readonly",
         "tizen": "readonly",
         "webapis": "readonly"
     },

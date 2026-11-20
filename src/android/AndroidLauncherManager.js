@@ -45,6 +45,8 @@ import { logger } from '../utils/Logger.js';
 import { pinManager } from '../utils/PinManager.js';
 import { storage } from '../utils/StorageService.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { getSeriesLastWatchedDates } from '../utils/NextUpActivity.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('AndroidLauncherManager');
 
@@ -314,9 +316,16 @@ class AndroidLauncherManager {
             // ── Phase 1: Query server-side Litefin companion plugin ─────────
             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+
+            // Retrieve configured mark as watched threshold fraction and percentage
+            const thresholdFraction = PlayerSettings.getWatchedThresholdFraction();
+            const watchedThresholdPct = Math.round(thresholdFraction * 100);
+
             const mergedParams = {
                 limit: 10,
-                fields: 'Overview,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags'
+                // Include SeriesPrimaryImageTag for Android TV home channel preview tiles
+                fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
+                watchedThreshold: watchedThresholdPct
             };
 
             let cutoffIso = null;
@@ -332,9 +341,31 @@ class AndroidLauncherManager {
                 log.info('Attempting to fetch pre-merged continue/next-up items from Litefin plugin');
                 const response = await api.getMergedRows(mergedParams);
                 if (response && response.Items && response.Items.length > 0) {
-                    const validPluginItems = response.Items.filter(
-                        (item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder
-                    );
+                    // Filter out container folders and finished/watched items defensively
+                    const validPluginItems = response.Items.filter((item) => {
+                        // Exclude invalid items and container folders
+                        if (!item || item.Type === 'Season' || item.Type === 'Series' || item.IsFolder) {
+                            return false;
+                        }
+
+                        // Exclude items already marked as watched/played
+                        if (item.UserData?.Played) {
+                            return false;
+                        }
+
+                        // Exclude items that have reached or passed the configured watched threshold
+                        const positionTicks = item.UserData?.PlaybackPositionTicks || 0;
+                        const runTimeTicks = item.RunTimeTicks || 0;
+                        if (positionTicks > 0 && runTimeTicks > 0) {
+                            const progress = positionTicks / runTimeTicks;
+                            if (progress >= thresholdFraction) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    });
+
                     if (validPluginItems.length > 0) {
                         log.info('Successfully fetched pre-merged items from server companion plugin');
                         mergedItems = validPluginItems.slice(0, 10);
@@ -352,7 +383,7 @@ class AndroidLauncherManager {
                 const [resumeRes, nextUpRes] = await Promise.all([
                     api.getResumeItems({
                         Limit: 5,
-                        Fields: 'Overview,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
+                        Fields: 'Overview,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,Tags',
                         ImageTypeLimit: 1,
                         EnableImageTypes: 'Primary,Backdrop,Thumb',
                         EnableTotalRecordCount: false
@@ -360,7 +391,7 @@ class AndroidLauncherManager {
                     (async () => {
                         const params = {
                             Limit: 5,
-                            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
+                            Fields: 'Overview,RunTimeTicks,CommunityRating,PremiereDate,IndexNumber,ParentIndexNumber,SeriesPrimaryImageTag,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags,MediaSources,MediaStreams,Width,Height,UserData',
                             ImageTypeLimit: 1,
                             EnableImageTypes: 'Primary,Backdrop,Thumb',
                             EnableTotalRecordCount: false
@@ -372,9 +403,31 @@ class AndroidLauncherManager {
                     })()
                 ]);
 
-                // Filter and tag resume items
+                // Filter and tag resume items, removing played items and items past watched threshold
                 const resumeItems = (resumeRes?.Items || [])
-                    .filter((item) => item && item.Type !== 'Season' && item.Type !== 'Series' && !item.IsFolder)
+                    .filter((item) => {
+                        // Drop invalid items and container folders
+                        if (!item || item.Type === 'Season' || item.Type === 'Series' || item.IsFolder) {
+                            return false;
+                        }
+
+                        // Exclude items already marked as watched/played
+                        if (item.UserData?.Played) {
+                            return false;
+                        }
+
+                        // Exclude items that have reached or passed the configured watched threshold
+                        const positionTicks = item.UserData?.PlaybackPositionTicks || 0;
+                        const runTimeTicks = item.RunTimeTicks || 0;
+                        if (positionTicks > 0 && runTimeTicks > 0) {
+                            const progress = positionTicks / runTimeTicks;
+                            if (progress >= thresholdFraction) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    })
                     .map((item) => ({ ...item, _isResume: true }));
 
                 // Filter and tag next-up items
@@ -386,35 +439,10 @@ class AndroidLauncherManager {
                     })
                     .map((item) => ({ ...item, _isResume: false }));
 
-                // Query parent series activity dates for chronological sorting
-                const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
-                const seriesLastPlayedMap = {};
-
-                if (nextUpSeriesIds.length > 0) {
-                    try {
-                        const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
-                        const activeEpisodesRes = await api.getItems({
-                            SeriesIds: uniqueSeriesIds.join(','),
-                            IncludeItemTypes: 'Episode',
-                            SortBy: 'DatePlayed',
-                            SortOrder: 'Descending',
-                            Fields: 'LastPlayedDate',
-                            Recursive: true,
-                            Limit: 100
-                        });
-
-                        const activeEpisodes = activeEpisodesRes?.Items || [];
-                        for (const ep of activeEpisodes) {
-                            const seriesId = ep.SeriesId;
-                            const lastPlayed = ep.UserData?.LastPlayedDate;
-                            if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
-                                seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
-                            }
-                        }
-                    } catch (err) {
-                        log.warn('Failed querying parent series last played dates:', err);
-                    }
-                }
+                // Rank next-up items the way Jellyfin's own Next Up (and the Litefin plugin)
+                // does: by when the furthest-watched episode was played, so rewatching an
+                // earlier episode does not move the series up.
+                const seriesLastPlayedMap = await getSeriesLastWatchedDates(nextUpItems.map((item) => item.SeriesId));
 
                 // Attach sort timestamps
                 const taggedResume = resumeItems.map((item) => ({
@@ -500,7 +528,7 @@ class AndroidLauncherManager {
             if (showName) titleParts.push(showName);
             if (epName) titleParts.push(epName);
 
-            const title = titleParts.length > 0 ? titleParts.join(' - ') : (epName || showName || 'Episode');
+            const title = titleParts.length > 0 ? titleParts.join(' - ') : epName || showName || 'Episode';
 
             // Retrieve synopsis overview of the episode to display in description row
             const description = item.Overview || item.ProgramInfo?.Overview || '';
@@ -524,7 +552,8 @@ class AndroidLauncherManager {
 
         if (item.Type === 'Movie') {
             // Retrieve movie overview or release year fallback
-            const description = item.Overview || item.ProgramInfo?.Overview || (item.ProductionYear ? String(item.ProductionYear) : '');
+            const description =
+                item.Overview || item.ProgramInfo?.Overview || (item.ProductionYear ? String(item.ProductionYear) : '');
 
             return {
                 id: item.Id,
@@ -584,7 +613,7 @@ class AndroidLauncherManager {
             imgType = 'Backdrop';
             imgTag = src.ParentBackdropImageTags[0];
             itemId = src.ParentBackdropItemId;
-        // Portrait fallbacks
+            // Portrait fallbacks
         } else if (src.ImageTags?.Primary) {
             imgType = 'Primary';
             imgTag = src.ImageTags.Primary;

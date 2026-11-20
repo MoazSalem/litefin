@@ -16,10 +16,14 @@ import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
 import { shouldShowScore } from '../utils/visibility.js';
-import { platformInfo } from '../utils/PlatformInfo.js';
 import { detailsIcons } from '../utils/Icons.js';
 import { escapeHtml } from '../utils/Utils.js';
 import { getMdbProviderInfo } from '../plugins/installed/mdblist-ratings/ratingsFormatter.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
+import { pluginManager } from '../plugins/PluginManager.js';
+import { idleGate } from '../utils/IdleGate.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
+import { scrollController } from './ScrollController.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -34,6 +38,8 @@ class HeroCarousel {
         const savedInterval = storage.getItem('pref:heroCarouselInterval');
         this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
         this._hideTimeoutId = null;
+        this._indicatorTimeoutId = null;
+        this._indicatorRafId = null;
 
         // Viewport visibility and progressive preloading state tracking
         this._isVisible = true;
@@ -41,9 +47,82 @@ class HeroCarousel {
         this._preloadTimeoutId = null;
         this._preloadIdleId = null;
 
+        // Configurable preload intervals allowing snappy test cycles while keeping TV production safe
+        // Lower default delay to 1200ms ensures slide preloading starts promptly post-splash
+        this._initialPreloadDelay = options.initialPreloadDelay !== undefined ? options.initialPreloadDelay : 1200;
+        this._preloadIntervalMs = options.preloadIntervalMs !== undefined ? options.preloadIntervalMs : 400;
+
+        // Progressive queue for background slide preloading (1 slide every 400ms)
+        this._pendingPreloadQueue = [];
+        this._preloadQueueTimer = null;
+        this._preloadQueueIdleTask = null;
+        this._deferredLogoHeights = Object.create(null);
+
+        // Timer identifier for warming next upcoming slide on active navigation
+        this._upcomingPreloadTimerId = null;
+
+        // ---------------------------------------------------------------------
+        // Idle preload & retained off-DOM bitmap bookkeeping
+        // ---------------------------------------------------------------------
+        // Pre-decoded backdrop and logo Image instances are kept alive inside
+        // `_retainedImages` and `_decodedBackdrops` so Chromium retains decoded
+        // textures across slide changes without keeping offscreen <img> DOM nodes
+        // mounted when idle (only the active slide's backdrop <img> stays in DOM).
+        // ---------------------------------------------------------------------
+        this._idlePreloadTask = null;
+        this._preloadedSlides = Object.create(null);
+        this._decodedBackdrops = Object.create(null);
+        this._warmedSlides = Object.create(null);
+        this._warmSlideRafId = null;
+        this._warmSlideIndex = -1;
+        this._retainedImages = [];
+        this._stackPreloadTimerId = null;
+        this._stackPreloadIdleTask = null;
+        this._postScrollAutoStartTimerId = null;
+
+        // Cached DOM node references populated in init() and cleared in destroy()
+        // so navigation never re-queries the carousel DOM tree on keypress frames.
+        this._slideItems = null;
+        this._dotItems = null;
+        this._slideBackdrops = null;
+        this._slideBackdropImages = null;
+        this._slideBlurhashCanvases = null;
+        this._slideLogos = null;
+        this._slideLogoContainers = null;
+
+        // Cached storage preferences populated on first render/init to avoid
+        // synchronous localStorage reads inside hot transition paths.
+        this._carouselStyle = null;
+        this._indicatorStyle = null;
+        this._isCompact = null;
+        this._isZoomEnabled = null;
+        this._isAnimationEnabled = null;
+        this._isBlurhashFill = null;
+
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
         this._handleBlur = this._handleBlur.bind(this);
+    }
+
+    /**
+     * Reads and caches static hero carousel storage preferences once per
+     * carousel instance so slide transitions avoid synchronous storage reads.
+     *
+     * @private
+     */
+    _loadCachedPrefs() {
+        if (this._carouselStyle !== null) return;
+
+        // Default carousel style is 'immersive-performance' for GPU compositing
+        this._carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
+        this._indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        this._isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+        this._isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
+        this._isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        // BlurHash ambient color fill is exclusive to Immersive (Performance) mode and disabled by default
+        this._isBlurhashFill =
+            this._carouselStyle === 'immersive-performance' &&
+            storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
     }
 
     /**
@@ -52,11 +131,10 @@ class HeroCarousel {
     render() {
         if (!this._items || this._items.length === 0) return '';
 
-        // Default carousel style is set to 'immersive-performance' for high-performance rendering.
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-
-        // Read the chosen indicator presentation style ('dots', 'lines', or 'progress')
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        // Populate cached storage preferences once prior to rendering slides
+        this._loadCachedPrefs();
+        const carouselStyle = this._carouselStyle;
+        const indicatorStyle = this._indicatorStyle;
 
         // Render slides and indicator elements
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
@@ -67,12 +145,11 @@ class HeroCarousel {
             )
             .join('');
 
-        // Query layout configuration flags from persistent storage
-        const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
-        const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
-        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
-        // BlurHash ambient color fill is exclusive to Immersive (Performance) mode and disabled by default
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        // Reuse cached layout configuration flags
+        const isCompact = this._isCompact;
+        const isZoomEnabled = this._isZoomEnabled;
+        const isAnimationEnabled = this._isAnimationEnabled;
+        const isBlurhashFill = this._isBlurhashFill;
         const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
         let navArrowsHtml = '';
@@ -110,14 +187,15 @@ class HeroCarousel {
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
-                    ${this._items.length > 1
-                ? `
+                    ${
+                        this._items.length > 1
+                            ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
                     `
-                : ''
-            }
+                            : ''
+                    }
                 </div>
                 ${navArrowsHtml}
             </div>
@@ -139,8 +217,8 @@ class HeroCarousel {
             item.BackdropImageTags && item.BackdropImageTags.length > 0
                 ? item.BackdropImageTags[0]
                 : item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0
-                    ? item.ParentBackdropImageTags[0]
-                    : item.ImageTags?.Backdrop;
+                  ? item.ParentBackdropImageTags[0]
+                  : item.ImageTags?.Backdrop;
 
         // Fall back to parent backdrop ID when the child item lacks its own artwork
         const backdropItemId =
@@ -164,7 +242,7 @@ class HeroCarousel {
 
         if (!useTextTitle && logoItemId && logoTag) {
             const logoParams = imageService.getParams('hero-logo');
-            const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+            const isCompact = this._isCompact !== null ? this._isCompact : storage.getItem('pref:heroCarouselCompact') !== 'false';
             const dpr = window.devicePixelRatio || 1;
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
                 fillWidth: Math.round(400 * dpr),
@@ -185,39 +263,15 @@ class HeroCarousel {
         }
 
         // Meta Info Row
-        const year = item.ProductionYear || '';
-        let runtimeText = '';
-        if (item.RunTimeTicks) {
-            const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-        }
-
-        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating)
-        const hasMdbRatings = item._mdbMetadata && item._mdbMetadata.ratings && item._mdbMetadata.ratings.length > 0;
-        const rating = item.OfficialRating;
-        const starRating =
-            !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
-                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
-                : '';
-
-        let metaHtml = '';
-        if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
-        if (runtimeText) metaHtml += `<span class="hero-meta-item">${runtimeText}</span>`;
-        if (rating) metaHtml += `<span class="hero-meta-item hero-meta-badge">${rating}</span>`;
-        if (starRating)
-            metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
-
-        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
-        if (item._mdbMetadata && shouldShowScore(item)) {
-            metaHtml += this._renderMdbMetadata(item._mdbMetadata);
-        }
+        const metaHtml = this._renderMetaHtml(item);
 
         // Resolve BlurHash for the hero backdrop and ambient fill background
         const blurHash = this._resolveBlurHash(item);
         // Ambient BlurHash fill is exclusive to the Immersive (Performance) style and off by default
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+        const isBlurhashFill =
+            this._isBlurhashFill !== null
+                ? this._isBlurhashFill
+                : carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
 
         // ---------------------------------------------------------------------
         // Lazy Backdrop & BlurHash Texture Allocation
@@ -227,18 +281,32 @@ class HeroCarousel {
         // 1820px backdrop at once, starving the main thread during page load.
         // We set background-image exclusively for the active slide (index 0).
         // Inactive slides store the URL in data-backdrop and load just-in-time.
+        // When reverse proxy headers are active, check native interception or cached Blob URL.
         // ---------------------------------------------------------------------
-        const backdropStyle = isActive ? ` style="background-image: url('${backdropUrl}')"` : '';
+        const initialBackdrop = customHeaders?.hasCustomHeaders?.()
+            ? (customHeaders.hasNativeInterception?.(backdropUrl) ? backdropUrl : customHeaders.getCachedBlobUrl(backdropUrl) || null)
+            : backdropUrl;
+        // Mount the backdrop <img> only on initial Slide 0; inactive slides keep
+        // their backdrop off-DOM until pre-decoded and attached right before crossfade.
+        const backdropImgHtml =
+            isActive && initialBackdrop
+                ? `<img class="hero-backdrop-img" src="${initialBackdrop}" decoding="async" alt="">`
+                : '';
 
         return `
-            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}"${!isActive ? ' style="visibility:hidden"' : ''}>
-                ${isBlurhashFill && blurHash ? `
+            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
+                ${
+                    isBlurhashFill && blurHash
+                        ? `
                     <div class="hero-blurhash-fill-wrap">
                         <canvas class="hero-blurhash-fill-canvas" data-blurhash="${blurHash}"></canvas>
                         <div class="hero-blurhash-fill-vignette"></div>
                     </div>
-                ` : ''}
-                <div class="hero-backdrop" data-backdrop="${backdropUrl}"${backdropStyle}>
+                `
+                        : ''
+                }
+                <div class="hero-backdrop" data-backdrop="${backdropUrl}">
+                    ${backdropImgHtml}
                     ${blurHash && isActive ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
                 </div>
                 <div class="hero-content">
@@ -253,10 +321,91 @@ class HeroCarousel {
     }
 
     /**
+     * Builds the meta row (year, runtime, parental rating, scores) for a slide.
+     * @param {Object} item - Hero item
+     * @returns {string} HTML string
+     * @private
+     */
+    _renderMetaHtml(item) {
+        const year = item.ProductionYear || '';
+        let runtimeText = '';
+        if (item.RunTimeTicks) {
+            const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        }
+
+        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating).
+        // Cached hero items keep their _mdbMetadata, so re-check the plugin and the hero preference at render time
+        // in case either was turned off since the items were enriched.
+        const mdbData = this._isMdbEnabled() ? item._mdbMetadata : null;
+        const hasMdbRatings = mdbData && mdbData.ratings && mdbData.ratings.length > 0;
+        const rating = item.OfficialRating;
+        const starRating =
+            !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
+                ? `${detailsIcons.ratingStar}${item.CommunityRating.toFixed(1)}`
+                : '';
+
+        let metaHtml = '';
+        if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
+        if (runtimeText) metaHtml += `<span class="hero-meta-item">${runtimeText}</span>`;
+        if (rating) metaHtml += `<span class="hero-meta-item hero-meta-badge">${rating}</span>`;
+        if (starRating)
+            metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
+
+        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
+        if (mdbData && shouldShowScore(item)) {
+            metaHtml += this._renderMdbMetadata(mdbData);
+        }
+
+        return metaHtml;
+    }
+
+    /**
+     * Whether MDBList ratings should be shown on the hero (plugin enabled and hero preference on).
+     * @returns {boolean}
+     * @private
+     */
+    _isMdbEnabled() {
+        return storage.getItem('pref:heroCarouselMdbList') !== 'false' && pluginManager.isEnabled('mdblist-ratings');
+    }
+
+    /**
+     * Re-renders the meta rows in place, e.g. after MDBList ratings arrive
+     * asynchronously once the plugin system finishes initializing.
+     */
+    refreshMeta() {
+        if (!this._container) return;
+        this._items.forEach((item, index) => {
+            const row = this._container.querySelector(`.hero-item[data-index="${index}"] .hero-meta-row`);
+            if (row) row.innerHTML = this._renderMetaHtml(item);
+        });
+    }
+
+    /**
+     * Updates the metadata DOM row of a single slide in place if its HTML has changed.
+     * Avoids tearing down and re-rendering unaffected slides or non-active carousel DOM.
+     *
+     * @param {number} index - Slide index to update
+     */
+    updateSlideMeta(index) {
+        if (!this._container || !this._items || !this._items[index]) return;
+        const item = this._items[index];
+        const row = this._container.querySelector(`.hero-item[data-index="${index}"] .hero-meta-row`);
+        if (!row) return;
+
+        const newHtml = this._renderMetaHtml(item);
+        if (row.innerHTML !== newHtml) {
+            row.innerHTML = newHtml;
+        }
+    }
+
+    /**
      * Renders MDBList Ratings and Awards for the carousel row.
      * @private
      */
-     _renderMdbMetadata(data) {
+    _renderMdbMetadata(data) {
         if (!data) return '';
 
         let html = '';
@@ -315,6 +464,27 @@ class HeroCarousel {
     init(el) {
         this._container = el || document.getElementById('hero-carousel-container');
         if (!this._container) return;
+
+        // Populate cached storage prefs and static slide DOM node arrays once
+        // so navigation transitions run in O(1) without querying or parsing storage.
+        this._loadCachedPrefs();
+        this._slideItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-item'));
+        this._dotItems = Array.prototype.slice.call(this._container.querySelectorAll('.hero-dot'));
+        this._slideBackdrops = this._slideItems.map((slide) => slide.querySelector('.hero-backdrop'));
+        this._slideBackdropImages = this._slideBackdrops.map((backdrop) =>
+            backdrop && typeof backdrop.querySelector === 'function'
+                ? backdrop.querySelector('.hero-backdrop-img')
+                : null
+        );
+        this._slideBlurhashCanvases = this._slideItems.map((slide) =>
+            slide && typeof slide.querySelector === 'function'
+                ? slide.querySelector('.hero-blurhash-canvas')
+                : null
+        );
+        this._slideLogos = this._slideItems.map((slide) => slide.querySelector('.hero-logo'));
+        this._slideLogoContainers = this._slideLogos.map((img) =>
+            img && typeof img.closest === 'function' ? img.closest('.hero-logo-container') : null
+        );
 
         // Flag to prevent accidental detail navigation when completing a swipe gesture
         this._suppressItemClick = false;
@@ -552,29 +722,37 @@ class HeroCarousel {
         // - Tall/square logos get more height (up to 130px) to remain legible.
         // - Wide/short logos shrink in container height to eliminate vertical gaps.
         // =========================================================================
-        const logos = this._container.querySelectorAll('.hero-logo');
-        logos.forEach((img) => {
-            const adjustHeight = () => {
-                const container = img.closest('.hero-logo-container');
-                if (container) {
-                    const aspect = img.naturalWidth / img.naturalHeight || 1;
-                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
-                    const maxW = 400; // max-width of .hero-logo in CSS
-                    const maxHeight = isCompact ? 110 : 130;
-                    const minHeight = isCompact ? 50 : 60;
+        // Adjust only slides whose logo src is already eager (slide 0 on mount).
+        // Deferred logos (slides 1..N) size themselves inside _preloadSlide().
+        const isCompact = this._isCompact;
+        for (let idx = 0; idx < this._slideLogos.length; idx++) {
+            const img = this._slideLogos[idx];
+            if (!img) continue;
 
-                    const targetHeight = maxW / aspect;
-                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
-                    container.style.height = `${containerHeight}px`;
+            const logoContainer = this._slideLogoContainers[idx];
+            const adjustHeight = () => {
+                // Skip layout mutation until intrinsic dimensions are actually known
+                if (!logoContainer || !img.naturalWidth || !img.naturalHeight) return;
+
+                const aspect = img.naturalWidth / img.naturalHeight || 1;
+                const maxW = 400; // max-width of .hero-logo in CSS
+                const maxHeight = isCompact ? 110 : 130;
+                const minHeight = isCompact ? 50 : 60;
+
+                const targetHeight = maxW / aspect;
+                const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                const heightCss = `${containerHeight}px`;
+                if (logoContainer.style.height !== heightCss) {
+                    logoContainer.style.height = heightCss;
                 }
             };
 
-            if (img.complete) {
+            if (img.complete && img.naturalWidth > 0) {
                 adjustHeight();
-            } else {
+            } else if (img.getAttribute('src')) {
                 img.onload = adjustHeight;
             }
-        });
+        }
 
         // ────────────────────────────────────────────────────────────────────
         // BlurHash Background Placeholders for Hero Carousel items
@@ -588,42 +766,101 @@ class HeroCarousel {
             const heroBackdrop = canvas.closest('.hero-backdrop');
             if (!heroBackdrop) return;
 
-            // Resolve the backdrop background-image URL
-            const style = heroBackdrop.style.backgroundImage;
-            const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
-            const url = (match && match[1]) || heroBackdrop.dataset.backdrop;
+            // Resolve the backdrop image URL from existing <img> or data-backdrop
+            const existingImg =
+                typeof heroBackdrop.querySelector === 'function'
+                    ? heroBackdrop.querySelector('.hero-backdrop-img')
+                    : null;
+            const url =
+                (existingImg && (existingImg.currentSrc || existingImg.getAttribute('src') || existingImg.src)) ||
+                heroBackdrop.dataset.backdrop;
             if (!url) return;
 
-            // Decode blurhash at low resolution asynchronously
-            import('../utils/BlurHashDecoder.js')
-                .then(({ default: BlurHashDecoder }) => {
-                    const pixels = BlurHashDecoder.decode(hash, 64, 36);
-                    if (pixels && canvas) {
-                        canvas.width = 64;
-                        canvas.height = 36;
-                        const ctx = canvas.getContext('2d');
-                        const imageData = ctx.createImageData(64, 36);
-                        imageData.data.set(pixels);
-                        ctx.putImageData(imageData, 0, 0);
-                    }
-                })
-                .catch((err) => log.error('Failed to decode hero blurhash', err));
+            // -----------------------------------------------------------------
+            // Helper: Dismiss BlurHash canvas cleanly and prevent late redraws
+            // -----------------------------------------------------------------
+            const dismissCanvas = (immediate = false) => {
+                canvas.dataset.dismissed = 'true';
+                if (immediate) {
+                    if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                    return;
+                }
+                canvas.style.opacity = '0';
+                setTimeout(() => {
+                    if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                }, 500);
+            };
 
-            // Track image load to cleanly fade out the blurhash canvas placeholder
-            const img = new Image();
-            img.onload = () => {
-                requestAnimationFrame(() => {
-                    canvas.style.opacity = '0';
-                    setTimeout(() => {
-                        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                    }, 500);
-                });
-            };
-            img.onerror = () => {
-                // If loading fails, remove canvas so it doesn't block underlying display
-                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-            };
-            img.src = url;
+            // -----------------------------------------------------------------
+            // If the backdrop image already decoded from cache, dismiss at once
+            // -----------------------------------------------------------------
+            if (existingImg && existingImg.complete && existingImg.naturalWidth > 0) {
+                dismissCanvas(true);
+                return;
+            }
+
+            // -----------------------------------------------------------------
+            // Hook load events so the placeholder fades as soon as bitmap paints
+            // -----------------------------------------------------------------
+            if (existingImg) {
+                existingImg.addEventListener('load', () => dismissCanvas(false), { once: true });
+                existingImg.addEventListener('error', () => dismissCanvas(true), { once: true });
+            } else {
+                const img = new Image();
+                img.onload = () => {
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(() => dismissCanvas(false));
+                    } else {
+                        dismissCanvas(false);
+                    }
+                };
+                img.onerror = () => dismissCanvas(true);
+                img.src = url;
+            }
+
+            // -----------------------------------------------------------------
+            // Decode blurhash at low resolution asynchronously, from an idle task
+            // -----------------------------------------------------------------
+            idleGate.runWhenIdle(
+                () => {
+                    // Abort if the real backdrop image already loaded or canvas faded
+                    const backdropImg = heroBackdrop.querySelector('.hero-backdrop-img');
+                    const isBackdropLoaded =
+                        (backdropImg && backdropImg.complete && backdropImg.naturalWidth > 0) ||
+                        (this._decodedBackdrops && this._decodedBackdrops[0]);
+                    if (canvas.dataset.dismissed === 'true' || canvas.style.opacity === '0' || isBackdropLoaded) {
+                        dismissCanvas(true);
+                        return;
+                    }
+
+                    import('../utils/BlurHashDecoder.js')
+                        .then(({ default: BlurHashDecoder }) => {
+                            // Secondary check: verify canvas state after dynamic import resolves
+                            if (canvas.dataset.dismissed === 'true' || canvas.style.opacity === '0' || !canvas.isConnected) {
+                                dismissCanvas(true);
+                                return;
+                            }
+                            const pixels = BlurHashDecoder.decode(hash, 64, 36);
+                            if (
+                                pixels &&
+                                canvas &&
+                                canvas.isConnected &&
+                                canvas.style.opacity !== '0' &&
+                                canvas.dataset.dismissed !== 'true'
+                            ) {
+                                canvas.width = 64;
+                                canvas.height = 36;
+                                const ctx = canvas.getContext('2d');
+                                const imageData = ctx.createImageData(64, 36);
+                                imageData.data.set(pixels);
+                                ctx.putImageData(imageData, 0, 0);
+                            }
+                        })
+                        .catch((err) => log.error('Failed to decode hero blurhash', err));
+                },
+                1200,
+                0
+            );
         });
 
         // ────────────────────────────────────────────────────────────────────
@@ -631,10 +868,9 @@ class HeroCarousel {
         // ────────────────────────────────────────────────────────────────────
         // Exclusive to the Immersive (Performance) style and disabled by default.
         // Extracts ambient colors from BlurHash to fill any empty canvas area.
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
-        if (isBlurhashFill) {
-            const activeSlide = this._container.querySelector('.hero-item.active');
+        // ────────────────────────────────────────────────────────────────────
+        if (this._isBlurhashFill) {
+            const activeSlide = this._slideItems[this._currentIndex] || this._container.querySelector('.hero-item.active');
             if (activeSlide) {
                 this._decodeBlurhashFill(activeSlide);
             }
@@ -647,7 +883,7 @@ class HeroCarousel {
         // carousel is no longer visible. Running background auto-scroll transitions
         // and crossfade animations off-screen steals CPU/GPU cycles and causes
         // frame drops during vertical row navigation. We suspend the timer when
-        // off-screen and resume instantly when scrolled back into view.
+        // off-screen and defer resume until vertical scrolling settles completely.
         // ---------------------------------------------------------------------
         if ('IntersectionObserver' in window) {
             this._intersectionObserver = new IntersectionObserver(
@@ -659,22 +895,22 @@ class HeroCarousel {
                             this._isVisible = isVisible;
                             if (!isVisible) {
                                 log.debug('Hero carousel off-screen; suspending timer');
+                                this._cancelObserverScrollFinish();
                                 this._stopAutoScroll();
                             } else if (!this._timer && !this._isFocused) {
                                 log.debug('Hero carousel visible; resuming timer');
-                                // Guard against triggering indicator progress animations or timer restarts mid-scroll
-                                if (window.__scrollController && window.__scrollController.isAnimating) {
+                                // Never synchronously mutate progress bars or start timers inside
+                                // scroll frames; wait for scroll:finished + 200ms settle window.
+                                if (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating) {
                                     if (!this._observerScrollFinishHandler) {
                                         this._observerScrollFinishHandler = () => {
                                             this._observerScrollFinishHandler = null;
-                                            if (this._isVisible && !this._timer && !this._isFocused) {
-                                                this._startAutoScroll();
-                                            }
+                                            this._schedulePostScrollAutoStart(200);
                                         };
                                         eventBus.once('scroll:finished', this._observerScrollFinishHandler);
                                     }
                                 } else {
-                                    this._startAutoScroll();
+                                    this._schedulePostScrollAutoStart(200);
                                 }
                             }
                         }
@@ -686,28 +922,65 @@ class HeroCarousel {
         }
 
         // ---------------------------------------------------------------------
-        // Deferred Single-Slide Preload Window
+        // Active Slide Mount & Staggered Inactive Preload Scheduling
         // ---------------------------------------------------------------------
-        // Rather than eager-loading all 5-10 slides at mount time, we only preload
-        // the immediate next slide (index 1) after an idle interval. Subsequent
-        // slides are preloaded progressively during transitions.
+        // Slide 0 is guaranteed to be the visible slide on mount, so its backdrop
+        // starts loading/decoding immediately. Inactive slides (1..N) are strictly
+        // suppressed during the first 3 seconds after mount to prevent freeze storms
+        // while row descriptors and MDBList metadata populate.
         // ---------------------------------------------------------------------
-        if (this._items.length > 1) {
-            if ('requestIdleCallback' in window) {
-                this._preloadIdleId = window.requestIdleCallback(
-                    () => {
-                        this._preloadSlide(1);
-                        this._preloadIdleId = null;
-                    },
-                    { timeout: 2500 }
-                );
-            } else {
-                this._preloadTimeoutId = setTimeout(() => {
-                    this._preloadSlide(1);
-                    this._preloadTimeoutId = null;
-                }, 1200);
-            }
-        }
+        this._preloadSlide(0);
+
+        // Gate background idle preloading of subsequent slides behind a 3000ms
+        // quiet window after mount, processing strictly 1 slide every 400ms.
+        this._scheduleStackPreload(1, this._initialPreloadDelay);
+        this._scheduleIdlePreload(this._initialPreloadDelay);
+    }
+
+    /**
+     * Staggers off-thread backdrop + logo decoding for stacked slides (indices
+     * 1..N) one slide every 400ms behind idleGate so preloading pauses safely
+     * behind the splash screen and during active scrolling.
+     *
+     * @param {number} index - Slide index to schedule next
+     * @param {number} [delay] - Initial quiet window before starting
+     * @private
+     */
+    _scheduleStackPreload(index, delay) {
+        if (!this._container) return;
+        const count = this._slideItems ? this._slideItems.length : (this._items ? this._items.length : 0);
+        if (index >= count) return;
+
+        this._cancelStackPreload();
+
+        const interval = delay !== undefined ? delay : (this._preloadIntervalMs || 400);
+
+        // Wait interval between slide dispatches, then gate execution via idleGate so
+        // preloads wait for splash dismissal and any in-flight scroll animation.
+        this._stackPreloadTimerId = setTimeout(() => {
+            this._stackPreloadTimerId = null;
+            if (!this._container) return;
+
+            this._stackPreloadIdleTask = idleGate.runWhenIdle(
+                () => {
+                    this._stackPreloadIdleTask = null;
+                    if (!this._container) return;
+
+                    // Abort or reschedule if scrolling or during active crossfade
+                    const isScrollAnimating = () =>
+                        typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+                    if (isScrollAnimating() || this._hideTimeoutId) {
+                        this._scheduleStackPreload(index, this._preloadIntervalMs || 400);
+                        return;
+                    }
+
+                    this._preloadSlide(index);
+                    this._scheduleStackPreload(index + 1, this._preloadIntervalMs || 400);
+                },
+                interval >= 1000 ? 1000 : 100,
+                interval >= 1000 ? 2500 : 800
+            );
+        }, interval);
     }
 
     /**
@@ -734,18 +1007,31 @@ class HeroCarousel {
             clearTimeout(this._preloadTimeoutId);
             this._preloadTimeoutId = null;
         }
+        if (this._idlePreloadTask) {
+            idleGate.cancel(this._idlePreloadTask);
+            this._idlePreloadTask = null;
+        }
         if (this._preloadIdleId && 'cancelIdleCallback' in window) {
             window.cancelIdleCallback(this._preloadIdleId);
             this._preloadIdleId = null;
+        }
+        // Cancel staggered stacked-slide preload timer and idle task
+        this._cancelStackPreload();
+        this._cancelPreloadQueue();
+        this._cancelWarmSlideGpuCache();
+        if (this._upcomingPreloadTimerId) {
+            clearTimeout(this._upcomingPreloadTimerId);
+            this._upcomingPreloadTimerId = null;
+        }
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+            this._postScrollAutoStartTimerId = null;
         }
         if (this._intersectionObserver) {
             this._intersectionObserver.disconnect();
             this._intersectionObserver = null;
         }
-        if (this._observerScrollFinishHandler) {
-            eventBus.off('scroll:finished', this._observerScrollFinishHandler);
-            this._observerScrollFinishHandler = null;
-        }
+        this._cancelObserverScrollFinish();
         if (this._scrollFinishHandler) {
             eventBus.off('scroll:finished', this._scrollFinishHandler);
             this._scrollFinishHandler = null;
@@ -760,6 +1046,18 @@ class HeroCarousel {
             this._container.removeEventListener('touchcancel', this._touchHandlers.onTouchCancel);
             this._touchHandlers = null;
         }
+        // Release retained decoded Image references and cached DOM elements
+        this._retainedImages = [];
+        this._decodedBackdrops = Object.create(null);
+        this._warmedSlides = Object.create(null);
+        this._slideItems = null;
+        this._dotItems = null;
+        this._slideBackdrops = null;
+        this._slideBackdropImages = null;
+        this._slideBlurhashCanvases = null;
+        this._slideLogos = null;
+        this._slideLogoContainers = null;
+        this._container = null;
         focusManager.unregister('home-hero');
     }
 
@@ -792,21 +1090,29 @@ class HeroCarousel {
 
     /**
      * Start the auto-scroll timer
+     * @param {Object} [options={}]
+     * @param {boolean} [options.resetIndicator=true] - Whether to reset an already-active indicator dot
      * @private
      */
-    _startAutoScroll() {
+    _startAutoScroll(options = {}) {
         this._stopAutoScroll();
         if (this._items.length <= 1) return;
 
         // Bypassed if carousel is currently suspended off-screen
         if (this._isVisible === false) return;
 
-        // Reset the visual progress bar to stay in sync with the JS timer
-        // ONLY if animations are enabled AND we are using the 'progress' indicator style.
-        // Static indicators ('lines', 'dots') do not require any animation frames or resets.
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
-        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
-        if (indicatorStyle === 'progress' && isAnimationEnabled) {
+        // Reset the visual progress bar to stay in sync with the JS timer ONLY
+        // when restarting on an already-active dot (e.g. re-focusing carousel).
+        // When goTo() just activated a brand-new dot, avoid stripping/re-adding
+        // .active 40ms later since that triggers a duplicate width transition.
+        const indicatorStyle =
+            this._indicatorStyle !== null ? this._indicatorStyle : storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        const isAnimationEnabled =
+            this._isAnimationEnabled !== null
+                ? this._isAnimationEnabled
+                : storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        const shouldResetIndicator = options.resetIndicator !== false;
+        if (indicatorStyle === 'progress' && isAnimationEnabled && shouldResetIndicator) {
             this._resetIndicatorAnimation();
         }
 
@@ -820,10 +1126,52 @@ class HeroCarousel {
      * @private
      */
     _stopAutoScroll() {
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+            this._postScrollAutoStartTimerId = null;
+        }
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = null;
         }
+    }
+
+    /**
+     * Defers auto-scroll startup out of the immediate `scroll:finished` or
+     * visibility callback turn so restarting progress indicator animations
+     * never bundles into ScrollController's finish long-task window.
+     *
+     * @param {number} [delayMs=60] - Settle window before resuming timer
+     * @private
+     */
+    _schedulePostScrollAutoStart(delayMs = 60) {
+        if (this._postScrollAutoStartTimerId) {
+            clearTimeout(this._postScrollAutoStartTimerId);
+        }
+        this._postScrollAutoStartTimerId = setTimeout(() => {
+            this._postScrollAutoStartTimerId = null;
+            if (!this._container || !this._isVisible) return;
+
+            // A second scroll can begin inside the settle window (e.g. the user
+            // taps Down again 100ms after the first stop). Re-check the live
+            // scroll state here instead of trusting the earlier visibility
+            // callback: restarting the timer would reset indicator classes and
+            // inject style/DOM work straight into ScrollController._step.
+            const sc = typeof window !== 'undefined' ? window.__scrollController : null;
+            if (sc && sc.isAnimating) {
+                this._cancelObserverScrollFinish();
+                this._observerScrollFinishHandler = () => {
+                    this._observerScrollFinishHandler = null;
+                    this._schedulePostScrollAutoStart(200);
+                };
+                eventBus.once('scroll:finished', this._observerScrollFinishHandler);
+                return;
+            }
+
+            if (this._isFocused || !this._timer) {
+                this._startAutoScroll();
+            }
+        }, delayMs);
     }
 
     /**
@@ -842,11 +1190,12 @@ class HeroCarousel {
         if (!this._container) return;
 
         // Bypassed completely for static indicator styles (Lines and Dots)
-        const indicatorStyle = storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
+        const indicatorStyle =
+            this._indicatorStyle !== null ? this._indicatorStyle : storage.getItem('pref:heroCarouselIndicatorStyle') || 'dots';
         if (indicatorStyle !== 'progress') return;
 
-        // Retrieve all dot indicators
-        const dots = this._container.querySelectorAll('.hero-dot');
+        // Retrieve cached dot indicators (fallback query only if called pre-init)
+        const dots = this._dotItems || this._container.querySelectorAll('.hero-dot');
         const currentDot = dots[this._currentIndex];
         if (!currentDot) return;
 
@@ -886,67 +1235,793 @@ class HeroCarousel {
      * @private
      */
     _preloadSlide(index) {
-        const items = this._container.querySelectorAll('.hero-item');
+        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
         const item = items[index];
         if (!item) return;
 
-        // ────────────────────────────────────────────────────────────────────
-        // Pre-decode Ambient BlurHash Fill Canvas for Preloaded Slide
-        // ────────────────────────────────────────────────────────────────────
-        // Prepares the background ambient gradient before the slide transitions into view.
-        // Exclusive to the Immersive (Performance) carousel style (disabled by default).
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive-performance';
-        const isBlurhashFill = carouselStyle === 'immersive-performance' && storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
-        if (isBlurhashFill) {
-            this._decodeBlurhashFill(item);
-        }
+        // Deduplicate: a slide is only preloaded once. Sequential stack preload
+        // and idle sweeps can both reach the same index.
+        if (this._preloadedSlides[index]) return;
+        this._preloadedSlides[index] = true;
 
-        // Preload backdrop image
-        const backdrop = item.querySelector('.hero-backdrop');
-        if (backdrop && backdrop.dataset.backdrop && !backdrop.style.backgroundImage) {
+        // Helper to gently fade out Slide 0's BlurHash overlay once decoded
+        const fadeBlurhashCanvas = (immediate = false) => {
+            const canvas = this._slideBlurhashCanvases
+                ? this._slideBlurhashCanvases[index]
+                : (typeof item.querySelector === 'function' ? item.querySelector('.hero-blurhash-canvas') : null);
+            if (!canvas) return;
+            canvas.dataset.dismissed = 'true';
+            if (immediate) {
+                if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                return;
+            }
+            canvas.style.opacity = '0';
+            setTimeout(() => {
+                if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            }, 500);
+        };
+
+        // Preload and retain off-DOM backdrop Image instance
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : item.querySelector('.hero-backdrop');
+        if (backdrop && backdrop.dataset && backdrop.dataset.backdrop && !this._decodedBackdrops[index]) {
             const url = backdrop.dataset.backdrop;
-            const img = new Image();
-            img.onload = () => {
-                if (backdrop.dataset.backdrop === url) {
-                    backdrop.style.backgroundImage = `url('${url}')`;
-                    // Fade out blurhash canvas if present
-                    const canvas = item.querySelector('.hero-blurhash-canvas');
-                    if (canvas) {
-                        canvas.style.opacity = '0';
-                        setTimeout(() => {
-                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
-                        }, 500);
+            const existingImg =
+                (this._slideBackdropImages && this._slideBackdropImages[index]) ||
+                (typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null);
+
+            /*
+             * Creates/decodes the slide's backdrop <img> off-DOM, retains a reference
+             * in _retainedImages/_decodedBackdrops, and attaches it immediately ONLY
+             * if this slide is currently active (inactive slides attach on goTo()).
+             */
+            const applyBackdrop = (effectiveUrl) => {
+                const img = existingImg || new Image();
+                if (!existingImg) {
+                    img.className = 'hero-backdrop-img';
+                    img.alt = '';
+                }
+                this._retainImage(img);
+                this._decodedBackdrops[index] = img;
+
+                let applied = false;
+                const commitBackdrop = () => {
+                    if (applied) return;
+
+                    // -----------------------------------------------------------------
+                    // Active slide check: visible hero backdrop must mount immediately
+                    // -----------------------------------------------------------------
+                    // If this slide is the one currently in view, mount its backdrop
+                    // and dismiss the blurhash placeholder without waiting for user idle.
+                    // Stacking or background warming for inactive slides (1..N) pauses
+                    // while the user is actively scrolling rows.
+                    // -----------------------------------------------------------------
+                    const isActiveSlide = index === this._currentIndex;
+                    if (!isActiveSlide) {
+                        const isScrolling =
+                            (scrollController && scrollController.isAnimating) ||
+                            (typeof window !== 'undefined' &&
+                                window.__scrollController &&
+                                window.__scrollController.isAnimating);
+                        const isUserActive =
+                            !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                        if (isScrolling || isUserActive) {
+                            idleGate.runWhenIdle(commitBackdrop, 1500, 3000);
+                            return;
+                        }
                     }
+
+                    applied = true;
+                    if (!this._container || backdrop.dataset.backdrop !== url) return;
+
+                    if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.commitBackdrop');
+                    // Keep inactive slides detached so off-screen DOM stays minimal;
+                    // goTo() swaps _decodedBackdrops[index] in synchronously.
+                    if (index === this._currentIndex) {
+                        this._mountBackdropImage(backdrop, img);
+                    } else {
+                        // Warm Skia/GPU bitmap and layer caches for inactive slides in the
+                        // background so Pass #1 of goTo() avoids synchronous first-paint stalls.
+                        this._warmSlideGpuCache(index);
+                    }
+                    fadeBlurhashCanvas(false);
+                };
+
+                // -----------------------------------------------------------------
+                // Decoding and load handler setup:
+                // Only bind img.onload if img.decode is not available so that
+                // decode() has full priority without racing or dispatching early.
+                // -----------------------------------------------------------------
+                const hasDecode = typeof img.decode === 'function';
+                if (!hasDecode) {
+                    img.onload = commitBackdrop;
+                }
+
+                // Handle backdrop loading failure with authenticated JS fetch fallback
+                img.onerror = () => {
+                    if (customHeaders?.hasCustomHeaders?.() && (effectiveUrl === url || !img.src.startsWith('blob:'))) {
+                        customHeaders
+                            .resolveImageUrl(url, null, { bypassNative: true })
+                            .then((blobUrl) => {
+                                if (blobUrl && blobUrl !== url) {
+                                    img.src = blobUrl;
+                                    if (typeof img.decode === 'function') {
+                                        img.decode().then(commitBackdrop).catch(() => {
+                                            if (img.complete && img.naturalWidth > 0) {
+                                                commitBackdrop();
+                                            } else {
+                                                fadeBlurhashCanvas(true);
+                                            }
+                                        });
+                                    }
+                                } else {
+                                    fadeBlurhashCanvas(true);
+                                }
+                            })
+                            .catch(() => fadeBlurhashCanvas(true));
+                    } else {
+                        fadeBlurhashCanvas(true);
+                    }
+                };
+
+                // Request async decoding before triggering network fetch
+                if ('decoding' in img) {
+                    img.decoding = 'async';
+                }
+
+                // Avoid re-assigning identical src on pre-rendered Slide 0 <img>
+                const currentSrcAttr = typeof img.getAttribute === 'function' ? img.getAttribute('src') : img.src;
+                if (!existingImg || currentSrcAttr !== effectiveUrl) {
+                    img.src = effectiveUrl;
+                }
+
+                // -----------------------------------------------------------------
+                // Decode off the critical transition path so bitmap pixels are warm
+                // -----------------------------------------------------------------
+                if (hasDecode) {
+                    img.decode()
+                        .then(commitBackdrop)
+                        .catch(() => {
+                            // If decode rejected or aborted on older TV WebKit, verify
+                            // whether the bitmap completed anyway or wire up onload.
+                            if (img.complete && img.naturalWidth > 0) {
+                                commitBackdrop();
+                            } else {
+                                img.onload = commitBackdrop;
+                            }
+                        });
+                } else if (img.complete && img.naturalWidth > 0) {
+                    commitBackdrop();
                 }
             };
-            img.src = url;
+
+            // Resolve via customHeaders if reverse proxy credentials are required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(url);
+                if (cached) {
+                    applyBackdrop(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(url)
+                        .then(applyBackdrop)
+                        .catch(() => applyBackdrop(url));
+                }
+            } else {
+                applyBackdrop(url);
+            }
         }
 
-        // Load logo image if deferred
-        const logo = item.querySelector('.hero-logo');
-        if (logo && logo.dataset.src && !logo.src) {
-            logo.src = logo.dataset.src;
+        // Load logo image if deferred and retain reference across slide switches
+        const logo = this._slideLogos ? this._slideLogos[index] : item.querySelector('.hero-logo');
+        if (logo) {
+            this._retainImage(logo);
+        }
+        if (logo && logo.dataset && logo.dataset.src && !logo.src) {
+            const container =
+                this._slideLogoContainers && this._slideLogoContainers[index]
+                    ? this._slideLogoContainers[index]
+                    : logo.closest('.hero-logo-container');
 
             // Recalculate natural aspect ratio container height once deferred logo loads
             const adjustLogoHeight = () => {
-                const container = logo.closest('.hero-logo-container');
-                if (container) {
+                if (container && logo.naturalWidth > 0 && logo.naturalHeight > 0) {
                     const aspect = logo.naturalWidth / logo.naturalHeight || 1;
-                    const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                    const isCompact =
+                        this._isCompact !== null ? this._isCompact : storage.getItem('pref:heroCarouselCompact') !== 'false';
                     const maxW = 400; // max-width of .hero-logo in CSS
                     const maxHeight = isCompact ? 110 : 130;
                     const minHeight = isCompact ? 50 : 60;
 
                     const targetHeight = maxW / aspect;
                     const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
-                    container.style.height = `${containerHeight}px`;
+                    const heightCss = `${containerHeight}px`;
+                    if (container.style.height !== heightCss) {
+                        container.style.height = heightCss;
+                    }
                 }
             };
 
-            if (logo.complete) {
+            let logoDone = false;
+            const finalizeLogo = () => {
+                if (logoDone) return;
+
+                // -----------------------------------------------------------------
+                // Active slide check: visible header layout must adjust immediately
+                // -----------------------------------------------------------------
+                // The active slide logo height should calculate as soon as its image
+                // loads so layout jumps are avoided. Inactive slides (1..N) defer
+                // adjustments while the user is actively scrolling rows.
+                // -----------------------------------------------------------------
+                const isActiveSlide = index === this._currentIndex;
+                if (!isActiveSlide) {
+                    const isScrolling =
+                        (scrollController && scrollController.isAnimating) ||
+                        (typeof window !== 'undefined' &&
+                            window.__scrollController &&
+                            window.__scrollController.isAnimating);
+                    const isUserActive =
+                        !idleGate.isBootLocked() && idleGate.isUserActive(1500);
+                    if (isScrolling || isUserActive) {
+                        idleGate.runWhenIdle(finalizeLogo, 1500, 3000);
+                        return;
+                    }
+                }
+
+                logoDone = true;
+                if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.finalizeLogo');
                 adjustLogoHeight();
+            };
+
+            /*
+             * Applies the resolved logo source URL, decodes off-thread when available,
+             * and adjusts container height once dimensions are ready.
+             */
+            const applyLogo = (effectiveUrl) => {
+                if ('decoding' in logo) {
+                    logo.decoding = 'async';
+                }
+                const hasLogoDecode = typeof logo.decode === 'function';
+                if (!hasLogoDecode) {
+                    logo.onload = finalizeLogo;
+                }
+                logo.src = effectiveUrl;
+                if (hasLogoDecode) {
+                    logo.decode().then(finalizeLogo).catch(() => {
+                        if (logo.complete && logo.naturalWidth > 0) {
+                            finalizeLogo();
+                        }
+                    });
+                } else if (logo.complete) {
+                    finalizeLogo();
+                }
+            };
+
+            // Fallback for logo images if native network request fails
+            logo.onerror = () => {
+                if (customHeaders?.hasCustomHeaders?.() && !logo.dataset.nativeFallbackTried) {
+                    logo.dataset.nativeFallbackTried = 'true';
+                    customHeaders
+                        .resolveImageUrl(logo.dataset.src, null, { bypassNative: true })
+                        .then((blobUrl) => {
+                            if (blobUrl && blobUrl !== logo.dataset.src) {
+                                logo.removeAttribute('crossorigin');
+                                logo.src = blobUrl;
+                                if (typeof logo.decode === 'function') {
+                                    logo.decode().then(finalizeLogo).catch(() => {
+                                        if (logo.complete && logo.naturalWidth > 0) {
+                                            finalizeLogo();
+                                        }
+                                    });
+                                }
+                            }
+                        })
+                        .catch(() => {});
+                }
+            };
+
+            // Resolve via customHeaders if reverse proxy credentials are required
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(logo.dataset.src);
+                if (cached) {
+                    applyLogo(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(logo.dataset.src)
+                        .then(applyLogo)
+                        .catch(() => applyLogo(logo.dataset.src));
+                }
             } else {
-                logo.onload = adjustLogoHeight;
+                applyLogo(logo.dataset.src);
+            }
+        }
+    }
+
+    /**
+     * Schedules an idle preload sweep for slides around the active index.
+     * Supports configurations beyond the initial stacked preloads while
+     * keeping goTo() strictly a class toggle.
+     *
+     * @param {number} [delay=800] - Quiet window required before the sweep runs
+     * @private
+     */
+    _scheduleIdlePreload(delay = 800) {
+        // Deduplicate: one pending sweep is enough, it covers the whole window.
+        if (this._idlePreloadTask) return;
+        if (!this._container || this._items.length === 0) return;
+
+        this._idlePreloadTask = idleGate.runWhenIdle(() => {
+            this._idlePreloadTask = null;
+            if (!this._container) return;
+
+            // Keep preloading & height adjustments off the active 1000ms CSS crossfade.
+            if (this._hideTimeoutId) {
+                this._scheduleIdlePreload(350);
+                return;
+            }
+
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.idlePreload');
+            const count = this._items.length;
+            const start = Math.max(0, this._currentIndex - 1);
+            const end = Math.min(count - 1, this._currentIndex + 2);
+
+            // Build strictly ordered queue for neighbor slides (1 slide every 400ms)
+            // instead of invoking this._preloadSlide(i) in a single synchronous burst
+            const queue = [];
+            for (let i = start; i <= end; i++) {
+                if (i !== this._currentIndex && !this._preloadedSlides[i] && queue.indexOf(i) === -1) {
+                    queue.push(i);
+                }
+            }
+
+            // Preload wrap-around neighbors when parked at boundary slides
+            if (count > 2) {
+                if (this._currentIndex === 0 && !this._preloadedSlides[count - 1] && queue.indexOf(count - 1) === -1) {
+                    queue.push(count - 1);
+                } else if (this._currentIndex === count - 1 && !this._preloadedSlides[0] && queue.indexOf(0) === -1) {
+                    queue.push(0);
+                }
+            }
+
+            // Append any remaining un-preloaded slides to ensure full coverage
+            for (let i = 0; i < count; i++) {
+                if (i !== this._currentIndex && !this._preloadedSlides[i] && queue.indexOf(i) === -1) {
+                    queue.push(i);
+                }
+            }
+
+            // Dispatch slides strictly one slide every 400ms via progressive queue
+            this._startPreloadQueue(queue);
+
+            // Ambient BlurHash fills are decoded ONLY for the active slide;
+            // non-active slides must never run expensive CPU BlurHash pixel generation.
+            const isBlurhashFill =
+                this._isBlurhashFill !== null
+                    ? this._isBlurhashFill
+                    : (storage.getItem('pref:heroCarouselStyle') || 'immersive-performance') === 'immersive-performance' &&
+                      storage.getItem('pref:heroCarouselBlurhashFill') === 'true';
+            if (isBlurhashFill) {
+                const slides = this._slideItems || this._container.querySelectorAll('.hero-item');
+                if (slides && slides[this._currentIndex]) {
+                    this._decodeBlurhashFill(slides[this._currentIndex]);
+                }
+            }
+        }, delay, 2500);
+    }
+
+    /**
+     * Initiates the progressive background preload queue.
+     *
+     * @param {number[]} queue - Array of slide indices to preload
+     * @private
+     */
+    _startPreloadQueue(queue) {
+        this._cancelPreloadQueue();
+        if (!queue || queue.length === 0) return;
+        this._pendingPreloadQueue = queue.slice();
+        this._processNextPreloadQueueItem();
+    }
+
+    /**
+     * Cancels any pending queue timers, idle tasks, and clears remaining items.
+     *
+     * @private
+     */
+    _cancelPreloadQueue() {
+        if (this._preloadQueueTimer) {
+            clearTimeout(this._preloadQueueTimer);
+            this._preloadQueueTimer = null;
+        }
+        if (this._preloadQueueIdleTask) {
+            idleGate.cancel(this._preloadQueueIdleTask);
+            this._preloadQueueIdleTask = null;
+        }
+        this._pendingPreloadQueue = [];
+    }
+
+    /**
+     * Pops and preloads the next slide from the queue, spacing subsequent
+     * dispatches by 400ms to yield control to the compositor and user navigation.
+     *
+     * @private
+     */
+    _processNextPreloadQueueItem() {
+        if (!this._container || this._pendingPreloadQueue.length === 0) return;
+
+        // Abort / reschedule if user is scrolling or slide crossfade is active
+        const isScrollAnimating = () =>
+            typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+        if (isScrollAnimating() || this._hideTimeoutId) {
+            this._preloadQueueTimer = setTimeout(() => {
+                this._preloadQueueTimer = null;
+                this._processNextPreloadQueueItem();
+            }, this._preloadIntervalMs || 400);
+            return;
+        }
+
+        const nextIndex = this._pendingPreloadQueue.shift();
+        if (nextIndex !== undefined && !this._preloadedSlides[nextIndex]) {
+            this._preloadSlide(nextIndex);
+        }
+
+        // Schedule next slide dispatch if queue still has items
+        if (this._pendingPreloadQueue.length > 0) {
+            const interval = this._preloadIntervalMs || 400;
+            this._preloadQueueTimer = setTimeout(() => {
+                this._preloadQueueTimer = null;
+                this._preloadQueueIdleTask = idleGate.runWhenIdle(
+                    () => {
+                        this._preloadQueueIdleTask = null;
+                        this._processNextPreloadQueueItem();
+                    },
+                    100,
+                    0
+                );
+            }, interval);
+        }
+    }
+
+    /**
+     * Retains a decoded Image reference so Chromium keeps its bitmap warm across
+     * slide changes and offscreen vertical scrolling until destroy() runs.
+     *
+     * @param {HTMLImageElement} img
+     * @private
+     */
+    _retainImage(img) {
+        if (!img || !this._retainedImages) return;
+        if (this._retainedImages.indexOf(img) === -1) {
+            this._retainedImages.push(img);
+        }
+    }
+
+    /**
+     * Cancels both the 100ms spacing timer and the idleGate handle for
+     * background stacked slide preloading.
+     *
+     * @private
+     */
+    _cancelStackPreload() {
+        if (this._stackPreloadTimerId) {
+            clearTimeout(this._stackPreloadTimerId);
+            this._stackPreloadTimerId = null;
+        }
+        if (this._stackPreloadIdleTask) {
+            idleGate.cancel(this._stackPreloadIdleTask);
+            this._stackPreloadIdleTask = null;
+        }
+    }
+
+    /**
+     * Detaches the deferred IntersectionObserver scroll:finished handler if active.
+     *
+     * @private
+     */
+    _cancelObserverScrollFinish() {
+        if (this._observerScrollFinishHandler) {
+            eventBus.off('scroll:finished', this._observerScrollFinishHandler);
+            this._observerScrollFinishHandler = null;
+        }
+    }
+
+    /**
+     * Cancels any in-flight two-frame GPU surface warming pass and detaches
+     * any non-active backdrop <img> it temporarily mounted.
+     *
+     * @param {number} [keepIndex=-1] - Optional incoming active index whose warmed <img> should remain attached
+     * @private
+     */
+    _cancelWarmSlideGpuCache(keepIndex = -1) {
+        if (this._warmSlideRafId !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._warmSlideRafId);
+            this._warmSlideRafId = null;
+        }
+        const prevWarmIdx = this._warmSlideIndex;
+        this._warmSlideIndex = -1;
+        if (prevWarmIdx < 0) return;
+
+        const warmItem = this._slideItems ? this._slideItems[prevWarmIdx] : null;
+        if (warmItem && warmItem.classList) {
+            warmItem.classList.remove('hero-item--gpu-warm');
+        }
+        // Keep the warmed <img> attached if goTo() is activating this exact slide
+        if (
+            prevWarmIdx !== this._currentIndex &&
+            prevWarmIdx !== keepIndex &&
+            this._slideBackdrops &&
+            this._decodedBackdrops
+        ) {
+            const backdrop = this._slideBackdrops[prevWarmIdx];
+            const img = this._decodedBackdrops[prevWarmIdx];
+            if (backdrop && img && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                backdrop.removeChild(img);
+            }
+        }
+    }
+
+    /**
+     * Briefly composites one pre-decoded inactive slide for two animation frames
+     * behind the active slide (via `.hero-item--gpu-warm`), forcing Chromium to
+     * scale/upload the backdrop texture and rasterize text/logo layers before its
+     * first `goTo()` transition, then detaches the `<img>` again so vertical
+     * scrolling never carries extra inactive DOM layers.
+     *
+     * @param {number} index - Slide index to warm
+     * @private
+     */
+    _warmSlideGpuCache(index) {
+        if (typeof requestAnimationFrame !== 'function') return;
+        if (!this._container || index === this._currentIndex || this._warmedSlides[index]) return;
+
+        const items = this._slideItems || (typeof this._container.querySelectorAll === 'function' ? this._container.querySelectorAll('.hero-item') : null);
+        const item = items ? items[index] : null;
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
+        const img = this._decodedBackdrops ? this._decodedBackdrops[index] : null;
+        if (!item || !backdrop || !img) return;
+
+        // Only warm one inactive slide at a time
+        this._cancelWarmSlideGpuCache();
+
+        const isScrollAnimating = () =>
+            typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating;
+
+        this._warmSlideRafId = requestAnimationFrame(() => {
+            this._warmSlideRafId = null;
+            if (!this._container || index === this._currentIndex || this._hideTimeoutId || isScrollAnimating()) {
+                return;
+            }
+
+            // Stage slide briefly at near-zero opacity behind active slide so Chromium
+            // uploads GPU textures instead of culling opacity: 0 layers.
+            this._warmSlideIndex = index;
+            this._mountBackdropImage(backdrop, img);
+            if (item.classList) {
+                item.classList.add('hero-item--gpu-warm');
+            }
+
+            // Wait two frames for commit + GPU composite before detaching again
+            this._warmSlideRafId = requestAnimationFrame(() => {
+                this._warmSlideRafId = null;
+                this._warmSlideRafId = requestAnimationFrame(() => {
+                    this._warmSlideRafId = null;
+                    if (!this._container) return;
+
+                    if (item.classList) {
+                        item.classList.remove('hero-item--gpu-warm');
+                    }
+                    if (index !== this._currentIndex && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                        backdrop.removeChild(img);
+                    }
+                    this._warmedSlides[index] = true;
+                    if (this._warmSlideIndex === index) {
+                        this._warmSlideIndex = -1;
+                    }
+                });
+            });
+        });
+    }
+
+    /**
+     * Inserts a backdrop <img> inside `.hero-backdrop` ahead of any active BlurHash
+     * canvas overlay, avoiding duplicate DOM mutations if already attached.
+     *
+     * @param {Element} backdrop
+     * @param {HTMLImageElement} img
+     * @private
+     */
+    _mountBackdropImage(backdrop, img) {
+        if (!backdrop || !img) return;
+        if (img.parentNode === backdrop) return;
+
+        // Place behind any active .hero-blurhash-canvas overlay while fading out
+        if (typeof backdrop.insertBefore === 'function' && 'firstChild' in backdrop) {
+            backdrop.insertBefore(img, backdrop.firstChild);
+        } else if (typeof backdrop.appendChild === 'function') {
+            backdrop.appendChild(img);
+        }
+
+        // Sync parentNode for minimal test DOM stubs without full child-tracking
+        if (img.parentNode !== backdrop) {
+            img.parentNode = backdrop;
+        }
+    }
+
+    /**
+     * Attaches the pre-decoded (or creates a fallback) backdrop <img> onto a slide
+     * right before `goTo()` transitions it to active.
+     *
+     * @param {number} index - Target slide index
+     * @private
+     */
+    _attachBackdrop(index) {
+        const backdrop = this._slideBackdrops ? this._slideBackdrops[index] : null;
+        if (!backdrop) return;
+
+        let img = this._decodedBackdrops ? this._decodedBackdrops[index] : null;
+        if (!img && this._slideBackdropImages && this._slideBackdropImages[index]) {
+            img = this._slideBackdropImages[index];
+        } else if (!img && typeof backdrop.querySelector === 'function') {
+            img = backdrop.querySelector('.hero-backdrop-img');
+        }
+
+        if (!img) {
+            const rawUrl = backdrop.dataset ? backdrop.dataset.backdrop : null;
+            if (!rawUrl) return;
+            const resolvedUrl = customHeaders?.hasCustomHeaders?.()
+                ? (customHeaders.hasNativeInterception?.(rawUrl) ? rawUrl : customHeaders.getCachedBlobUrl(rawUrl) || null)
+                : rawUrl;
+            if (!resolvedUrl) return;
+
+            img = new Image();
+            img.className = 'hero-backdrop-img';
+            img.alt = '';
+            if ('decoding' in img) {
+                img.decoding = 'async';
+            }
+            img.src = resolvedUrl;
+            this._retainImage(img);
+            if (this._decodedBackdrops) {
+                this._decodedBackdrops[index] = img;
+            }
+        }
+
+        this._mountBackdropImage(backdrop, img);
+    }
+
+    /**
+     * Attaches and begins loading the logo for a slide if still deferred,
+     * adjusting its container height as soon as dimensions are resolved.
+     *
+     * @param {number} index - Slide index
+     * @private
+     */
+    _attachSlideLogo(index) {
+        const logo = this._slideLogos ? this._slideLogos[index] : null;
+        if (!logo) return;
+
+        this._retainImage(logo);
+
+        const container =
+            this._slideLogoContainers && this._slideLogoContainers[index]
+                ? this._slideLogoContainers[index]
+                : (typeof logo.closest === 'function' ? logo.closest('.hero-logo-container') : null);
+
+        // Deduplicate preload flag for this slide so background queues do not re-request
+        this._preloadedSlides[index] = true;
+
+        // If the logo has already loaded (e.g. from background preload), adjust height immediately
+        if (logo.complete && logo.naturalWidth > 0) {
+            if (container) {
+                const aspect = logo.naturalWidth / logo.naturalHeight || 1;
+                const isCompact = this._isCompact !== null ? this._isCompact : true;
+                const maxW = 400;
+                const maxHeight = isCompact ? 110 : 130;
+                const minHeight = isCompact ? 50 : 60;
+                const targetHeight = maxW / aspect;
+                const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                const heightCss = `${containerHeight}px`;
+                if (container.style.height !== heightCss) {
+                    container.style.height = heightCss;
+                }
+            }
+            return;
+        }
+
+        // If still deferred on data-src, initiate load immediately for active slide
+        if (logo.dataset && logo.dataset.src && !logo.src) {
+            const url = logo.dataset.src;
+            const adjustLogoHeight = () => {
+                if (container && logo.naturalWidth > 0 && logo.naturalHeight > 0) {
+                    const aspect = logo.naturalWidth / logo.naturalHeight || 1;
+                    const isCompact = this._isCompact !== null ? this._isCompact : true;
+                    const maxW = 400;
+                    const maxHeight = isCompact ? 110 : 130;
+                    const minHeight = isCompact ? 50 : 60;
+                    const targetHeight = maxW / aspect;
+                    const containerHeight = Math.min(maxHeight, Math.max(minHeight, Math.round(targetHeight)));
+                    const heightCss = `${containerHeight}px`;
+                    if (container.style.height !== heightCss) {
+                        container.style.height = heightCss;
+                    }
+                }
+            };
+
+            const applyLogo = (effectiveUrl) => {
+                if ('decoding' in logo) {
+                    logo.decoding = 'async';
+                }
+                const hasLogoDecode = typeof logo.decode === 'function';
+                if (!hasLogoDecode) {
+                    logo.onload = adjustLogoHeight;
+                }
+                logo.src = effectiveUrl;
+                if (hasLogoDecode) {
+                    logo.decode().then(adjustLogoHeight).catch(() => {
+                        if (logo.complete && logo.naturalWidth > 0) {
+                            adjustLogoHeight();
+                        }
+                    });
+                } else if (logo.complete) {
+                    adjustLogoHeight();
+                }
+            };
+
+            if (customHeaders?.hasCustomHeaders?.()) {
+                const cached = customHeaders.getCachedBlobUrl(url);
+                if (cached) {
+                    applyLogo(cached);
+                } else {
+                    customHeaders
+                        .resolveImageUrl(url)
+                        .then(applyLogo)
+                        .catch(() => applyLogo(url));
+                }
+            } else {
+                applyLogo(url);
+            }
+        }
+    }
+
+    /**
+     * Pre-warms the next upcoming slide in sequence 200ms after a transition begins,
+     * ensuring off-DOM backdrop and logo textures are ready before the next slide switch.
+     *
+     * @param {number} nextIndex - Next slide index to warm
+     * @private
+     */
+    _scheduleUpcomingPreload(nextIndex) {
+        if (this._upcomingPreloadTimerId) {
+            clearTimeout(this._upcomingPreloadTimerId);
+            this._upcomingPreloadTimerId = null;
+        }
+        if (this._items.length <= 1 || this._preloadedSlides[nextIndex]) return;
+
+        this._upcomingPreloadTimerId = setTimeout(() => {
+            this._upcomingPreloadTimerId = null;
+            if (this._container) {
+                this._preloadSlide(nextIndex);
+            }
+        }, 200);
+    }
+
+    /**
+     * Detaches inactive slides' backdrop <img> nodes from the DOM once crossfade
+     * settles, while keeping their decoded Image instances inside `_retainedImages`
+     * and `_decodedBackdrops` for instant zero-decode subsequent swaps.
+     *
+     * @param {number} activeIndex - Currently active slide index to preserve
+     * @private
+     */
+    _detachInactiveBackdrops(activeIndex) {
+        if (!this._slideBackdrops) return;
+        for (let i = 0; i < this._slideBackdrops.length; i++) {
+            if (i === activeIndex) continue;
+            const backdrop = this._slideBackdrops[i];
+            if (!backdrop) continue;
+
+            const img =
+                (this._decodedBackdrops && this._decodedBackdrops[i]) ||
+                (typeof backdrop.querySelector === 'function' ? backdrop.querySelector('.hero-backdrop-img') : null);
+            if (img && img.parentNode === backdrop && typeof backdrop.removeChild === 'function') {
+                backdrop.removeChild(img);
             }
         }
     }
@@ -971,73 +2046,66 @@ class HeroCarousel {
      * Navigate to a specific item
      */
     goTo(index) {
-        if (index === this._currentIndex) return;
+        if (index === this._currentIndex || !this._container) return;
 
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo');
         log.debug(`Navigating to hero item ${index}`);
 
-        const items = this._container.querySelectorAll('.hero-item');
-        const dots = this._container.querySelectorAll('.hero-dot');
+        const items = this._slideItems || this._container.querySelectorAll('.hero-item');
+        const dots = this._dotItems || this._container.querySelectorAll('.hero-dot');
 
         if (!items[index] || !dots[index]) return;
 
-        const prevItem = items[this._currentIndex];
+        // Cancel any background GPU-warming frame cleanly while preserving the incoming slide's <img>
+        this._cancelWarmSlideGpuCache(index);
+
+        const prevIndex = this._currentIndex;
+        const prevItem = items[prevIndex];
         const nextItem = items[index];
 
-        // Hide all non-adjacent slides immediately to free GPU memory
-        items.forEach((item, i) => {
-            if (i !== this._currentIndex && i !== index) {
-                item.style.visibility = 'hidden';
-            }
-        });
+        // Swap in the pre-decoded <img> for the incoming slide before activating it
+        this._attachBackdrop(index);
 
-        // Preload the target slide's images
-        this._preloadSlide(index);
+        // Ensure incoming active slide has its logo attached and loading immediately
+        this._attachSlideLogo(index);
 
-        // Make the new slide visible and promote GPU layers before transition
-        nextItem.style.visibility = 'visible';
-        nextItem.style.willChange = 'opacity';
-        const nextContent = nextItem.querySelector('.hero-content');
-        if (nextContent) nextContent.style.willChange = 'transform, opacity';
-        const nextBackdrop = nextItem.querySelector('.hero-backdrop');
-        if (nextBackdrop) nextBackdrop.style.willChange = 'transform';
-
-        // Update classes
         prevItem.classList.remove('active');
-        dots[this._currentIndex].classList.remove('active');
+        dots[prevIndex].classList.remove('active');
 
         this._currentIndex = index;
 
         nextItem.classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
-        // After the opacity transition completes, hide the previous slide
-        // and demote GPU compositing layers to release texture caches
+        // Cancel previous neighbor preload queue
+        this._cancelPreloadQueue();
+
+        // Pre-warm the next upcoming slide in sequence after a 200ms settle window
+        const nextUpcoming = (index + 1) % this._items.length;
+        this._scheduleUpcomingPreload(nextUpcoming);
+
+        // Timestamp the synchronous portion only: everything after this point is
+        // timer/rAF work, so a long task attributed to a later mark is deferred
+        // paint/compositor cost — not class-toggle cost.
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:classes');
+
+        // Detach inactive backdrop <img> DOM nodes once the 1000ms crossfade
+        // completes while keeping their decoded Image references in _retainedImages.
         if (this._hideTimeoutId) clearTimeout(this._hideTimeoutId);
         this._hideTimeoutId = setTimeout(() => {
-            prevItem.style.visibility = 'hidden';
-            prevItem.style.willChange = 'auto';
-            const prevContent = prevItem.querySelector('.hero-content');
-            if (prevContent) prevContent.style.willChange = 'auto';
-            const prevBackdrop = prevItem.querySelector('.hero-backdrop');
-            if (prevBackdrop) prevBackdrop.style.willChange = 'auto';
-
-            // Clean up will-change on active item now that transition is settled
-            nextItem.style.willChange = 'auto';
-            if (nextContent) nextContent.style.willChange = 'auto';
-            if (nextBackdrop) nextBackdrop.style.willChange = 'auto';
-
             this._hideTimeoutId = null;
-        }, 1050); // Just after the 1000ms opacity transition
+            if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:crossfadeSettled');
+            this._detachInactiveBackdrops(this._currentIndex);
+        }, 1050);
 
-        // Preload adjacent slides for instant navigation
-        const nextAdjacent = (this._currentIndex + 1) % this._items.length;
-        const prevAdjacent = (this._currentIndex - 1 + this._items.length) % this._items.length;
-        if (nextAdjacent !== index) this._preloadSlide(nextAdjacent);
-        if (prevAdjacent !== index) this._preloadSlide(prevAdjacent);
+        // Extend any sliding-window preload (>5 slides) / BlurHash fill past crossfade.
+        this._scheduleIdlePreload(1200);
 
-        // Restart timer on navigation. This will also restart the progress
-        // animation if it is enabled.
-        this._startAutoScroll();
+        // Restart timer on slide switch without stripping/re-adding .active on the
+        // brand-new dot 40ms later, preventing a duplicate indicator width transition.
+        this._startAutoScroll({ resetIndicator: false });
+
+        if (typeof markPerfOperation === 'function') markPerfOperation('HeroCarousel.goTo:deferredScheduled');
     }
 
     /**
@@ -1072,9 +2140,7 @@ class HeroCarousel {
         if (window.__scrollController && window.__scrollController.isAnimating) {
             this._scrollFinishHandler = () => {
                 this._scrollFinishHandler = null;
-                if (this._isFocused && this._isVisible) {
-                    this._startAutoScroll();
-                }
+                this._schedulePostScrollAutoStart();
             };
             eventBus.once('scroll:finished', this._scrollFinishHandler);
         } else {
@@ -1145,12 +2211,38 @@ class HeroCarousel {
     _decodeBlurhashFill(itemElement) {
         if (!itemElement) return;
 
+        // Never decode BlurHash canvases for inactive slides.
+        // Canvas operations on inactive slides burn hundreds of milliseconds of TV CPU.
+        const activeSlide = this._slideItems ? this._slideItems[this._currentIndex] : null;
+        if (activeSlide && itemElement !== activeSlide) return;
+        if (itemElement.classList && !itemElement.classList.contains('active')) return;
+
         // Locate the blurhash fill canvas element within this slide
         const canvas = itemElement.querySelector('.hero-blurhash-fill-canvas');
         if (!canvas || canvas.dataset.decoded === 'true') return;
 
         const hash = canvas.dataset.blurhash;
         if (!hash) return;
+
+        // Never decode during an active crossfade or scroll transition. Requeue
+        // the work on the idle gate instead of burning the transition frame.
+        if (
+            this._hideTimeoutId ||
+            (typeof window !== 'undefined' && window.__scrollController && window.__scrollController.isAnimating)
+        ) {
+            if (!canvas.dataset.decodeDeferred) {
+                canvas.dataset.decodeDeferred = '1';
+                idleGate.runWhenIdle(
+                    () => {
+                        if (canvas.dataset) delete canvas.dataset.decodeDeferred;
+                        this._decodeBlurhashFill(itemElement);
+                    },
+                    600,
+                    0
+                );
+            }
+            return;
+        }
 
         // Mark decoding initiated to avoid redundant decode passes
         canvas.dataset.decoded = 'true';

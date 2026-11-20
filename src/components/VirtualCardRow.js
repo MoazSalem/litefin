@@ -1,8 +1,10 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
-import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
+import { scrollController } from '../ui/ScrollController.js';
+import { mouseRowScroller } from '../ui/MouseRowScroller.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 
 export class VirtualCardRow {
     /**
@@ -53,12 +55,22 @@ export class VirtualCardRow {
         const scale = isExpanded
             ? parseFloat(storage.getItem('pref:expandedCardSizeScale')) || 1.2
             : isModernPosters
-                ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
-                : isModern
-                    ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2
-                    : isExpanding
-                        ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
-                        : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+              ? parseFloat(storage.getItem('pref:modernPostersCardSizeScale')) || 1.2
+              : isModern
+                ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.2
+                : isExpanding
+                  ? parseFloat(storage.getItem('pref:expandingCardSizeScale')) || 1.0
+                  : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+
+        // ---------------------------------------------------------------------
+        // Persistent Scale Metrics
+        // ---------------------------------------------------------------------
+        // Persist resolved scale factor and multiplier directly on the instance.
+        // This ensures runtime window updates can calculate physical card pixel
+        // dimensions dynamically without repetitive storage or parsing overhead.
+        // ---------------------------------------------------------------------
+        this.scale = scale;
+        this.modernMultiplier = scale;
 
         // =====================================================================
         // Portrait Mobile & Scaled Viewport Track Padding
@@ -67,9 +79,10 @@ export class VirtualCardRow {
         // from 60px to 20px so that horizontal card rows align seamlessly with
         // page typography, rich metadata, and content card margins above.
         // =====================================================================
-        const isPortrait = document.documentElement.hasAttribute('data-litefin-portrait') ||
+        const isPortrait =
+            document.documentElement.hasAttribute('data-litefin-portrait') ||
             document.documentElement.hasAttribute('data-litefin-scaled') ||
-            (window.innerHeight > window.innerWidth);
+            window.innerHeight > window.innerWidth;
         const defaultSidePadding = isPortrait ? 20 : 60;
 
         if (isExpanded) {
@@ -78,7 +91,11 @@ export class VirtualCardRow {
             // =================================================================
             // Modern Cards (Expanded): Uniform 16:9 Widescreen Cards (396px base)
             // =================================================================
-            if (this.cardType === 'square' || this.cardType === 'artist' || (isExpanded && this.cardType === 'person')) {
+            if (
+                this.cardType === 'square' ||
+                this.cardType === 'artist' ||
+                (isExpanded && this.cardType === 'person')
+            ) {
                 this.itemWidth = Math.round(223 * scale);
             } else {
                 this.itemWidth = Math.round(396 * scale);
@@ -171,7 +188,9 @@ export class VirtualCardRow {
         this.track.__virtualRow = this;
 
         // Expanding: Handle Poster-to-Landscape Expansion logic
+        // Declare callbacks at method scope so global and native focus event listeners can invoke them
         let loadExpansionThumb;
+        let handleFocus;
         if (isExpanding) {
             // Add a buffer for the expanded card width (375px) so the track doesn't clip.
             // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
@@ -237,7 +256,7 @@ export class VirtualCardRow {
              *
              * @param {HTMLElement} element - The target focused element or sub-component.
              */
-            const handleFocus = (element) => {
+            handleFocus = (element) => {
                 // Find the closest media-card ancestor within this row
                 const card = element.closest('.media-card');
 
@@ -395,8 +414,8 @@ export class VirtualCardRow {
                 imageRatioDiv.style.paddingBottom = this.isLandscape
                     ? '56.25%'
                     : this.cardType === 'square' || this.cardType === 'artist'
-                        ? '100%'
-                        : '150%';
+                      ? '100%'
+                      : '150%';
                 imageRatioDiv.style.border = '3px solid transparent';
                 dummyContent.appendChild(imageRatioDiv);
 
@@ -419,7 +438,11 @@ export class VirtualCardRow {
                 imageRatioDiv.style.width = '100%';
                 imageRatioDiv.style.height = '0';
                 let padding = '150%'; // Classic & Modern Portrait Poster (2:3)
-                if (this.cardType === 'square' || this.cardType === 'artist' || ((isExpanded || isModernPosters) && this.cardType === 'person')) {
+                if (
+                    this.cardType === 'square' ||
+                    this.cardType === 'artist' ||
+                    ((isExpanded || isModernPosters) && this.cardType === 'person')
+                ) {
                     // Square / Artist / Person icon: 1:1 aspect ratio
                     padding = '100%';
                 } else if (this.isLandscape || isExpanded) {
@@ -458,6 +481,15 @@ export class VirtualCardRow {
 
         this.domNodes = new Map(); // Maps index -> HTMLElement
 
+        /**
+         * Last window range materialized in the DOM ({ start, end }).
+         * Used to short-circuit _updateWindow() when the sliding window has not
+         * actually moved — the diff loops and child-order sort are pure overhead
+         * when the focused card stays inside the same rendered range.
+         * @type {{start: number, end: number}|null}
+         */
+        this._renderedRange = null;
+
         if (this._initialWindow != null && this.currentIndex === 0) {
             this._isBootRender = true;
         }
@@ -469,7 +501,8 @@ export class VirtualCardRow {
         if (this.currentIndex > 0) {
             const isRtl = document.documentElement.dir === 'rtl';
             const elementPos = this.getItemPosition(this.currentIndex);
-            const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const canExpand =
+                isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
 
             const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
@@ -478,19 +511,28 @@ export class VirtualCardRow {
             const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
             // =================================================================
-            // ANDROID SCROLL RESTORATION: Native scrollLeft owns position
+            // SCROLL RESTORATION: Check active horizontal scroll mode
             // =================================================================
-            // On Android, TouchHorizontalScroller turns row-items into a native
-            // overflow-x scroller. Restoring focus must write to parent scrollLeft
-            // instead of applying a CSS transform to prevent transform fights.
-            if (platformInfo.isAndroid) {
+            /*
+             * Active horizontal scroll animation mode resolution.
+             * In native mode, native container scrollLeft owns position (Smooth).
+             * In GPU mode, hardware CSS translate3d owns position on .row-items-track.
+             * Defaults to 'native' (Smooth) across all targets.
+             */
+            const horizontalScrollMode =
+                storage.getItem('pref:horizontalScrollMode') || 'native';
+
+            if (horizontalScrollMode === 'native') {
                 requestAnimationFrame(() => {
                     if (this.track.parentElement) {
                         this.track.parentElement.scrollLeft = isRtl ? -finalScrollLeft : finalScrollLeft;
                     }
                 });
-                // Skip track transform restore below — native scroll owns geometry on Android
+                // Skip track transform restore below — native scroll owns geometry on touch scrollers
             } else {
+                if (this.track.parentElement && this.track.parentElement.scrollLeft !== 0) {
+                    this.track.parentElement.scrollLeft = 0;
+                }
                 this.track.style.transition = 'none';
                 this.track.style.webkitTransition = 'none';
 
@@ -572,64 +614,77 @@ export class VirtualCardRow {
         // Page size: roughly half the visible row width per click
         const pageSize = Math.max(1, Math.floor(this.visibleCount / 1.5));
 
-        /**
-         * Scroll the track to center on `targetIndex` without touching focus.
-         *
-         * We replicate the exact same translate3d formula that ScrollController uses
-         * (src/ui/ScrollController.js ~L508-L564) so the visual result is identical,
-         * but we skip focusManager.focusElement() so the keyboard/remote focus ring
-         * stays exactly where the user left it.
-         */
-        const scrollToIndex = (targetIndex) => {
-            const isRtl = document.documentElement.dir === 'rtl';
-            const clamped = Math.max(0, Math.min(this.totalItems - 1, targetIndex));
-
-            // Update virtual window so the target cards are in the DOM
-            this.currentIndex = clamped;
-            this._updateWindow(this.currentIndex);
-
-            // Compute the scroll offset (mirrors ScrollController logic exactly)
-            const elementPos = this.getItemPosition(clamped);
-
-            // -----------------------------------------------------------------
-            // Card Centering Geometry (Expanding Posters)
-            // -----------------------------------------------------------------
-            // If we are running the expanding posters layout and the cards can expand,
-            // we center the card based on its EXPANDED width (468px/600px).
-            // This prevents the card's right boundary from clipping and centers
-            // the expanded card perfectly in the middle of the viewport.
-            // -----------------------------------------------------------------
-            const isExpanding = document.documentElement.getAttribute('data-layout-media-rows') === 'expanding';
-            const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
-            const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
-
-            const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
-            const trackWidth = this.getTrackWidth();
-
-            const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
-            const maxScroll = Math.max(0, trackWidth - containerWidth);
-            const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
-
-            // Apply smooth CSS transition — same transition the track CSS already has
-            const transformValue = isRtl
-                ? `translate3d(${finalScrollLeft}px, 0, 0)`
-                : `translate3d(-${finalScrollLeft}px, 0, 0)`;
-
-            this.track.style.webkitTransform = transformValue;
-            this.track.style.transform = transformValue;
-        };
-
         leftBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            scrollToIndex(this.currentIndex - pageSize);
+            this._scrollFromArrow(-pageSize);
         });
 
         rightBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            scrollToIndex(this.currentIndex + pageSize);
+            this._scrollFromArrow(pageSize);
         });
 
         sectionEl.appendChild(arrowContainer);
+    }
+
+    /**
+     * ========================================================================
+     * Scroll-Arrow Page Scroll
+     * ========================================================================
+     * Scrolls the row by `deltaIndex` cards without touching focus. The
+     * position writer depends on the active horizontal scroll mode:
+     *
+     * - 'native'/'instant' (Web, Desktop, TVs): the container's scrollLeft
+     *   owns position. Writing a CSS transform here STACKS with the live
+     *   scrollLeft and produced badly offset, janky jumps. Instead we hand
+     *   the target to MouseRowScroller.scrollRowTo() which animates
+     *   scrollLeft smoothly with easeOutQuad and keeps the virtual window
+     *   synchronized frame-by-frame.
+     *
+     * - 'gpu' (Android): the track transform owns position; write translate3d
+     *   directly (CSS transition provides the easing).
+     *
+     * @param {number} deltaIndex - Signed number of cards to advance (RTL-aware)
+     * @private
+     */
+    _scrollFromArrow(deltaIndex) {
+        const rowItems = this.track.parentElement;
+        if (!rowItems) return;
+
+        const clamped = Math.max(0, Math.min(this.totalItems - 1, this.currentIndex + deltaIndex));
+
+        // -----------------------------------------------------------------
+        // Centering geometry — mirrors ScrollController / settle math exactly
+        // -----------------------------------------------------------------
+        const elementPos = this.getItemPosition(clamped);
+
+        // Expanding layouts must center on the EXPANDED card width so the
+        // target card's boundaries never clip at the viewport edge
+        const isExpanding = document.documentElement.getAttribute('data-layout-media-rows') === 'expanding';
+        const canExpand = isExpanding && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+        const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
+
+        const containerWidth = rowItems.clientWidth;
+        const maxScroll = Math.max(0, this.getTrackWidth() - containerWidth);
+        const targetScroll = Math.max(0, Math.min(elementPos - containerWidth / 2 + elementWidth / 2, maxScroll));
+
+        // Update virtual window so the target cards are rendered before moving
+        this.currentIndex = clamped;
+        this._updateWindow(clamped);
+
+        const scrollMode = scrollController.getHorizontalScrollMode();
+        if (scrollMode === 'gpu') {
+            // GPU mode: transform owns position — same writer ScrollController uses
+            const isRtl = document.documentElement.dir === 'rtl';
+            const transformValue = isRtl
+                ? `translate3d(${targetScroll}px, 0, 0)`
+                : `translate3d(-${targetScroll}px, 0, 0)`;
+            this.track.style.webkitTransform = transformValue;
+            this.track.style.transform = transformValue;
+        } else {
+            // Native mode: animate scrollLeft via the shared smooth scroller
+            mouseRowScroller.scrollRowTo(rowItems, targetScroll);
+        }
     }
 
     /**
@@ -645,6 +700,7 @@ export class VirtualCardRow {
         // All subsequent calls fall through to the normal sliding-window logic.
         if (this._isBootRender) {
             this._isBootRender = false; // Never repeat the boot path
+            if (typeof markPerfOperation === 'function') markPerfOperation('VirtualCardRow._updateWindow');
             const bootEnd = Math.min(this.totalItems - 1, this._initialWindow - 1);
 
             // Build [0 .. bootEnd] — unconditionally, no size checks needed
@@ -671,8 +727,49 @@ export class VirtualCardRow {
                             cardNode.style.left = `${leftPos}px`;
                         }
                         cardNode.style.top = '0';
-                        if (!this.isModern && !this.isExpanded && !this.isModernPosters && !this.isExpanding) {
-                            cardNode.style.width = `${this.itemWidth}px`;
+                        // -----------------------------------------------------------------
+                        // Explicit Dimensional Calculation & Legacy Coordinate Synchronization
+                        // -----------------------------------------------------------------
+                        // On legacy and ultra-legacy engines (Chromium < 49 / Tizen 2-3 / webOS 1-3),
+                        // runtime CSS custom properties applied via track style.setProperty do not
+                        // resolve on element selectors. Setting explicit inline dimensions guarantees
+                        // that every card matches this.totalItemWidth mathematically, eliminating
+                        // empty spacing gaps between items across all layouts.
+                        // -----------------------------------------------------------------
+                        if (!this.isExpanding) {
+                            let cardWidth = this.itemWidth;
+                            if (cardNode.classList.contains('landscape') && !this.isLandscape) {
+                                const baseW = (this.isModern || this.isExpanded || this.isModernPosters) ? 396 : 400;
+                                cardWidth = Math.round(baseW * (this.modernMultiplier || this.scale || 1.0));
+                            } else if (cardNode.classList.contains('square') && this.cardType !== 'square' && this.cardType !== 'artist') {
+                                cardWidth = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                            }
+                            cardNode.style.width = `${cardWidth}px`;
+                            cardNode.style.marginLeft = '0px';
+                            cardNode.style.marginRight = `${this.itemMargin}px`;
+
+                            // -----------------------------------------------------------------
+                            // Card Image Surface Height Normalization
+                            // -----------------------------------------------------------------
+                            // Ensure the card image container's physical height matches the target
+                            // aspect ratio (16:9 for landscape, 2:3 for portrait, 1:1 for square)
+                            // scaled by user preferences, preventing stretched or squished posters.
+                            // -----------------------------------------------------------------
+                            const cardImage = cardNode.querySelector('.card-image');
+                            if (cardImage && (this.isModern || this.isExpanded || this.isModernPosters)) {
+                                let imageHeight;
+                                if (cardNode.classList.contains('landscape') || (this.isLandscape && !cardNode.classList.contains('square'))) {
+                                    imageHeight = Math.round(222.75 * (this.modernMultiplier || this.scale || 1.0));
+                                } else if (cardNode.classList.contains('square') || this.cardType === 'square' || this.cardType === 'artist') {
+                                    imageHeight = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                                } else {
+                                    imageHeight = Math.round(318 * (this.modernMultiplier || this.scale || 1.0));
+                                }
+                                cardImage.style.setProperty('height', `${imageHeight}px`, 'important');
+                            }
+                        } else {
+                            // In expanding poster mode, reset horizontal margin to align with coordinates
+                            cardNode.style.marginLeft = '0px';
                         }
                         cardNode.dataset.virtualIndex = i;
                         cardNode.setAttribute('data-virtual-index', i);
@@ -727,6 +824,23 @@ export class VirtualCardRow {
             }
         }
 
+        // ── No-op window fast path ──────────────────────────────────────────
+        // If the computed range is identical to the range already in the DOM and
+        // every index in it is still materialized, there is nothing to diff.
+        // Avoids re-allocating a Set, walking domNodes, and re-sorting children
+        // on every D-pad press that stays inside the current window.
+        const prevRange = this._renderedRange;
+        if (
+            prevRange &&
+            prevRange.start === start &&
+            prevRange.end === end &&
+            this.domNodes.size === end - start + 1
+        ) {
+            return;
+        }
+        this._renderedRange = { start, end };
+        if (typeof markPerfOperation === 'function') markPerfOperation('VirtualCardRow._updateWindow');
+
         const requiredIndices = new Set();
         for (let i = start; i <= end; i++) {
             requiredIndices.add(i);
@@ -773,8 +887,49 @@ export class VirtualCardRow {
                     }
 
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
-                    if (!this.isModern && !this.isExpanded && !this.isModernPosters && !this.isExpanding) {
-                        cardNode.style.width = `${this.itemWidth}px`;
+                    // -----------------------------------------------------------------
+                    // Explicit Dimensional Calculation & Legacy Coordinate Synchronization
+                    // -----------------------------------------------------------------
+                    // On legacy and ultra-legacy engines (Chromium < 49 / Tizen 2-3 / webOS 1-3),
+                    // runtime CSS custom properties applied via track style.setProperty do not
+                    // resolve on element selectors. Setting explicit inline dimensions guarantees
+                    // that every card matches this.totalItemWidth mathematically, eliminating
+                    // empty spacing gaps between items across all layouts.
+                    // -----------------------------------------------------------------
+                    if (!this.isExpanding) {
+                        let cardWidth = this.itemWidth;
+                        if (cardNode.classList.contains('landscape') && !this.isLandscape) {
+                            const baseW = (this.isModern || this.isExpanded || this.isModernPosters) ? 396 : 400;
+                            cardWidth = Math.round(baseW * (this.modernMultiplier || this.scale || 1.0));
+                        } else if (cardNode.classList.contains('square') && this.cardType !== 'square' && this.cardType !== 'artist') {
+                            cardWidth = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                        }
+                        cardNode.style.width = `${cardWidth}px`;
+                        cardNode.style.marginLeft = '0px';
+                        cardNode.style.marginRight = `${this.itemMargin}px`;
+
+                        // -----------------------------------------------------------------
+                        // Card Image Surface Height Normalization
+                        // -----------------------------------------------------------------
+                        // Ensure the card image container's physical height matches the target
+                        // aspect ratio (16:9 for landscape, 2:3 for portrait, 1:1 for square)
+                        // scaled by user preferences, preventing stretched or squished posters.
+                        // -----------------------------------------------------------------
+                        const cardImage = cardNode.querySelector('.card-image');
+                        if (cardImage && (this.isModern || this.isExpanded || this.isModernPosters)) {
+                            let imageHeight;
+                            if (cardNode.classList.contains('landscape') || (this.isLandscape && !cardNode.classList.contains('square'))) {
+                                imageHeight = Math.round(222.75 * (this.modernMultiplier || this.scale || 1.0));
+                            } else if (cardNode.classList.contains('square') || this.cardType === 'square' || this.cardType === 'artist') {
+                                imageHeight = Math.round(223 * (this.modernMultiplier || this.scale || 1.0));
+                            } else {
+                                imageHeight = Math.round(318 * (this.modernMultiplier || this.scale || 1.0));
+                            }
+                            cardImage.style.setProperty('height', `${imageHeight}px`, 'important');
+                        }
+                    } else {
+                        // In expanding poster mode, reset horizontal margin to align with coordinates
+                        cardNode.style.marginLeft = '0px';
                     }
 
                     // Add index for identifying the card in focus handlers
@@ -948,7 +1103,9 @@ export class VirtualCardRow {
         } else {
             const targetStr = String(target).replace(/-/g, '').toLowerCase();
             index = this.items.findIndex((item) => {
-                const id = String(item.Id || item.id || '').replace(/-/g, '').toLowerCase();
+                const id = String(item.Id || item.id || '')
+                    .replace(/-/g, '')
+                    .toLowerCase();
                 return id === targetStr;
             });
         }

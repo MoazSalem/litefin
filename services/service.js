@@ -820,10 +820,10 @@ proxyServer.listen(PORT, LISTEN_HOST, function() {
 // These module.exports callbacks are called by the Tizen service framework
 // when the ytresolver service receives an ApplicationControl request.
 //
-// The HTTP proxy started above continues running independently — we do NOT
-// call tizen.application.getCurrentApplication().exit() here (unlike the
-// jellyfin-tizen reference implementation) because the ytresolver service
-// must remain alive to handle trailer and discovery HTTP requests.
+// After a successful setPreviewData() the service exits, because Samsung only
+// commits preview tiles once the service process terminates. This briefly
+// stops the HTTP proxy above; SmartHubManager relaunches the service a few
+// seconds later so trailer and discovery requests keep working.
 //
 // When SmartHubManager.js sends a 'SmartHubPreview' ApplicationControl:
 //   1. Tizen calls module.exports.onRequest on this service.
@@ -831,6 +831,7 @@ proxyServer.listen(PORT, LISTEN_HOST, function() {
 //   3. webapis.preview.setPreviewData() registers the tiles with Samsung.
 //   4. On completion, sendSmartHubAck() sends a status message back to the
 //      main Litefin app's 'SmartHubAck' MessagePort so the Promise resolves.
+//   5. The service exits; the main app relaunches it.
 // ============================================================================
 
 if (!isWebOS) {
@@ -916,6 +917,16 @@ if (!isWebOS) {
                                 /* Success — Samsung accepted the preview tiles. */
                                 console.log('[Litefin Service] Smart Hub preview set successfully');
                                 sendSmartHubAck('success');
+                                /*
+                                 * Samsung only commits and renders new preview tiles once the
+                                 * service process terminates; otherwise the update stays buffered.
+                                 * The short delay lets the ACK message leave first. The main app
+                                 * relaunches this service afterwards so the trailer/discovery
+                                 * HTTP proxy comes back (SmartHubManager._relaunchService).
+                                 */
+                                setTimeout(function () {
+                                    tizen.application.getCurrentApplication().exit();
+                                }, 500);
                             },
                             function (e) {
                                 /* Samsung rejected the data (API error). */

@@ -1,0 +1,46 @@
+/**
+ * ============================================================================
+ * Litefin - TV Stylesheet Bundle (Tizen / webOS tiers)
+ * ============================================================================
+ * Identical to bundle.css except it EXCLUDES the mobile-only stylesheets:
+ *   - android-mobile.css (touch/portrait restyle stacks, inert on TVs)
+ *   - mobile-nav.css     (MobileNav is never mounted on TVs)
+ * and includes scroll-compositing.css, whose rules were previously defined
+ * inside android-mobile.css but apply on televisions too (ScrollController
+ * stamps html[data-horizontal-scroll] on every platform).
+ *
+ * Wired at build time via webpack NormalModuleReplacementPlugin: every TV
+ * tier (modern, debug, normal, normal-oblong, legacy, ultra-legacy) swaps
+ * bundle.css -> this file. Desktop/web tiers keep the full bundle.css.
+ *
+ * LayoutManager guarantees TVs never carry html[data-litefin-portrait],
+ * html[data-litefin-scaled] or html[data-litefin-touch], so the excluded
+ * rules could never match on these builds regardless.
+ *
+ * As with bundle.css, page-specific stylesheets load with their owning page
+ * module's async chunk instead of here.
+ * ============================================================================
+ */
+
+/* Core typography, font face definitions, and resets */
+@import './fonts.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+@import './card-ratings.css';
+
+/* Application shell and shared structural styles */
+@import './sidebar.css';
+
+/* Overlay dialogs that must exist before any async chunk can load */
+@import './offline.css';
+@import './screensaver.css';
+
+/* RTL mirror rules load lazily from App.init when the resolved UI
+   direction is rtl (App.js) - not imported here. */
+
+/* Modern interface layers load lazily via modern/bundle.css
+   (LayoutManager.ensureModernStyles) - not imported here. */
+
+/* TV-shared GPU/instant row scroll compositing (kept on all tiers) */
+@import './scroll-compositing.css';

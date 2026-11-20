@@ -18,6 +18,7 @@ import { logger } from '../utils/Logger.js';
 import { screensaverManager } from './ScreensaverManager.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 // Setup highly targeted logger to trace button mapping execution details
 const log = logger.create('RemoteButtonManager');
@@ -191,6 +192,27 @@ class RemoteButtonManager {
                 }
                 break;
 
+            case 'playerToggleOsdLayout':
+            case 'playerToggleStealth':
+                /*
+                 * ====================================================================
+                 * ACTION: TOGGLE OSD LAYOUT (STEALTH <-> PREVIOUS MODE)
+                 * ====================================================================
+                 * Dynamically toggles between Stealth / Anti-Spoiler mode (hidden)
+                 * and the user's previously configured OSD layout mode (left / centered).
+                 * Seamlessly updates PlayerSettings and adjusts the active player OSD.
+                 * ====================================================================
+                 */
+                log.info('Player Toggle OSD Layout Mapped: Switching between Stealth and previous layout.');
+                this._toggleOsdLayoutMode();
+                if (e) {
+                    // Mark as explicitly handled to prevent default reveal logic
+                    e._remoteActionHandled = true;
+                    if (typeof e.preventDefault === 'function') e.preventDefault();
+                    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                }
+                break;
+
             case 'sendWol':
                 /*
                  * ====================================================================
@@ -243,7 +265,9 @@ class RemoteButtonManager {
             return;
         }
 
-        const initialMsg = i18n.t('SendingWolPacket') ? i18n.t('SendingWolPacket').replace('{0}', macAddress) : `Sending Wake-on-LAN packet to ${macAddress}...`;
+        const initialMsg = i18n.t('SendingWolPacket')
+            ? i18n.t('SendingWolPacket').replace('{0}', macAddress)
+            : `Sending Wake-on-LAN packet to ${macAddress}...`;
         toast.show(initialMsg, 3000);
 
         try {
@@ -289,7 +313,93 @@ class RemoteButtonManager {
      */
     _isPlayerActive() {
         const currentPage = router.getCurrentPage();
-        return !!(currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd));
+        return !!(
+            currentPage &&
+            (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd)
+        );
+    }
+
+    /**
+     * Helper to retrieve active OSDController instance if video playback is active.
+     * Extracts reference safely from the active page instance.
+     * @returns {Object|null}
+     * @private
+     */
+    _getPlayerOsd() {
+        // Query the active route controller from single-page application router
+        const currentPage = router.getCurrentPage();
+        // Return OSDController reference from either property accessor
+        if (currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd)) {
+            return currentPage.osd || currentPage._osd || null;
+        }
+        return null;
+    }
+
+    /**
+     * ========================================================================
+     * DYNAMIC OSD LAYOUT MODE SWITCHER (STEALTH <-> PREVIOUS MODE)
+     * ========================================================================
+     * Switches the active OSD presentation state between Stealth / Anti-Spoiler
+     * layout ('hidden') and whatever non-stealth layout ('left', 'centered')
+     * was previously configured or active.
+     *
+     * State Persistence:
+     * - Stashes the active layout into 'pref:previousOsdLayout' before switching
+     *   to Stealth mode.
+     * - Restores from 'pref:previousOsdLayout' (defaulting to 'left' if none saved
+     *   or if it was set to 'hidden') when exiting Stealth mode.
+     * - Updates PlayerSettings ('osdLayout') to propagate changes across the app.
+     * - Dynamically reconfigures active OSD presentation if playback is live.
+     * - Dispatches an informative Toast notification.
+     * ========================================================================
+     * @private
+     */
+    _toggleOsdLayoutMode() {
+        // Read current OSD layout setting (defaults to 'left')
+        const currentLayout = PlayerSettings.get('osdLayout') || 'left';
+        let targetLayout;
+
+        // Perform bidirectional state transition
+        if (currentLayout === 'hidden') {
+            // Restore previous mode or fallback gracefully to default left-aligned layout
+            let previousLayout = storage.getItem('pref:previousOsdLayout') || 'left';
+            // Guard against edge cases where the previous layout was somehow recorded as hidden
+            if (previousLayout === 'hidden') {
+                previousLayout = 'left';
+            }
+            targetLayout = previousLayout;
+            log.info(`Toggling OSD layout from Stealth (hidden) back to previous layout: ${targetLayout}`);
+        } else {
+            // Stash current active layout before switching to stealth mode
+            storage.setItem('pref:previousOsdLayout', currentLayout);
+            targetLayout = 'hidden';
+            log.info(`Toggling OSD layout from ${currentLayout} to Stealth (hidden)`);
+        }
+
+        // Persist new layout preference and broadcast event to listeners
+        PlayerSettings.set('osdLayout', targetLayout);
+
+        // If video playback is currently active, notify active player OSD immediately
+        if (this._isPlayerActive()) {
+            const osd = this._getPlayerOsd();
+            if (osd && typeof osd.updateLayoutMode === 'function') {
+                osd.updateLayoutMode(targetLayout);
+            }
+        }
+
+        // Format user-friendly layout name for real-time visual Toast feedback
+        const layoutLabel =
+            targetLayout === 'hidden'
+                ? 'Stealth'
+                : targetLayout === 'centered'
+                  ? i18n.t('OsdLayoutCentered') || 'Centered'
+                  : i18n.t('OsdLayoutLeft') || 'Left Aligned';
+
+        // Present subtle on-screen confirmation toast (replaces in-place to prevent pile-up)
+        toast.show(`${i18n.t('OsdLayout') || 'OSD Layout'}: ${layoutLabel}`, 2000, {
+            id: 'osd-layout',
+            replace: true
+        });
     }
 
     /**
@@ -373,7 +483,10 @@ class RemoteButtonManager {
         if (this._sleepTimerMinutes > 120) {
             this._sleepTimerMinutes = 0;
             log.info('Sleep Timer: Exceeded 120 minutes limit. Resetting to 0 (Disabled).');
-            toast.show(i18n.t('SleepTimerDisabled') || 'Sleep Timer: Off', 3000);
+            toast.show(i18n.t('SleepTimerDisabled') || 'Sleep Timer: Off', 2500, {
+                id: 'sleep-timer',
+                replace: true
+            });
             return;
         }
 
@@ -387,7 +500,10 @@ class RemoteButtonManager {
             timeString = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
         }
 
-        toast.show(`${i18n.t('SleepTimerSet') || 'Sleep Timer'}: ${timeString}`, 3000);
+        toast.show(`${i18n.t('SleepTimerSet') || 'Sleep Timer'}: ${timeString}`, 2500, {
+            id: 'sleep-timer',
+            replace: true
+        });
 
         // Start countdown interval ticking every 1 minute (60,000 ms)
         this._sleepTimerInterval = setInterval(() => {

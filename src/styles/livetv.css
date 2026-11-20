@@ -267,13 +267,17 @@
     text-transform: uppercase;
 }
 
-/* Gradient Palettes for Fallbacks */
-.grad-1 { background: linear-gradient(135deg, #ff5e62, #ff9966); }
-.grad-2 { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-.grad-3 { background: linear-gradient(135deg, #667eea, #764ba2); }
-.grad-4 { background: linear-gradient(135deg, #11998e, #38ef7d); }
-.grad-5 { background: linear-gradient(135deg, #ee0979, #ff6a00); }
-.grad-6 { background: linear-gradient(135deg, #30cfd0, #330867); }
+/* Gradient Palettes for Live TV fallbacks (EPG channel logos).
+   Scoped to .livetv-page: bare .grad-N rules here once globally overrode the
+   canonical palette in components.css app-wide the moment this chunk loaded
+   (identical specificity, later in document order) — fallback cards on the
+   home page silently changed color after visiting Live TV. */
+.livetv-page .grad-1 { background: linear-gradient(135deg, #ff5e62, #ff9966); }
+.livetv-page .grad-2 { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.livetv-page .grad-3 { background: linear-gradient(135deg, #667eea, #764ba2); }
+.livetv-page .grad-4 { background: linear-gradient(135deg, #11998e, #38ef7d); }
+.livetv-page .grad-5 { background: linear-gradient(135deg, #ee0979, #ff6a00); }
+.livetv-page .grad-6 { background: linear-gradient(135deg, #30cfd0, #330867); }
 
 .epg-channel-info {
     flex-grow: 1;

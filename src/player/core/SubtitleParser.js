@@ -37,9 +37,54 @@ export class SubtitleParser {
     }
 
     /**
+     * Determines whether a subtitle cue should be positioned at the top or bottom of the screen.
+     *
+     * Evaluates WebVTT cue settings (e.g. line:20%, line:0) and ASS alignment tags embedded
+     * in raw subtitle text (e.g. {\an7}, {\an8}, {\an9} or legacy {\a5}, {\a6}, {\a7}).
+     *
+     * @param {string} [settings=''] - WebVTT cue settings line remainder
+     * @param {string} [rawText=''] - Raw subtitle text prior to ASS tag stripping
+     * @returns {'top'|'bottom'} Resolved screen position
+     */
+    static _detectPosition(settings = '', rawText = '') {
+        // 1. Evaluate WebVTT line settings if present
+        if (settings) {
+            const lineMatch = settings.match(/\bline:(-?\d+(?:\.\d+)?)(%?)/i);
+            if (lineMatch) {
+                const val = parseFloat(lineMatch[1]);
+                const isPercent = lineMatch[2] === '%';
+
+                if (isPercent) {
+                    // Percentage values: top half is < 50%
+                    if (val < 50) return 'top';
+                    return 'bottom';
+                } else {
+                    // Non-percentage integer line index:
+                    // Positive line indices (0, 1, 2...) count downwards from the top edge.
+                    // Negative numbers count upwards from the bottom edge.
+                    if (val >= 0 && val < 10) return 'top';
+                    return 'bottom';
+                }
+            }
+        }
+
+        // 2. Evaluate ASS / SSA alignment override tags in raw text
+        if (rawText) {
+            // \an7 = top-left, \an8 = top-center, \an9 = top-right
+            // Legacy SSA: \a5 = top-left, \a6 = top-center, \a7 = top-right
+            if (/\{\\an[789]\}/i.test(rawText) || /\{\\a[567]\}/i.test(rawText)) {
+                return 'top';
+            }
+        }
+
+        // Default baseline position for standard dialogue cues
+        return 'bottom';
+    }
+
+    /**
      * Parse WebVTT content
      * @param {string} vttText - Raw VTT text
-     * @returns {Array<{start: number, end: number, text: string}>}
+     * @returns {Array<{start: number, end: number, text: string, position: string}>}
      */
     static parseVTT(vttText) {
         const cues = [];
@@ -85,14 +130,15 @@ export class SubtitleParser {
                 }
             }
 
-            // Parse timing: 00:00:00.000 --> 00:00:05.000
+            // Parse timing: 00:00:00.000 --> 00:00:05.000 with optional cue settings (e.g. line:20%)
             const timingMatch = line.match(
-                /((?:\d{2}:)?\d{2}:\d{2}[.,]\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}[.,]\d{3})/
+                /((?:\d{2}:)?\d{2}:\d{2}[.,]\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}[.,]\d{3})(.*)/
             );
 
             if (timingMatch) {
                 const start = this._parseVTTTime(timingMatch[1]);
                 const end = this._parseVTTTime(timingMatch[2]);
+                const settings = timingMatch[3] ? timingMatch[3].trim() : '';
 
                 // Collect text lines until empty line
                 i++;
@@ -103,10 +149,13 @@ export class SubtitleParser {
                 }
 
                 if (textLines.length > 0) {
+                    const rawText = textLines.join('<br>');
+                    const position = this._detectPosition(settings, rawText);
                     cues.push({
                         start,
                         end,
-                        text: this._cleanText(textLines.join('<br>'), styleMap)
+                        text: this._cleanText(rawText, styleMap),
+                        position
                     });
                 }
             } else {
@@ -114,13 +163,16 @@ export class SubtitleParser {
             }
         }
 
+        // Ensure cues are sorted chronologically by start time (and end time for ties)
+        cues.sort((a, b) => a.start - b.start || a.end - b.end);
+
         return cues;
     }
 
     /**
      * Parse SRT content
      * @param {string} srtText - Raw SRT text
-     * @returns {Array<{start: number, end: number, text: string}>}
+     * @returns {Array<{start: number, end: number, text: string, position: string}>}
      */
     static parseSRT(srtText) {
         const cues = [];
@@ -144,27 +196,34 @@ export class SubtitleParser {
 
             if (timingLineIndex === -1) continue;
 
-            // Parse timing: 00:00:00,000 --> 00:00:05,000
+            // Parse timing: 00:00:00,000 --> 00:00:05,000 with optional settings
             const timingLine = lines[timingLineIndex];
             const timingMatch = timingLine.match(
-                /(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})/
+                /(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})(.*)/
             );
 
             if (timingMatch) {
                 const start = this._parseSRTTime(timingMatch[1]);
                 const end = this._parseSRTTime(timingMatch[2]);
+                const settings = timingMatch[3] ? timingMatch[3].trim() : '';
 
                 // Text is everything after timing line
                 const textLines = lines.slice(timingLineIndex + 1);
                 if (textLines.length > 0) {
+                    const rawText = textLines.join('<br>');
+                    const position = this._detectPosition(settings, rawText);
                     cues.push({
                         start,
                         end,
-                        text: this._cleanText(textLines.join('<br>'))
+                        text: this._cleanText(rawText),
+                        position
                     });
                 }
             }
         }
+
+        // Ensure cues are sorted chronologically by start time (and end time for ties)
+        cues.sort((a, b) => a.start - b.start || a.end - b.end);
 
         return cues;
     }
@@ -224,12 +283,20 @@ export class SubtitleParser {
                 const text = this._extractTTMLText(p);
 
                 if (text.trim().length > 0) {
-                    cues.push({ start, end, text: this._cleanText(text) });
+                    cues.push({
+                        start,
+                        end,
+                        text: this._cleanText(text),
+                        position: 'bottom'
+                    });
                 }
             }
         } catch (err) {
             console.error('Failed to parse TTML:', err);
         }
+
+        // Ensure cues are sorted chronologically
+        cues.sort((a, b) => a.start - b.start || a.end - b.end);
 
         return cues;
     }

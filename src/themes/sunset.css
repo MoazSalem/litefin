@@ -1,0 +1,155 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Sunset Theme
+ * ============================================================================
+ * A cinematic gradient-dusk mode: twilight plum at the top of the screen
+ * melting through magenta-wine into a low amber sun bloom at the bottom.
+ * Glass surfaces carry a fixed rose tint; buttons follow the accent color.
+ * ============================================================================
+ */
+
+[data-theme-mode="sunset"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so dusk bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(10, 8, 24, 0.88);
+
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: rgba(255, 228, 220, 0.8);
+    --jf-text-tertiary: rgba(255, 228, 220, 0.55);
+    --jf-text-disabled: rgba(255, 228, 220, 0.3);
+
+    --jf-success: #5ec98f;
+    --jf-warning: #ffb35c;
+    --jf-error: #ff6b7a;
+    --jf-info: #8f9bf7;
+
+    /* Fixed rose-tinted translucent glass chrome */
+    --jf-input-bg: rgba(255, 148, 108, 0.10);
+    --jf-input-border: rgba(255, 148, 108, 0.24);
+    --jf-button-bg: rgba(255, 148, 108, 0.15);
+    --jf-button-hover: rgba(255, 148, 108, 0.28);
+    --jf-switch-bg: rgba(255, 148, 108, 0.2);
+    --jf-switch-handle: var(--jf-accent-content-color, #1c142e);
+
+    --jf-shadow-sm: 0 2px 4px rgba(8, 4, 16, 0.45);
+    --jf-shadow-md: 0 4px 14px rgba(8, 4, 16, 0.55);
+    --jf-shadow-lg: 0 12px 44px rgba(8, 4, 16, 0.65);
+
+    --jf-scrollbar: rgba(255, 255, 255, 0.18);
+    --jf-scrollbar-hover: rgba(255, 255, 255, 0.35);
+
+    --jf-button-border-focus: #ffffff;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(255, 148, 108, 0.12);
+    --jf-action-btn-border: rgba(255, 148, 108, 0.26);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #1c142e);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Twilight baseline painted on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="sunset"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="sunset"] body {
+    /* body must stay transparent so the dusk layer shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * SUNSET DUSK ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders the full
+ * cinematic sky gradient: deep twilight plum at the upper edge sinking
+ * through wine-magenta band structure into a warm horizon, topped by a
+ * low sun bloom and a violet counter-glow in the opposite corner.
+ */
+[data-theme-mode="sunset"] body::before,
+html[data-theme-mode="sunset"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Nature-layer stack: sun bloom painted above the sky bands */
+        radial-gradient(58% 44% at 50% 108%,
+                rgba(255, 154, 66, 0.40) 0%,
+                rgba(255, 122, 82, 0.17) 36%,
+                transparent 64%),
+        /* Low warm horizon band hugging the bottom edge */
+        linear-gradient(to top, rgba(255, 110, 60, 0.16) 0%, transparent 26%),
+        /* Violet twilight counter-glow, top-left */
+        radial-gradient(52% 36% at 12% 0%,
+                rgba(98, 74, 208, 0.24) 0%,
+                transparent 60%),
+        /* The full dusk sky: plum -> wine -> amber horizon */
+        linear-gradient(180deg,
+                #150f2e 0%,
+                #241640 34%,
+                #3c1c42 60%,
+                #542618 80%,
+                #6b3226 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="sunset"] .page {
+    /* Reset the opaque page paint so the dusk shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the dusk layer during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="sunset"],
+[data-theme-mode="sunset"] body.player-active,
+html.player-active[data-theme-mode="sunset"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="sunset"] body.player-active::before,
+html.player-active[data-theme-mode="sunset"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="sunset"] body.player-active .page,
+html.player-active[data-theme-mode="sunset"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}

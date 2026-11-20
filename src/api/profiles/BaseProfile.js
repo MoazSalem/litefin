@@ -10,7 +10,54 @@
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { storage } from '../../utils/StorageService.js';
 
+/** Legacy 'NNNNp' values of the maxResolution setting, as width/height. */
+const LEGACY_RESOLUTIONS = {
+    '720p': { width: 1280, height: 720 },
+    '1080p': { width: 1920, height: 1080 },
+    '2160p': { width: 3840, height: 2160 },
+    '4320p': { width: 7680, height: 4320 }
+};
+
 export class BaseProfile {
+    /**
+     * Parse the "Max resolution" player setting.
+     *
+     * The settings menu stores 'WIDTHxHEIGHT' values (e.g. '1920x1080'). The
+     * 'NNNNp' form (e.g. '1080p') is also accepted, for older stored values.
+     * @param {string} [value] - Setting value; defaults to the stored setting
+     * @returns {{width: number, height: number}|null} null for 'auto' or an unrecognised value
+     */
+    static getMaxResolution(value = PlayerSettings.get('maxResolution')) {
+        if (!value || value === 'auto') return null;
+        const text = String(value).trim().toLowerCase();
+        if (LEGACY_RESOLUTIONS[text]) return { ...LEGACY_RESOLUTIONS[text] };
+        const match = /^(\d+)x(\d+)$/.exec(text);
+        if (!match) return null;
+        const width = parseInt(match[1], 10);
+        const height = parseInt(match[2], 10);
+        return width > 0 && height > 0 ? { width, height } : null;
+    }
+
+    /**
+     * Whether a codec profile is a video size limit: a Video profile for every
+     * codec and container whose conditions are only Width / Height limits.
+     * Playback modes that drop codec restrictions keep it, because a video
+     * larger than the panel can decode fails in every mode.
+     * @param {Object} codecProfile - Entry of DeviceProfile.CodecProfiles
+     * @returns {boolean}
+     */
+    static isVideoSizeLimitProfile(codecProfile) {
+        return Boolean(
+            codecProfile &&
+            codecProfile.Type === 'Video' &&
+            !codecProfile.Codec &&
+            !codecProfile.Container &&
+            Array.isArray(codecProfile.Conditions) &&
+            codecProfile.Conditions.length > 0 &&
+            codecProfile.Conditions.every((c) => c.Property === 'Width' || c.Property === 'Height')
+        );
+    }
+
     /**
      * Build the standard subtitle profiles array based on the subtitleBurnIn setting.
      * @returns {Array} List of subtitle profiles

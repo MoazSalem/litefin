@@ -1,0 +1,67 @@
+# ==============================================================================
+# Litefin Dev Builds Dispatcher Workflow
+# ==============================================================================
+# Pushes to the 'development' branch trigger an automated build pipeline in the
+# dedicated 'litefin-dev-builds' repository via GitHub repository_dispatch.
+#
+# Ignored:
+# - Any commit starting with 'chore:' or 'chore('
+# - Markdown and documentation changes
+# ==============================================================================
+
+name: Trigger Dev Builds
+
+on:
+  push:
+    branches:
+      - development
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+
+jobs:
+  dispatch:
+    # Filter out chore commits as requested
+    if: "!startsWith(github.event.head_commit.message, 'chore:') && !startsWith(github.event.head_commit.message, 'chore(')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare Dispatch Metadata
+        id: meta
+        run: |
+          # Compute short commit hash
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+          # Extract sanitized first line of commit message for notification payload
+          CLEAN_MSG=$(echo "${{ github.event.head_commit.message }}" | head -n 1)
+          echo "msg=${CLEAN_MSG}" >> $GITHUB_OUTPUT
+
+      - name: Dispatch Event to litefin-dev-builds
+        run: |
+          # Construct valid JSON payload safely using jq to prevent shell quote escaping issues
+          PAYLOAD=$(jq -n \
+            --arg sha "${{ github.sha }}" \
+            --arg short_sha "${{ steps.meta.outputs.short_sha }}" \
+            --arg ref "${{ github.ref_name }}" \
+            --arg msg "${{ steps.meta.outputs.msg }}" \
+            --arg author "${{ github.actor }}" \
+            '{
+              event_type: "build_dev_commit",
+              client_payload: {
+                sha: $sha,
+                short_sha: $short_sha,
+                ref: $ref,
+                message: $msg,
+                author: $author
+              }
+            }')
+
+          echo "Dispatching to ${{ github.repository_owner }}/litefin-dev-builds with payload:"
+          echo "$PAYLOAD"
+
+          curl -s -S -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.BUILD_TRIGGER_PAT }}" \
+            https://api.github.com/repos/${{ github.repository_owner }}/litefin-dev-builds/dispatches \
+            -d "$PAYLOAD"

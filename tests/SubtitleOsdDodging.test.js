@@ -18,6 +18,9 @@ globalThis.document = {
 
 const { PlayerSettings } = await import('../src/utils/PlayerSettings.js');
 const {
+    getTextStyles,
+    getSecondaryTextStyles,
+    getWindowStyles,
     getSecondaryWindowStyles,
     isPrimarySubtitleInBottomHalf,
     isSecondarySubtitleInBottomHalf
@@ -218,9 +221,11 @@ test('Dual Subtitle State strips osd-active when OSD is hidden or unmounted', ()
 test('Secondary Subtitle position setting updates window styles correctly', () => {
     storageMap.clear();
 
-    // Default position is 10% from top
+    // Default position is 10% from top with elevated z-index and normalized opacity
     let styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
+        { name: 'zIndex', value: '150' },
+        { name: 'opacity', value: '1' },
         { name: 'top', value: '10%' },
         { name: 'bottom', value: 'auto' }
     ]);
@@ -229,6 +234,8 @@ test('Secondary Subtitle position setting updates window styles correctly', () =
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 25);
     styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
+        { name: 'zIndex', value: '150' },
+        { name: 'opacity', value: '1' },
         { name: 'top', value: '25%' },
         { name: 'bottom', value: 'auto' }
     ]);
@@ -237,9 +244,31 @@ test('Secondary Subtitle position setting updates window styles correctly', () =
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 5);
     styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
+        { name: 'zIndex', value: '150' },
+        { name: 'opacity', value: '1' },
         { name: 'top', value: '5%' },
         { name: 'bottom', value: 'auto' }
     ]);
+});
+
+test('getWindowStyles provides elevated zIndex and normalized opacity for OSD contrast protection', () => {
+    storageMap.clear();
+
+    // Default preset (-2) bottom positioning
+    let styles = getWindowStyles();
+    const zIndexStyle = styles.find((s) => s.name === 'zIndex');
+    const opacityStyle = styles.find((s) => s.name === 'opacity');
+
+    assert.equal(zIndexStyle?.value, '150', 'Primary window styles must enforce z-index: 150');
+    assert.equal(opacityStyle?.value, '1', 'Primary window styles must normalize opacity: 1');
+
+    // Custom bottom positioning
+    PlayerSettings.set('subtitleVerticalPosition', 'custom');
+    PlayerSettings.set('subtitleVerticalPositionCustom', 15);
+    styles = getWindowStyles();
+
+    assert.equal(styles.find((s) => s.name === 'zIndex')?.value, '150');
+    assert.equal(styles.find((s) => s.name === 'opacity')?.value, '1');
 });
 
 test('CSS rules ensure secondary subtitle does not have hardcoded top !important override', () => {
@@ -259,6 +288,50 @@ test('CSS rules ensure secondary subtitle does not have hardcoded top !important
         /html\[data-layout-tier="ultra-legacy"\]\s+\.subtitle-overlay\.secondary[^{]*\{[^}]*top:\s*10%\s*!important/s,
         'Ultra-legacy secondary subtitle must not force top: 10% !important'
     );
+});
+
+test('CSS rules ensure secondary subtitle does not have diminished opacity override', () => {
+    const cssPath = path.resolve('src/styles/player-page.css');
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+    // Ensure secondary subtitles do not declare custom fractional opacity (e.g. 0.9)
+    // so brightness, chromaticity, and drop shadow contrast match primary subtitles.
+    assert.doesNotMatch(
+        cssContent,
+        /\.subtitle-overlay\.secondary\s+\.subtitle-line[^{]*\{[^}]*opacity:\s*0\.[0-9]+/s,
+        'Secondary subtitle must not force reduced opacity on .subtitle-line'
+    );
+});
+
+test('Secondary subtitle text styles match primary brightness, hue, and shadow appearance', () => {
+    storageMap.clear();
+
+    // Configure distinct subtitle appearance attributes
+    PlayerSettings.set('subtitleTextColor', '#ffff00');
+    PlayerSettings.set('subtitleTextOpacity', 90);
+    PlayerSettings.set('subtitleTextBackground', '#000000');
+    PlayerSettings.set('subtitleBackgroundOpacity', 75);
+    PlayerSettings.set('subtitleDropShadow', 'uniform_border');
+    PlayerSettings.set('subtitleDropShadowColor', '#00ffff');
+    PlayerSettings.set('subtitleDropShadowOpacity', 80);
+    PlayerSettings.set('subtitleDropShadowBlur', 8);
+    PlayerSettings.set('subtitleBorderWidth', 4);
+    PlayerSettings.set('subtitleBorderOpacity', 95);
+
+    // Fetch primary and secondary style property arrays
+    const primaryStyles = getTextStyles(false);
+    const secondaryStyles = getSecondaryTextStyles(false);
+
+    // Helper to extract CSS style property values by name
+    const getVal = (styles, name) => styles.find((s) => s.name === name)?.value;
+
+    // Verify exact parity across brightness, hue, color opacity, and shadows
+    assert.equal(getVal(secondaryStyles, 'color'), getVal(primaryStyles, 'color'), 'Text color and opacity must match');
+    assert.equal(getVal(secondaryStyles, 'opacity'), getVal(primaryStyles, 'opacity'), 'Layer opacity must match');
+    assert.equal(getVal(secondaryStyles, 'textShadow'), getVal(primaryStyles, 'textShadow'), 'Text drop shadow must match');
+    assert.equal(getVal(secondaryStyles, 'webkitTextStroke'), getVal(primaryStyles, 'webkitTextStroke'), 'Border stroke outline must match');
+    assert.equal(getVal(secondaryStyles, 'paintOrder'), getVal(primaryStyles, 'paintOrder'), 'Paint order must match');
+    assert.equal(getVal(secondaryStyles, 'backgroundColor'), getVal(primaryStyles, 'backgroundColor'), 'Background color and opacity must match');
 });
 
 test('Smart Hemisphere Detection correctly classifies subtitle positions', () => {
@@ -333,6 +406,44 @@ test('Smart Dodging CSS rules shift bottom half UP and top half DOWN', () => {
         cssContent,
         /\.player-page\.osd-active\.has-dual-subtitles:not\(\.osd-dodging-disabled\)\s+\.subtitle-overlay\.pos-top[^{]*\{[^}]*translateY\(12vh\)\s+scale\(0\.88\)/s,
         'Dual subtitles in top half must push DOWN together with compact scale'
+    );
+});
+
+test('CSS rules elevate subtitle overlays above OSD gradients and enforce opacity: 1 during active shift', () => {
+    const cssPath = path.resolve('src/styles/player-page.css');
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+
+    // Base subtitle-overlay must have z-index: 150 (above OSD 100)
+    assert.match(
+        cssContent,
+        /\.subtitle-overlay\s*\{[^}]*z-index:\s*150;/s,
+        'Base .subtitle-overlay must have z-index: 150 to paint in front of OSD gradient'
+    );
+
+    // Active OSD dodging must enforce z-index: 150 !important and opacity: 1 !important
+    assert.match(
+        cssContent,
+        /\.player-page\.osd-active\s+\.subtitle-overlay[^{]*\{[^}]*z-index:\s*150\s*!important/s,
+        'Active OSD dodging must enforce z-index: 150 !important on subtitle overlays'
+    );
+    assert.match(
+        cssContent,
+        /\.player-page\.osd-active\s+\.subtitle-overlay[^{]*\{[^}]*opacity:\s*1\s*!important/s,
+        'Active OSD dodging must enforce opacity: 1 !important on subtitle overlays'
+    );
+
+    // Active OSD dodging must enforce opacity: 1 !important on subtitle lines
+    assert.match(
+        cssContent,
+        /\.player-page\.osd-active\s+\.subtitle-overlay\s+\.subtitle-line[^{]*\{[^}]*opacity:\s*1\s*!important/s,
+        'Active OSD dodging must enforce opacity: 1 !important on subtitle lines'
+    );
+
+    // Ultra-legacy must also elevate to z-index: 150 !important
+    assert.match(
+        cssContent,
+        /html\[data-layout-tier="ultra-legacy"\]\s+\.subtitle-overlay\s*\{[^}]*z-index:\s*150\s*!important;/s,
+        'Ultra-legacy .subtitle-overlay must have z-index: 150 !important'
     );
 });
 

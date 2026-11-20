@@ -27,10 +27,11 @@ html[data-layout-login="modern"] .server-input-container > *:not(:last-child) {
     margin-bottom: 24px;
 }
 
-html[data-layout-login="modern"] .server-url-input {
+html[data-layout-login="modern"] .server-url-input,
+html[data-layout-login="modern"] .server-url-input.text-input.tv-input {
     background: var(--jf-surface, #0f0f0f);
     border: 4px solid transparent;
-    padding: 21px 21px 21px 69px;
+    padding: 21px 24px !important;
     border-radius: 14px;
     font-size: 1.6rem;
     width: 100%;
@@ -46,46 +47,43 @@ html[data-layout-login="modern"] .server-url-input.focused {
     background: var(--jf-card-bg-hover, #151515);
 }
 
-html[data-layout-login="modern"] .server-input-container::before {
-    content: '';
-    position: absolute;
-    left: 24px;
-    top: 26px;
-    width: 28px;
-    height: 28px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.2)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    z-index: 5;
+html[data-layout-login="modern"] .modern-server-buttons-row {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    align-items: stretch;
 }
 
-html[data-layout-login="modern"] .connect-btn {
-    width: 100%;
-    height: 72px;
+html[data-layout-login="modern"] .modern-server-buttons-row .connect-btn {
+    flex: 1.4;
+    height: 68px;
     background: var(--jf-accent, #7c4dff);
     border: 4px solid transparent;
     border-radius: 14px;
-    font-size: 1.7rem;
+    font-size: 1.6rem;
     font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--jf-text-primary);
     cursor: pointer;
-    /* PERFORMANCE: Replaced transition: all. */
+    box-shadow: none !important;
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-html[data-layout-login="modern"] .connect-btn > *:not(:last-child) {
+html[data-layout-login="modern"] .modern-server-buttons-row .connect-btn > *:not(:last-child) {
     margin-left: 16px;
 }
 
-html[data-layout-login="modern"] .connect-btn:focus,
-html[data-layout-login="modern"] .connect-btn.focused {
+html[data-layout-login="modern"] .modern-server-buttons-row .connect-btn:focus,
+html[data-layout-login="modern"] .modern-server-buttons-row .connect-btn.focused {
     transform: scale(1.02);
     border-color: var(--jf-button-border-focus, #ffffff);
+    background: var(--jf-accent-hover, #651fff);
+    outline: none;
 }
 
-html[data-layout-login="modern"] .connect-btn span::before {
+html[data-layout-login="modern"] .modern-server-buttons-row .connect-btn span::before {
     content: '';
     display: inline-block;
     width: 24px;
@@ -94,6 +92,39 @@ html[data-layout-login="modern"] .connect-btn span::before {
     background-repeat: no-repeat;
     vertical-align: middle;
     margin-right: 12px;
+}
+
+html[data-layout-login="modern"] .modern-server-buttons-row .server-proxy-headers-btn {
+    flex: 1;
+    height: 68px;
+    background: var(--jf-surface, #0f0f0f);
+    border: 4px solid transparent;
+    border-radius: 14px;
+    font-size: 1.45rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-text-primary);
+    cursor: pointer;
+    box-shadow: none !important;
+    margin: 0px;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+html[data-layout-login="modern"] .modern-server-buttons-row .server-proxy-headers-btn .proxy-headers-icon {
+    margin-right: 12px;
+    stroke: currentColor;
+    opacity: 0.9;
+}
+
+html[data-layout-login="modern"] .modern-server-buttons-row .server-proxy-headers-btn:focus,
+html[data-layout-login="modern"] .modern-server-buttons-row .server-proxy-headers-btn.focused {
+    transform: scale(1.02);
+    border-color: var(--jf-button-border-focus, #ffffff);
+    background: var(--jf-card-bg-hover, #181818);
+    color: #ffffff;
+    outline: none;
 }
 
 /* Discovered Servers & Saved Servers Sections */

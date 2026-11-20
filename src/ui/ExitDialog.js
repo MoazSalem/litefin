@@ -2,7 +2,6 @@ import { focusManager } from './FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
-import { androidAdapter } from '../android/AndroidAdapter.js';
 import { desktopAdapter } from '../desktop/DesktopAdapter.js';
 import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
@@ -76,7 +75,10 @@ class ExitDialog {
             } else if (platformInfo.isWebOS) {
                 webosAdapter.exit();
             } else if (platformInfo.isAndroid) {
-                androidAdapter.exit();
+                // AndroidAdapter is lazily imported - Android-only module.
+                import('../android/AndroidAdapter.js')
+                    .then(({ androidAdapter }) => androidAdapter.exit())
+                    .catch((err) => log.error('Failed to load AndroidAdapter for exit:', err));
             } else if (platformInfo.isDesktop) {
                 desktopAdapter.exit();
             } else {

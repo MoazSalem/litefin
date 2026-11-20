@@ -228,6 +228,8 @@ export default class DescriptionModal extends BaseMenu {
                 if (this._openedAt && (Date.now() - this._openedAt < 300)) {
                     return true;
                 }
+                this.osd.closeMenu();
+                return true;
             case 'back':
                 this.osd.closeMenu();
                 return true;

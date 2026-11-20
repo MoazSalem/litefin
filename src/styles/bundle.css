@@ -1,0 +1,48 @@
+/**
+ * ============================================================================
+ * Litefin - Consolidated Application Stylesheet Bundle
+ * ============================================================================
+ * Compiles the boot-critical stylesheets and color themes into a single entry
+ * module at build time via css-loader.
+ *
+ * Performance note for low-power television hardware (LG webOS / Samsung Tizen):
+ * By aggregating the core stylesheets under this single entry point, the
+ * Webpack style-loader singleton engine performs exactly ONE document
+ * stylesheet update during initial bootstrap. This avoids multiple synchronous
+ * DOM text node insertions and eliminates repetitive CSSOM re-parse freezes
+ * on embedded Cortex-A53 dual-core TV CPUs.
+ *
+ * Page-specific stylesheets (settings, details, player OSD, livetv, ...) are
+ * NOT imported here: they are imported by their owning page module and load
+ * with that page's async chunk instead, keeping them out of the boot parse.
+ * On legacy engines (Chromium 38-47) the CssVarsPolyfill adopts the lazily
+ * injected style tags via ensureStylesResolved() (called by AsyncPageProxy).
+ * ============================================================================
+ */
+
+/* Core typography, font face definitions, and resets */
+@import './fonts.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+@import './card-ratings.css';
+
+/* Application shell and shared structural styles */
+@import './sidebar.css';
+
+/* Overlay dialogs that must exist before any async chunk can load */
+@import './offline.css';
+@import './screensaver.css';
+
+/* RTL mirror rules load lazily from App.init when the resolved UI
+   direction is rtl (App.js) - not imported here. */
+
+/* Modern interface layers load lazily via modern/bundle.css
+   (LayoutManager.ensureModernStyles) - not imported here. */
+
+/* Mobile viewport enhancements (web/desktop tiers; TV tiers swap this file) */
+@import './android-mobile.css';
+@import './mobile-nav.css';
+
+/* TV-shared GPU/instant row scroll compositing (kept on all tiers) */
+@import './scroll-compositing.css';

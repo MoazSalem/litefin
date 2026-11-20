@@ -1,0 +1,175 @@
+/**
+ * ============================================================================
+ * Litefin - Cyberpunk Theme
+ * ============================================================================
+ * "Night City Signage": a violet-ink canvas lit by two asymmetric neon sign
+ * blooms — hot magenta at mid-right, electric cyan at low-left — under a
+ * CRT scanline raster sheet, with a magenta city-light horizon strip along
+ * the bottom edge. Glass surfaces carry a violet-neon tint; buttons and
+ * focus states follow the accent color (default: neon hot magenta).
+ * ============================================================================
+ */
+
+[data-theme-mode="cyberpunk"] {
+    /* Sidebar alias; LayoutManager maps it to transparent so the neon bleeds */
+    --sidebar-bg: var(--jf-background-alt);
+
+    --jf-overlay-bg: rgba(4, 2, 10, 0.9);
+
+    --jf-text-primary: #f2f4ff;
+    --jf-text-secondary: rgba(228, 222, 245, 0.76);
+    --jf-text-tertiary: rgba(206, 202, 228, 0.52);
+    --jf-text-disabled: rgba(206, 202, 228, 0.26);
+
+    --jf-success: #3ce88a;
+    --jf-warning: #f4d04d;
+    --jf-error: #ff4d8f;
+    --jf-info: #35d6ff;
+
+    /* Fixed violet-neon translucent glass chrome */
+    --jf-input-bg: rgba(150, 120, 255, 0.07);
+    --jf-input-border: rgba(150, 120, 255, 0.18);
+    --jf-button-bg: rgba(150, 120, 255, 0.1);
+    --jf-button-hover: rgba(150, 120, 255, 0.2);
+    --jf-switch-bg: rgba(150, 120, 255, 0.16);
+    --jf-switch-handle: var(--jf-accent-content-color, #0a0713);
+
+    /* Night-city shadows: deep, cool, slightly violet */
+    --jf-shadow-sm: 0 2px 4px rgba(2, 0, 8, 0.55);
+    --jf-shadow-md: 0 4px 16px rgba(2, 0, 8, 0.66);
+    --jf-shadow-lg: 0 14px 48px rgba(2, 0, 8, 0.76);
+
+    --jf-scrollbar: rgba(230, 226, 244, 0.15);
+    --jf-scrollbar-hover: rgba(230, 226, 244, 0.3);
+
+    --jf-button-border-focus: #f2f4ff;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(150, 120, 255, 0.09);
+    --jf-action-btn-border: rgba(150, 120, 255, 0.19);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #0a0713);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * BASE CANVAS FOUNDATION
+ * ============================================================================
+ * Night-city baseline painted on the root node; scopes out of the player so
+ * hardware video overlays stay fully transparent during playback.
+ */
+html[data-theme-mode="cyberpunk"]:not(.player-active) {
+    background-color: var(--jf-background) !important;
+}
+
+[data-theme-mode="cyberpunk"] body {
+    /* body must stay transparent so the neon layer shows through */
+    background-color: transparent !important;
+    background-image: none !important;
+    background-attachment: scroll !important;
+}
+
+/*
+ * ============================================================================
+ * NIGHT-CITY ATMOSPHERE
+ * ============================================================================
+ * A single GPU-composited viewport-locked layer that renders:
+ *   1. The scanline sheet: CRT raster over the entire frame.
+ *   2. Hot magenta sign bloom and its hot core at mid-right.
+ *   3. Electric cyan sign bloom and hot core at low-left.
+ *   4. City-light horizon strip along the bottom edge.
+ *   5. The night grid canvas: violet zenith sinking to ink.
+ */
+[data-theme-mode="cyberpunk"] body::before,
+html[data-theme-mode="cyberpunk"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+
+    background-color: var(--jf-background) !important;
+    background-image:
+        /* Scanline sheet: CRT raster over the whole viewport */
+        repeating-linear-gradient(0deg,
+                rgba(2, 0, 8, 0.16) 0px,
+                rgba(2, 0, 8, 0.16) 1px,
+                transparent 1px,
+                transparent 3px),
+        /* Hot magenta neon sign bloom, mid-right edge */
+        radial-gradient(40% 42% at 86% 62%,
+                rgba(255, 45, 120, 0.18) 0%,
+                rgba(255, 45, 120, 0.06) 42%,
+                transparent 70%),
+        /* Magenta sign hot core */
+        radial-gradient(14% 15% at 88% 60%,
+                rgba(255, 96, 164, 0.2) 0%,
+                transparent 72%),
+        /* Electric cyan sign bloom, low-left */
+        radial-gradient(36% 38% at 10% 84%,
+                rgba(34, 216, 255, 0.14) 0%,
+                rgba(34, 216, 255, 0.04) 44%,
+                transparent 70%),
+        /* Cyan sign hot core */
+        radial-gradient(12% 13% at 11% 84%,
+                rgba(126, 240, 255, 0.18) 0%,
+                transparent 72%),
+        /* City-light horizon: neon haze strip along the bottom edge */
+        linear-gradient(to top,
+                rgba(255, 45, 120, 0.07) 0%,
+                transparent 16%),
+        /* Night grid canvas: violet zenith sinking to ink base */
+        linear-gradient(to bottom,
+                #0d0a1c 0%,
+                #080618 55%,
+                #05030f 100%);
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+[data-theme-mode="cyberpunk"] .page {
+    /* Reset the opaque page paint so the neon layer shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Unloads the night-city layer during active video playback to guarantee
+ * zero GPU overhead for the hardware video pipeline.
+ */
+html.player-active[data-theme-mode="cyberpunk"],
+[data-theme-mode="cyberpunk"] body.player-active,
+html.player-active[data-theme-mode="cyberpunk"] body {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="cyberpunk"] body.player-active::before,
+html.player-active[data-theme-mode="cyberpunk"] body::before {
+    display: none !important;
+}
+
+[data-theme-mode="cyberpunk"] body.player-active .page,
+html.player-active[data-theme-mode="cyberpunk"] .page {
+    background: transparent !important;
+    background-image: none !important;
+}

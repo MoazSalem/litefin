@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { platformInfo } from './PlatformInfo.js';
 import { getFallbackFontFamily, getFallbackFontName } from './FallbackFonts.js';
 
 /**
@@ -31,7 +32,7 @@ function _hexToRgba(hex, opacity) {
 
 /**
  * Resolves responsive height calculation for subtitle sizing and margins.
- * 
+ *
  * Supports modern engines and mobile viewports (where AndroidAdapter applies CSS zoom
  * and sets --litefin-app-h) by referencing var(--litefin-app-h, 100vh). This ensures
  * subtitle cues scale proportionally with the rest of the 1600px/750px UI canvas
@@ -45,11 +46,133 @@ function _hexToRgba(hex, opacity) {
  */
 function _getResponsiveHeight(fraction) {
     // Check if browser/engine natively supports CSS custom properties
-    if (typeof window !== 'undefined' && typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('--a', '0')) {
+    if (
+        typeof window !== 'undefined' &&
+        typeof CSS !== 'undefined' &&
+        typeof CSS.supports === 'function' &&
+        CSS.supports('--a', '0')
+    ) {
         return `calc(var(--litefin-app-h, 100vh) * ${fraction})`;
     }
     // Safe legacy fallback to standard viewport height
     return `${fraction * 100}vh`;
+}
+
+/**
+ * ============================================================================
+ * WebKit Version Helper for HTML paint-order
+ * ============================================================================
+ * WebKit parsed paint-order for SVG prior to Safari 17.4 while ignoring it
+ * on HTML text strokes, producing the same CSS.supports() false positive as
+ * Chromium < 123. Inspects the UA only when chromeVersion === 999.
+ *
+ * @returns {boolean} True when running on WebKit/Safari older than 17.4.
+ */
+function _isPre174WebKit() {
+    if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+
+    const ua = navigator.userAgent;
+
+    // Desktop and mobile Safari expose the engine version via Version/<major>.<minor>.
+    const isSafari = /Safari\//i.test(ua) && !/(?:Chrome|Chromium|Edg|OPR|Firefox)\//i.test(ua);
+    if (isSafari) {
+        const versionMatch = ua.match(/Version\/(\d+)(?:\.(\d+))?/i);
+        if (versionMatch) {
+            const major = parseInt(versionMatch[1], 10);
+            const minor = parseInt(versionMatch[2] || '0', 10);
+            return major < 17 || (major === 17 && minor < 4);
+        }
+    }
+
+    // Third-party iOS browsers wrap the system WebKit engine and report the OS version.
+    if (/(?:CriOS|FxiOS|EdgiOS)\//i.test(ua)) {
+        const osMatch = ua.match(/OS (\d+)[._](\d+)/i);
+        if (osMatch) {
+            const major = parseInt(osMatch[1], 10);
+            const minor = parseInt(osMatch[2] || '0', 10);
+            return major < 17 || (major === 17 && minor < 4);
+        }
+    }
+
+    return false;
+}
+
+/**
+ * ============================================================================
+ * Stroked Text Border Capability
+ * ============================================================================
+ * Determines whether -webkit-text-stroke + paint-order can outline HTML text
+ * without thinning the glyphs.
+ *
+ * Chromium 35–122 (crbug.com/41372165) and WebKit/Safari < 17.4 parse
+ * paint-order for SVG but ignore it for stroked HTML text; real HTML text
+ * support starts in Chromium 123 and Safari 17.4. On older engines the stroke
+ * paints over the fill and eats into the glyphs, so callers must fall back to
+ * an outer text-shadow ring.
+ *
+ * Evaluated on demand (rather than memoized at module scope) so dynamic test
+ * environments and runtime platform refreshes are always respected.
+ *
+ * @returns {boolean} True when the stroke/paint-order border renders correctly.
+ */
+function _supportsStrokedTextBorder() {
+    try {
+        // 999 = non-Chromium/unknown engine; CSS.supports is authoritative there
+        // once pre-17.4 WebKit engines are excluded.
+        const chromeVersion = typeof platformInfo !== 'undefined' ? platformInfo.chromeVersion : 999;
+
+        // Require native CSS support for both properties and exclude Chromium < 123
+        // and WebKit < 17.4, where paint-order parses cleanly but has no effect on
+        // HTML text strokes.
+        return (
+            typeof CSS !== 'undefined' &&
+            typeof CSS.supports === 'function' &&
+            CSS.supports('-webkit-text-stroke-width', '1px') &&
+            CSS.supports('paint-order', 'stroke fill') &&
+            (chromeVersion === 999 ? !_isPre174WebKit() : chromeVersion >= 123)
+        );
+    } catch (_) {
+        // Fail closed to the shadow fallback if CSS/platform inspection throws.
+        return false;
+    }
+}
+
+/**
+ * ============================================================================
+ * Fallback Outline Shadow Builder
+ * ============================================================================
+ * Builds an outer outline from zero-blur text shadows. Unlike text-stroke,
+ * this never paints over the glyph fill.
+ *
+ * Sample count scales in multiples of 8 with the ring radius (up to 32) so
+ * small border widths stay fast while larger slider widths (up to 20px) avoid
+ * notched or scalloped corners between adjacent shadow offsets.
+ *
+ * @param {number|string} borderWidth - Configured stroke width in pixels.
+ * @param {string} color - Border color (RGBA string).
+ * @returns {string} Comma-separated text-shadow value, or '' when width <= 0.
+ */
+function _buildOutlineShadows(borderWidth, color) {
+    // text-stroke straddles the glyph edge; only its outer half is visible
+    // once paint-order works. Match that footprint with radius = width / 2.
+    const radius = Number(borderWidth) / 2;
+    if (!radius || radius <= 0) return '';
+
+    // Keep chord spacing along the ring around ~1.6px so corners stay smooth,
+    // quantized to multiples of 8 (preserving cardinal + diagonal offsets) and
+    // capped at 32 layers to bound TV software rasterization cost.
+    const steps = Math.min(32, Math.max(8, Math.ceil((2 * Math.PI * radius) / 1.6 / 8) * 8));
+    const shadows = [];
+
+    for (let i = 0; i < steps; i++) {
+        // Distribute sample angles evenly around the full circle.
+        const angle = (i * 2 * Math.PI) / steps;
+        const x = Number((Math.cos(angle) * radius).toFixed(2));
+        const y = Number((Math.sin(angle) * radius).toFixed(2));
+        shadows.push(`${color} ${x}px ${y}px 0`);
+    }
+
+    return shadows.join(', ');
 }
 
 // ============================================================================
@@ -71,6 +194,16 @@ export function getTextStyles(isHdr = false) {
     // Reset properties that might have been set by other modes (like 'border')
     styles.push({ name: 'webkitTextStroke', value: '' });
     styles.push({ name: 'paintOrder', value: '' });
+
+    /* -----------------------------------------------------------------
+       Normalize container element opacity to full 1.0.
+       Ensures that fine-grained opacity values (text opacity, background
+       opacity, drop shadow opacity, and border stroke opacity) are applied
+       deterministically via RGBA channels rather than being attenuated by
+       an inherited or stale CSS opacity property. Both primary and
+       secondary subtitles maintain identical brightness and hue.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'opacity', value: '1' });
 
     // ========================================================================
     // Font Size
@@ -152,6 +285,9 @@ export function getTextStyles(isHdr = false) {
     const shadowColor = _hexToRgba(shadowColorHex, shadowOpacity);
     const highlightColor = _hexToRgba('#ffffff', shadowOpacity); // Keep highlight white but respect opacity
 
+    // Uniform 8-direction drop shadow, shared by 'uniform' and 'uniform_border'.
+    const uniformShadow = `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`;
+
     switch (shadow) {
         case 'heavy':
         case 'dropshadow':
@@ -173,25 +309,42 @@ export function getTextStyles(isHdr = false) {
         case 'uniform':
             styles.push({
                 name: 'textShadow',
-                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
+                value: uniformShadow
             });
             break;
         case 'border':
-            // Solid border logic using -webkit-text-stroke.
-            // Using 'paint-order: stroke fill' ensures the border stays behind the text
-            // so it doesn't thin out the glyphs even at high widths.
-            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
-            styles.push({ name: 'paintOrder', value: 'stroke fill' });
-            styles.push({ name: 'textShadow', value: 'none' });
+            if (_supportsStrokedTextBorder()) {
+                // Solid border logic using -webkit-text-stroke.
+                // Using 'paint-order: stroke fill' ensures the border stays behind the text
+                // so it doesn't thin out the glyphs even at high widths.
+                styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
+                styles.push({ name: 'paintOrder', value: 'stroke fill' });
+                styles.push({ name: 'textShadow', value: 'none' });
+            } else {
+                // Fallback: paint the outline outside the glyph with shadows so
+                // the stroke never eats into the fill. Chromium < 123 ignores
+                // paint-order for stroked HTML text.
+                styles.push({
+                    name: 'textShadow',
+                    value: _buildOutlineShadows(borderWidth, borderShadowColor) || 'none'
+                });
+            }
             break;
         case 'uniform_border':
-            // Combines stroke-based border outline with uniform drop shadow blur.
-            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
-            styles.push({ name: 'paintOrder', value: 'stroke fill' });
-            styles.push({
-                name: 'textShadow',
-                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
-            });
+            if (_supportsStrokedTextBorder()) {
+                // Combines stroke-based border outline with uniform drop shadow blur.
+                styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${borderShadowColor}` });
+                styles.push({ name: 'paintOrder', value: 'stroke fill' });
+                styles.push({ name: 'textShadow', value: uniformShadow });
+            } else {
+                // Shadow-only outline + drop shadow. The ring is listed first so
+                // it paints on top of the blurred shadow layer.
+                const outline = _buildOutlineShadows(borderWidth, borderShadowColor);
+                styles.push({
+                    name: 'textShadow',
+                    value: outline ? `${outline}, ${uniformShadow}` : uniformShadow
+                });
+            }
             break;
         case 'none':
             styles.push({ name: 'textShadow', value: 'none' });
@@ -359,6 +512,15 @@ export function getWindowStyles() {
     const styles = [];
     const posSetting = PlayerSettings.get('subtitleVerticalPosition');
 
+    /* -----------------------------------------------------------------
+       Stacking context and opacity normalization:
+       Elevate the subtitle container overlay above the OSD gradient
+       overlay (z-index: 100) so that shifted subtitles retain full
+       luminance and unattenuated contrast during active playback.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'zIndex', value: '150' });
+    styles.push({ name: 'opacity', value: '1' });
+
     if (posSetting === 'custom') {
         const customPos = PlayerSettings.get('subtitleVerticalPositionCustom') ?? 10;
         styles.push({ name: 'top', value: '' });
@@ -384,14 +546,15 @@ export function getWindowStyles() {
 // ============================================================================
 // Secondary Subtitle Style Generators
 // Secondary subtitles inherit ALL primary appearance settings (color, shadow,
-// font family, weight, opacity, background) but have their own independent
-// size and position controls.
+// font family, weight, opacity, background) ensuring identical brightness, hue,
+// and drop shadow appearance, while maintaining independent size and position controls.
 // ============================================================================
 
 /**
  * Generate text styles for the secondary subtitle overlay.
- * Inherits all primary text styles, then overrides fontSize with the
- * secondary-specific size setting.
+ * Inherits all primary text styles (color, hue, brightness, text shadow, border,
+ * font family, weight, and background), ensuring visual parity with the primary
+ * subtitle while applying the secondary-specific font size setting.
  *
  * @param {boolean} isHdr - Whether the active playback stream is High Dynamic Range
  * @returns {Object[]} Array of {name, value} CSS properties
@@ -400,6 +563,8 @@ export function getSecondaryTextStyles(isHdr = false) {
     /* -------------------------------------------------------------
        Fetch baseline visual attributes from the primary text styles.
        Pass down HDR context to apply appropriate opacity setting.
+       Secondary subtitles inherit identical brightness, hue, drop
+       shadows, borders, and color opacity from primary settings.
        ------------------------------------------------------------- */
     const styles = getTextStyles(isHdr);
 
@@ -446,6 +611,15 @@ export function getSecondaryTextStyles(isHdr = false) {
 export function getSecondaryWindowStyles() {
     const styles = [];
     const posSetting = PlayerSettings.get('secondarySubtitleVerticalPosition') || 'custom';
+
+    /* -----------------------------------------------------------------
+       Stacking context and opacity normalization:
+       Elevate the secondary subtitle container overlay above the OSD
+       gradient overlay (z-index: 100) so that shifted subtitles retain
+       full luminance and unattenuated contrast during active playback.
+       ----------------------------------------------------------------- */
+    styles.push({ name: 'zIndex', value: '150' });
+    styles.push({ name: 'opacity', value: '1' });
 
     /*
      * ========================================================================

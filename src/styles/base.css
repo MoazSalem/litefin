@@ -64,6 +64,26 @@
     --jf-text-secondary: rgba(255, 255, 255, 0.8);
     --jf-text-tertiary: #666666;
 
+    /* Global Button & Control Semantic Defaults (Crucial for ultra-legacy ponyfill) */
+    --jf-button-bg: rgba(255, 255, 255, 0.12);
+    --jf-button-hover: rgba(255, 255, 255, 0.22);
+    --jf-button-border-focus: #ffffff;
+    --jf-input-bg: rgba(255, 255, 255, 0.08);
+    --jf-input-border: rgba(255, 255, 255, 0.18);
+    --jf-switch-bg: rgba(255, 255, 255, 0.20);
+    --jf-switch-handle: #ffffff;
+
+    /* Semantic Status & Feedback Colors */
+    --jf-error: #f44336;
+    --jf-success: #4caf50;
+    --jf-warning: #ff9800;
+    --jf-info: #2196f3;
+
+    /* Structural Surface Borders & Dividers */
+    --jf-border: rgba(255, 255, 255, 0.15);
+    --jf-border-light: rgba(255, 255, 255, 0.08);
+    --jf-divider: rgba(255, 255, 255, 0.08);
+
     /* Legacy Aliases (Compatibility for untracked CSS files) */
     --text-primary: var(--jf-text-primary);
     --text-secondary: var(--jf-text-secondary);
@@ -170,6 +190,7 @@ html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .meta-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .episode-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .quality-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .card-rating-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .seerr-type-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .details-rich-meta,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="true"] .action-btn-tooltip-text,
@@ -244,6 +265,7 @@ html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .count-badge
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .episode-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .quality-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .game-card-badge,
+html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .card-rating-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .seerr-type-badge,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .details-rich-meta,
 html[data-layout-tier="ultra-legacy"][data-rounded-corners="false"] .action-btn-tooltip-text,
@@ -905,13 +927,6 @@ body.player-active #sidebar-container {
     /* Ensure images/content respect the radius */
 }
 
-/* Ensure fallbacks and overlays also get rounded */
-.media-fallback,
-.card-overlay-tint,
-.skeleton-image {
-    border-radius: var(--jf-border-radius);
-}
-
 .focusable:focus,
 .focusable.focused,
 [tabindex]:focus,
@@ -955,10 +970,62 @@ body.player-active #sidebar-container {
     display: block;
 }
 
-/* Hide the internal spinner if the global one is still up, 
-   but keep the layout active to block clicks */
+/* Hide the internal spinner if the global one is still up,
+   but keep the layout active to block clicks. Also pause keyframe ticks on
+   hidden page-level loaders so invisible spinners do not wake compositor passes
+   while the startup overlay covers the viewport. */
 body.app-splash-active .page-loading .loading-spinner {
     opacity: 0;
+}
+
+body.app-splash-active .page-loading .loading-spinner,
+body.app-splash-active .page-loading .loading-spinner::before,
+body.app-splash-active .page-loading .loading-spinner::after,
+body.app-splash-active .page-loading * {
+    -webkit-animation-play-state: paused !important;
+    animation-play-state: paused !important;
+    will-change: auto !important;
+}
+
+/*
+ * Reinforce splash spinner teardown across all dynamically selected loader
+ * themes once splash fade-out starts (high ID specificity beats loader rules).
+ */
+#app-splash.splash-content.fade-out .loading-spinner {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+#app-splash.splash-content.fade-out *,
+#app-splash.splash-content.fade-out *::before,
+#app-splash.splash-content.fade-out *::after {
+    -webkit-animation: none !important;
+    animation: none !important;
+    will-change: auto !important;
+}
+
+/* 
+ * ============================================================================
+ * STARTUP SPINNER VISIBILITY MANAGEMENT
+ * ============================================================================
+ * Keep the initial startup loading indicator hidden until user preferences
+ * have finished restoring into LayoutManager and applied to the DOM.
+ * ============================================================================
+ */
+#app-splash .loading-spinner {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 
+ * Reveal the loading spinner once user settings have been restored
+ * and the active loader style attribute has been populated.
+ */
+html[data-settings-loaded="true"] #app-splash .loading-spinner,
+body.settings-loaded #app-splash .loading-spinner {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Premium Shimmer Skeleton Animation */
@@ -1189,13 +1256,7 @@ body.app-splash-active .page-loading .loading-spinner {
    Welcome Screen (Temporary)
    ============================================================================ */
 
-
-@import 'sidebar.css';
-@import 'library.css';
-@import 'library_rows.css';
-@import 'player-page.css';
-@import 'player-osd.css';
-
+/* Component layout styles are aggregated in bundle.css */
 /* ============================================================================
    Typography
    ============================================================================ */
@@ -1319,16 +1380,36 @@ body {
     z-index: 8;
 }
 
-.count-badge.media-source-count-badge {
+/* Version Count Badge (Bottom Left) */
+.version-badge,
+.media-source-count-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    top: auto;
+    right: auto;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 8px;
+    border-radius: var(--jf-border-radius-lg);
     background-color: var(--jf-accent, #00a4dc);
     color: var(--jf-accent-content-color, #ffffff);
     font-size: 1.1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+    box-sizing: border-box;
 }
 
-.played-badge {
+/* Favorite Badge (Bottom Left) */
+.favorite-badge {
     position: absolute;
     bottom: 12px;
-    right: 12px;
+    left: 12px;
+    top: auto;
+    right: auto;
     width: 40px;
     height: 40px;
     border-radius: var(--jf-border-radius-lg);
@@ -1336,7 +1417,114 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 8;
-    /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
+    color: #ff3b30;
+    box-sizing: border-box;
+}
+
+/* Sibling Offset: Shift Favorite Badge and Anime Badges when preceding bottom-left badges are present */
+.version-badge ~ .favorite-badge,
+.media-source-count-badge ~ .favorite-badge {
+    left: 60px;
+}
+
+.version-badge ~ .card-anime-pills,
+.media-source-count-badge ~ .card-anime-pills,
+.favorite-badge ~ .card-anime-pills {
+    left: 60px;
+}
+
+.version-badge ~ .favorite-badge ~ .card-anime-pills,
+.media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 108px;
+}
+
+/* Watched Badge (Bottom Right) */
+.played-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    top: auto;
+    left: auto;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+}
+
+/* Elevate bottom badges when progress bar is present */
+.card-progress-container ~ .played-badge,
+.card-progress-container ~ .version-badge,
+.card-progress-container ~ .media-source-count-badge,
+.card-progress-container ~ .favorite-badge,
+.card-progress-container ~ .card-anime-pills,
+.card-progress-container ~ .anime-pills-row.card-anime-pills,
+.media-card.has-progress .played-badge,
+.media-card.has-progress .version-badge,
+.media-card.has-progress .media-source-count-badge,
+.media-card.has-progress .favorite-badge,
+.media-card.has-progress .card-anime-pills,
+.media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 18px !important;
+}
+
+/* --------------------------------------------------------------------------
+ * Modern Media Rows Family Placement
+ * --------------------------------------------------------------------------
+ * Included in core stylesheet to guarantee instant layout resolution during
+ * initial boot before asynchronous modern interface layer chunks finish loading.
+ * -------------------------------------------------------------------------- */
+
+/* Default resting position in modern media row layouts */
+html[data-media-rows-family="modern"] .card-anime-pills {
+    bottom: 22px;
+    left: 22px;
+    right: auto;
+}
+
+/* Sibling horizontal offset when version or favorite badges precede bottom-left */
+html[data-media-rows-family="modern"] .version-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .favorite-badge ~ .card-anime-pills {
+    left: 74px;
+}
+
+/* Dual sibling offset when both version and favorite badges are present */
+html[data-media-rows-family="modern"] .version-badge ~ .favorite-badge ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .media-source-count-badge ~ .favorite-badge ~ .card-anime-pills {
+    left: 126px;
+}
+
+/* Elevate badges above floating progress track (bottom: 20px, height: 8px) with 10px buffer */
+html[data-layout-media-rows="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanded"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanded"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="modern-posters"] .media-card.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .card-progress-container ~ .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .card-anime-pills,
+html[data-media-rows-family="modern"] .card-progress-container ~ .anime-pills-row.card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .card-anime-pills,
+html[data-media-rows-family="modern"] .media-card.has-progress .anime-pills-row.card-anime-pills {
+    bottom: 38px !important;
+}
+
+/* Expanding layout: badges elevate above inside text on landscape and square cards */
+html[data-layout-media-rows="expanding"] .media-card.landscape .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square .card-anime-pills {
+    bottom: 112px;
+    left: 30px;
+    right: auto;
+}
+
+/* Expanding layout elevation when active playback progress bar is present */
+html[data-layout-media-rows="expanding"] .media-card.landscape.has-progress .card-anime-pills,
+html[data-layout-media-rows="expanding"] .media-card.square.has-progress .card-anime-pills {
+    bottom: 122px;
 }
 
 .video-badge {
@@ -1441,6 +1629,195 @@ body {
     display: block !important;
 }
 
+/* ==========================================================================
+   Anime Marker & Audio Classification Badges
+   ==========================================================================
+   Capsule pills representing episode content (Filler, Mixed, Recap) and
+   audio tracks (Subbed, Dubbed, Subbed/Dubbed).
+   
+   Geometry & Rendering Rules:
+   - Full capsule pill curves enforced via 9999px border-radius with !important
+     and -webkit-border-radius to guarantee rounded capsules across all engines.
+   - High-contrast, dark-tinted backgrounds for card thumbnails so text is
+     sharp, legible, and never washes out over light or noisy anime artwork.
+   - Zero box-shadows and zero backdrop-filter blurs to maintain 60fps
+     smooth scrolling on TV chipsets and low-power hardware.
+   ========================================================================== */
+
+/* Container row anchoring anime badges */
+.anime-pills-row {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 8;
+    pointer-events: none;
+}
+
+/* Card thumbnail overlay positioning */
+.anime-pills-row.card-anime-pills {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+}
+
+/* When placed inside list view title rows, details header, or card info, render inline beside metadata */
+.card-title-row .anime-pills-row,
+.card-info .anime-pills-row,
+.details-meta-row .anime-pills-row,
+.details-hero-anime-pills {
+    position: static !important;
+    max-width: none !important;
+    display: inline-flex !important;
+    vertical-align: middle;
+}
+
+.details-hero-anime-pills {
+    margin-right: 20px;
+    gap: 6px;
+}
+
+/* Base capsule pill typography, borders, and geometry */
+.anime-pill,
+.anime-pills-row .anime-pill,
+.card-anime-pills .anime-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 12px;
+    border-radius: 9999px !important;
+    -webkit-border-radius: 9999px !important;
+    font-size: 1.1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.25px;
+    white-space: nowrap;
+    border-width: 1px;
+    border-style: solid;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-sizing: border-box;
+}
+
+/* Compact pill sizing for card thumbnails and dense grids */
+.anime-pills-row.compact .anime-pill {
+    padding: 2px 10px;
+    border-radius: 9999px !important;
+    -webkit-border-radius: 9999px !important;
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+/* On card thumbnails, apply opaque dark backing so text stands out over any background */
+.card-anime-pills .anime-pill {
+    background-color: rgba(14, 14, 18, 0.92) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Pill Color Themes (Standard Details View & Inline Episode Meta Rows)
+   -------------------------------------------------------------------------- */
+
+/* Filler content category (Orange tint) */
+.anime-pill-filler {
+    color: #ffaa33;
+    background-color: rgba(255, 170, 51, 0.22);
+    border-color: rgba(255, 170, 51, 0.75);
+}
+
+/* Mixed Canon/Filler category (Amber/Yellow tint) */
+.anime-pill-mixed {
+    color: #ffdb4d;
+    background-color: rgba(255, 219, 77, 0.22);
+    border-color: rgba(255, 219, 77, 0.75);
+}
+
+/* Recap episode category (Purple tint) */
+.anime-pill-recap {
+    color: #e09cf5;
+    background-color: rgba(224, 156, 245, 0.22);
+    border-color: rgba(224, 156, 245, 0.75);
+}
+
+/* Canon episode category (Green tint for Manga Canon and Anime Canon) */
+.anime-pill-canon,
+.anime-pill-anime-canon {
+    color: #4cd964;
+    background-color: rgba(76, 217, 100, 0.22);
+    border-color: rgba(76, 217, 100, 0.75);
+}
+
+/* Subbed audio track (Original Japanese only - Cyan tint) */
+.anime-pill-subbed {
+    color: #66d4ff;
+    background-color: rgba(102, 212, 255, 0.22);
+    border-color: rgba(102, 212, 255, 0.75);
+}
+
+/* Dubbed audio track (Foreign language dub only - Coral tint) */
+.anime-pill-dubbed {
+    color: #ff8c8c;
+    background-color: rgba(255, 140, 140, 0.22);
+    border-color: rgba(255, 140, 140, 0.75);
+}
+
+/* Subbed/Dubbed dual audio tracks (Violet / Indigo tint) */
+.anime-pill-dual {
+    color: #ccaeff;
+    background-color: rgba(204, 174, 255, 0.24);
+    border-color: rgba(204, 174, 255, 0.75);
+}
+
+/* --------------------------------------------------------------------------
+   Card Overlay High-Contrast Overrides
+   Dark-tinted backing prevents light anime drawings or white sleeves from
+   washing out badge text on episode card thumbnails.
+   -------------------------------------------------------------------------- */
+
+.card-anime-pills .anime-pill-filler {
+    color: #ffaa33;
+    border-color: rgba(255, 170, 51, 0.85);
+    background-color: rgba(26, 18, 12, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-mixed {
+    color: #ffdb4d;
+    border-color: rgba(255, 219, 77, 0.85);
+    background-color: rgba(26, 24, 12, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-recap {
+    color: #e09cf5;
+    border-color: rgba(224, 156, 245, 0.85);
+    background-color: rgba(26, 14, 28, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-canon,
+.card-anime-pills .anime-pill-anime-canon {
+    color: #4cd964;
+    border-color: rgba(76, 217, 100, 0.85);
+    background-color: rgba(12, 28, 16, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-subbed {
+    color: #66d4ff;
+    border-color: rgba(102, 212, 255, 0.85);
+    background-color: rgba(12, 22, 28, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-dubbed {
+    color: #ff8c8c;
+    border-color: rgba(255, 140, 140, 0.85);
+    background-color: rgba(28, 14, 16, 0.94) !important;
+}
+
+.card-anime-pills .anime-pill-dual {
+    color: #ccaeff;
+    border-color: rgba(204, 174, 255, 0.85);
+    background-color: rgba(22, 16, 32, 0.94) !important;
+}
+
 /* Game fallback cover with central gamepad icon */
 .media-fallback.game-fallback {
     display: flex;
@@ -1467,20 +1844,36 @@ html[data-badge-style="tinted"] .count-badge,
 html[data-badge-style="tinted"] .played-badge,
 html[data-badge-style="tinted"] .episode-badge,
 html[data-badge-style="tinted"] .quality-badge,
-html[data-badge-style="tinted"] .game-card-badge {
+html[data-badge-style="tinted"] .game-card-badge,
+html[data-badge-style="tinted"] .version-badge,
+html[data-badge-style="tinted"] .media-source-count-badge,
+html[data-badge-style="tinted"] .favorite-badge,
+html[data-badge-style="tinted"] .card-rating-badge {
     background-color: var(--jf-accent);
     color: var(--jf-accent-content-color);
     border: none;
+}
+
+html[data-badge-style="tinted"] .favorite-badge {
+    color: var(--jf-accent-content-color, #ffffff);
 }
 
 html[data-badge-style="dark"] .count-badge,
 html[data-badge-style="dark"] .played-badge,
 html[data-badge-style="dark"] .episode-badge,
 html[data-badge-style="dark"] .quality-badge,
-html[data-badge-style="dark"] .game-card-badge {
+html[data-badge-style="dark"] .game-card-badge,
+html[data-badge-style="dark"] .version-badge,
+html[data-badge-style="dark"] .media-source-count-badge,
+html[data-badge-style="dark"] .favorite-badge,
+html[data-badge-style="dark"] .card-rating-badge {
     background-color: rgba(0, 0, 0, 0.65);
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+html[data-badge-style="dark"] .favorite-badge {
+    color: #ff3b30;
 }
 
 /* ============================================================================
@@ -1595,12 +1988,21 @@ html[data-low-vram="true"] .grid-card {
     will-change: auto !important;
 }
 
-/* Ensure card progress bar remains visible in Low VRAM mode without requiring CSS fade-in animations */
-html[data-low-vram="true"] .card-progress-container {
+/* Ensure card progress bar remains visible in Low VRAM mode and on Legacy/Ultra-Legacy hardware without animations */
+html[data-low-vram="true"] .card-progress-container,
+html[data-layout-tier="legacy"] .card-progress-container,
+html[data-layout-tier="ultra-legacy"] .card-progress-container {
     opacity: 1 !important;
     -webkit-animation: none !important;
     animation: none !important;
     will-change: auto !important;
+}
+
+/* Ensure progress value has a definitive fill on Legacy and Ultra-Legacy engines */
+html[data-layout-tier="legacy"] progress.card-progress::-webkit-progress-value,
+html[data-layout-tier="ultra-legacy"] progress.card-progress::-webkit-progress-value {
+    background-color: #00a4dc !important;
+    background-color: var(--jf-accent, #00a4dc) !important;
 }
 
 /* Maintain skeleton shimmer fallback (solid color instead of animation) */
@@ -1630,7 +2032,11 @@ html[data-disable-card-scaling="true"] .media-card:focus .video-badge,
 html[data-disable-card-scaling="true"] .media-card.focused .played-badge,
 html[data-disable-card-scaling="true"] .media-card:focus .played-badge,
 html[data-disable-card-scaling="true"] .media-card.focused .count-badge,
-html[data-disable-card-scaling="true"] .media-card:focus .count-badge {
+html[data-disable-card-scaling="true"] .media-card:focus .count-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .version-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .version-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .favorite-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .favorite-badge {
     -webkit-transform: none !important;
     transform: none !important;
 }
@@ -2555,17 +2961,42 @@ html[data-card-label-style="hidden"] .genre-grid-items {
    Card Labels Alignment Adjustments
    ============================================================================ */
 
-/* Card Labels Alignment Adjustments (excluding list-views) */
-html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+/*
+ * Align card titles and subtitles based on data-card-label-align.
+ * NOTE: CSS Selectors Level 3 (used by legacy and ultra-legacy engines like
+ * Chromium 26 - 47 on Tizen 2.x/3.x and webOS 1.x-3.x) does NOT support complex
+ * selectors inside :not() (such as :not(.view-list .media-card)).
+ * A complex selector in :not() causes older CSS parsers to discard the entire rule!
+ * Therefore, list-view exclusions are handled via an explicit overriding rule below.
+ */
+
+/* Start Alignment (Left in LTR, Right in RTL) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: left !important;
     text-align: start !important;
 }
-html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .card-title,
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: right !important;
+    text-align: start !important;
+}
+
+/* End Alignment (Right in LTR, Left in RTL) */
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: right !important;
     text-align: end !important;
 }
-html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
-html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .card-title,
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .card-subtitle {
+    text-align: left !important;
+    text-align: end !important;
+}
+
+/* Center Alignment */
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .card-title,
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .card-subtitle {
     text-align: center !important;
 }
 
@@ -2575,7 +3006,7 @@ html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-li
     margin-right: auto !important;
     margin-top: 4px !important;
 }
-[dir="rtl"] html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+html[dir="rtl"][data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: auto !important;
     margin-right: 0 !important;
 }
@@ -2584,7 +3015,7 @@ html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line
     margin-left: auto !important;
     margin-right: 0 !important;
 }
-[dir="rtl"] html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+html[dir="rtl"][data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
     margin-left: 0 !important;
     margin-right: auto !important;
 }
@@ -2594,8 +3025,20 @@ html[data-card-label-align="center"] .media-card:not(.list-skeleton) .skeleton-l
     margin-right: auto !important;
 }
 
-/* Title Only 2 Lines Wrapping Override (excluding list-views) */
-html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title {
+/* List view cards always retain start alignment (left in LTR, right in RTL) */
+html[data-card-label-align] .view-list .media-card .card-title,
+html[data-card-label-align] .view-list .media-card .card-subtitle {
+    text-align: left !important;
+    text-align: start !important;
+}
+html[dir="rtl"][data-card-label-align] .view-list .media-card .card-title,
+html[dir="rtl"][data-card-label-align] .view-list .media-card .card-subtitle {
+    text-align: right !important;
+    text-align: start !important;
+}
+
+/* Title Only 2 Lines Wrapping Override */
+html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton) .card-title {
     white-space: normal !important;
     display: -webkit-box !important;
     -webkit-line-clamp: 2 !important;
@@ -2605,6 +3048,13 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
     text-overflow: ellipsis !important;
     line-height: 1.25 !important;
     max-height: 2.5em !important;
+}
+html[data-card-label-style="titleOnly2Lines"] .view-list .media-card .card-title {
+    white-space: nowrap !important;
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    max-height: none !important;
 }
 
 /* ============================================================================
@@ -2630,18 +3080,22 @@ html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):no
  * numbers inside round card badges, bypassing broken flex alignments.
  */
 html[data-layout-quirks="c26"] .count-badge,
-html[data-layout-quirks="c26"] .played-badge {
+html[data-layout-quirks="c26"] .played-badge,
+html[data-layout-quirks="c26"] .version-badge,
+html[data-layout-quirks="c26"] .favorite-badge {
     display: -webkit-box !important;
     -webkit-box-orient: horizontal !important;
     -webkit-box-pack: center !important;
     -webkit-box-align: center !important;
 }
 
-html[data-layout-quirks="c26"] .count-badge {
+html[data-layout-quirks="c26"] .count-badge,
+html[data-layout-quirks="c26"] .version-badge {
     line-height: 39px !important;
 }
 
-html[data-layout-quirks="c26"] .played-badge svg {
+html[data-layout-quirks="c26"] .played-badge svg,
+html[data-layout-quirks="c26"] .favorite-badge svg {
     display: block !important;
     margin: 0 !important;
 }

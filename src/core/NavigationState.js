@@ -45,7 +45,10 @@ class NavigationState {
 
             // If focus is currently on an inner metadata chip inside RichMetadataTable,
             // capture the outer rich table container instead so restoration doesn't get trapped.
-            if (focusedEl && (focusedEl.classList.contains('meta-chip') || focusedEl.closest('.details-rich-meta, #rich-meta'))) {
+            if (
+                focusedEl &&
+                (focusedEl.classList.contains('meta-chip') || focusedEl.closest('.details-rich-meta, #rich-meta'))
+            ) {
                 const outerTable = document.getElementById('rich-meta') || document.querySelector('.details-rich-meta');
                 if (outerTable) {
                     focusedEl = outerTable;
@@ -316,7 +319,10 @@ class NavigationState {
      */
     _restoreFocus(state) {
         // Safeguard for rich metadata table: restore focus to outer container, not inner chips
-        if (state.focusSectionName === 'details-rich-meta' || (state.focusElementSelector && state.focusElementSelector.includes('meta-chip'))) {
+        if (
+            state.focusSectionName === 'details-rich-meta' ||
+            (state.focusElementSelector && state.focusElementSelector.includes('meta-chip'))
+        ) {
             const outerTable = document.getElementById('rich-meta') || document.querySelector('.details-rich-meta');
             if (outerTable) {
                 if (this._debug) log.debug('Restoring focus to outer rich metadata table container');

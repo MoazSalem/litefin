@@ -6,6 +6,10 @@
  * ============================================================================
  */
 
+// Page-scoped styles - loads with this module's chunk instead of the boot bundle
+import '../styles/library.css';
+import '../styles/library_rows.css';
+
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
@@ -13,6 +17,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { animeMarkerService } from '../utils/AnimeMarkerService.js';
 import { imageService } from '../utils/ImageService.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -25,10 +30,8 @@ import { eventBus } from '../core/EventBus.js';
 import { seerr } from '../api/seerrClient.js';
 import {
     getGenreNameById,
-    getGenreMediaType,
     getStudioNameById,
     getNetworkNameById,
-    getLanguageNameById,
     MOVIE_GENRES_FALLBACK,
     TV_GENRES_FALLBACK,
     SEERR_LANGUAGES,
@@ -102,8 +105,10 @@ class LibraryPage extends Page {
              * Music libraries default to 'square' (album-cover style), which maps to
              * CardRenderer type 'square' rather than adding a 6th viewMode constant.
              */
-            viewMode: 'poster',
+            // Initialize view mode with user-configured global default (fallback to 'poster')
+            viewMode: storage.getItem('pref:defaultLibraryViewMode') || 'poster',
             gridMode: 'dynamic',
+            // Default column count resolved dynamically from configured default
             gridColumns: 7
         };
 
@@ -304,6 +309,32 @@ class LibraryPage extends Page {
      * =========================================================================
      */
     _getDefaultColumnsForMode(mode) {
+        // Supported grid column options map for each distinct layout mode
+        const colOptionsMap = {
+            poster: [4, 5, 6, 7],
+            'small-poster': [8, 9, 10, 12],
+            thumb: [3, 4, 5, 6],
+            banner: [2, 3, 4, 5],
+            list: [1]
+        };
+
+        // Check if user has explicitly saved a default column preference for this layout mode
+        const savedModeCols = parseInt(storage.getItem(`pref:defaultLibraryGridColumns:${mode}`), 10);
+        const validOpts = colOptionsMap[mode] || [];
+        if (validOpts.includes(savedModeCols)) {
+            return savedModeCols;
+        }
+
+        // Check generic global default column setting if the target mode matches the active default view mode
+        const defaultViewMode = storage.getItem('pref:defaultLibraryViewMode') || 'poster';
+        if (mode === defaultViewMode) {
+            const genericSavedCols = parseInt(storage.getItem('pref:defaultLibraryGridColumns'), 10);
+            if (validOpts.includes(genericSavedCols)) {
+                return genericSavedCols;
+            }
+        }
+
+        // Fall back to native Litefin standard static column counts
         switch (mode) {
             case 'small-poster':
                 return 9;
@@ -437,12 +468,75 @@ class LibraryPage extends Page {
         this._letterOffsetCache.set('#', 0);
         this.state.libraryId = this.params.id;
 
+        // Auto-refresh library cards when series anime markers resolve in background
+        this._markerUnsub = animeMarkerService.onMarkersLoaded(() => {
+            if (this._isDestroyed) return;
+            const hasEpisodes =
+                this.state.viewType === 'Episodes' ||
+                this.state.items?.some((i) => i.Type === 'Episode');
+            if (hasEpisodes) {
+                CardRenderer.clearCache();
+                const grid = this.$('#library-grid');
+                if (grid && this.state.items?.length > 0) {
+                    const columns = this.state._gridColumns || 4;
+                    const currentRow =
+                        this._lastFocusItemIndex != null
+                            ? Math.floor(this._lastFocusItemIndex / columns)
+                            : (this._currentStartRow || 0);
+                    this._syncVirtualGrid(currentRow, this._lastFocusItemIndex);
+                }
+            }
+        });
+
         // Special handling for 'virtual' library IDs (e.g. 'all' for search expansion, 'seerr' for Seerr discovery)
         const isVirtualLibrary = this.state.libraryId === 'all';
         const isSeerrLibrary = this.state.libraryId === 'seerr';
 
         if (this.params.char) {
             this.state.nameStartsWith = decodeURIComponent(this.params.char);
+        }
+
+        // ====================================================================
+        // PERSISTED CATEGORY / TAB REHYDRATION
+        // ====================================================================
+        // When paginating or following deep links to non-default library tabs
+        // (such as Collections, Genres, Favorites, Episodes, Albums, etc.),
+        // restore viewType from the route parameters so category context is
+        // preserved rather than resetting back to the primary library default.
+        // ====================================================================
+        const tabParam = this.params.tab || this.params.viewType;
+        if (tabParam) {
+            // Unescape and apply the requested tab identifier to the state model
+            this.state.viewType = decodeURIComponent(tabParam);
+        }
+
+        // ====================================================================
+        // PERSISTED ROUTE FILTERS REHYDRATION
+        // ====================================================================
+        // When paginating or navigating via deep link with attached query filters,
+        // restore state.filters from the route parameter so active filter subsets
+        // (such as Unplayed, Genres, Parental Ratings, etc.) are preserved
+        // across pages without reverting back to unfiltered defaults.
+        // ====================================================================
+        if (this.params.filters) {
+            try {
+                // Handle both direct JSON strings and URI-encoded query strings
+                let parsedRouteFilters = this.params.filters;
+                if (typeof parsedRouteFilters === 'string') {
+                    try {
+                        parsedRouteFilters = JSON.parse(parsedRouteFilters);
+                    } catch {
+                        parsedRouteFilters = JSON.parse(decodeURIComponent(parsedRouteFilters));
+                    }
+                }
+
+                // Merge deserialized filters into existing page state
+                if (parsedRouteFilters && typeof parsedRouteFilters === 'object') {
+                    this.state.filters = Object.assign(this.state.filters || {}, parsedRouteFilters);
+                }
+            } catch (e) {
+                log.error('Failed to parse route filters parameter', e);
+            }
         }
 
         if (this.params.page) {
@@ -540,7 +634,7 @@ class LibraryPage extends Page {
         // --------------------------------------------------------------------
         const activePageSize = storage.getItem('pref:libraryPageSize');
         const activeIsInfinite = activePageSize === 'unlimited';
-        const activeLimit = activeIsInfinite ? 100 : (parseInt(activePageSize, 10) || 50);
+        const activeLimit = activeIsInfinite ? 100 : parseInt(activePageSize, 10) || 50;
 
         // State Rehydration Check
         // Priority 1: Check memory state cache for full rehydration
@@ -1041,6 +1135,40 @@ class LibraryPage extends Page {
             eventBus.on('pref:alphaPickerScrollMode:changed', this._onAlphaPickerScrollModeChanged);
         }
 
+        // ---------------------------------------------------------------------
+        // Dynamic Global Default Library View Mode & Columns Preference Listener
+        // ---------------------------------------------------------------------
+        // When user modifies default view mode or default items per row in Settings,
+        // re-evaluate the active library layout ONLY if this library does not have
+        // a custom view mode explicitly configured by the user.
+        // ---------------------------------------------------------------------
+        if (!this._onDefaultLibraryViewModeChanged) {
+            this._onDefaultLibraryViewModeChanged = () => {
+                log.info('Default library view layout preference changed in settings');
+
+                // Determine whether current library or tab has an explicit custom preference
+                const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
+                const isSeerr = this.state.libraryId === 'seerr' || this.state.libraryInfo?.CollectionType === 'seerr';
+                const tabStorageKey = isTabSpecific
+                    ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}`
+                    : null;
+                const libStorageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
+                const hasCustomViewMode = Boolean(
+                    (tabStorageKey && storage.getItem(tabStorageKey)) || storage.getItem(libStorageKey)
+                );
+
+                // If no custom view mode is set for this library, rehydrate and re-render grid
+                if (!hasCustomViewMode) {
+                    this._loadPersistedViewMode();
+                    if (this.state.items && this.state.items.length > 0) {
+                        this._renderGrid(this.state.items);
+                    }
+                }
+            };
+            eventBus.on('pref:defaultLibraryViewMode:changed', this._onDefaultLibraryViewModeChanged);
+            eventBus.on('pref:defaultLibraryGridColumns:changed', this._onDefaultLibraryViewModeChanged);
+        }
+
         // =========================================================================
         // BACKGROUND AND SCREEN SLEEP LIFECYCLE HANDLERS
         // =========================================================================
@@ -1153,8 +1281,25 @@ class LibraryPage extends Page {
         if (this.params.personId) parts.push(`person:${this.params.personId}`);
         if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
         if (this.params.searchTerm) parts.push(`search:${this.params.searchTerm}`);
+        // --------------------------------------------------------------------
+        // Category / tab partition: ensure memory caches do not collide
+        // across different tabs within the same library ID.
+        // --------------------------------------------------------------------
+        const tab =
+            this.params.tab || this.params.viewType || (this.state?.viewType !== 'Items' ? this.state?.viewType : null);
+        if (tab) parts.push(`tab:${tab}`);
         if (this.params.viewModeIndex !== undefined) parts.push(`vmIdx:${this.params.viewModeIndex}`);
         if (this.params.viewMode) parts.push(`vm:${this.params.viewMode}`);
+        // --------------------------------------------------------------------
+        // Filter partition: isolate cached memory snapshots by active filters
+        // so unfiltered library pages and filtered subsets never collide.
+        // --------------------------------------------------------------------
+        const filterStr =
+            this.params.filters ||
+            (this.state?.filters && Object.keys(this.state.filters).length > 0
+                ? JSON.stringify(this.state.filters)
+                : null);
+        if (filterStr) parts.push(`filters:${filterStr}`);
         // Fall back to state.nameStartsWith if route params have not been synced yet
         const char = this.params.char || this.state?.nameStartsWith;
         if (char) parts.push(`char:${char}`);
@@ -1222,7 +1367,7 @@ class LibraryPage extends Page {
         // --------------------------------------------------------------------
         const activePageSize = storage.getItem('pref:libraryPageSize');
         const activeIsInfinite = activePageSize === 'unlimited';
-        const activeLimit = activeIsInfinite ? 100 : (parseInt(activePageSize, 10) || 50);
+        const activeLimit = activeIsInfinite ? 100 : parseInt(activePageSize, 10) || 50;
 
         const limitMismatch =
             savedState.limit != null &&
@@ -1236,7 +1381,7 @@ class LibraryPage extends Page {
             sortOrder: savedState.sortOrder || this.state.sortOrder,
             filters: savedState.filters || {},
             nameStartsWith: savedState.nameStartsWith || null,
-            startIndex: limitMismatch ? 0 : (savedState.startIndex || 0),
+            startIndex: limitMismatch ? 0 : savedState.startIndex || 0,
             limit: activeLimit,
             isInfinite: activeIsInfinite,
             // Restore view mode and column layouts from nav state
@@ -1324,6 +1469,13 @@ class LibraryPage extends Page {
             this._onAlphaPickerScrollModeChanged = null;
         }
 
+        // Clean up global default library view mode and column change listeners
+        if (this._onDefaultLibraryViewModeChanged) {
+            eventBus.off('pref:defaultLibraryViewMode:changed', this._onDefaultLibraryViewModeChanged);
+            eventBus.off('pref:defaultLibraryGridColumns:changed', this._onDefaultLibraryViewModeChanged);
+            this._onDefaultLibraryViewModeChanged = null;
+        }
+
         // Clean up background and sleep listeners
         if (this._onAppHidden) {
             eventBus.off('app:hidden', this._onAppHidden);
@@ -1387,7 +1539,21 @@ class LibraryPage extends Page {
         }
 
         try {
-            const item = await api.getItem(this.state.libraryId);
+            let item = null;
+
+            // Check if library metadata is already available from in-memory user views
+            const cachedLibraries = state.get('home:libraries');
+            if (Array.isArray(cachedLibraries)) {
+                const found = cachedLibraries.find((lib) => lib && lib.Id === this.state.libraryId);
+                if (found) {
+                    item = { ...found };
+                }
+            }
+
+            // Fallback to server query if library was not found in local memory cache
+            if (!item) {
+                item = await api.getItem(this.state.libraryId);
+            }
 
             // If the libraryId is a deep link to an Album/Artist/Series, it won't have a CollectionType.
             // Fake it so the LibraryPage behaves like it's inside that specific library type.
@@ -1484,6 +1650,14 @@ class LibraryPage extends Page {
             this.title = title; // Update Page title
         } catch (e) {
             log.error('Failed to fetch info', e);
+            // Ensure libraryInfo is never null or undefined on failure
+            if (!this.state.libraryInfo) {
+                this.state.libraryInfo = {
+                    Id: this.state.libraryId,
+                    Name: this.params.name || this.params.title || i18n.t('Library') || 'Library',
+                    CollectionType: this.params.collectionType || null
+                };
+            }
         }
     }
 
@@ -1707,11 +1881,12 @@ class LibraryPage extends Page {
 
         // Align limit to grid columns so the last rendered row is always full.
         // For list view, column count is always 1 (upstream fix).
-        const effectiveLimitCols = this.state.viewMode === 'list'
-            ? 1
-            : (isLandscape && this.state.viewMode !== 'thumb'
-                ? this._getDefaultColumnsForMode('thumb')
-                : this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode));
+        const effectiveLimitCols =
+            this.state.viewMode === 'list'
+                ? 1
+                : isLandscape && this.state.viewMode !== 'thumb'
+                  ? this._getDefaultColumnsForMode('thumb')
+                  : this.state.gridColumns || this._getDefaultColumnsForMode(this.state.viewMode);
         // ANDROID PORTRAIT: apply the portrait column override AFTER the stock
         // resolution above, so landscape and TV behavior are untouched.
         const portraitLimitCols =
@@ -1736,7 +1911,8 @@ class LibraryPage extends Page {
                 StartIndex: this.state.startIndex,
                 Limit: this.state.limit,
                 Recursive: true,
-                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Tags,ProviderIds,SortName',
+                // Include MediaSources, MediaStreams, Genres, Tags, SeriesId, and Path for accurate anime and audio badge evaluation
+                Fields: 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb',
                 EnableTotalRecordCount: true
@@ -2408,8 +2584,9 @@ class LibraryPage extends Page {
                 this._updatePaginationUI();
                 return;
             } else if (viewType === 'Episodes') {
-                // Flattened episodes view
+                // Flattened episodes view: ensure SeriesId, MediaSources, and MediaStreams are requested
                 params.IncludeItemTypes = 'Episode';
+                params.Fields = 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId,SeriesName';
                 result = await api.getItems(params);
             } else if (viewType === 'Favorites') {
                 params.Filters = 'IsFavorite';
@@ -2473,6 +2650,15 @@ class LibraryPage extends Page {
                 this.state.items = result?.Items || [];
                 this.state.totalRecordCount = result?.TotalRecordCount || 0;
 
+                // Preload series anime markers for any episode items so badges render synchronously
+                const episodeItems = (this.state.items || []).filter((item) => item.Type === 'Episode' && item.SeriesId);
+                if (episodeItems.length > 0) {
+                    const uniqueSeriesIds = [...new Set(episodeItems.map((ep) => ep.SeriesId))];
+                    await Promise.all(
+                        uniqueSeriesIds.map((seriesId) => animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null))
+                    );
+                }
+
                 // Enrich individual playlist/collection items with Primary images from their contents
                 const collectionType = this.state.libraryInfo?.CollectionType;
                 if ((collectionType === 'playlists' || collectionType === 'boxsets') && this.state.items.length > 0) {
@@ -2486,7 +2672,12 @@ class LibraryPage extends Page {
             }
         } catch (e) {
             log.error('Failed to load items', e);
-            this.$('#library-grid').innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
+            // Clear pending navigation state so the spinner is never trapped waiting for focus
+            this._pendingNavState = null;
+            const gridEl = this.$('#library-grid');
+            if (gridEl) {
+                gridEl.innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
+            }
         } finally {
             // Keep loading active if focus restoration is pending;
             // onScrollFocusRestored or the safety timer will release it once focus settles.
@@ -2621,7 +2812,9 @@ class LibraryPage extends Page {
          * =====================================================================
          */
         const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
-        const tabStorageKey = isTabSpecific ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}` : null;
+        const tabStorageKey = isTabSpecific
+            ? `pref:library:viewMode:${this.state.libraryId}:${this.state.viewType}`
+            : null;
         const libStorageKey = isSeerr ? 'pref:seerr:viewMode' : `pref:library:viewMode:${this.state.libraryId}`;
 
         // ---------------------------------------------------------------------
@@ -2646,17 +2839,24 @@ class LibraryPage extends Page {
             // Retrieve saved preference (checking tab-specific key before library-level key)
             const saved = (tabStorageKey && storage.getItem(tabStorageKey)) || storage.getItem(libStorageKey);
 
+            // Resolve fallback default layout mode from global settings
+            const configuredDefault = storage.getItem('pref:defaultLibraryViewMode');
+            const defaultMode =
+                configuredDefault && validModes.includes(configuredDefault) ? configuredDefault : 'poster';
+
             if (saved) {
-                // Validate the value is still a known picker option (guards against stale data)
+                // Validate that the persisted library-specific value is still an allowed option
                 const allowedModes = isSeerr ? ['poster', 'small-poster'] : validModes;
-                this.state.viewMode = allowedModes.includes(saved) ? saved : (isLandscape ? 'thumb' : 'poster');
+                this.state.viewMode = allowedModes.includes(saved) ? saved : isLandscape ? 'thumb' : defaultMode;
             } else {
-                // Universal default is 'thumb' for landscape collections/tabs, 'poster' for portrait
-                this.state.viewMode = isLandscape ? 'thumb' : 'poster';
+                // Universal default is 'thumb' for landscape collections/tabs, user-configured default otherwise
+                this.state.viewMode = isLandscape ? 'thumb' : defaultMode;
             }
         }
 
-        log.info(`[ViewMode] Active view mode: ${this.state.viewMode} for library ${this.state.libraryId} (tab: ${this.state.viewType || 'Items'})`);
+        log.info(
+            `[ViewMode] Active view mode: ${this.state.viewMode} for library ${this.state.libraryId} (tab: ${this.state.viewType || 'Items'})`
+        );
 
         /*
          * =========================================================================
@@ -2666,13 +2866,17 @@ class LibraryPage extends Page {
          * custom column counts selected for this viewMode.
          * =========================================================================
          */
-        const tabModeKey = isTabSpecific ? `pref:library:gridMode:${this.state.libraryId}:${this.state.viewType}` : null;
+        const tabModeKey = isTabSpecific
+            ? `pref:library:gridMode:${this.state.libraryId}:${this.state.viewType}`
+            : null;
         const libModeKey = isSeerr ? 'pref:seerr:gridMode' : `pref:library:gridMode:${this.state.libraryId}`;
         const savedMode = (tabModeKey && storage.getItem(tabModeKey)) || storage.getItem(libModeKey);
         this.state.gridMode = savedMode === 'static' ? 'static' : 'dynamic';
 
         const effectiveMode = this.state.viewMode;
-        const tabColsKey = isTabSpecific ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${effectiveMode}` : null;
+        const tabColsKey = isTabSpecific
+            ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${effectiveMode}`
+            : null;
         const colsKey = isSeerr
             ? `pref:seerr:gridColumns:${effectiveMode}`
             : `pref:library:gridColumns:${this.state.libraryId}:${effectiveMode}`;
@@ -2718,7 +2922,9 @@ class LibraryPage extends Page {
     _loadPersistedFilters() {
         // Skip sub-views (genre, studio, tag pages, etc.) to prevent overriding
         // their specific query parameters with the general library filters.
-        if (this._isSubView()) {
+        // Also skip when filters are explicitly supplied by route parameters
+        // (e.g. during pagination or deep link queries) to prevent overwriting.
+        if (this._isSubView() || (this.params.filters && Object.keys(this.state.filters || {}).length > 0)) {
             return;
         }
 
@@ -3336,6 +3542,7 @@ class LibraryPage extends Page {
          * and native GPU scrolling without continuous main-thread layout thrashing.
          */
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
+        // prettier-ignore
         const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 10);
         const poolRows = Math.min(totalRows, POOL_ROWS);
 
@@ -3450,6 +3657,7 @@ class LibraryPage extends Page {
             }
         } else {
             // Register initial eager cards with image observer and lazy loader (eagerLoad = true for viewport)
+            // prettier-ignore
             this._hookGridCards(grid.querySelectorAll('.virtual-grid-row:not([data-skeleton="true"]) .media-card'), true);
 
             // Progressively hydrate remaining buffer rows frame-by-frame
@@ -3782,7 +3990,10 @@ class LibraryPage extends Page {
         const isCardLandscape =
             this.state.viewMode === 'thumb' ||
             this.state.viewMode === 'banner' ||
-            (isLandscape && this.state.viewMode !== 'list' && this.state.viewMode !== 'poster' && this.state.viewMode !== 'small-poster');
+            (isLandscape &&
+                this.state.viewMode !== 'list' &&
+                this.state.viewMode !== 'poster' &&
+                this.state.viewMode !== 'small-poster');
 
         return items
             .map((item) =>
@@ -4008,8 +4219,9 @@ class LibraryPage extends Page {
         this._lastFocusItemIndex = itemIndex;
 
         // Proactively stream next batch if approaching end of loaded array in infinite mode
-        const prefetchThreshold = this.state.items.length - (columns * 4);
-        const hasMore = this.state._hasMoreInfinite !== false &&
+        const prefetchThreshold = this.state.items.length - columns * 4;
+        const hasMore =
+            this.state._hasMoreInfinite !== false &&
             (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount);
         if (this.state.isInfinite && itemIndex >= prefetchThreshold && hasMore) {
             this._loadNextInfiniteBatch();
@@ -4205,7 +4417,7 @@ class LibraryPage extends Page {
         const totalRows = Math.ceil(items.length / columns);
         const isListView = this.state.viewMode === 'list';
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
-        const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 10);
+        const POOL_ROWS = isSkipLazy ? totalRows : isListView ? 22 : 10;
 
         // If total rows fit entirely within the pool (or skip lazy mode is active),
         // all cards exist in the DOM and no row recycling is needed.
@@ -4226,7 +4438,7 @@ class LibraryPage extends Page {
         }
 
         let startRow = this._currentStartRow != null ? this._currentStartRow : 0;
-        let endRow = this._currentEndRow != null ? this._currentEndRow : (startRow + poolRows - 1);
+        let endRow = this._currentEndRow != null ? this._currentEndRow : startRow + poolRows - 1;
 
         // Guard: If the pool already encompasses the ideal window, no DOM mutation needed
         if (startRow === idealStartRow && endRow === idealEndRow) {
@@ -4778,6 +4990,28 @@ class LibraryPage extends Page {
         this.state.startIndex = 0; // Reset pagination
         this.state.nameStartsWith = null; // Reset Alpha Picker
 
+        // --------------------------------------------------------------------
+        // SYNC IN-MEMORY ROUTE PARAMS FOR TAB SWITCH
+        // --------------------------------------------------------------------
+        // Reset page offset and letter jump parameters from the previous tab.
+        // Track the active tab in params so subsequent page requests inherit it.
+        // --------------------------------------------------------------------
+        if (this.params.page) {
+            delete this.params.page;
+        }
+        if (this.params.char) {
+            delete this.params.char;
+        }
+        if (this.params.filters) {
+            delete this.params.filters;
+        }
+        if (newType && newType !== 'Items') {
+            this.params.tab = newType;
+        } else {
+            delete this.params.tab;
+            delete this.params.viewType;
+        }
+
         // Rehydrate view mode and grid column preferences for the selected tab
         this._loadPersistedViewMode();
 
@@ -4796,7 +5030,8 @@ class LibraryPage extends Page {
         // Sync URL to new top-level tab state if we escaped a sub-view
         if (hasChanges) {
             log.info(`Cleared sub-view parameters for tab switch: ${newType}`);
-            router.navigate(`/library/${this.state.libraryId}`, { silent: true, replace: true });
+            const query = newType && newType !== 'Items' ? `?tab=${encodeURIComponent(newType)}` : '';
+            router.navigate(`/library/${this.state.libraryId}${query}`, { silent: true, replace: true });
         }
 
         // Update UI Tabs
@@ -4905,7 +5140,6 @@ class LibraryPage extends Page {
 
         const columns = this.state._gridColumns || 7;
         const isListView = this.state.viewMode === 'list';
-        const ROWS_ABOVE = isListView ? 15 : 8;
         const ROWS_BELOW = isListView ? 20 : 10;
 
         // ---------------------------------------------------------------------
@@ -5034,7 +5268,6 @@ class LibraryPage extends Page {
 
         // Invalidate spatial navigation cache so FocusManager recognizes newly mapped cards
         focusManager.invalidateCache('library-grid');
-
 
         // ---------------------------------------------------------------------
         // STEP 4: Smoothly glide viewport to target position using exact DOM coordinates
@@ -5405,7 +5638,11 @@ class LibraryPage extends Page {
 
         // If viewport is running an active scroll animation and this is a background prefetch,
         // defer the fetch until scrolling settles to keep compositor frame rates steady at 60fps.
-        if (silent && (scrollController.isVerticalAnimating || (window.__scrollController && window.__scrollController.isAnimating))) {
+        if (
+            silent &&
+            (scrollController.isVerticalAnimating ||
+                (window.__scrollController && window.__scrollController.isAnimating))
+        ) {
             const onScrollFinish = () => {
                 eventBus.off('scroll:finished', onScrollFinish);
                 if (!this._isDestroyed && !this._isLoadingMore) {
@@ -5435,6 +5672,15 @@ class LibraryPage extends Page {
                 }
 
                 if (nextItems && nextItems.length > 0) {
+                    // Preload series anime markers for any newly fetched episode items
+                    const eps = nextItems.filter((i) => i.Type === 'Episode' && i.SeriesId);
+                    if (eps.length > 0) {
+                        const uniqueIds = [...new Set(eps.map((e) => e.SeriesId))];
+                        await Promise.all(
+                            uniqueIds.map((sId) => animeMarkerService.fetchSeriesMarkers(sId).catch(() => null))
+                        );
+                    }
+
                     this.state.items = this.state.items.concat(nextItems);
 
                     const collectionType = this.state.libraryInfo?.CollectionType;
@@ -5445,16 +5691,18 @@ class LibraryPage extends Page {
                     const grid = this.$('#library-grid');
                     if (grid) {
                         const columns = this.state._gridColumns || 7;
-                        const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
+                        const rowHeight =
+                            this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
                         const totalRows = Math.ceil(this.state.items.length / columns);
 
                         // Expand container height to fit the full item count geometry
                         grid.style.height = `${totalRows * rowHeight}px`;
 
                         // Re-sync virtual row pool to ensure the forward buffer is loaded
-                        const currentRow = this._lastFocusItemIndex != null
-                            ? Math.floor(this._lastFocusItemIndex / columns)
-                            : (this._currentStartRow || 0);
+                        const currentRow =
+                            this._lastFocusItemIndex != null
+                                ? Math.floor(this._lastFocusItemIndex / columns)
+                                : this._currentStartRow || 0;
                         this._syncVirtualGrid(currentRow, this._lastFocusItemIndex);
 
                         // Invalidate spatial navigation cache
@@ -5472,7 +5720,10 @@ class LibraryPage extends Page {
                     this._schedulePreWarm(currentEnd + 1, 1);
 
                     // If collection still contains further unloaded items, schedule continuous background prefetch
-                    if (this.state._hasMoreInfinite && (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount)) {
+                    if (
+                        this.state._hasMoreInfinite &&
+                        (!this.state.totalRecordCount || this.state.items.length < this.state.totalRecordCount)
+                    ) {
                         this._scheduleLibraryIdlePrefetch(300);
                     }
                 }
@@ -5504,7 +5755,10 @@ class LibraryPage extends Page {
             if (this.state.totalRecordCount > 0 && this.state.items.length >= this.state.totalRecordCount) return;
 
             // Defer if scroll animation is actively in flight
-            if (scrollController.isVerticalAnimating || (window.__scrollController && window.__scrollController.isAnimating)) {
+            if (
+                scrollController.isVerticalAnimating ||
+                (window.__scrollController && window.__scrollController.isAnimating)
+            ) {
                 const onScrollFinish = () => {
                     eventBus.off('scroll:finished', onScrollFinish);
                     if (!this._isDestroyed) {
@@ -5572,10 +5826,7 @@ class LibraryPage extends Page {
             if (currentIndex < totalCards) {
                 if (typeof window.requestIdleCallback === 'function') {
                     this._idleChunkType = 'idle';
-                    this._idleChunkId = window.requestIdleCallback(
-                        () => processNextChunk(),
-                        { timeout: 100 }
-                    );
+                    this._idleChunkId = window.requestIdleCallback(() => processNextChunk(), { timeout: 100 });
                 } else {
                     this._idleChunkType = 'timer';
                     this._idleChunkId = setTimeout(processNextChunk, 50);
@@ -5589,10 +5840,7 @@ class LibraryPage extends Page {
         // Dispatch the initial deferred chunk right after initial render frame
         if (typeof window.requestIdleCallback === 'function') {
             this._idleChunkType = 'idle';
-            this._idleChunkId = window.requestIdleCallback(
-                () => processNextChunk(),
-                { timeout: 100 }
-            );
+            this._idleChunkId = window.requestIdleCallback(() => processNextChunk(), { timeout: 100 });
         } else {
             this._idleChunkType = 'timer';
             this._idleChunkId = setTimeout(processNextChunk, 50);
@@ -5856,8 +6104,13 @@ class LibraryPage extends Page {
             const currentParams = new URLSearchParams();
             if (this.params.seerrType) currentParams.set('seerrType', this.params.seerrType);
             if (this.params.mediaType) currentParams.set('mediaType', this.params.mediaType);
-            if (this.params.genreId || this.params.genre)
-                currentParams.set('genreId', this.params.genreId || this.params.genre);
+            // Preserve Seerr filter selections across pages
+            const activeGenre = this.state.filters?.genre || this.params.genreId || this.params.genre;
+            if (activeGenre) currentParams.set('genreId', activeGenre);
+            const activeLang = this.state.filters?.language || this.params.language;
+            if (activeLang) currentParams.set('language', activeLang);
+            const activeCert = this.state.filters?.certification || this.params.certification;
+            if (activeCert) currentParams.set('certification', activeCert);
             if (this.params.studioId || this.params.studio)
                 currentParams.set('studioId', this.params.studioId || this.params.studio);
             if (this.params.networkId || this.params.network)
@@ -5895,6 +6148,36 @@ class LibraryPage extends Page {
             currentParams.set('char', selectedChar);
         } else {
             currentParams.delete('char');
+        }
+
+        // ====================================================================
+        // ACTIVE TAB / CATEGORY PRESERVATION
+        // ====================================================================
+        // Transmit the active category viewType (such as Collections, Favorites,
+        // Episodes, Genres, or Albums) to ensure pagination keeps browsing the
+        // current category instead of resetting back to the primary library default.
+        // ====================================================================
+        const activeTab = this.state.viewType || this.params.tab;
+        if (activeTab && activeTab !== 'Items') {
+            currentParams.set('tab', activeTab);
+        } else {
+            currentParams.delete('tab');
+            currentParams.delete('viewType');
+        }
+
+        // ====================================================================
+        // ACTIVE FILTERS PRESERVATION ACROSS PAGES
+        // ====================================================================
+        // When paginating with active filters (e.g. Unplayed, Genres, Ratings),
+        // serialize and transmit state.filters in currentParams so the target
+        // page request preserves all filter constraints rather than reverting
+        // back to unfiltered defaults.
+        // ====================================================================
+        const activeFilters = this.state.filters;
+        if (activeFilters && typeof activeFilters === 'object' && Object.keys(activeFilters).length > 0) {
+            currentParams.set('filters', JSON.stringify(activeFilters));
+        } else {
+            currentParams.delete('filters');
         }
 
         // Apply updated target page
@@ -5985,6 +6268,14 @@ class LibraryPage extends Page {
         this.state.filters = {};
         this.state.nameStartsWith = null;
         this.state.startIndex = 0;
+
+        // Clear active route parameters associated with filters and pagination
+        delete this.params.filters;
+        delete this.params.page;
+        delete this.params.char;
+
+        // Evict cached pages for this library so stale filtered snapshots are not reused
+        state.clearByPrefix(`library:state:${this.state.libraryId}`);
 
         // ------------------------------------------------------------------
         // Persist the clean state to local storage.
@@ -6144,11 +6435,16 @@ class LibraryPage extends Page {
         // otherwise default to standard column count for this mode.
         const defaultInitialCols = this._getDefaultColumnsForMode(tempMode);
         const isTabSpecific = Boolean(this.state.viewType && this.state.viewType !== 'Items');
-        const initialTabColsKey = isTabSpecific ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${tempMode}` : null;
+        const initialTabColsKey = isTabSpecific
+            ? `pref:library:gridColumns:${this.state.libraryId}:${this.state.viewType}:${tempMode}`
+            : null;
         const initialColsKey = isSeerr
             ? `pref:seerr:gridColumns:${tempMode}`
             : `pref:library:gridColumns:${this.state.libraryId}:${tempMode}`;
-        const initialSavedCols = parseInt((initialTabColsKey && storage.getItem(initialTabColsKey)) || storage.getItem(initialColsKey), 10);
+        const initialSavedCols = parseInt(
+            (initialTabColsKey && storage.getItem(initialTabColsKey)) || storage.getItem(initialColsKey),
+            10
+        );
         const validInitialOpts = colOptionsMap[tempMode] || [];
 
         let tempColumns;
@@ -7169,6 +7465,13 @@ class LibraryPage extends Page {
         this.$('#btn-filter-clear').addEventListener('click', () => {
             this.state.filters = {};
 
+            // Clear in-memory route filter and page parameters
+            delete this.params.filters;
+            delete this.params.page;
+
+            // Invalidate cached memory pages for this library so stale pages are purged
+            state.clearByPrefix(`library:state:${this.state.libraryId}`);
+
             // ------------------------------------------------------------------
             // Remove the persisted filter configuration since user cleared all.
             // ------------------------------------------------------------------
@@ -7182,6 +7485,19 @@ class LibraryPage extends Page {
 
         this.$('#btn-filter-apply').addEventListener('click', async () => {
             this.state.startIndex = 0;
+
+            // Reset page parameter on applying new filter set
+            delete this.params.page;
+
+            // Synchronize active filters to route parameters
+            if (this.state.filters && Object.keys(this.state.filters).length > 0) {
+                this.params.filters = JSON.stringify(this.state.filters);
+            } else {
+                delete this.params.filters;
+            }
+
+            // Invalidate cached memory pages for this library so stale snapshots are purged
+            state.clearByPrefix(`library:state:${this.state.libraryId}`);
 
             // ------------------------------------------------------------------
             // Persist the newly selected filters.
@@ -7604,6 +7920,12 @@ class LibraryPage extends Page {
         if (this._preWarmedUrls) {
             this._preWarmedUrls.clear();
             this._preWarmedUrls = null;
+        }
+
+        // Unsubscribe from series marker load events
+        if (this._markerUnsub) {
+            this._markerUnsub();
+            this._markerUnsub = null;
         }
 
         super.onDestroyed?.();

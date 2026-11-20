@@ -38,7 +38,7 @@ test('country selection defaults to Italy and never borrows providers from anoth
     assert.deepEqual(providersForRegion(providers, 'FR'), { flatrate: [], buy: [] });
     assert.deepEqual(providersForRegion(null, 'IT'), { flatrate: [], buy: [] });
     const html = renderWatchProviders(providers, 'FR', t, 'it');
-    assert.match(html, /Disponibilità non indicata/);
+    assert.match(html, /Disponibilità non elencata/);
     assert.doesNotMatch(html, /US only|Subscription service/);
 });
 
@@ -63,8 +63,8 @@ test('providers are separated by purchase type, deduplicated and ordered by prio
     );
     assert.equal(result.buy.length, 1);
     const html = renderWatchProviders(providers, 'IT', t, 'it');
-    assert.match(html, /In abbonamento/);
-    assert.match(html, /Acquistabile/);
+    assert.match(html, /Abbonamento/);
+    assert.match(html, /Acquista/);
     assert.match(html, /https:\/\/image.tmdb.org\/t\/p\/w92\/logo.jpg/);
     assert.doesNotMatch(html, /JustWatch|TMDB|watch-providers-attribution/);
     assert.doesNotMatch(html, /US only/);
@@ -112,8 +112,10 @@ test('Jellyfin lookups use film/series TMDB IDs and skip unsupported or unidenti
 });
 
 // Exercise the actual page loader with isolated network and DOM dependencies.
-const pageSource = readFileSync(new URL('../src/pages/DetailsPage.js', import.meta.url), 'utf8');
-const loaderBody = pageSource.split('    async _loadWatchProviders() {')[1].split('\n    async _loadDetails() {')[0];
+const pageSource = readFileSync(new URL('../src/pages/DetailsPage.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const startLoader = pageSource.indexOf('    async _loadWatchProviders() {');
+const endLoader = pageSource.indexOf('\n    }\n', startLoader);
+const loaderBody = pageSource.slice(startLoader + '    async _loadWatchProviders() {'.length, endLoader + 6);
 function pageWith(seerr, preference = 'true') {
     const classes = new Set();
     const container = {
@@ -200,7 +202,7 @@ test('older TVs display full country names in settings and title details without
         assert.equal(watchProviderRegionName('DE', 'it'), 'Germania');
         assert.equal(watchProviderRegionName('FR', 'en-us'), 'France');
         const html = renderWatchProviders(providers, 'IT', t, 'it');
-        assert.match(html, /Dove guardarlo.*Italia/);
+        assert.match(html, /Dove guardare.*Italia/);
         assert.doesNotMatch(html, /Dati sulla disponibilità/);
         assert.doesNotMatch(html, /TMDB|JustWatch/);
         Intl.DisplayNames = function () {

@@ -106,6 +106,19 @@ class DebugOverlay {
             logger.setEnabled(true);
         }
 
+        // Drain pre-boot logs buffered by logger.js before DebugOverlay initialized
+        // Ensures early boot diagnostics and telemetry appear in exported client logs
+        if (window.__earlyLogs && Array.isArray(window.__earlyLogs)) {
+            for (let i = 0; i < window.__earlyLogs.length; i++) {
+                const earlyEntry = window.__earlyLogs[i];
+                if (earlyEntry && earlyEntry.formatted) {
+                    this._uploadBuffer.push(earlyEntry.formatted);
+                }
+            }
+            // Reset buffer after transfer so duplicate lines are not retained
+            window.__earlyLogs = [];
+        }
+
         // Subscribe to Logger events
         eventBus.on('logger:log', (logEntry) => this._queueLog(logEntry));
 
@@ -405,7 +418,13 @@ class DebugOverlay {
             ''
         ].join('\r\n');
 
-        return header + this._uploadBuffer.join('\r\n');
+        // Cap uploaded dump to the most recent 2,500 lines.
+        // Prevents multi-megabyte payloads that cause socket timeouts on TV network stacks
+        // while preserving ample history for diagnosing app behavior and playback issues.
+        const linesToDump =
+            this._uploadBuffer.length > 2500 ? this._uploadBuffer.slice(-2500) : this._uploadBuffer;
+
+        return header + linesToDump.join('\r\n');
     }
 
     /**

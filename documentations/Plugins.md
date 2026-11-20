@@ -12,7 +12,7 @@ The plugin system is built around three main components:
 
 ## Bundled Plugins
 
-Litefin ships with 4 bundled plugins registered in `PluginManager.js`:
+Litefin ships with 5 bundled plugins registered in `PluginManager.js`:
 
 | Plugin ID         | Description                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------------- |
@@ -20,6 +20,7 @@ Litefin ships with 4 bundled plugins registered in `PluginManager.js`:
 | `syncplay`        | Real-time synchronized group playback via WebSockets                                              |
 | `local-intros`    | Play custom local video files before media content                                                |
 | `mdblist-ratings` | Fetch and display IMDb, Rotten Tomatoes, Metacritic, Trakt, TMDB, and Letterboxd ratings on cards |
+| `home-screen-sections` | Add the rows configured in the Home Screen Sections server plugin to the Home screen |
 
 ## Creating a Plugin
 
@@ -144,6 +145,7 @@ Litefin pairs with dedicated server-side plugins to unlock advanced capabilities
 ### 1. Litefin Server Plugin ([Jellyfin](https://github.com/MoazSalem/litefin-plugin) / [Emby](https://github.com/MoazSalem/litefin-plugin-emby))
 Extends your server with features that require elevated or backend network access:
 - **Seerr Discovery & Requests**: Proxies Jellyseerr / Overseerr requests without exposing API keys to client devices.
+- **Seerr Images**: Serves Seerr's cached TMDB artwork (posters, backdrops, logos) so clients without internet access still show images. Older plugins that don't offer it fall back to loading images from TMDB.
 - **Where to Watch (Streaming Availability)**: Queries TMDB streaming provider catalogs (Netflix, Prime, Disney+, etc.) grouped by subscription and rental.
 - **MDBList Ratings Aggregation**: Enriches media items with multi-source ratings (Rotten Tomatoes, IMDb, Metacritic, Trakt, Letterboxd).
 

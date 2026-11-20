@@ -403,6 +403,22 @@ export class MoviVideoPlayer {
          */
         element.setAttribute('persist', 'none');
 
+        /*
+         * -----------------------------------------------------------------
+         * Automatic Software Decoding Fallback (sw="auto")
+         * -----------------------------------------------------------------
+         * On desktop and web runtimes (particularly Linux / Chromium / WebKitGTK),
+         * hardware WebCodecs decoding may reject unsupported profiles or lack
+         * GPU hardware acceleration for specific video codecs (e.g. High 4:2:0 Level 41).
+         * Without sw="auto", movi-player halts playback and raises an errordisplay
+         * screen ("Format Unsupported: This video codec is not supported by your
+         * browser's hardware acceleration") expecting interactive button confirmation.
+         * Setting sw="auto" instructs the engine to silently and automatically
+         * fall back to its internal WASM / FFmpeg software decoder without halting.
+         * -----------------------------------------------------------------
+         */
+        element.setAttribute('sw', 'auto');
+        element.sw = 'auto';
 
         // Apply saved system volume
         const savedVol = MediaHelper.getSavedVolume();
@@ -699,6 +715,27 @@ export class MoviVideoPlayer {
                 // Log error screen details surfaced by the web component
                 log.error(`movi-player: Error display surfaced — [${title}] ${message}`, detail);
 
+                /*
+                 * -------------------------------------------------------------
+                 * Seamless Software Decoding Fallback Recovery
+                 * -------------------------------------------------------------
+                 * If movi-player raises an error screen for an unsupported format
+                 * or hardware decode refusal where software decoding is available
+                 * (canTrySoftware === true), immediately engage software decoding
+                 * via element.enableSoftwareDecoding() instead of crashing or
+                 * terminating playback through an unrecoverable player error.
+                 * -------------------------------------------------------------
+                 */
+                if (detail.canTrySoftware && typeof element.enableSoftwareDecoding === 'function') {
+                    log.info('movi-player: Software decoding fallback available — attempting auto recovery via enableSoftwareDecoding()');
+                    try {
+                        element.enableSoftwareDecoding();
+                        return;
+                    } catch (e) {
+                        log.warn('movi-player: Failed to invoke enableSoftwareDecoding():', e);
+                    }
+                }
+
                 const isNetworkError = /network|connection|fetch|offline|dropped/i.test(`${title} ${message}`);
 
                 // Inform player subscribers of the surfaced error screen
@@ -977,6 +1014,9 @@ export class MoviVideoPlayer {
         playerElement.setAttribute('bindav', 'false');
         // Prevent MoviElement internal OPFS settings from hijacking audio language
         playerElement.setAttribute('persist', 'none');
+        // Ensure automatic/silent fallback to software decoding if hardware decoding refuses
+        playerElement.setAttribute('sw', 'auto');
+        playerElement.sw = 'auto';
         if (playerElement.player && typeof playerElement.player.setBindAV === 'function') {
             try {
                 playerElement.player.setBindAV(false);

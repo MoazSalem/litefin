@@ -1,4 +1,4 @@
-namespace Litefin.Web;
+﻿namespace Litefin.Web;
 
 using System;
 using System.Collections.Generic;
@@ -118,7 +118,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = this.Name,
-                DisplayName = this.Configuration?.PluginMenuTitle ?? this.Name,
+                DisplayName = "Litefin Client",
                 EmbeddedResourcePath = string.Format(
                     CultureInfo.InvariantCulture,
                     "{0}.Configuration.configPage.html",

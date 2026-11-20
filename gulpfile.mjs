@@ -318,6 +318,10 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
      *
      * Deleting them here from the staging copy is the safest fix; it mirrors what
      * we already do for config.xml and does not touch the original buildDir.
+     *
+     * assets/warmup.mp4 is the Tizen boot-warmup clip: WebOS has no AVPlay plane
+     * to warm, so it is dropped from the IPK staging copy (the original
+     * dist/<tier>/assets/ file stays intact for the parallel Tizen WGT task).
      */
     const tizenOnlyFiles = [
         path.join(stagingDir, 'config.xml'),
@@ -325,7 +329,8 @@ async function createIpk(buildDir, outputDir, finalName, includeServices = true)
         path.join(stagingDir, 'signature1.xml'),
         path.join(stagingDir, 'tile_1920x1080.png'),
         path.join(stagingDir, 'assets/icon.png'),
-        path.join(stagingDir, 'icon.png')
+        path.join(stagingDir, 'icon.png'),
+        path.join(stagingDir, 'assets/warmup.mp4')
     ];
     await del(tizenOnlyFiles.filter((f) => existsSync(f)));
 

@@ -33,7 +33,7 @@ export class RichMetadataTable {
         const translatedLabel = i18n.t(labelKey) || labelKey;
         const valuesHtml = items
             .map((i) => {
-                const name = typeof i === 'string' ? i : (i.Name || i);
+                const name = typeof i === 'string' ? i : i.Name || i;
                 const id = typeof i === 'object' && i.Id ? i.Id : '';
                 const type = labelKey.toLowerCase();
 

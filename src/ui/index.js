@@ -10,3 +10,4 @@
 export { focusManager } from './FocusManager.js';
 
 export { layoutManager, LAYOUT, THEME_MODES } from './LayoutManager.js';
+export { customHeadersDialog } from './CustomHeadersDialog.js';

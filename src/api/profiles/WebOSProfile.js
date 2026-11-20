@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../../utils/Logger.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { BaseProfile } from './BaseProfile.js';
 import { webosAdapter } from '../../webos/WebOSAdapter.js';
@@ -68,7 +69,7 @@ function getProbedCodecs() {
         // Some TVs only support VP9 in WebM, others in MP4
         vp9: supportsCodec('video/webm; codecs="vp9"') || supportsCodec('video/mp4; codecs="vp09.00.10.08"'),
 
-        // AV1 typically only on WebOS 6+ (O7, G1, C1 etc.)
+        // AV1: every webOS 6+ set, and some webOS 5 sets (2020 α9 Gen 3)
         av1: supportsCodec('video/mp4; codecs="av01.0.05M.08"') || supportsCodec('video/webm; codecs="av1"'),
 
         // Probe for 10-bit HEVC support as a proxy for HDR10 with multiple level/string variants
@@ -85,43 +86,65 @@ function getProbedCodecs() {
             supportsCodec('video/mpeg') ||
             supportsCodec('video/mp2t; codecs="mp2v.20.2"'),
         mpegts: supportsCodec('video/mp2t'),
-        mp2: v.canPlayType('audio/mpeg; codecs="mp2"') !== '' || v.canPlayType('audio/mp4; codecs="mp2"') !== ''
+        mp2: v.canPlayType('audio/mpeg; codecs="mp2"') !== '' || v.canPlayType('audio/mp4; codecs="mp2"') !== '',
+        dts: probeDts(v)
     };
 
     return _codecCache;
 }
 
-function getWebOSVersion() {
-    const userAgent = navigator.userAgent.toLowerCase();
-    const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
-    if (!match) {
-        // Ancient WebOS 1.x/2.x platforms use pure WebKit without Chrome in UserAgent.
-        // Fall back to parsing the AppleWebKit version number:
-        //   AppleWebKit/538.2 -> WebOS 2.x
-        //   AppleWebKit/537.41 -> WebOS 1.x
-        const webkitMatch = /applewebkit\/([0-9.]+)/.exec(userAgent);
-        if (webkitMatch) {
-            const webkitVersion = parseFloat(webkitMatch[1]);
-            if (webkitVersion >= 538) return 2;
-            if (webkitVersion >= 537) return 1;
+/**
+ * The registered MP4 sample entries for DTS: core (dtsc), DTS-HD (dtsh), DTS-HD
+ * lossless (dtsl), DTS Express (dtse) and DTS:X (dtsx, dtsy). There are no codec
+ * strings for DTS in MKV or MPEG-TS, and a type without a codec can only ever
+ * answer 'maybe', so these are the only questions with a definite answer.
+ */
+const DTS_PROBE_TYPES = [
+    'audio/mp4; codecs="dtsc"',
+    'audio/mp4; codecs="dtsh"',
+    'audio/mp4; codecs="dtsl"',
+    'audio/mp4; codecs="dtse"',
+    'audio/mp4; codecs="dtsx"',
+    'audio/mp4; codecs="dtsy"'
+];
+
+/**
+ * Asks the TV's media pipeline whether it plays DTS.
+ *
+ * Only a definite 'probably' counts as support. An empty answer is treated as
+ * "unknown", not "no": LG's Chromium builds answer '' for codecs they still
+ * pass through over HDMI eARC (the same mis-reporting the enableEac3 setting
+ * exists for), so the probe can only turn DTS on, never off.
+ *
+ * @param {HTMLVideoElement} video - Element to call canPlayType on
+ * @returns {boolean|null} true when the pipeline confirms DTS, null when inconclusive
+ */
+function probeDts(video) {
+    const answers = {};
+    let confirmed = false;
+    for (const type of DTS_PROBE_TYPES) {
+        let answer = '';
+        try {
+            answer = video.canPlayType(type) || '';
+        } catch (e) {
+            answer = '';
         }
-        return 1; // Minimum safe fallback instead of 0
+        answers[type] = answer;
+        if (answer === 'probably') confirmed = true;
     }
+    log.info('WebOSProfile: DTS canPlayType probe:', JSON.stringify(answers));
+    return confirmed ? true : null;
+}
 
-    const versionMajor = parseInt(match[1].split('.')[0], 10);
-
-    if (versionMajor >= 120) return 25; // Estimate for WebOS 25
-    if (versionMajor >= 108) return 24;
-    if (versionMajor >= 94) return 23;
-    if (versionMajor >= 87) return 22;
-    if (versionMajor >= 79) return 6;
-    if (versionMajor >= 68) return 5;
-    if (versionMajor >= 53) return 4;
-    if (versionMajor >= 38) return 3;
-    if (versionMajor >= 34) return 2;
-    if (versionMajor >= 26) return 1;
-
-    return 1; // Fallback for very old versions
+/**
+ * Resolves the LG webOS major release version.
+ * Delegates to the centralized platformInfo single source of truth.
+ *
+ * @returns {number} webOS major version float (defaulting to 1 if unknown)
+ */
+export function getWebOSVersion() {
+    // Leverage unified platformInfo webOS version detection
+    return platformInfo.webosVersion || 1;
 }
 
 // Max audio channels — default to 6 for surround support on TV hardware
@@ -162,7 +185,14 @@ export function getDeviceCapabilities() {
         if (info.hdr10 !== undefined) hdr10Hw = info.hdr10 === true || info.hdr10 === 'true';
         if (info.screenWidth) screenWidthHw = parseInt(info.screenWidth, 10);
         if (info.screenHeight) screenHeightHw = parseInt(info.screenHeight, 10);
-    } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
+    } else if (
+        typeof window !== 'undefined' &&
+        typeof window.webOS !== 'undefined' &&
+        typeof window.webOS.deviceInfo === 'function' &&
+        // Only query webOS.deviceInfo when a real TV bridge exists (PalmServiceBridge or PalmSystem)
+        // to avoid webOSTV.js emitting Luna service failure warnings in test/browser environments
+        (typeof window.PalmServiceBridge !== 'undefined' || typeof window.PalmSystem !== 'undefined')
+    ) {
         window.webOS.deviceInfo((res) => {
             log.info('WebOSProfile: Async deviceInfo received, clearing cache');
             clearCapabilitiesCache();
@@ -207,8 +237,9 @@ export function getDeviceCapabilities() {
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
+    // Below webOS 6 the probe decides: LG's 2020 α9 Gen 3 sets (webOS 5) already decode AV1.
     const vp9 = true;
-    const av1 = webosVersion >= 6;
+    const av1 = webosVersion >= 6 || codecs.av1;
 
     const ac3 = codecs.ac3;
 
@@ -223,36 +254,44 @@ export function getDeviceCapabilities() {
     // ────────────────────────────────────────────────────────────────────────
     // DTS Passthrough & Decode Evaluation
     // ────────────────────────────────────────────────────────────────────────
-    // LG disabled DTS decode support on WebOS 5.0 through 22, however, TVs can
-    // still pass-through DTS over eARC. Since the user settings return strings
-    // ('enable', 'disable', 'auto'), a strict comparison against boolean true
-    // would always evaluate to false, rendering auto-detection non-functional.
-    // We now evaluate this setting string correctly:
+    // The user setting is a string ('enable', 'disable', 'auto'):
     //   - 'enable' yields true
     //   - 'disable' yields false
-    //   - 'auto' falls back to true on older WebOS < 5.0 platforms which have
-    //     native DTS decoding capabilities.
+    //   - 'auto' is true when the media pipeline confirms DTS via canPlayType,
+    //     otherwise it falls back to the version table: webOS < 5 decodes DTS.
+    //
+    // The version table alone is wrong in both directions. LG dropped DTS for
+    // the 2020–2022 models (webOS 5 to 22) but brought it back on 2023 OLEDs
+    // and QNED85+, which report webOS 23+. And the version comes from the
+    // Chromium build, i.e. the software: a 2022 set upgraded through webOS
+    // Re:New reports 23/24 without the DTS hardware. The probe can only add
+    // DTS, see probeDts().
     // ────────────────────────────────────────────────────────────────────────
     const dtsSetting = PlayerSettings.get('enableDts');
-    const dts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : webosVersion < 5;
+    const dts =
+        dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : codecs.dts === true || webosVersion < 5;
 
-    const manualRes = PlayerSettings.get('maxResolution');
-    if (manualRes && manualRes !== 'auto') {
-        switch (manualRes) {
-            case '720p':
-            case '1080p':
-                uhd = false;
-                uhd8K = false;
-                break;
-            case '2160p':
-                uhd = true;
-                uhd8K = false;
-                break;
-            case '4320p':
-                uhd = true;
-                uhd8K = true;
-                break;
-        }
+    const manualRes = BaseProfile.getMaxResolution();
+    if (manualRes) {
+        uhd = manualRes.width >= 3840;
+        uhd8K = manualRes.width >= 7680;
+    }
+
+    // ------------------------------------------------------------------------
+    // Largest video the server may send (see the size limit in buildJellyfinProfile)
+    // ------------------------------------------------------------------------
+    // A manual Max resolution always applies. In auto mode the limit comes from
+    // the panel's uhd / uhd8K flags, and only once webOS has reported them:
+    // before that a 4K panel looks like 1080p, and a limit would block 4K.
+    // screenWidth / screenHeight are not used: on many TVs they report the
+    // 1080p UI size rather than the panel.
+    let maxVideoSize = manualRes;
+    if (!maxVideoSize && info && info.uhd !== undefined) {
+        maxVideoSize = uhd8K
+            ? { width: 7680, height: 4320 }
+            : uhd
+              ? { width: 3840, height: 2160 }
+              : { width: 1920, height: 1080 };
     }
 
     const caps = {
@@ -263,6 +302,8 @@ export function getDeviceCapabilities() {
         screenHeight: screenHeightHw || (uhd8K ? 4320 : uhd ? 2160 : 1080),
         uhd,
         uhd8K,
+        maxVideoWidth: maxVideoSize ? maxVideoSize.width : null,
+        maxVideoHeight: maxVideoSize ? maxVideoSize.height : null,
         hdr10,
         hdr10Plus: false,
         hlg: hdr10,
@@ -321,10 +362,47 @@ function _buildMinimalProfile(caps) {
                 Protocol: 'http'
             }
         ],
-        CodecProfiles: [],
+        // The size limit still applies: Force Transcode is what users pick when a
+        // 4K transcode fails on a 1080p panel
+        CodecProfiles: _buildVideoSizeLimitProfiles(caps),
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),
         ResponseProfiles: []
     };
+}
+
+/**
+ * Codec profile that limits the video size to caps.maxVideoWidth x caps.maxVideoHeight.
+ *
+ * The server only scales a transcode down when it has to cut the bitrate. A 4K
+ * file whose bitrate is already under MaxStreamingBitrate is otherwise
+ * transcoded at full size, which a 1080p panel can't decode (playback error).
+ * A Video codec profile with no Codec applies to every codec: the server uses
+ * Width / Height as MaxWidth / MaxHeight for transcodes, and transcodes larger
+ * sources instead of direct-playing them.
+ * @param {Object} caps - Result of getDeviceCapabilities()
+ * @returns {Array} One codec profile, or none when there is no known limit
+ */
+function _buildVideoSizeLimitProfiles(caps) {
+    if (!caps.maxVideoWidth || !caps.maxVideoHeight) return [];
+    return [
+        {
+            Type: 'Video',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'Width',
+                    Value: String(caps.maxVideoWidth),
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'Height',
+                    Value: String(caps.maxVideoHeight),
+                    IsRequired: false
+                }
+            ]
+        }
+    ];
 }
 
 export function buildJellyfinProfile(options = {}) {
@@ -359,16 +437,30 @@ export function buildJellyfinProfile(options = {}) {
     const hdrSetting = PlayerSettings.get('enableHDR');
     const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : caps.hdr10;
 
-    // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
+    // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting.
     const dolbyVisionSetting = PlayerSettings.get('enableDolbyVision');
     const enableDolbyVision =
         dolbyVisionSetting === 'enable' ? true : dolbyVisionSetting === 'disable' ? false : caps.dolbyVision;
 
+    // Raw Dolby Vision Profile 5 ('DOVI') has no HDR10/SDR base layer. The HTML5 backend plays
+    // HLS through hls.js + MSE, which cannot hand the DV metadata to the display, so Profile 5
+    // shows inverted colours there — it must be transcoded. DV with a base layer still plays as
+    // that base layer, and the DV-specific container rules (e.g. MKV on webOS < 25) still apply.
+    const allowDoviProfile5 = enableDolbyVision && !isHtml5;
+
     const dtsSetting = PlayerSettings.get('enableDts');
     const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
 
+    // -------------------------------------------------------------------------
+    // Dolby TrueHD: WebOS web applications and MediaPipeline lack native decode
+    // or bitstream passthrough for TrueHD from HTTP progressive media streams.
+    // TrueHD bitstream is only supported on LG TVs via external HDMI inputs.
+    // TrueHD is advertised only when forced on in settings. On Auto it is not advertised in
+    // DirectPlayProfiles or DirectStreamProfiles, so Jellyfin copies video and transcodes
+    // TrueHD to E-AC-3/AC-3. Forced on, Jellyfin is told the TV can take it.
+    // -------------------------------------------------------------------------
     const trueHdSetting = PlayerSettings.get('enableTrueHd');
-    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
+    const enableTrueHd = trueHdSetting === 'enable';
 
     log.info('Evaluation flags:', {
         isHtml5,
@@ -401,8 +493,8 @@ export function buildJellyfinProfile(options = {}) {
     // audio bitstreams. Defaulting to 6 channels causes Jellyfin server's CodecProfiles condition
     // (AudioChannels <= 6) to reject DirectPlay for 7.1 tracks with AudioChannelsNotSupported,
     // forcing unnecessary server transcoding to a 5.1 AC3 compatibility track.
-    const defaultMaxChannels = (enableDts || enableTrueHd) ? 8 : caps.maxAudioChannels;
-    const maxAudioChannels = (userMaxChannels && userMaxChannels > 0) ? userMaxChannels : defaultMaxChannels;
+    const defaultMaxChannels = enableDts || enableTrueHd ? 8 : caps.maxAudioChannels;
+    const maxAudioChannels = userMaxChannels && userMaxChannels > 0 ? userMaxChannels : defaultMaxChannels;
 
     // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
     // a separate string-form for use inside CodecProfile condition objects.
@@ -412,12 +504,19 @@ export function buildJellyfinProfile(options = {}) {
     // Transcode Maximum Audio Channels Resolution
     // -------------------------------------------------------------------------
     // Dictates the maximum audio channels emitted during server transcode.
-    // If not set explicitly (-1 / auto), falls back to Direct Play channel cap.
+    // If not set explicitly (-1 / auto), falls back to the user's channel
+    // setting, else to the TV's own channel count. The 8 channels allowed above
+    // for DTS/TrueHD are for passing those bitstreams through untouched; a
+    // transcode is decoded by the TV itself. On an LG C4 a DTS:X 7.1.4 track
+    // transcoded to 8-channel E-AC-3 in HLS played as hiss.
     // -------------------------------------------------------------------------
     const userTransChannels = PlayerSettings.get('transcodeMaxAudioChannels');
-    const transMaxAudioChannels = (userTransChannels && userTransChannels > 0)
-        ? userTransChannels
-        : maxAudioChannels;
+    const transMaxAudioChannels =
+        userTransChannels && userTransChannels > 0
+            ? userTransChannels
+            : userMaxChannels && userMaxChannels > 0
+              ? userMaxChannels
+              : caps.maxAudioChannels;
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -522,8 +621,12 @@ export function buildJellyfinProfile(options = {}) {
 
     // Exclude DirectPlay profiles for modes that force server-side processing.
     // transcodeVideo / transcodeAudio both bypass direct play entirely.
-    if (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
-        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') {
+    if (
+        playbackMode !== 'transcode' &&
+        playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' &&
+        playbackMode !== 'transcodeAudio'
+    ) {
         // Standard web containers — available on both backends
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
@@ -673,6 +776,47 @@ export function buildJellyfinProfile(options = {}) {
         transAudioCodecsArr.push('aac');
     }
 
+    // ---------------------------------------------------------------------------
+    // HTML5 backend: only what hls.js + MSE can play
+    // ---------------------------------------------------------------------------
+    // The HTML5 backend plays every HLS stream through hls.js and MSE, not the
+    // TV's native pipeline (HtmlVideoPlayer prefers native HLS only on Tizen):
+    //   - E-AC-3 in MPEG-TS: hls.js rejects it ("Unsupported EC-3 in M2TS found");
+    //     in fMP4 it is passed through when MSE accepts 'ec-3'.
+    //   - AC-3 and HEVC: only where MSE reports support.
+    // Without this, "Retry with HTML5" asked the server for HLS it could not play.
+    // Progressive direct play still uses the native pipeline and is unchanged.
+    // ---------------------------------------------------------------------------
+    let hevcInHls = enableHEVC;
+    if (isHtml5) {
+        const mseSupports = (type) => {
+            try {
+                return (
+                    typeof window.MediaSource !== 'undefined' &&
+                    typeof window.MediaSource.isTypeSupported === 'function' &&
+                    window.MediaSource.isTypeSupported(type)
+                );
+            } catch (e) {
+                return false;
+            }
+        };
+        const keepEac3 = primaryHlsContainer === 'mp4' && mseSupports('audio/mp4; codecs="ec-3"');
+        const keepAc3 = mseSupports('audio/mp4; codecs="ac-3"');
+        for (let i = transAudioCodecsArr.length - 1; i >= 0; i--) {
+            const codec = transAudioCodecsArr[i];
+            if ((codec === 'eac3' && !keepEac3) || (codec === 'ac3' && !keepAc3)) {
+                transAudioCodecsArr.splice(i, 1);
+            }
+        }
+        if (transAudioCodecsArr.length === 0) {
+            transAudioCodecsArr.push('aac');
+        }
+        hevcInHls =
+            enableHEVC &&
+            (mseSupports('video/mp4; codecs="hvc1.1.6.L120.90"') ||
+                mseSupports('video/mp4; codecs="hev1.1.6.L120.90"'));
+    }
+
     // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
     // ---------------------------------------------------------------------------
     // DirectStream audio codec list (DirectStreamProfiles).
@@ -691,7 +835,7 @@ export function buildJellyfinProfile(options = {}) {
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     const directAudioCodecs = directAudioCodecsArr.join(',');
 
-    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    let transVideoCodecs = hevcInHls ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
         // -----------------------------------------------------------------------
@@ -738,9 +882,9 @@ export function buildJellyfinProfile(options = {}) {
     const isVideoDirectStream = playbackMode === 'remux' || playbackMode === 'transcodeAudio';
     const effectiveSegmentLength = isVideoDirectStream
         ? undefined
-        : (isHtml5
-            ? PlayerSettings.get('html5SegmentLength') || 2
-            : PlayerSettings.get('webosSegmentLength') || 6);
+        : isHtml5
+          ? PlayerSettings.get('html5SegmentLength') || 2
+          : PlayerSettings.get('webosSegmentLength') || 6;
 
     const transAudioProfileCodecs = BaseProfile.getTranscodeAudioCodecs(transAudioCodecsArr);
 
@@ -914,10 +1058,10 @@ export function buildJellyfinProfile(options = {}) {
             'DOVIWithELHDR10Plus',
             'DOVIInvalid'
         );
-        if (enableDolbyVision) {
+        if (allowDoviProfile5) {
             allowedRangeTypesList.push('DOVI');
         }
-    } else if (enableDolbyVision) {
+    } else if (allowDoviProfile5) {
         allowedRangeTypesList.push('DOVI', 'DOVIWithSDR');
     } else {
         allowedRangeTypesList.push('DOVIWithSDR');
@@ -1010,6 +1154,9 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
+    // Video size limit (see _buildVideoSizeLimitProfiles)
+    codecProfiles.push(..._buildVideoSizeLimitProfiles(caps));
 
     if (enableHEVC) {
         codecProfiles.push({
@@ -1203,34 +1350,32 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // Dolby Vision MKV — Force Remux on WebOS < 25
+    // Dolby Vision in MKV Container Handling
     // -------------------------------------------------------------------------
-    // WebOS < 25 cannot reliably direct-play Dolby Vision content wrapped in an
-    // MKV container, regardless of the video codec (HEVC, H.264, etc.). DirectPlay
-    // of DOVI MKVs causes the native player to stall and crash due to the way the
-    // raw MKV byte stream is fed to the hardware decoder over HTTP.
+    // DO NOT add a CodecProfile scoped to Container: 'mkv' with negative
+    // conditions on VideoRangeType (e.g. NotEquals DOVI...).
     //
-    // The correct fix: add a CodecProfile scoped to Container:'mkv' with no Codec
-    // restriction (so it applies universally to every video codec). The NotEquals
-    // conditions tell the Jellyfin server "DOVI is not supported for direct-play in
-    // this container" — causing it to immediately fall back to an fMP4 HLS Remux,
-    // which packages the identical stream into segments the TV handles flawlessly.
+    // WHY THIS CAUSES COMPLETE PLAYBACK FAILURE:
+    // 1. Jellyfin's StreamBuilder evaluates CodecProfiles against the source file's
+    //    container when determining DirectPlay compatibility.
+    // 2. When a condition like NotEquals VideoRangeType DOVI... fails on an MKV file,
+    //    StreamBuilder records TranscodeReasons=VideoRangeTypeNotSupported.
+    // 3. In StreamBuilder.cs, DirectStreamReasons only masks ContainerNotSupported,
+    //    AudioReasons, and VideoCodecTagNotSupported — it does NOT mask VideoRangeTypeNotSupported.
+    //    Consequently, SupportsDirectStream evaluates to false alongside SupportsDirectPlay.
+    // 4. When falling back to the transcoding pipeline, the server interprets
+    //    VideoRangeTypeNotSupported as a fundamental hardware incompatibility with
+    //    the video stream's color range. Instead of copying the video stream (remux),
+    //    FFmpeg initiates a full 4K HEVC re-encode tone-mapped down to SDR.
+    // 5. This heavy transcode chokes low-power servers and causes the native player
+    //    on webOS TVs to freeze after 20-30 seconds with washed-out SDR picture.
     //
-    // WebOS >= 25 handles DOVI MKV natively, so we skip this block for those devices.
-    if (enableDolbyVision && caps.webosVersion < 25) {
-        codecProfiles.push({
-            Type: 'Video',
-            // No Codec field = applies to ALL video codecs (hevc, h264, av1, vp9, etc.)
-            Container: 'mkv',
-            Conditions: [
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus', IsRequired: false }
-            ]
-        });
-    }
+    // NATIVE DIRECT PLAY BEHAVIOR:
+    // For Dolby Vision Profile 8.1/8.2/8.4 and Profile 7, the bitstream incorporates
+    // a standard HDR10 base layer. WebOS TVs direct-play these MKVs over HTTP via
+    // WebOSPlayer._playNativeDirect() without crashing, playing the HDR10 base layer
+    // (or Dolby Vision) smoothly at full quality with 0% server overhead.
+    // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
     // DirectStreamProfiles — raw container output for the DirectStream path.
@@ -1241,15 +1386,20 @@ export function buildJellyfinProfile(options = {}) {
     // headers (like chained SeekHead MKVs) get repackaged into seekable HLS chunks
     // via FFmpeg instead of re-serving the same unseekable static container stream.
     // -------------------------------------------------------------------------
-    const directStreamProfiles = (playbackMode !== 'transcode' && playbackMode !== 'remux' &&
-        playbackMode !== 'transcodeVideo' && playbackMode !== 'transcodeAudio') ? [
-        {
-            Container: 'mkv',
-            Type: 'Video',
-            VideoCodec: mkvVideoCodecs.join(','),
-            AudioCodec: directAudioCodecs
-        }
-    ] : [];
+    const directStreamProfiles =
+        playbackMode !== 'transcode' &&
+        playbackMode !== 'remux' &&
+        playbackMode !== 'transcodeVideo' &&
+        playbackMode !== 'transcodeAudio'
+            ? [
+                  {
+                      Container: 'mkv',
+                      Type: 'Video',
+                      VideoCodec: mkvVideoCodecs.join(','),
+                      AudioCodec: directAudioCodecs
+                  }
+              ]
+            : [];
 
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,

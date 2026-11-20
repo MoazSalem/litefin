@@ -11,12 +11,12 @@ import { eventBus } from './EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
-import { androidAdapter } from '../android/AndroidAdapter.js';
 import { desktopAdapter } from '../desktop/DesktopAdapter.js';
 import { webAdapter } from '../web/WebAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
+import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { LogoScreensaver } from './screensaver/LogoScreensaver.js';
 import { BackdropScreensaver } from './screensaver/BackdropScreensaver.js';
 import { BlackScreensaver } from './screensaver/BlackScreensaver.js';
@@ -36,6 +36,9 @@ class ScreensaverManager {
         this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10) || 0;
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
+        // Whether the lazy screensaver stylesheet chunk has been kicked
+        this._stylesLoaded = false;
+
         this._hideBound = this.hide.bind(this);
     }
 
@@ -53,11 +56,6 @@ class ScreensaverManager {
             return webosAdapter;
         }
 
-        // Android / Fire TV adapter
-        if (platformInfo.isAndroid) {
-            return androidAdapter;
-        }
-
         // Desktop application adapter (Tauri windowing)
         if (platformInfo.isDesktop) {
             return desktopAdapter;
@@ -70,6 +68,37 @@ class ScreensaverManager {
 
         // Standard web browser fallback
         return webAdapter;
+    }
+
+    /**
+     * Lazily loads the Android adapter. AndroidAdapter is Android-only code
+     * (MediaSession/back-button/keep-screen-on management) that is not part
+     * of the statically parsed boot bundle on TV tiers; it is fetched the
+     * first time any screensaver functionality actually needs it.
+     *
+     * @private
+     * @returns {Promise<Object>} The AndroidAdapter singleton.
+     */
+    _getAndroidAdapter() {
+        if (!this._androidAdapterPromise) {
+            this._androidAdapterPromise = import('../android/AndroidAdapter.js').then((m) => m.androidAdapter);
+        }
+        return this._androidAdapterPromise;
+    }
+
+    /**
+     * Resets the platform idle counter after an interaction.
+     *
+     * @private
+     */
+    _resetPlatformIdle() {
+        if (!platformInfo.isAndroid) {
+            this._getPlatformAdapter().reportInput?.();
+            return;
+        }
+        this._getAndroidAdapter()
+            .then((adapter) => adapter.reportInput?.())
+            .catch((err) => log.warn('Failed to reset Android idle counter:', err));
     }
 
     init() {
@@ -107,8 +136,7 @@ class ScreensaverManager {
              * full delay period before the screensaver can appear again.
              */
             // Reset OS idle timer on the resolved platform adapter
-            const platformAdapter = this._getPlatformAdapter();
-            platformAdapter.reportInput?.();
+            this._resetPlatformIdle();
         });
         eventBus.on('auth:logout', () => {
             this.hide();
@@ -127,6 +155,20 @@ class ScreensaverManager {
         if (isNaN(this._delaySeconds)) this._delaySeconds = 0; // default never
 
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
+
+        // Preload the screensaver stylesheet while enabled but idle - the
+        // activation is minutes away, so the small async chunk is long since
+        // arrived by the time show() renders. Never fetched when the
+        // screensaver is disabled (the default), keeping it out of boot.
+        if (this._delaySeconds > 0 && !this._stylesLoaded) {
+            this._stylesLoaded = true;
+            import(/* webpackChunkName: "screensaver-css" */ '../styles/screensaver.css')
+                .then(() => cssVarsPolyfill.ensureStylesResolved())
+                .catch((err) => {
+                    this._stylesLoaded = false;
+                    log.warn('Screensaver stylesheet chunk failed:', err);
+                });
+        }
 
         this._startPolling();
     }
@@ -155,8 +197,23 @@ class ScreensaverManager {
         if (this._isVideoPlaying) return;
 
         // Query idle time from the active platform adapter
-        const platformAdapter = this._getPlatformAdapter();
         const minIdleTimeMs = this._delaySeconds * 1000;
+
+        if (platformInfo.isAndroid) {
+            // AndroidAdapter is lazily imported; evaluate idle time once the
+            // module has loaded (the next interval tick re-checks normally).
+            this._getAndroidAdapter()
+                .then((adapter) => {
+                    if (adapter.idleTime >= minIdleTimeMs) {
+                        log.info('System idle time reached limit, showing screensaver');
+                        this.show();
+                    }
+                })
+                .catch((err) => log.debug('Android idle time unavailable:', err));
+            return;
+        }
+
+        const platformAdapter = this._getPlatformAdapter();
 
         if (platformAdapter.idleTime >= minIdleTimeMs) {
             log.info('System idle time reached limit, showing screensaver');
@@ -220,8 +277,7 @@ class ScreensaverManager {
         document.body.classList.remove('screensaver-active');
 
         // Reset tracking to prevent immediate re-triggering across platforms
-        const platformAdapter = this._getPlatformAdapter();
-        platformAdapter.reportInput?.();
+        this._resetPlatformIdle();
 
         // Let plugin clean up DOM/Animation
         if (this._activePlugin) {

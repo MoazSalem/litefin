@@ -10,6 +10,12 @@
  */
 
 // ----------------------------------------------------------------------------
+// fetch() / Headers / Request / Response — added in Chrome 42.
+// Required for ApiClient, AuthManager, and network subsystems on Chrome 38.
+// ----------------------------------------------------------------------------
+import 'whatwg-fetch';
+
+// ----------------------------------------------------------------------------
 // Element.matches() — added in Chrome 34 (vendor-prefixed in earlier WebKit).
 // ----------------------------------------------------------------------------
 if (typeof Element !== 'undefined' && !Element.prototype.matches) {

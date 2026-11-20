@@ -17,6 +17,8 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { touchHorizontalScroller } from './TouchHorizontalScroller.js';
 import { layoutManager } from '../ui/LayoutManager.js';
+import { customHeaders } from '../utils/CustomHeaders.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('AndroidAdapter');
 
@@ -32,57 +34,57 @@ const ANDROID_KEYS = {
     ENTER: 13,
 
     // Hardware Back & fallback keys
-    BACK: 4,         // Android KeyEvent.KEYCODE_BACK in Chromium WebView
-    ESCAPE: 27,      // Standard desktop Escape key
-    BACKSPACE: 8,    // Backspace key on external physical keyboards
+    BACK: 4, // Android KeyEvent.KEYCODE_BACK in Chromium WebView
+    ESCAPE: 27, // Standard desktop Escape key
+    BACKSPACE: 8, // Backspace key on external physical keyboards
 
-// Media playback controls found on Android TV remotes
+    // Media playback controls found on Android TV remotes
     PLAY: 250,
-    PLAY_ALT: 126,        // Android KeyEvent.KEYCODE_MEDIA_PLAY
+    PLAY_ALT: 126, // Android KeyEvent.KEYCODE_MEDIA_PLAY
     PLAY_LEGACY: 415,
     PAUSE: 19,
-    PAUSE_ALT: 127,       // Android KeyEvent.KEYCODE_MEDIA_PAUSE
+    PAUSE_ALT: 127, // Android KeyEvent.KEYCODE_MEDIA_PAUSE
     PLAY_PAUSE: 179,
-    PLAY_PAUSE_ALT: 85,   // Android KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+    PLAY_PAUSE_ALT: 85, // Android KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
     PLAY_PAUSE_LEGACY: 10252,
     STOP: 178,
-    STOP_ALT: 86,         // Android KeyEvent.KEYCODE_MEDIA_STOP
+    STOP_ALT: 86, // Android KeyEvent.KEYCODE_MEDIA_STOP
     STOP_LEGACY: 413,
     FAST_FORWARD: 228,
     FAST_FORWARD_ALT: 90, // Android KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
-    FAST_FORWARD_STEP: 272,// Android KeyEvent.KEYCODE_MEDIA_STEP_FORWARD
-    FAST_FORWARD_SKIP: 274,// Android KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD
+    FAST_FORWARD_STEP: 272, // Android KeyEvent.KEYCODE_MEDIA_STEP_FORWARD
+    FAST_FORWARD_SKIP: 274, // Android KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD
     FAST_FORWARD_LEGACY: 417,
     REWIND: 227,
-    REWIND_ALT: 89,       // Android KeyEvent.KEYCODE_MEDIA_REWIND
-    REWIND_STEP: 273,     // Android KeyEvent.KEYCODE_MEDIA_STEP_BACKWARD
-    REWIND_SKIP: 275,     // Android KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD
+    REWIND_ALT: 89, // Android KeyEvent.KEYCODE_MEDIA_REWIND
+    REWIND_STEP: 273, // Android KeyEvent.KEYCODE_MEDIA_STEP_BACKWARD
+    REWIND_SKIP: 275, // Android KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD
     REWIND_LEGACY: 412,
-    NEXT: 87,             // Android KeyEvent.KEYCODE_MEDIA_NEXT
-    PREV: 88,             // Android KeyEvent.KEYCODE_MEDIA_PREVIOUS
+    NEXT: 87, // Android KeyEvent.KEYCODE_MEDIA_NEXT
+    PREV: 88, // Android KeyEvent.KEYCODE_MEDIA_PREVIOUS
 
     // Channel stepping
     PAGE_UP: 33,
     PAGE_DOWN: 34,
 
     // Color buttons (Red, Green, Yellow, Blue) found on TV remotes (TCL, Philips, Sony, etc.)
-    RED: 183,             // Android KeyEvent.KEYCODE_PROG_RED
-    RED_LEGACY: 403,      // Standard Smart TV / HbbTV red keycode
-    GREEN: 184,           // Android KeyEvent.KEYCODE_PROG_GREEN
-    GREEN_LEGACY: 404,    // Standard Smart TV / HbbTV green keycode
-    YELLOW: 185,          // Android KeyEvent.KEYCODE_PROG_YELLOW
-    YELLOW_LEGACY: 405,   // Standard Smart TV / HbbTV yellow keycode
-    BLUE: 186,            // Android KeyEvent.KEYCODE_PROG_BLUE
-    BLUE_LEGACY: 406,     // Standard Smart TV / HbbTV blue keycode
+    RED: 183, // Android KeyEvent.KEYCODE_PROG_RED
+    RED_LEGACY: 403, // Standard Smart TV / HbbTV red keycode
+    GREEN: 184, // Android KeyEvent.KEYCODE_PROG_GREEN
+    GREEN_LEGACY: 404, // Standard Smart TV / HbbTV green keycode
+    YELLOW: 185, // Android KeyEvent.KEYCODE_PROG_YELLOW
+    YELLOW_LEGACY: 405, // Standard Smart TV / HbbTV yellow keycode
+    BLUE: 186, // Android KeyEvent.KEYCODE_PROG_BLUE
+    BLUE_LEGACY: 406, // Standard Smart TV / HbbTV blue keycode
 
     // TV utility & function buttons
-    CAPTIONS: 175,        // Android KeyEvent.KEYCODE_CAPTIONS
-    SUBTITLE: 460,        // Standard Smart TV subtitle keycode
-    INFO: 165,            // Android KeyEvent.KEYCODE_INFO
-    INFO_LEGACY: 457,     // Standard Smart TV info keycode
-    GUIDE: 172,           // Android KeyEvent.KEYCODE_GUIDE
-    GUIDE_LEGACY: 458,    // Standard Smart TV guide keycode
-    BOOKMARK: 174         // Android KeyEvent.KEYCODE_BOOKMARK
+    CAPTIONS: 175, // Android KeyEvent.KEYCODE_CAPTIONS
+    SUBTITLE: 460, // Standard Smart TV subtitle keycode
+    INFO: 165, // Android KeyEvent.KEYCODE_INFO
+    INFO_LEGACY: 457, // Standard Smart TV info keycode
+    GUIDE: 172, // Android KeyEvent.KEYCODE_GUIDE
+    GUIDE_LEGACY: 458, // Standard Smart TV guide keycode
+    BOOKMARK: 174 // Android KeyEvent.KEYCODE_BOOKMARK
 };
 
 class AndroidAdapter {
@@ -147,6 +149,15 @@ class AndroidAdapter {
         document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
         document.addEventListener('touchstart', () => this.reportInput(), { passive: true });
 
+        // Synchronize active reverse proxy custom headers to native Android bridge
+        try {
+            if (typeof customHeaders !== 'undefined' && typeof customHeaders?.syncCurrentServer === 'function') {
+                customHeaders.syncCurrentServer();
+            }
+        } catch (e) {
+            log.warn('Failed synchronizing custom headers on AndroidAdapter init:', e);
+        }
+
         // Synchronize display wake lock and standard Media Session playback state
         // Prevents the Android system screensaver (Ambient Mode, Daydream) from activating
         // while informing Android's MediaSessionManager of active media playback.
@@ -203,9 +214,13 @@ class AndroidAdapter {
                 }
             } else {
                 if (metaViewport && metaViewport.getAttribute('content')?.includes('width=1920')) {
-                    metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+                    metaViewport.setAttribute(
+                        'content',
+                        'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+                    );
                 } else if (metaViewport && !metaViewport.getAttribute('content')?.includes('viewport-fit=cover')) {
-                    const currentContent = metaViewport.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+                    const currentContent =
+                        metaViewport.getAttribute('content') || 'width=device-width, initial-scale=1.0';
                     metaViewport.setAttribute('content', `${currentContent}, viewport-fit=cover`);
                 }
                 // Stamp touch-primary input indicator onto root element for mobile phones and tablets
@@ -236,40 +251,56 @@ class AndroidAdapter {
 
         // Re-enforce fullscreen preference when the window regains focus or visibility
         if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-            window.addEventListener('focus', () => {
-                const fs = this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled();
-                this.setFullscreen(fs);
-            }, { passive: true });
-        }
-        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
+            window.addEventListener(
+                'focus',
+                () => {
                     const fs = this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled();
                     this.setFullscreen(fs);
-                    // Re-acquire wake lock if player was actively playing when resuming visibility
-                    if (this._isPlaybackActive) {
-                        this.setKeepScreenOn(true);
+                },
+                { passive: true }
+            );
+        }
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener(
+                'visibilitychange',
+                () => {
+                    if (!document.hidden) {
+                        const fs = this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled();
+                        this.setFullscreen(fs);
+                        // Re-acquire wake lock if player was actively playing when resuming visibility
+                        if (this._isPlaybackActive) {
+                            this.setKeepScreenOn(true);
+                        }
+                    } else {
+                        // Release web wake lock when tab or activity is concealed
+                        if (this._wakeLock) {
+                            this._wakeLock.release().catch(() => {});
+                            this._wakeLock = null;
+                        }
                     }
-                } else {
-                    // Release web wake lock when tab or activity is concealed
-                    if (this._wakeLock) {
-                        this._wakeLock.release().catch(() => {});
-                        this._wakeLock = null;
-                    }
-                }
-            }, { passive: true });
-            
+                },
+                { passive: true }
+            );
+
             // Browser gesture hook for user interaction (respects active preference)
-            document.addEventListener('touchstart', () => {
-                if (this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled()) {
-                    this.setFullscreen(true);
-                }
-            }, { passive: true, once: true });
-            document.addEventListener('click', () => {
-                if (this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled()) {
-                    this.setFullscreen(true);
-                }
-            }, { passive: true, once: true });
+            document.addEventListener(
+                'touchstart',
+                () => {
+                    if (this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled()) {
+                        this.setFullscreen(true);
+                    }
+                },
+                { passive: true, once: true }
+            );
+            document.addEventListener(
+                'click',
+                () => {
+                    if (this._isPlaybackActive || this.isAndroidTv || this.isMobileFullscreenEnabled()) {
+                        this.setFullscreen(true);
+                    }
+                },
+                { passive: true, once: true }
+            );
         }
 
         // Retrieve hardware details from native bridge
@@ -283,24 +314,33 @@ class AndroidAdapter {
 
     /**
      * Determines whether the current host device is an Android TV / Google TV.
-     * Evaluates native bridge isTv() method or user agent / touch capabilities fallback.
+     * Delegates to the centralized platformInfo single source of truth when available,
+     * falling back safely to native bridge/UA checks in isolated VM environments.
      * @returns {boolean} True if running on Android TV
      */
     get isAndroidTv() {
+        if (typeof platformInfo !== 'undefined') {
+            return platformInfo.isAndroidTv;
+        }
         try {
             if (typeof window !== 'undefined') {
                 if (typeof window.LitefinAndroid?.isTv === 'function') {
-                    return !!window.LitefinAndroid.isTv();
+                    return Boolean(window.LitefinAndroid.isTv());
                 }
                 if (typeof window.AndroidBridge?.isTv === 'function') {
-                    return !!window.AndroidBridge.isTv();
+                    return Boolean(window.AndroidBridge.isTv());
                 }
             }
             if (typeof navigator !== 'undefined' && navigator.userAgent) {
                 const ua = navigator.userAgent;
-                const hasTvToken = /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(ua);
-                const isNonMobileWithoutTouch = !/Mobile/i.test(ua) && (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
-                return hasTvToken || isNonMobileWithoutTouch;
+                const hasTvToken =
+                    /Android.*(TV|Television|GoogleTV|Large Screen|SmartTV|BRAVIA|AFT|Nexus Player|MIBOX|SHIELD)/i.test(
+                        ua
+                    );
+                const isNonMobileWithoutTouch =
+                    !/Mobile/i.test(ua) &&
+                    (typeof window === 'undefined' || !('ontouchstart' in window) || navigator.maxTouchPoints === 0);
+                return Boolean(hasTvToken || isNonMobileWithoutTouch);
             }
         } catch (_) {}
         return false;
@@ -519,14 +559,17 @@ class AndroidAdapter {
             if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
                 if (keepOn) {
                     if (!this._wakeLock) {
-                        navigator.wakeLock.request('screen').then((lock) => {
-                            this._wakeLock = lock;
-                            lock.addEventListener('release', () => {
-                                this._wakeLock = null;
+                        navigator.wakeLock
+                            .request('screen')
+                            .then((lock) => {
+                                this._wakeLock = lock;
+                                lock.addEventListener('release', () => {
+                                    this._wakeLock = null;
+                                });
+                            })
+                            .catch((err) => {
+                                log.debug('Screen Wake Lock request rejected:', err);
                             });
-                        }).catch((err) => {
-                            log.debug('Screen Wake Lock request rejected:', err);
-                        });
                     }
                 } else if (this._wakeLock) {
                     this._wakeLock.release().catch(() => {});
@@ -752,7 +795,9 @@ class AndroidAdapter {
         const pressedKeys = new Set();
 
         // Clear tracking set if window loses focus to prevent stuck keys
-        window.addEventListener('blur', () => pressedKeys.clear(), { passive: true });
+        if (typeof window?.addEventListener === 'function') {
+            window.addEventListener('blur', () => pressedKeys.clear(), { passive: true });
+        }
 
         /**
          * Unified key event processor handling both standard hardware remotes
@@ -1003,9 +1048,7 @@ class AndroidAdapter {
             }
 
             const isNextKey =
-                keyCode === ANDROID_KEYS.NEXT ||
-                keyStr === 'MediaTrackNext' ||
-                codeStr === 'MediaTrackNext';
+                keyCode === ANDROID_KEYS.NEXT || keyStr === 'MediaTrackNext' || codeStr === 'MediaTrackNext';
 
             if (isNextKey) {
                 e.preventDefault();
@@ -1014,9 +1057,7 @@ class AndroidAdapter {
             }
 
             const isPrevKey =
-                keyCode === ANDROID_KEYS.PREV ||
-                keyStr === 'MediaTrackPrevious' ||
-                codeStr === 'MediaTrackPrevious';
+                keyCode === ANDROID_KEYS.PREV || keyStr === 'MediaTrackPrevious' || codeStr === 'MediaTrackPrevious';
 
             if (isPrevKey) {
                 e.preventDefault();
@@ -1150,7 +1191,7 @@ class AndroidAdapter {
      * @private
      * @returns {boolean} True if viewport was portrait and handled
      */
-     _applyPortraitScale() {
+    _applyPortraitScale() {
         if (typeof layoutManager !== 'undefined' && layoutManager?._applyDisplayScale) {
             layoutManager._applyDisplayScale();
         }
@@ -1269,6 +1310,67 @@ class AndroidAdapter {
             log.warn('Failed retrieving manufacturer:', err);
         }
         return 'Android';
+    }
+
+    /**
+     * ========================================================================
+     * Reverse Proxy Custom Headers Synchronization
+     * ========================================================================
+     * Dispatches reverse proxy headers (e.g. Cloudflare Service Tokens) to the
+     * native Android WebView bridge, allowing AuthenticatedWebViewClient to
+     * intercept media asset requests and attach headers without CORS preflights.
+     *
+     * @param {string} serverUrl - Jellyfin server root URL
+     * @param {Object} headersMap - Key-value map of header names to values
+     * @returns {boolean} True if successfully dispatched to native bridge
+     */
+    syncCustomHeaders(serverUrl, headersMap) {
+        if (typeof window === 'undefined') return false;
+
+        try {
+            if (typeof window.LitefinAndroid?.setCustomHeaders === 'function') {
+                const serialized = JSON.stringify(headersMap || {});
+                window.LitefinAndroid.setCustomHeaders(serverUrl, serialized);
+                log.info(`Synchronized custom reverse proxy headers to native Android bridge for ${serverUrl}`);
+                return true;
+            }
+        } catch (e) {
+            log.warn('Failed synchronizing custom headers with native bridge:', e);
+        }
+        return false;
+    }
+
+    /**
+     * Checks if native shell supports transparent request interception for custom headers.
+     * @returns {boolean}
+     */
+    hasNativeHeaderInterception() {
+        if (typeof window === 'undefined') return false;
+        try {
+            return typeof window.LitefinAndroid?.hasNativeHeaderInterception === 'function' &&
+                Boolean(window.LitefinAndroid.hasNativeHeaderInterception());
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
+     * Injects an authentication cookie directly into the native WebView cookie jar.
+     * @param {string} url - Target URL domain
+     * @param {string} cookie - Full cookie specification string
+     * @returns {boolean}
+     */
+    setCookie(url, cookie) {
+        if (typeof window === 'undefined') return false;
+        try {
+            if (typeof window.LitefinAndroid?.setCookie === 'function') {
+                window.LitefinAndroid.setCookie(url, cookie);
+                return true;
+            }
+        } catch (e) {
+            log.warn('Failed injecting cookie to native bridge:', e);
+        }
+        return false;
     }
 
     /**

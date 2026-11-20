@@ -114,6 +114,74 @@ class I18nManager {
     }
 
     /**
+     * Resolves the canonical localization keys array.
+     * Uses compile-time injected __I18N_KEYS__ when built via Webpack,
+     * or lazily fetches _keys.json as a fallback.
+     *
+     * @returns {Promise<string[]>} Array of canonical dictionary keys
+     */
+    async _getKeys() {
+        // Return compile-time embedded keys if defined (zero network latency)
+        if (typeof __I18N_KEYS__ !== 'undefined' && Array.isArray(__I18N_KEYS__)) {
+            return __I18N_KEYS__;
+        }
+
+        // Return cached keys if previously loaded
+        if (this._keys) {
+            return this._keys;
+        }
+
+        // Fallback: fetch _keys.json via XHR if running in an external bundle
+        try {
+            const url = this._localeUrl('_keys');
+            const data = await this._loadJson(url);
+            if (Array.isArray(data)) {
+                this._keys = data;
+                return this._keys;
+            }
+        } catch (err) {
+            log.warn('Could not load _keys.json fallback', err);
+        }
+
+        return [];
+    }
+
+    /**
+     * Hydrates loaded translation data into an in-memory key-value dictionary.
+     * Supports both compiled keyless value arrays and raw key-value JSON objects.
+     *
+     * @param {Object|Array} data - Raw parsed JSON data from locale file
+     * @param {string[]} keys - Canonical keys array
+     * @returns {Object<string, string>} Hydrated key-value dictionary
+     */
+    _hydrateDictionary(data, keys = []) {
+        // Guard against null or invalid input
+        if (!data) {
+            return {};
+        }
+
+        // If data is already a key-value object (dev mode or unit tests), return as-is
+        if (!Array.isArray(data)) {
+            return data;
+        }
+
+        const dict = {};
+        const count = Math.min(keys.length, data.length);
+
+        // Fast hydration loop - maps array indices back to canonical dictionary keys
+        for (let i = 0; i < count; i++) {
+            const val = data[i];
+
+            // Only populate non-empty values; empty strings fall back to English dictionary
+            if (val !== '' && val !== null && val !== undefined) {
+                dict[keys[i]] = val;
+            }
+        }
+
+        return dict;
+    }
+
+    /**
      * Initializes the language manager.
      * @param {string} langCode - Language ('en-us', 'es', etc.)
      */
@@ -121,26 +189,27 @@ class I18nManager {
         this.currentLang = langCode;
         this.isRTL = langCode === 'ar' || langCode === 'he' || langCode === 'fa';
 
+        // Resolve canonical keys schema for array hydration
+        const keys = await this._getKeys();
+
         const url = this._localeUrl(this.currentLang);
-        log.info(`[i18n] Initializing with lang: ${this.currentLang}`);
-        log.info(`[i18n] Locale URL: ${url} (protocol: ${window.location.protocol})`);
+        log.info(`Initializing with lang: ${this.currentLang}`);
+        log.info(`Locale URL: ${url} (protocol: ${window.location.protocol})`);
 
         try {
             // Use XHR instead of fetch() — works on both Tizen and WebOS file:// contexts
             const data = await this._loadJson(url);
-            this.dictionary = data;
+            this.dictionary = this._hydrateDictionary(data, keys);
 
             const keyCount = Object.keys(this.dictionary).length;
-            log.info(`[i18n] Successfully loaded ${keyCount} keys for ${this.currentLang}`);
+            log.info(`Successfully loaded ${keyCount} keys for ${this.currentLang}`);
 
             // Sanity check — empty dict means url was wrong; this would cause all keys to show raw
             if (keyCount === 0) {
-                log.warn(
-                    `[i18n] WARNING: Loaded 0 keys! The locale file at "${url}" may be empty or the URL is wrong.`
-                );
+                log.warn(`WARNING: Loaded 0 keys! The locale file at "${url}" may be empty or the URL is wrong.`);
             }
         } catch (error) {
-            log.error(`[i18n] Init failed, falling back to empty dict`, {
+            log.error(`Init failed, falling back to empty dict`, {
                 url,
                 lang: this.currentLang,
                 error: error.message,
@@ -155,12 +224,12 @@ class I18nManager {
             try {
                 const fallbackUrl = this._localeUrl(this.fallbackLang);
                 const data = await this._loadJson(fallbackUrl);
-                this.fallbackDictionary = data;
+                this.fallbackDictionary = this._hydrateDictionary(data, keys);
                 log.info(
-                    `[i18n] Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
+                    `Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
                 );
             } catch (error) {
-                log.error(`[i18n] Failed to load fallback dictionary`, error);
+                log.error(`Failed to load fallback dictionary`, error);
                 this.fallbackDictionary = {};
             }
         } else {
@@ -252,7 +321,8 @@ class I18nManager {
      * @returns {string} Formatted time string (e.g., "12:30 PM" or "12:30 م")
      */
     formatLocalTime(date) {
-        if (!date || !(date instanceof Date)) return '';
+        // Support both standard JavaScript Date objects and native platform TZDate objects
+        if (!date || (!(date instanceof Date) && typeof date.getHours !== 'function')) return '';
 
         const hours = date.getHours();
         const minutes = date.getMinutes();

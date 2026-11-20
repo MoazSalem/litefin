@@ -12,6 +12,7 @@ import { logger } from '../utils/Logger.js';
 import { spatialNavigator } from './SpatialNavigator.js';
 import { scrollController } from './ScrollController.js';
 import { storage } from '../utils/StorageService.js';
+import { markPerfOperation } from '../utils/PerfMarker.js';
 
 const log = logger.create('FocusManager');
 
@@ -160,18 +161,16 @@ class FocusManager {
 
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
-            // NOTE: Page.setLoading(false) only removes the 'loading' class from the
-            // page root — it never removes the '.page-loading' overlay div itself, so
-            // that element stays in the DOM (just CSS-hidden via display:none) for the
-            // rest of the page's lifetime. Checking for its mere presence therefore
-            // treats the page as "loading" forever after the first spinner, silently
-            // dropping every subsequent focusin (e.g. DetailsPage's resumeBtn.focus()),
-            // so we must also verify it's actually visible before treating it as active.
+            // NOTE: Page.setLoading(false) removes the 'loading' class from the
+            // page root — '.page-loading' remains in the DOM (CSS-hidden).
+            // Checking display via getComputedStyle() forces a synchronous style
+            // recalculation across the entire DOM tree on every keypress, so we check
+            // active loading status exclusively via fast class/ancestor presence.
             const pageLoadingEl = document.querySelector('.page-loading');
             const isPageLoading =
                 document.body.classList.contains('app-splash-active') ||
-                document.querySelector('.page.loading') ||
-                (pageLoadingEl && getComputedStyle(pageLoadingEl).display !== 'none');
+                document.querySelector('.page.loading') !== null ||
+                (pageLoadingEl && pageLoadingEl.closest('.page.loading') !== null);
 
             if (isPageLoading) {
                 const sectionName = this.getSectionForElement(e.target);
@@ -304,9 +303,17 @@ class FocusManager {
      * @param {string} direction
      */
     _handleKey(direction) {
-        // Simple debounce to prevent event flooding
+        // Simple debounce to prevent event flooding. A keypress in the OPPOSITE
+        // direction of the previous one always passes through: auto-repeat only
+        // repeats the same direction, so a direction change is an intentional
+        // correction — most noticeable at page boundaries where the previous
+        // press was a dead key (e.g. Down at the last row, then immediately Up).
+        // Without this passthrough the correction key would be silently
+        // swallowed and navigation would feel frozen for KEY_DEBOUNCE_MS.
         const now = Date.now();
-        if (now - this._lastMoveTime < KEY_DEBOUNCE_MS) return;
+        const isDebouncedGap = now - this._lastMoveTime < KEY_DEBOUNCE_MS;
+        const isDirectionChange = this._lastMoveDirection != null && direction !== this._lastMoveDirection;
+        if (isDebouncedGap && !isDirectionChange) return;
 
         // Track previous move time BEFORE updating current
         // This allows us to detect rapid key holds
@@ -336,11 +343,10 @@ class FocusManager {
                 const max = parseFloat(el.max) || 100;
                 let value = parseFloat(el.value) || 0;
 
-                // Detect if the slider is rendered in RTL mode
-                let isRTL = document.documentElement.dir === 'rtl';
-                if (window.getComputedStyle) {
-                    isRTL = window.getComputedStyle(el).direction === 'rtl';
-                }
+                // Detect if the slider is rendered in RTL mode without layout reflows
+                const isRTL =
+                    el.dir === 'rtl' ||
+                    (typeof document !== 'undefined' && document.documentElement?.dir === 'rtl');
 
                 // In RTL, min is on the right and max is on the left visually.
                 // Pressing Left should increase value (move towards max).
@@ -430,8 +436,13 @@ class FocusManager {
         // PERFORMANCE: Remove the data-fm-section tag we set in register()
         // so the container is clean and doesn't confuse future closest() calls.
         const config = this._sections.get(name);
-        if (config && config.container && config.container.dataset) {
-            delete config.container.dataset.fmSection;
+        if (config && config.container) {
+            if (config.container.dataset) {
+                delete config.container.dataset.fmSection;
+            }
+            if (typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache(config.container);
+            }
         }
 
         this._sections.delete(name);
@@ -499,7 +510,9 @@ class FocusManager {
         // Self-healing isTrapped() auto-purges orphaned traps if container is gone or modal closed.
         // ====================================================================
         if (name !== '__trap__' && this.isTrapped()) {
-            log.warn(`setActiveSection: Blocked attempt to change section to "${name}" while focus is trapped in modal`);
+            log.warn(
+                `setActiveSection: Blocked attempt to change section to "${name}" while focus is trapped in modal`
+            );
             return;
         }
 
@@ -610,8 +623,15 @@ class FocusManager {
     invalidateCache(sectionName) {
         if (sectionName) {
             this._focusablesCache.delete(sectionName);
+            const cfg = this._sections.get(sectionName);
+            if (cfg && cfg.container && typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache(cfg.container);
+            }
         } else {
             this._focusablesCache.clear();
+            if (typeof this._spatial?.clearCache === 'function') {
+                this._spatial.clearCache();
+            }
         }
     }
 
@@ -665,7 +685,11 @@ class FocusManager {
         }
 
         // If nothing focused, element is detached, or element is outside container, focus first available
-        if (!this._focusedElement || !document.contains(this._focusedElement) || !config.container.contains(this._focusedElement)) {
+        if (
+            !this._focusedElement ||
+            !document.contains(this._focusedElement) ||
+            !config.container.contains(this._focusedElement)
+        ) {
             this.focusElement(focusables[0]);
             return;
         }
@@ -765,14 +789,14 @@ class FocusManager {
                 }
             }
         } else {
-            // 'grid' or default fallback — delegate to SpatialNavigator
-            nextElement = this._spatial.findNext(this._focusedElement, focusables, direction);
+            // 'grid' or default fallback — delegate to SpatialNavigator with section container
+            nextElement = this._spatial.findNext(this._focusedElement, focusables, direction, config.container);
         }
 
         // 2. If we found a target, move to it
         if (nextElement) {
             // ----------------------------------------------------------------
-            // ADAPTIVE INTERACTION PHYSICS 
+            // ADAPTIVE INTERACTION PHYSICS
             // ----------------------------------------------------------------
             // Normal browsing and deliberate fast taps (<5 items) stay silky smooth,
             // tracking focus transitions with continuous ease-out deceleration.
@@ -806,6 +830,7 @@ class FocusManager {
      * @param {string} direction
      */
     _leaveSection(direction) {
+        if (typeof markPerfOperation === 'function') markPerfOperation('FocusManager._leaveSection');
         const config = this._sections.get(this._activeSection);
         if (!config) return;
 
@@ -883,16 +908,10 @@ class FocusManager {
         if (nextSection && this._sections.has(nextSection)) {
             const originElement = this._focusedElement; // Capture for spatial handover
 
-            // Unfocus current
-            if (this._focusedElement) {
-                this._focusedElement.classList.remove('focused');
-
-                // Remove generic .focused-row from parent settings items
-                const oldSettingItem = this._focusedElement.closest('.setting-item');
-                if (oldSettingItem) {
-                    oldSettingItem.classList.remove('focused-row');
-                }
-            }
+            // NOTE: the old element's `.focused` class is intentionally left in
+            // place here. focusElement() clears it AFTER computing the scroll
+            // target, so the geometry reads run against an un-dirtied layout
+            // instead of forcing a synchronous reflow on the keypress path.
 
             // ----------------------------------------------------------------
             // ADAPTIVE SECTION TRANSITION
@@ -931,6 +950,8 @@ class FocusManager {
         // Abort if element is invalid or no longer connected to the active DOM tree
         if (!element || !document.contains(element)) return;
 
+        if (typeof markPerfOperation === 'function') markPerfOperation('FocusManager.focusElement');
+
         // ====================================================================
         // MODAL FOCUS TRAP ENFORCEMENT
         // ====================================================================
@@ -950,20 +971,6 @@ class FocusManager {
 
         const defaults = { scroll: true, skipScroll: false, instantScroll: false };
         options = { ...defaults, ...options };
-
-        // Cleanup old focus FIRST (lightweight)
-        // TIZEN FIX: Explicitly blur the old element to remove native :focus state
-        if (this._focusedElement && this._focusedElement !== element) {
-            this._focusedElement.classList.remove('focused');
-
-            // Remove generic .focused-row from parent settings items
-            const oldSettingItem = this._focusedElement.closest('.setting-item');
-            if (oldSettingItem) {
-                oldSettingItem.classList.remove('focused-row');
-            }
-
-            this._focusedElement.blur(); // Clear native :focus styling on Tizen
-        }
 
         // PERFORMANCE: Use provided sectionName hint to skip DOM closest() traversal.
         // _move() always knows the section and passes it via options.
@@ -988,9 +995,33 @@ class FocusManager {
             }
         }
 
-        // Delegate scroll positioning to ScrollController
-        // Passes section config for custom offsets (scrollOffsetTop, etc.)
+        // Delegate scroll positioning to ScrollController.
+        //
+        // PERFORMANCE ORDERING: compute the scroll target BEFORE mutating any
+        // focus classes. The old element keeps its `.focused` class during the
+        // measurement, but that class only applies a transform / z-index — it
+        // does not change layout metrics. Doing the reads first means the layout
+        // tree is still clean, avoiding a forced synchronous reflow in the
+        // middle of a D-pad keypress (50-120ms on Tizen).
         this._scroll.scrollIntoView(element, config || {}, options);
+
+        // Cleanup old focus AFTER the geometry reads (style-only writes).
+        // TIZEN FIX: Explicitly blur the old element to remove native :focus state
+        if (this._focusedElement && this._focusedElement !== element) {
+            this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+
+            // Only invoke blur() when native focus actually sits on this element
+            // to avoid triggering spurious blur/focusout style reconciliations.
+            if (typeof document !== 'undefined' && document.activeElement === this._focusedElement) {
+                this._focusedElement.blur();
+            }
+        }
 
         // NOW set focus (after scroll is done)
         this._focusedElement = element;
@@ -1074,7 +1105,8 @@ class FocusManager {
             return;
         }
 
-        let focusables = this._getFocusables(sectionName);
+        // Query current focusable DOM elements registered within the active section
+        const focusables = this._getFocusables(sectionName);
         const memory = this._focusMemory.get(sectionName);
 
         if (!focusables.length) {
@@ -1150,7 +1182,7 @@ class FocusManager {
         // If we came from another element (e.g. Button below grid), pick closest grid item
         // Note: Handled above via onEnter hook for virtual rows
         if (fromElement && document.contains(fromElement) && typeof config.onEnter !== 'function') {
-            target = this._spatial.findClosest(fromElement, focusables);
+            target = this._spatial.findClosest(fromElement, focusables, config.container);
         }
 
         // 3. Memory (Fallback)
@@ -1267,7 +1299,10 @@ class FocusManager {
         // If active section is not '__trap__' AND active focus is outside the trap container,
         // the application has already navigated or switched away from the trap.
         // Keeping the trap alive would lock navigation permanently. Auto-purge it.
-        if (this._activeSection !== '__trap__' && (!this._focusedElement || !trapConfig.container.contains(this._focusedElement))) {
+        if (
+            this._activeSection !== '__trap__' &&
+            (!this._focusedElement || !trapConfig.container.contains(this._focusedElement))
+        ) {
             log.warn('isTrapped: Purging orphaned focus trap because active focus has left the trap container');
             this._trapStack = [];
             this._sections.delete('__trap__');
@@ -1311,7 +1346,9 @@ class FocusManager {
         const trapFocusables = this._getFocusables('__trap__', true);
         if (trapFocusables.length > 0 && (!this._focusedElement || !container.contains(this._focusedElement))) {
             const defaultEl = options.defaultFocusSelector
-                ? trapFocusables.find((el) => typeof el.matches === 'function' && el.matches(options.defaultFocusSelector))
+                ? trapFocusables.find(
+                      (el) => typeof el.matches === 'function' && el.matches(options.defaultFocusSelector)
+                  )
                 : null;
             this.focusElement(defaultEl || trapFocusables[0]);
         }

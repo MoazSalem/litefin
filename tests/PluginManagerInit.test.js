@@ -7,8 +7,14 @@ import vm from 'node:vm';
 const appSource = readFileSync(new URL('../src/core/App.js', import.meta.url), 'utf8');
 
 const initBlock = appSource.slice(
-    appSource.indexOf("        if (state.get('user:authenticated')) {"),
+    appSource.indexOf("// 4.6. Plugin Manager Initialization"),
     appSource.indexOf('        // Initialize ScreensaverManager')
+);
+
+// Extract deferred plugin manager initialization executed when splash screen hides
+const hideSplashBlock = appSource.slice(
+    appSource.indexOf('                if (this._pluginInitPending) {'),
+    appSource.indexOf('                timeManager.init();')
 );
 
 function evaluateInitBlock({
@@ -67,7 +73,13 @@ function evaluateInitBlock({
         focusManager: { name: 'FocusManager' }
     };
 
-    vm.runInNewContext(`(function () {\n${initBlock}\n})();`, context);
+    const appScope = {};
+    context.appScope = appScope;
+    vm.runInNewContext(
+        `(function () {\n${initBlock}\n}).call(appScope);\n` +
+        `(function () {\n${hideSplashBlock}\n}).call(appScope);`,
+        context
+    );
 
     return calls;
 }
