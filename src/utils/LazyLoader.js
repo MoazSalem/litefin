@@ -295,7 +295,15 @@ class LazyLoader {
                 (entries, observer) => {
                     let markedIntersect = false;
                     entries.forEach((entry) => {
-                        if (entry.isIntersecting) {
+                        // Fallback check for legacy Chromium engines (e.g. Chromium 56 on Tizen 4)
+                        const isIntersecting =
+                            typeof entry.isIntersecting === 'boolean'
+                                ? entry.isIntersecting
+                                : entry.intersectionRatio > 0 ||
+                                  (Boolean(entry.intersectionRect) &&
+                                      (entry.intersectionRect.width > 0 || entry.intersectionRect.height > 0));
+
+                        if (isIntersecting) {
                             const target = entry.target;
                             if (!target || target.isConnected === false) return;
 
@@ -354,14 +362,22 @@ class LazyLoader {
                 (entries) => {
                     const canApplyNow = this._canRunDeferredWork();
                     entries.forEach((entry) => {
+                        // Fallback check for legacy Chromium engines (e.g. Chromium 56 on Tizen 4)
+                        const isIntersecting =
+                            typeof entry.isIntersecting === 'boolean'
+                                ? entry.isIntersecting
+                                : entry.intersectionRatio > 0 ||
+                                  (Boolean(entry.intersectionRect) &&
+                                      (entry.intersectionRect.width > 0 || entry.intersectionRect.height > 0));
+
                         if (!canApplyNow) {
                             // Defer shimmer layer wakeups/pauses until scrolling and keypress
                             // cooldown settle so finish frames never re-promote 30 shimmers at once.
-                            this._pendingShimmerStates.set(entry.target, entry.isIntersecting);
+                            this._pendingShimmerStates.set(entry.target, isIntersecting);
                             return;
                         }
                         // Use classList directly — no touching other properties
-                        if (entry.isIntersecting) {
+                        if (isIntersecting) {
                             // Back in view: resume shimmer animation
                             entry.target.classList.remove('shimmer-hidden');
                         } else {

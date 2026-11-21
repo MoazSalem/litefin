@@ -227,3 +227,31 @@ if (typeof Document !== 'undefined' && !Document.prototype.append) {
         }
     };
 }
+
+// ----------------------------------------------------------------------------
+// IntersectionObserverEntry.isIntersecting — added in Chrome 58.
+// ----------------------------------------------------------------------------
+// Tizen 4.0 runs Chromium 56, which supports IntersectionObserver natively
+// but lacks the isIntersecting property on IntersectionObserverEntry.
+// Without this getter polyfill, entry.isIntersecting returns undefined,
+// causing lazy-loading and visibility observers to silently ignore all elements.
+// ----------------------------------------------------------------------------
+if (
+    typeof window !== 'undefined' &&
+    typeof window.IntersectionObserverEntry !== 'undefined' &&
+    !('isIntersecting' in window.IntersectionObserverEntry.prototype)
+) {
+    Object.defineProperty(window.IntersectionObserverEntry.prototype, 'isIntersecting', {
+        get: function () {
+            // Determine intersection based on positive intersectionRatio or
+            // non-empty intersection bounding geometry.
+            return (
+                this.intersectionRatio > 0 ||
+                (Boolean(this.intersectionRect) &&
+                    (this.intersectionRect.width > 0 || this.intersectionRect.height > 0))
+            );
+        },
+        configurable: true,
+        enumerable: true
+    });
+}

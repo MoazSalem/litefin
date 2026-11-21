@@ -84,6 +84,35 @@
     }
 
     // ------------------------------------------------------------------------
+    // IntersectionObserverEntry.prototype.isIntersecting — added in Chrome 58
+    // ------------------------------------------------------------------------
+    // Samsung Tizen 4.0 (2018 models) runs Chromium 56. Chromium 51+ provides
+    // window.IntersectionObserver natively, but the entry objects lack the
+    // 'isIntersecting' getter (added to the W3C specification and Chrome in M58).
+    // Without this shim, entry.isIntersecting evaluates to undefined (falsy),
+    // which permanently blocks all lazy image loading and sentinel observers.
+    // ------------------------------------------------------------------------
+    if (
+        typeof window !== 'undefined' &&
+        typeof window.IntersectionObserverEntry !== 'undefined' &&
+        !('isIntersecting' in window.IntersectionObserverEntry.prototype)
+    ) {
+        Object.defineProperty(window.IntersectionObserverEntry.prototype, 'isIntersecting', {
+            get: function () {
+                // An entry is intersecting if its visible ratio is positive, or if
+                // its intersection bounding box has measurable width or height.
+                return (
+                    this.intersectionRatio > 0 ||
+                    (Boolean(this.intersectionRect) &&
+                        (this.intersectionRect.width > 0 || this.intersectionRect.height > 0))
+                );
+            },
+            configurable: true,
+            enumerable: true
+        });
+    }
+
+    // ------------------------------------------------------------------------
     // WeakSet polyfill — required by hls.js on ancient WebKit (WebOS WebKit/538)
     // ------------------------------------------------------------------------
     if (typeof WeakSet === 'undefined') {

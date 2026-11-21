@@ -890,7 +890,13 @@ class HeroCarousel {
                 (entries) => {
                     for (let i = 0; i < entries.length; i++) {
                         const entry = entries[i];
-                        const isVisible = entry.isIntersecting && entry.intersectionRatio > 0.15;
+                        const isIntersecting =
+                            typeof entry.isIntersecting === 'boolean'
+                                ? entry.isIntersecting
+                                : entry.intersectionRatio > 0 ||
+                                  (Boolean(entry.intersectionRect) &&
+                                      (entry.intersectionRect.width > 0 || entry.intersectionRect.height > 0));
+                        const isVisible = isIntersecting && entry.intersectionRatio > 0.15;
                         if (this._isVisible !== isVisible) {
                             this._isVisible = isVisible;
                             if (!isVisible) {

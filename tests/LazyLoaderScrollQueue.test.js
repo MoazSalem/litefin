@@ -176,7 +176,7 @@ test('LazyLoader queues intersecting elements while scrolling and flushes them i
     // Finish the second scroll and let the full 800ms quiet window elapse cleanly
     globalThis.window.__scrollController.isAnimating = false;
     eventBus.emit('scroll:finished');
-    await new Promise((resolve) => setTimeout(resolve, 850));
+    await new Promise((resolve) => setTimeout(resolve, 950));
 
     // Frame slice must await rAF turn before mutating DOM
     const loadedAfterSettle = images.filter((img) => img.src !== '').length;
@@ -280,10 +280,52 @@ test('LazyLoader yields after loading a lazy row and prunes disconnected contain
 
     // First frame loads row1 ONLY and yields before row2 so two full rows never burst together
     runOneRafTurn();
-    assert.ok(row1._images.every((img) => img.src !== ''), 'Row 1 images should load in slice 1');
-    assert.ok(row2._images.every((img) => img.src === ''), 'Row 2 must wait for the next frame slice');
+    assert.ok(
+        row1._images.every((img) => img.src !== ''),
+        'Row 1 images should load in slice 1'
+    );
+    assert.ok(
+        row2._images.every((img) => img.src === ''),
+        'Row 2 must wait for the next frame slice'
+    );
 
     // Second frame loads row2
     runOneRafTurn();
-    assert.ok(row2._images.every((img) => img.src !== ''), 'Row 2 images should load in slice 2');
+    assert.ok(
+        row2._images.every((img) => img.src !== ''),
+        'Row 2 images should load in slice 2'
+    );
+});
+
+test('LazyLoader handles legacy Tizen 4 (Chromium 56) entries where isIntersecting is undefined', () => {
+    // Reset queue state cleanly before testing legacy entry behavior
+    lazyLoader._pendingElements = [];
+    scheduledRafs.length = 0;
+    globalThis.window.__scrollController.isAnimating = false;
+
+    const intersectingImg = createMockImage('http://example.com/tizen4-visible.jpg');
+    const nonIntersectingImg = createMockImage('http://example.com/tizen4-hidden.jpg');
+
+    // Simulate native Chromium 56 IntersectionObserverEntry:
+    // entry.isIntersecting is undefined! Only intersectionRatio and intersectionRect are present.
+    const legacyEntries = [
+        {
+            target: intersectingImg,
+            isIntersecting: undefined,
+            intersectionRatio: 0.75,
+            intersectionRect: { width: 300, height: 450 }
+        },
+        {
+            target: nonIntersectingImg,
+            isIntersecting: undefined,
+            intersectionRatio: 0,
+            intersectionRect: { width: 0, height: 0 }
+        }
+    ];
+
+    ioCallback(legacyEntries, lazyLoader.observer);
+
+    // Visible image must load immediately when scroll is idle
+    assert.equal(intersectingImg.src, 'http://example.com/tizen4-visible.jpg', 'Visible legacy image must load');
+    assert.equal(nonIntersectingImg.src, '', 'Hidden legacy image must remain unloaded');
 });
