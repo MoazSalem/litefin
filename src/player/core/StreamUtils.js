@@ -107,28 +107,45 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
     // -------------------------------------------------------------------------
     // 2. Active Playback Session / Transcoding Status Inspection
     // -------------------------------------------------------------------------
+    // When mediaSource contains an active TranscodingUrl, an HLS or progressive
+    // session is actively streaming. We inspect session-specific constraints while
+    // ensuring we do not misapply one track's transcode target parameters to others.
     if (mediaSource?.TranscodingUrl && !isAdvancedBackend) {
         const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
 
+        // Resolve which audio stream index this TranscodingUrl was constructed for.
+        // Falls back through URL parameters, container defaults, or first audio stream.
         const urlAudioIndexMatch = mediaSource.TranscodingUrl.match(/[?&]AudioStreamIndex=([^&]+)/);
         const activeUrlAudioIndex = urlAudioIndexMatch
             ? parseInt(urlAudioIndexMatch[1], 10)
-            : (mediaSource.DefaultAudioStreamIndex ?? mediaSource.MediaStreams?.find((s) => s.Type === 'Audio' && s.IsDefault)?.Index);
+            : (mediaSource.DefaultAudioStreamIndex ??
+               mediaSource.MediaStreams?.find((s) => s.Type === 'Audio' && s.IsDefault)?.Index ??
+               mediaSource.MediaStreams?.find((s) => s.Type === 'Audio')?.Index);
 
-        if (track.Index === activeUrlAudioIndex || activeUrlAudioIndex === undefined) {
+        // Active stream evaluation:
+        // If we are evaluating the stream currently being delivered by this session,
+        // and the server has flagged that audio is not being streamed directly
+        // (for example, due to bitrate limits, downmixing, or codec transcoding),
+        // then this specific active track is currently transcoding.
+        if (typeof activeUrlAudioIndex === 'number' && track.Index === activeUrlAudioIndex) {
             if (!isAudioDirect) {
                 return false;
             }
         }
 
-        const allowedAudioCodecsStr = (mediaSource.TranscodingUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1];
-        if (allowedAudioCodecsStr) {
-            const allowed = allowedAudioCodecsStr.toLowerCase().split(',').map((c) => c.trim());
-            if (!allowed.includes(codec)) {
-                return false;
-            }
-        }
+        // Note on non-active tracks:
+        // In an active transcoding/remuxing session, the TranscodingUrl was built
+        // specifically for activeUrlAudioIndex with an AudioCodec parameter indicating
+        // the transcode target codec for THAT stream (such as EAC-3).
+        // Other tracks in the container must NEVER be matched against that AudioCodec
+        // parameter, because switching audio tracks triggers a playback restart with
+        // fresh capability negotiation, allowing direct play or remuxing if supported.
 
+        // Transport stream constraints when video requires server transcoding:
+        // When video is being re-encoded, delivery occurs through an HLS transport stream
+        // (MPEG-TS or fMP4). Codecs not supported for passthrough in MPEG-TS/fMP4 HLS
+        // (such as raw TrueHD, lossless FLAC, or Vorbis) cannot direct stream alongside
+        // transcoded video and will inevitably require an audio transcode pass by FFmpeg.
         if (!isVideoDirect) {
             const HLS_TS_SAFE_AUDIO = new Set(['aac', 'ac3', 'eac3', 'mp3', 'mp2']);
             if (!HLS_TS_SAFE_AUDIO.has(codec)) {

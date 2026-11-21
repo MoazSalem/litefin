@@ -54,7 +54,10 @@ function setup(settings = {}, caps = {}, initialStorage = {}, platform = { isTiz
         // in this suite (MediaHelper only runs with a TranscodingUrl present;
         // languageManager checks typeof at each call site), but stubs keep
         // the extracted source runnable without their module imports.
-        MediaHelper: { getTranscodeStatus: () => ({ isVideoDirect: true, isAudioDirect: true }) },
+        // MediaHelper stub returns realistic transcode status when provided on mediaSource
+        MediaHelper: {
+            getTranscodeStatus: (ms) => ms?._transcodeStatus || { isVideoDirect: true, isAudioDirect: true }
+        },
         languageManager: { normalizeLanguage: (lang) => lang },
         log: {
             info() {},
@@ -782,4 +785,137 @@ test('doesAudioTrackRequireDirectStream: TrueHD track does NOT require remux on 
 
     const moviRemux = doesAudioTrackRequireDirectStream(mediaSource, 1, 'movi');
     assert.strictEqual(moviRemux, false, 'Movi backend must not require remux for TrueHD when enabled');
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Multi-Audio Track Transcoding Detection & Active Session Isolation
+// ────────────────────────────────────────────────────────────────────────────
+
+test('isAudioTrackNativelyPlayable: Movie with TrueHD and DD/DD+ does not flag DD tracks as needing transcoding', () => {
+    // ------------------------------------------------------------------------
+    // Scenario 1 from Issue Report:
+    // Movie has Track 1 (TrueHD 7.1), Track 2 (DD 5.1), Track 3 (DD+ 5.1),
+    // and Track 4 (DD+ Atmos 5.1). TrueHD cannot direct play on webOS without
+    // explicit passthrough, so the server starts transcoding Track 1 to EAC-3.
+    // ------------------------------------------------------------------------
+    const webOSPlatform = { isTizen: false, isWebOS: true };
+    const webOSCaps = { ac3: true, eac3: true, truehd: false, dts: false, maxAudioChannels: 6 };
+
+    const { isAudioTrackNativelyPlayable } = setup({
+        enableTrueHd: 'disable',
+        enableDts: 'disable',
+        enableEac3: 'auto'
+    }, webOSCaps, {}, webOSPlatform);
+
+    // Media source representing an active transcoding session for Track 1 (TrueHD).
+    // Jellyfin targets eac3 in the TranscodingUrl query parameter.
+    const mediaSource = {
+        Id: 'movie-1-truehd-transcoding',
+        Container: 'mkv',
+        TranscodingUrl: '/videos/item/master.m3u8?AudioStreamIndex=1&AudioCodec=eac3&TranscodeReasons=AudioCodecNotSupported',
+        _transcodeStatus: { isVideoDirect: true, isAudioDirect: false },
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'eac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 4, Type: 'Audio', Codec: 'eac3', Channels: 6, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Track 1 (TrueHD) is the active stream and is actively transcoding -> should be flagged (false)
+    const isTrack1Playable = isAudioTrackNativelyPlayable(mediaSource.MediaStreams[0], mediaSource, 'webos');
+    assert.strictEqual(isTrack1Playable, false, 'TrueHD track must be flagged as needing transcode');
+
+    // Track 2 (DD / AC3) is natively supported by webOS hardware decoders.
+    // Must NOT be falsely flagged because the active session transcoded Track 1 to EAC3.
+    const isTrack2Playable = isAudioTrackNativelyPlayable(mediaSource.MediaStreams[1], mediaSource, 'webos');
+    assert.strictEqual(isTrack2Playable, true, 'DD (AC3) track must NOT be flagged as needing transcode');
+
+    // Track 3 (DD+ / EAC3) is natively supported
+    const isTrack3Playable = isAudioTrackNativelyPlayable(mediaSource.MediaStreams[2], mediaSource, 'webos');
+    assert.strictEqual(isTrack3Playable, true, 'DD+ (EAC3) track must NOT be flagged as needing transcode');
+
+    // Track 4 (DD+ Atmos / EAC3) is natively supported
+    const isTrack4Playable = isAudioTrackNativelyPlayable(mediaSource.MediaStreams[3], mediaSource, 'webos');
+    assert.strictEqual(isTrack4Playable, true, 'DD+ Atmos track must NOT be flagged as needing transcode');
+});
+
+test('isAudioTrackNativelyPlayable: Movie with DTS and DD/DD+ does not flag DD tracks as needing transcoding', () => {
+    // ------------------------------------------------------------------------
+    // Scenario 2 from Issue Report:
+    // Movie has Track 1 (DTS:X), Track 2 (DTS), Track 3 (DD+), Track 4 (DD),
+    // and Track 5 (DTS-HD MA). DTS is unsupported on LG C1/C3 without AVR passthrough,
+    // so Track 1 transcodes to EAC-3 in HLS.
+    // ------------------------------------------------------------------------
+    const webOSPlatform = { isTizen: false, isWebOS: true };
+    const webOSCaps = { ac3: true, eac3: true, truehd: false, dts: false, maxAudioChannels: 6 };
+
+    const { isAudioTrackNativelyPlayable } = setup({
+        enableTrueHd: 'disable',
+        enableDts: 'disable',
+        enableEac3: 'auto'
+    }, webOSCaps, {}, webOSPlatform);
+
+    const mediaSource = {
+        Id: 'movie-2-dts-transcoding',
+        Container: 'mkv',
+        TranscodingUrl: '/videos/item/master.m3u8?AudioStreamIndex=1&AudioCodec=eac3&TranscodeReasons=AudioCodecNotSupported',
+        _transcodeStatus: { isVideoDirect: true, isAudioDirect: false },
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'dts', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 3, Type: 'Audio', Codec: 'eac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 4, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: false },
+            { Index: 5, Type: 'Audio', Codec: 'dts', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // Track 1 (DTS:X / 8ch) -> requires transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[0], mediaSource, 'webos'), false);
+
+    // Track 2 (DTS / 6ch) -> requires transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[1], mediaSource, 'webos'), false);
+
+    // Track 3 (DD+ / EAC3) -> natively playable
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[2], mediaSource, 'webos'), true);
+
+    // Track 4 (DD / AC3) -> natively playable, must not be flagged
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[3], mediaSource, 'webos'), true);
+
+    // Track 5 (DTS-HD MA / 8ch) -> requires transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[4], mediaSource, 'webos'), false);
+});
+
+test('isAudioTrackNativelyPlayable: Video transcode session respects HLS transport stream safe codecs', () => {
+    // ------------------------------------------------------------------------
+    // When video itself requires transcoding (e.g. 4K HDR downscaled to 1080p SDR),
+    // playback delivery is packaged into an HLS transport stream.
+    // Standard broadcast codecs (AC-3, E-AC-3, AAC, MP3) can direct stream inside HLS,
+    // while codecs like TrueHD cannot be muxed into HLS and must transcode.
+    // ------------------------------------------------------------------------
+    const webOSPlatform = { isTizen: false, isWebOS: true };
+    const webOSCaps = { ac3: true, eac3: true, truehd: true, dts: true, maxAudioChannels: 6 };
+
+    const { isAudioTrackNativelyPlayable } = setup({
+        enableTrueHd: 'enable',
+        enableDts: 'enable'
+    }, webOSCaps, {}, webOSPlatform);
+
+    // Session where video is transcoding (isVideoDirect: false)
+    const mediaSource = {
+        Id: 'video-transcoding-session',
+        Container: 'mkv',
+        TranscodingUrl: '/videos/item/master.m3u8?AudioStreamIndex=1&TranscodeReasons=VideoCodecNotSupported',
+        _transcodeStatus: { isVideoDirect: false, isAudioDirect: true },
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'ac3', Channels: 6, Language: 'eng', IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'truehd', Channels: 8, Language: 'eng', IsDefault: false }
+        ]
+    };
+
+    // AC3 is in HLS_TS_SAFE_AUDIO, so audio direct streams without re-encoding
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[0], mediaSource, 'webos'), true);
+
+    // TrueHD cannot direct stream in an HLS transport stream, so it requires transcode
+    assert.strictEqual(isAudioTrackNativelyPlayable(mediaSource.MediaStreams[1], mediaSource, 'webos'), false);
 });
