@@ -869,14 +869,26 @@ export class WebOSPlayer {
          * the direct media playlist with the stream-copy query parameters.
          * The secondary SDR variant is eliminated entirely, locking webOS into
          * the stream-copied HDR track.
+         *
+         * Live and runtime-less sources must keep master.m3u8: Jellyfin serves
+         * main.m3u8 only when the media source has RunTimeTicks; anything
+         * without it is treated as a segmented live stream and exposed through
+         * live.m3u8. Requesting main.m3u8 for those returns 500 ("Invalid
+         * segment length or runtime ticks (0)"). That covers Live TV channels
+         * and in-progress recordings alike. The SDR entrance this bypass avoids
+         * is only injected for HDR sources, and master.m3u8 playback is what
+         * Litefin used before this optimisation existed.
          * ====================================================================
          */
         let streamUrl = options.url;
         const isVideoDirect = options.playMethod === 'DirectStream' ||
                               options.playMethod === 'Remux' ||
                               (options.mediaSource ? MediaHelper.getTranscodeStatus(options.mediaSource).isVideoDirect : false);
+        // Mirror Jellyfin's IsSegmentedLiveStream: no RunTimeTicks means the
+        // server builds the playlist through live.m3u8, so main.m3u8 is invalid.
+        const hasKnownRuntime = Boolean(options.mediaSource?.RunTimeTicks);
 
-        if (isVideoDirect && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
+        if (hasKnownRuntime && isVideoDirect && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
             log.info('WebOSPlayer: Video stream copy active — requesting main.m3u8 directly to bypass server SDR variant');
             streamUrl = streamUrl.replace(/\/master\.m3u8/i, '/main.m3u8');
             options = { ...options, url: streamUrl };
