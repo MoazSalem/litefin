@@ -269,7 +269,8 @@ export class SeerrClient {
     /**
      * Makes an authenticated call through the Litefin server plugin.
      * @param {string} path - Path after /Litefin/Seerr
-     * @param {Object} [options] - Request method, body, and `fresh` to bypass the cached GET response
+     * @param {Object} [options] - Request method, body, `fresh` to bypass the cached GET response,
+     *   and `silent` for expected failures (capability probes) that should not log errors
      * @returns {Promise<any>}
      * @private
      */
@@ -303,11 +304,11 @@ export class SeerrClient {
                 return cached.data;
             }
 
-            const data = await api.get(`${API_ROOT}${path}`);
+            const data = await api.get(`${API_ROOT}${path}`, null, options.silent ? { silent: true } : {});
             this._cache.set(cacheKey, { data, timestamp: now });
             return data;
         } catch (err) {
-            log.warn(`Request failed: ${method} ${path}`, err);
+            if (!options.silent) log.warn(`Request failed: ${method} ${path}`, err);
             throw err;
         }
     }
@@ -367,7 +368,7 @@ export class SeerrClient {
             // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
 
-            // Append explicit language override if supplied in options
+            // Append the TMDB original-language filter (e.g. "ja|ko") if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
 
             // Append age rating and certification country filters
@@ -379,15 +380,17 @@ export class SeerrClient {
             // Append keyword and studio constraints
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.studio) queryParams += `&studio=${options.studio}`;
+            queryParams += this._catalogFilterParams(options);
 
             // Append TMDB sort expression
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
 
-        // Ensure path receives user's active preferred language tag
-        const optLang = typeof options === 'object' && options ? options.language : null;
-        const targetPath = this._withLanguage(`/Discover/Movies?${queryParams}`, optLang);
-        return this._normalizeList(await this._request(targetPath));
+        // No UI language here: on /discover/movies|tv Seerr reads `language` as the TMDB
+        // original-language filter, so appending e.g. "en-US" returned no results at all and
+        // "de" silently limited results to German productions. Titles are localized by Seerr
+        // from the user's locale; only an explicit original-language filter is sent.
+        return this._normalizeList(await this._request(`/Discover/Movies?${queryParams}`));
     }
 
     /**
@@ -408,7 +411,7 @@ export class SeerrClient {
             // Append genre filter parameter if specified
             if (options.genre) queryParams += `&genre=${encodeURIComponent(options.genre)}`;
 
-            // Append explicit language override if supplied in options
+            // Append the TMDB original-language filter (e.g. "ja|ko") if supplied in options
             if (options.language) queryParams += `&language=${encodeURIComponent(options.language)}`;
 
             // Append age rating and certification country filters
@@ -420,15 +423,56 @@ export class SeerrClient {
             // Append keyword and network constraints
             if (options.keywords) queryParams += `&keywords=${options.keywords}`;
             if (options.network) queryParams += `&network=${options.network}`;
+            queryParams += this._catalogFilterParams(options);
 
             // Append TMDB sort expression
             if (options.sortBy) queryParams += `&sortBy=${encodeURIComponent(options.sortBy)}`;
         }
 
-        // Ensure path receives user's active preferred language tag
-        const optLang = typeof options === 'object' && options ? options.language : null;
-        const targetPath = this._withLanguage(`/Discover/Tv?${queryParams}`, optLang);
-        return this._normalizeList(await this._request(targetPath));
+        // No UI language here: on /discover/movies|tv Seerr reads `language` as the TMDB
+        // original-language filter, so appending e.g. "en-US" returned no results at all and
+        // "de" silently limited results to German productions. Titles are localized by Seerr
+        // from the user's locale; only an explicit original-language filter is sent.
+        return this._normalizeList(await this._request(`/Discover/Tv?${queryParams}`));
+    }
+
+    /**
+     * Builds the query suffix for filters only understood by newer Litefin server plugins
+     * (keyword lists and streaming providers). Older plugins ignore unknown parameters.
+     *
+     * @param {Object} options - Discover options
+     * @returns {string} Query suffix starting with '&', or an empty string
+     * @private
+     */
+    _catalogFilterParams(options) {
+        let suffix = '';
+        if (options.keywordIds) suffix += `&keywordIds=${encodeURIComponent(options.keywordIds)}`;
+        if (options.watchProviders && options.watchRegion) {
+            suffix += `&watchRegion=${encodeURIComponent(options.watchRegion)}`;
+            suffix += `&watchProviders=${encodeURIComponent(options.watchProviders)}`;
+        }
+        return suffix;
+    }
+
+    /**
+     * Gets the Seerr discover slider configuration (built-in and custom rows).
+     * Returns null when the server plugin predates the route (404) or Seerr is unreachable,
+     * so callers can fall back to the built-in row list.
+     *
+     * @returns {Promise<Array<Object>|null>} Raw slider list in Seerr order, or null
+     */
+    async discoverSettings() {
+        // Older plugins answer 404; remember that for this session instead of re-probing on every visit
+        if (this._discoverSettingsUnsupported) return null;
+        try {
+            // silent: a 404 from plugins without this route is expected, not an error
+            const sliders = await this._request('/Settings/Discover', { silent: true });
+            return Array.isArray(sliders) ? sliders : null;
+        } catch (err) {
+            if (err && err.status === 404) this._discoverSettingsUnsupported = true;
+            log.debug('Discover settings unavailable, using built-in rows', err);
+            return null;
+        }
     }
 
     async moviesByGenre(genreId, page = 1, sortBy = null, language = null) {
