@@ -471,6 +471,22 @@ export class WebOSPlayer {
         video.style.opacity = '0';
         video.style.visibility = 'hidden';
 
+        /*
+         * ====================================================================
+         * Hardware Video Overlay Transparency
+         * ====================================================================
+         * On LG webOS, hardware decoders (notably AV1 on Alpha 9 series processors
+         * like the C2, and high-bitrate 4K HEVC streams) decode directly onto the
+         * underlying hardware video plane positioned physically beneath the webview.
+         *
+         * The <video> element must maintain an explicitly transparent background
+         * so the browser's compositor creates an unblocked punch-through viewport.
+         * Any solid background color on the video element will mask the hardware
+         * video plane with an opaque black quad, causing black screen playback.
+         * ====================================================================
+         */
+        video.style.backgroundColor = 'transparent';
+
         // Ensure the container exists before we try to append
         if (!this.container) {
             this.container = document.createElement('div');
@@ -2484,6 +2500,11 @@ export class WebOSPlayer {
         if (targetVideo) {
             targetVideo.style.opacity = '';
             targetVideo.style.visibility = '';
+            /*
+             * Reassert transparent background on restored video presentation to
+             * ensure hardware video overlay punch-through remains unobstructed.
+             */
+            targetVideo.style.backgroundColor = 'transparent';
             log.debug('WebOSPlayer: Restored video visibility after resume landing');
         }
     }
@@ -3729,6 +3750,11 @@ export class WebOSPlayer {
         style.height = `${box.height}px`;
         style.objectFit = box.objectFit;
         style.objectPosition = 'center';
+        /*
+         * Preserve transparent background across dynamic geometry recalibrations
+         * to guarantee continuous hardware overlay punch-through during playback.
+         */
+        style.backgroundColor = 'transparent';
         this._appliedVideoBox = { video, key };
         return true;
     }

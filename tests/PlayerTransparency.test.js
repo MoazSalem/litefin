@@ -88,3 +88,37 @@ test('Hardware Transparency: PlayerPage calls tizenAdapter.resetCompositorLayer(
         'PlayerPage.destroy() must invoke tizenAdapter.resetCompositorLayer()'
     );
 });
+
+test('Hardware Transparency: player-page.css scopes webOS video element with transparent background', () => {
+    // Read player page stylesheet directly from source
+    const playerPageCssPath = path.resolve('src/styles/player-page.css');
+    const playerPageCss = fs.readFileSync(playerPageCssPath, 'utf8');
+
+    // On LG webOS, hardware video decoding (AV1 / 4K HEVC) renders on the native VDC
+    // video plane behind the Chromium webview. The <video> element must have an explicitly
+    // transparent background so it does not mask the hardware overlay with an opaque black quad.
+    assert.match(
+        playerPageCss,
+        /html\[data-platform="webos"\]\s+\.player-container\s+video\s*\{[^}]*background(-color)?:\s*transparent\s*!important;/s,
+        'player-page.css must define transparent background for html[data-platform="webos"] .player-container video'
+    );
+});
+
+test('Hardware Transparency: WebOSPlayer initializes and maintains transparent background on video element', () => {
+    // Read WebOSPlayer source directly from disk
+    const webOSPlayerSrc = fs.readFileSync(path.resolve('src/player/core/WebOSPlayer.js'), 'utf8');
+
+    // Ensure _ensureVideoElement sets transparent background on the video element
+    assert.match(
+        webOSPlayerSrc,
+        /video\.style\.backgroundColor\s*=\s*['"]transparent['"]/,
+        'WebOSPlayer._ensureVideoElement() must set video.style.backgroundColor = "transparent"'
+    );
+
+    // Ensure _restoreVideoAfterResume keeps transparent background
+    assert.match(
+        webOSPlayerSrc,
+        /targetVideo\.style\.backgroundColor\s*=\s*['"]transparent['"]/,
+        'WebOSPlayer._restoreVideoAfterResume() must maintain video.style.backgroundColor = "transparent"'
+    );
+});
