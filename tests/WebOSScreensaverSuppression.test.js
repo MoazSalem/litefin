@@ -119,8 +119,16 @@ test('WebOSAdapter: Source code integrity for screensaver suppression and user p
      * outside the video frame bounds with solid black, cutting off subtitles
      * rendered in the bottom black bar and debug log overlays.
      *
-     * Setting enablePigScreenSaver: false and preferredType: 2 guarantees
-     * that webOS keeps the full HTML canvas and subtitle overlays active.
+     * Setting enablePigScreenSaver: false guarantees that webOS leaves the full
+     * graphics plane unmasked.
+     *
+     * In addition, screenSaverProperties (preferredType: 2) must NOT be declared.
+     * webOS Type 2 screensaver is specifically designed to dim OSD/UI layers
+     * gradually on OLED TVs when idle. Because HTML5/canvas subtitles reside in
+     * the web/OSD layer, declaring preferredType: 2 causes all subtitles
+     * (SRT, ASS, PGS) to gradually dim from white to grey during playback until
+     * a remote button is pressed. Omission allows subtitles to retain full
+     * brightness throughout media playback.
      * ========================================================================
      */
     const appinfo = JSON.parse(
@@ -128,17 +136,19 @@ test('WebOSAdapter: Source code integrity for screensaver suppression and user p
     );
 
     // Ensure Picture-in-Graphics screensaver is explicitly disabled
+    // This stops webOS from drawing black masks over letterbox regions where subtitles sit
     assert.strictEqual(
         appinfo.enablePigScreenSaver,
         false,
         'appinfo.json must define enablePigScreenSaver: false to prevent webOS from masking black bars'
     );
 
-    // Ensure OSD media playback preferredType 2 is declared
+    // Ensure screenSaverProperties is NOT present
+    // preferredType: 2 triggers webOS Type 2 OSD dimming on OLED TVs, fading subtitles to grey
     assert.strictEqual(
-        appinfo.screenSaverProperties?.preferredType,
-        2,
-        'appinfo.json must declare preferredType: 2 in screenSaverProperties'
+        appinfo.screenSaverProperties,
+        undefined,
+        'appinfo.json must omit screenSaverProperties to prevent webOS from dimming subtitles'
     );
 });
 

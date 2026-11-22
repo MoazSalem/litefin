@@ -17,9 +17,6 @@
     "iconColor": "#0f0a14",
     "supportTouchMode": "full",
     "enablePigScreenSaver": false,
-    "screenSaverProperties": {
-        "preferredType": 2
-    },
     "requiredPermissions": [
         "time.query"
     ]
