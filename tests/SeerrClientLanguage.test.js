@@ -124,13 +124,20 @@ test('SeerrClient endpoints use localized routes and partition caches by languag
         await client.search('Batman', 1);
         assert.equal(recordedPaths[recordedPaths.length - 1], '/Litefin/Seerr/Search?query=Batman&page=1&language=de');
 
-        // Test discoverMovies localization
+        // discoverMovies/discoverTv must NOT carry the UI language: Seerr reads `language` on
+        // /discover/movies|tv as the TMDB original-language filter ("de" would hide every
+        // non-German title, "en-US" matched nothing). Only an explicit filter is forwarded.
         await client.discoverMovies(1, { genre: '28' });
-        assert.equal(recordedPaths[recordedPaths.length - 1], '/Litefin/Seerr/Discover/Movies?page=1&genre=28&language=de');
+        assert.equal(recordedPaths[recordedPaths.length - 1], '/Litefin/Seerr/Discover/Movies?page=1&genre=28');
 
-        // Test discoverTv localization
         await client.discoverTv(1, { network: '213' });
-        assert.equal(recordedPaths[recordedPaths.length - 1], '/Litefin/Seerr/Discover/Tv?page=1&network=213&language=de');
+        assert.equal(recordedPaths[recordedPaths.length - 1], '/Litefin/Seerr/Discover/Tv?page=1&network=213');
+
+        await client.discoverMovies(1, { genre: '28', language: 'ja|ko' });
+        assert.equal(
+            recordedPaths[recordedPaths.length - 1],
+            '/Litefin/Seerr/Discover/Movies?page=1&genre=28&language=ja%7Cko'
+        );
 
         // Verify cache keys differ when language changes
         const lang1 = client._getPreferredLanguage();
