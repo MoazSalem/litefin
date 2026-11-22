@@ -27,7 +27,7 @@ import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
-import { seerr } from '../api/seerrClient.js';
+import { catalogQueryFromLibraryParams, fetchCatalogPage, seerrSortParam } from '../api/SeerrCatalog.js';
 import {
     getGenreNameById,
     getStudioNameById,
@@ -1666,24 +1666,11 @@ class LibraryPage extends Page {
 
         // Special handling for Seerr discovery library
         if (this.state.libraryId === 'seerr') {
-            const seerrType = this.params.seerrType;
-            const rawMediaType = this.params.mediaType || (seerrType === 'network' ? 'tv' : 'movie');
-            const mediaType =
-                rawMediaType === 'tv' || rawMediaType === 'series' || rawMediaType === 'tvshows' ? 'tv' : 'movie';
-            const selectedGenre =
-                this.state.filters.genre !== undefined
-                    ? this.state.filters.genre
-                    : this.params.genreId || this.params.genre;
-            const genreId = selectedGenre;
-            const language =
-                this.state.filters.language !== undefined ? this.state.filters.language : this.params.language;
-            const certification =
-                this.state.filters.certification !== undefined
-                    ? this.state.filters.certification
-                    : this.params.certification;
-            const studioId = this.params.studioId || this.params.studio;
-            const networkId = this.params.networkId || this.params.network;
-            const keywordId = this.params.keywordId || this.params.keywords || this.params.keyword;
+            // Filters → Seerr call dispatch lives in SeerrCatalog (shared with Discover custom rows)
+            const seerrSortBy = seerrSortParam(this.state.sortBy, this.state.sortOrder);
+            const catalogQuery = catalogQueryFromLibraryParams(this.params, this.state.filters, seerrSortBy);
+            const mediaType = catalogQuery.mediaType;
+            const selectedGenre = catalogQuery.genre;
 
             // Dynamically update title if genre filter changed
             if (selectedGenre) {
@@ -1704,58 +1691,10 @@ class LibraryPage extends Page {
 
             // Calculate active page for Seerr request (each page contains 100 items merged from 5 upstream pages)
             const seerrPage = Math.floor(this.state.startIndex / 100) + 1;
-            const sortField = this.state.sortBy || 'popularity';
-            const sortDir = (this.state.sortOrder || 'Descending').toLowerCase().startsWith('asc') ? 'asc' : 'desc';
-            // Only send sortBy parameter if it differs from the upstream default (popularity.desc)
-            const seerrSortBy = sortField === 'popularity' && sortDir === 'desc' ? null : `${sortField}.${sortDir}`;
 
             let items = [];
             try {
-                if (seerrType === 'keyword' || seerrType === 'tag' || keywordId) {
-                    if (mediaType === 'tv') {
-                        items = await seerr.discoverTv(seerrPage, {
-                            keywords: keywordId,
-                            genre: genreId,
-                            language,
-                            certification,
-                            sortBy: seerrSortBy
-                        });
-                    } else {
-                        items = await seerr.discoverMovies(seerrPage, {
-                            keywords: keywordId,
-                            genre: genreId,
-                            language,
-                            certification,
-                            sortBy: seerrSortBy
-                        });
-                    }
-                } else if (genreId || language || certification || seerrType === 'genre') {
-                    if (mediaType === 'tv') {
-                        items = await seerr.discoverTv(seerrPage, {
-                            genre: genreId,
-                            language,
-                            certification,
-                            sortBy: seerrSortBy
-                        });
-                    } else {
-                        items = await seerr.discoverMovies(seerrPage, {
-                            genre: genreId,
-                            language,
-                            certification,
-                            sortBy: seerrSortBy
-                        });
-                    }
-                } else if (seerrType === 'studio' || studioId) {
-                    items = await seerr.moviesByStudio(studioId, seerrPage);
-                } else if (seerrType === 'network' || networkId) {
-                    items = await seerr.tvByNetwork(networkId, seerrPage);
-                } else {
-                    if (mediaType === 'tv') {
-                        items = await seerr.discoverTv(seerrPage, { language, certification, sortBy: seerrSortBy });
-                    } else {
-                        items = await seerr.discoverMovies(seerrPage, { language, certification, sortBy: seerrSortBy });
-                    }
-                }
+                items = await fetchCatalogPage(catalogQuery, seerrPage);
             } catch (err) {
                 log.error('Failed to load Seerr category items', err);
                 items = [];
@@ -1764,15 +1703,7 @@ class LibraryPage extends Page {
             this._lastFetchContext = {
                 viewType: 'seerr',
                 isSeerr: true,
-                seerrType,
-                mediaType,
-                keywordId,
-                genreId,
-                language,
-                certification,
-                studioId,
-                networkId,
-                seerrSortBy
+                catalogQuery
             };
             this.state.items = items || [];
             this.state.limit = 100;
@@ -5532,56 +5463,21 @@ class LibraryPage extends Page {
             const seerrPage = Math.floor(startIndex / 100) + 1;
             let items = [];
             try {
-                if (ctx.seerrType === 'keyword' || ctx.seerrType === 'tag' || ctx.keywordId) {
-                    items =
-                        ctx.mediaType === 'tv'
-                            ? await seerr.discoverTv(seerrPage, {
-                                  keywords: ctx.keywordId,
-                                  genre: ctx.genreId,
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              })
-                            : await seerr.discoverMovies(seerrPage, {
-                                  keywords: ctx.keywordId,
-                                  genre: ctx.genreId,
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              });
-                } else if (ctx.genreId || ctx.language || ctx.certification || ctx.seerrType === 'genre') {
-                    items =
-                        ctx.mediaType === 'tv'
-                            ? await seerr.discoverTv(seerrPage, {
-                                  genre: ctx.genreId,
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              })
-                            : await seerr.discoverMovies(seerrPage, {
-                                  genre: ctx.genreId,
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              });
-                } else if (ctx.seerrType === 'studio' || ctx.studioId) {
-                    items = await seerr.moviesByStudio(ctx.studioId, seerrPage);
-                } else if (ctx.seerrType === 'network' || ctx.networkId) {
-                    items = await seerr.tvByNetwork(ctx.networkId, seerrPage);
-                } else {
-                    items =
-                        ctx.mediaType === 'tv'
-                            ? await seerr.discoverTv(seerrPage, {
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              })
-                            : await seerr.discoverMovies(seerrPage, {
-                                  language: ctx.language,
-                                  certification: ctx.certification,
-                                  sortBy: ctx.seerrSortBy
-                              });
-                }
+                // Contexts restored from older navigation snapshots predate catalogQuery
+                const catalogQuery =
+                    ctx.catalogQuery ||
+                    catalogQueryFromLibraryParams(
+                        {
+                            seerrType: ctx.seerrType,
+                            mediaType: ctx.mediaType,
+                            keywordId: ctx.keywordId,
+                            studioId: ctx.studioId,
+                            networkId: ctx.networkId
+                        },
+                        { genre: ctx.genreId, language: ctx.language, certification: ctx.certification },
+                        ctx.seerrSortBy
+                    );
+                items = await fetchCatalogPage(catalogQuery, seerrPage);
             } catch (err) {
                 log.warn('Failed to load Seerr batch', err);
                 items = [];

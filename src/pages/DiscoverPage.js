@@ -25,6 +25,8 @@ import { storage } from '../utils/StorageService.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { escapeHtml } from '../utils/Utils.js';
+import { resolveDiscoverRows } from './discover/DiscoverRowSet.js';
 
 const log = logger.create('DiscoverPage');
 
@@ -32,97 +34,6 @@ const log = logger.create('DiscoverPage');
  * Cache TTL for discovery page data (10 minutes, matching HomePage).
  */
 const PAGE_CACHE_TTL = 10 * 60 * 1000;
-
-/**
- * Ordered descriptor list of all supported discovery rows.
- * Defines the canonical vertical sequence, localization keys, and fetch queries.
- */
-const ROW_DEFINITIONS = [
-    {
-        key: 'recentlyAdded',
-        titleKey: 'SeerrRecentlyAdded',
-        defaultTitle: 'Recently Added',
-        cardType: 'poster',
-        fetch: () => seerr.recentlyAdded()
-    },
-    {
-        key: 'requests',
-        titleKey: 'SeerrMyRequests',
-        defaultTitle: 'My Requests',
-        cardType: 'poster',
-        fetch: () => seerr.requests()
-    },
-    {
-        key: 'watchlist',
-        titleKey: 'SeerrWatchlist',
-        defaultTitle: 'Watchlist',
-        cardType: 'poster',
-        fetch: () => seerr.watchlist()
-    },
-    {
-        key: 'trending',
-        titleKey: 'SeerrTrending',
-        defaultTitle: 'Trending',
-        cardType: 'poster',
-        fetch: () => seerr.discoverTrending()
-    },
-    {
-        key: 'movies',
-        titleKey: 'SeerrPopularMovies',
-        defaultTitle: 'Popular Movies',
-        cardType: 'poster',
-        fetch: () => seerr.discoverMovies()
-    },
-    {
-        key: 'genreMovies',
-        titleKey: 'SeerrMovieGenres',
-        defaultTitle: 'Movie Genres',
-        cardType: 'landscape',
-        fetch: () => seerr.genreSliderMovies()
-    },
-    {
-        key: 'upcomingMovies',
-        titleKey: 'SeerrUpcomingMovies',
-        defaultTitle: 'Upcoming Movies',
-        cardType: 'poster',
-        fetch: () => seerr.upcomingMovies()
-    },
-    {
-        key: 'studios',
-        titleKey: 'SeerrStudios',
-        defaultTitle: 'Studios',
-        cardType: 'landscape',
-        fetch: () => seerr.studios()
-    },
-    {
-        key: 'series',
-        titleKey: 'SeerrPopularSeries',
-        defaultTitle: 'Popular Series',
-        cardType: 'poster',
-        fetch: () => seerr.discoverTv()
-    },
-    {
-        key: 'genreSeries',
-        titleKey: 'SeerrSeriesGenres',
-        defaultTitle: 'Series Genres',
-        cardType: 'landscape',
-        fetch: () => seerr.genreSliderTv()
-    },
-    {
-        key: 'upcomingSeries',
-        titleKey: 'SeerrUpcomingSeries',
-        defaultTitle: 'Upcoming Series',
-        cardType: 'poster',
-        fetch: () => seerr.upcomingTv()
-    },
-    {
-        key: 'networks',
-        titleKey: 'SeerrNetworks',
-        defaultTitle: 'Networks',
-        cardType: 'landscape',
-        fetch: () => seerr.networks()
-    }
-];
 
 /**
  * Batching parameters for progressive row loading.
@@ -138,7 +49,12 @@ class DiscoverPage extends Page {
         this._rowRegistry = new Map();
         this._orderedRowKeys = [];
 
-        // Track index in ROW_DEFINITIONS of next batch to fetch
+        // Ordered row descriptors from DiscoverRowSet ({ key, title, cardType, noCardLabels, load })
+        this._rows = [];
+        // Opaque DiscoverRowSet cache entry, stored with the page cache for instant back navigation
+        this._rowSetCache = null;
+
+        // Track index in this._rows of next batch to fetch
         this._nextRowIndexToLoad = 0;
         this._isLoadingMore = false;
         this._isDestroyed = false;
@@ -186,11 +102,14 @@ class DiscoverPage extends Page {
         const cache = this._getValidCache();
         if (cache) {
             log.info('Restoring Discover page from cache');
+            // Rebuild rows from the cached slider config: no network round trip on back navigation.
+            // Caches written before row sets existed hold the built-in rows, i.e. sliders: null.
+            await this._resolveRows(cache.rowSet || { sliders: null });
             this._restoreFromCache(cache, hasFocusTarget);
 
             // If target row wasn't in cache, fetch rows up to target row
             if (targetRowKey && !this._rowRegistry.has(targetRowKey) && this._hasMoreRows()) {
-                const targetDefIndex = ROW_DEFINITIONS.findIndex((d) => d.key === targetRowKey);
+                const targetDefIndex = this._rows.findIndex((d) => d.key === targetRowKey);
                 if (targetDefIndex !== -1) {
                     while (this._nextRowIndexToLoad <= targetDefIndex && this._hasMoreRows() && !this._isDestroyed) {
                         await this._loadNextBatch(false);
@@ -207,6 +126,10 @@ class DiscoverPage extends Page {
                 this.markReady();
                 return;
             }
+
+            // Resolve which rows to show (Seerr discover sliders, or the built-in list)
+            await this._resolveRows();
+            if (this._isDestroyed) return;
 
             // Load the initial prioritized batch of rows (extended if target row is requested)
             await this._loadInitialRows(targetRowKey);
@@ -283,7 +206,7 @@ class DiscoverPage extends Page {
 
         // Mount each cached row into the DOM without making API requests
         for (const [key, data] of sortedEntries) {
-            const def = ROW_DEFINITIONS.find((d) => d.key === key);
+            const def = this._rows.find((d) => d.key === key);
             if (def && data.items && data.items.length > 0) {
                 this._renderAndMountRow(def, data.items, data.defIndex);
             }
@@ -324,6 +247,7 @@ class DiscoverPage extends Page {
         state.set('discover:pageCache', {
             rows,
             nextRowIndexToLoad: this._nextRowIndexToLoad,
+            rowSet: this._rowSetCache,
             serverUrl: api._serverUrl,
             userId: api._userId,
             lang: currentLang,
@@ -336,6 +260,17 @@ class DiscoverPage extends Page {
     // ========================================================================
     // Progressive Loading & Data Fetching
     // ========================================================================
+
+    /**
+     * Resolves the ordered row list (Seerr discover sliders or built-in rows).
+     * @param {Object} [cached] - Row set cache entry from the page cache; skips the network when given.
+     * @private
+     */
+    async _resolveRows(cached) {
+        const { rows, cacheEntry } = await resolveDiscoverRows(cached === undefined ? {} : { cached });
+        this._rows = rows;
+        this._rowSetCache = cacheEntry;
+    }
 
     /**
      * Loads the initial prioritized batch of discovery rows (Recently Added, My Requests, Watchlist).
@@ -351,27 +286,19 @@ class DiscoverPage extends Page {
         // Determine how many initial rows to fetch (extend if focus restoration targets a deeper row)
         let initialTargetCount = INITIAL_ROW_COUNT;
         if (targetRowKey) {
-            const targetDefIndex = ROW_DEFINITIONS.findIndex((d) => d.key === targetRowKey);
+            const targetDefIndex = this._rows.findIndex((d) => d.key === targetRowKey);
             if (targetDefIndex !== -1) {
-                initialTargetCount = Math.min(ROW_DEFINITIONS.length, Math.max(INITIAL_ROW_COUNT, targetDefIndex + 1));
+                initialTargetCount = Math.min(this._rows.length, Math.max(INITIAL_ROW_COUNT, targetDefIndex + 1));
             }
         }
 
         let renderedCount = 0;
 
-        // Helper to safely isolate row fetch errors so one failed endpoint does not break the page
-        const safeFetch = async (def, index) => {
-            try {
-                const items = await def.fetch();
-                return { def, items, index };
-            } catch (err) {
-                log.warn(`Discover row fetch failed for "${def.key}"`, err);
-                return { def, items: null, index };
-            }
-        };
+        // row.load() never throws, so one failed endpoint does not break the page
+        const safeFetch = async (def, index) => ({ def, items: await def.load(), index });
 
         // Fetch initial prioritized batch in parallel
-        const initialBatch = ROW_DEFINITIONS.slice(0, initialTargetCount);
+        const initialBatch = this._rows.slice(0, initialTargetCount);
         this._nextRowIndexToLoad = initialTargetCount;
 
         const results = await Promise.all(initialBatch.map((def, idx) => safeFetch(def, idx)));
@@ -390,9 +317,9 @@ class DiscoverPage extends Page {
         }
 
         // If the initial batch yielded fewer than 2 populated rows, fetch next rows progressively
-        while (renderedCount < 2 && this._nextRowIndexToLoad < ROW_DEFINITIONS.length && !this._isDestroyed) {
+        while (renderedCount < 2 && this._nextRowIndexToLoad < this._rows.length && !this._isDestroyed) {
             const nextIdx = this._nextRowIndexToLoad++;
-            const def = ROW_DEFINITIONS[nextIdx];
+            const def = this._rows[nextIdx];
             const res = await safeFetch(def, nextIdx);
 
             if (res.items && res.items.length > 0) {
@@ -402,7 +329,7 @@ class DiscoverPage extends Page {
         }
 
         // If no items were found across all available rows, display a failure message
-        if (renderedCount === 0 && this._nextRowIndexToLoad >= ROW_DEFINITIONS.length) {
+        if (renderedCount === 0 && this._nextRowIndexToLoad >= this._rows.length) {
             this._showMessage(i18n.t('SeerrLoadFailed'), false);
             this._isLoadingMore = false;
             return;
@@ -502,25 +429,17 @@ class DiscoverPage extends Page {
      */
     async _loadNextBatch(autoFocus = false) {
         if (this._isLoadingMore || this._isDestroyed) return;
-        if (this._nextRowIndexToLoad >= ROW_DEFINITIONS.length) return;
+        if (this._nextRowIndexToLoad >= this._rows.length) return;
 
         this._isLoadingMore = true;
 
         const startIndex = this._nextRowIndexToLoad;
-        const endIndex = Math.min(startIndex + BATCH_ROW_COUNT, ROW_DEFINITIONS.length);
-        const batchDefs = ROW_DEFINITIONS.slice(startIndex, endIndex);
+        const endIndex = Math.min(startIndex + BATCH_ROW_COUNT, this._rows.length);
+        const batchDefs = this._rows.slice(startIndex, endIndex);
         this._nextRowIndexToLoad = endIndex;
 
-        // Helper to safely fetch row data
-        const safeFetch = async (def, idx) => {
-            try {
-                const items = await def.fetch();
-                return { def, items, index: idx };
-            } catch (err) {
-                log.warn(`Discover row fetch failed for "${def.key}"`, err);
-                return { def, items: null, index: idx };
-            }
-        };
+        // row.load() never throws
+        const safeFetch = async (def, idx) => ({ def, items: await def.load(), index: idx });
 
         // Fetch the batch in parallel
         const results = await Promise.all(batchDefs.map((def, i) => safeFetch(def, startIndex + i)));
@@ -565,7 +484,7 @@ class DiscoverPage extends Page {
      * @private
      */
     _hasMoreRows() {
-        return this._nextRowIndexToLoad < ROW_DEFINITIONS.length;
+        return this._nextRowIndexToLoad < this._rows.length;
     }
 
     /**
@@ -600,8 +519,7 @@ class DiscoverPage extends Page {
         if (this._rowRegistry.has(def.key)) return;
 
         const isLandscape = def.cardType === 'landscape';
-        const hasNoCardLabels =
-            def.key === 'genreMovies' || def.key === 'studios' || def.key === 'genreSeries' || def.key === 'networks';
+        const hasNoCardLabels = Boolean(def.noCardLabels);
 
         // Create the section container for the row
         const sectionEl = document.createElement('section');
@@ -609,8 +527,9 @@ class DiscoverPage extends Page {
         sectionEl.setAttribute('data-row-id', def.key);
         sectionEl.setAttribute('data-def-index', defIndex);
 
-        // Build inner HTML structure for title and horizontal scroll track
-        const titleText = i18n.t(def.titleKey, [def.defaultTitle]);
+        // Build inner HTML structure for title and horizontal scroll track.
+        // Custom row titles come from Seerr, so they are escaped.
+        const titleText = escapeHtml(def.title);
         sectionEl.innerHTML = `
             <h2 class="row-title">${titleText}</h2>
             <div class="row-items" id="row-items-${def.key}">
