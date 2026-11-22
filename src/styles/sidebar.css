@@ -271,7 +271,12 @@ body.sidebar-mode-hidden .sidebar:not(.expanded):not(.has-focus) {
  */
 body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-body.sidebar-mode-hidden .sidebar.has-focus,
+body.sidebar-mode-hidden .sidebar.has-focus {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
+/* Isolated :focus-within selector rule preventing Chromium <63 engines from dropping entire selector block */
 body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);

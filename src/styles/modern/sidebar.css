@@ -1863,14 +1863,19 @@ html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:no
 html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
+html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus {
+    -webkit-transform: translate3d(-250px, 0, 0) !important;
+    transform: translate3d(-250px, 0, 0) !important;
+}
+
+/* Isolated :focus-within selector rule preventing Chromium <63 engines from dropping entire selector block */
+html[data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
+html[data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(-250px, 0, 0) !important;
     transform: translate3d(-250px, 0, 0) !important;
@@ -1888,14 +1893,19 @@ html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden 
 html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar.has-focus,
-html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded),
-html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus,
+html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar.has-focus {
+    -webkit-transform: translate3d(250px, 0, 0) !important;
+    transform: translate3d(250px, 0, 0) !important;
+}
+
+/* Isolated RTL :focus-within selector rule preventing Chromium <63 engines from dropping entire selector block */
+html[dir="rtl"][data-layout-sidebar="modern-collapsed"] body.sidebar-mode-hidden .sidebar:focus-within,
+html[dir="rtl"][data-layout-sidebar="floating-buttons"] body.sidebar-mode-hidden .sidebar:focus-within,
 html[dir="rtl"][data-layout-sidebar="floating-island"] body.sidebar-mode-hidden .sidebar:focus-within {
     -webkit-transform: translate3d(250px, 0, 0) !important;
     transform: translate3d(250px, 0, 0) !important;

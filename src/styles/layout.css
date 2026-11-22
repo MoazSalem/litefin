@@ -431,6 +431,8 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     top: 0;
     left: 0;
     bottom: 0;
+    /* Static physical fallback width ensuring solid 100px navigation rail footprint on legacy TV WebViews */
+    width: 100px;
     width: var(--sidebar-width-collapsed, 100px);
     /* Match sidebar.css var */
     z-index: 200;
@@ -447,6 +449,8 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
 #page-container {
     position: absolute;
     top: 0;
+    /* Fixed physical left clearance so pages mount adjacent to collapsed sidebar even before CSS variables resolve */
+    left: 100px;
     left: var(--sidebar-width-collapsed, 100px);
     right: 0;
     bottom: 0;
