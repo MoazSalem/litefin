@@ -12,6 +12,10 @@ import { eventBus } from '../core/EventBus.js';
 import { logger, LogLevel } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 
+// Jellyfin accepts up to 1,000,000 bytes on /ClientLog/Document.
+const MAX_LOG_UPLOAD_BYTES = 900000;
+const LOG_LINE_SEPARATOR = '\r\n';
+
 class DebugOverlay {
     constructor() {
         this._initialized = false;
@@ -405,7 +409,7 @@ class DebugOverlay {
     }
 
     /**
-     * Get all buffered logs as a single string
+     * Get the most recent buffered logs within the upload size limit.
      */
     getLogDump() {
         const header = [
@@ -416,15 +420,23 @@ class DebugOverlay {
             `Time: ${new Date().toLocaleString()}`,
             '================================================================================',
             ''
-        ].join('\r\n');
+        ].join(LOG_LINE_SEPARATOR);
 
-        // Cap uploaded dump to the most recent 2,500 lines.
-        // Prevents multi-megabyte payloads that cause socket timeouts on TV network stacks
-        // while preserving ample history for diagnosing app behavior and playback issues.
-        const linesToDump =
-            this._uploadBuffer.length > 2500 ? this._uploadBuffer.slice(-2500) : this._uploadBuffer;
+        // Blob measures the UTF-8 body, including multibyte text, on older TVs too.
+        const logBudget = MAX_LOG_UPLOAD_BYTES - new Blob([header]).size;
+        let remainingBytes = logBudget;
+        const linesToDump = [];
+        for (const line of this._uploadBuffer.slice(-2500).reverse()) {
+            const lineBytes = new Blob([line]).size;
+            const separatorBytes = linesToDump.length > 0 ? LOG_LINE_SEPARATOR.length : 0;
+            // Skip a single line that cannot fit even in an empty upload.
+            if (lineBytes > logBudget) continue;
+            if (lineBytes + separatorBytes > remainingBytes) break;
+            linesToDump.push(line);
+            remainingBytes -= lineBytes + separatorBytes;
+        }
 
-        return header + linesToDump.join('\r\n');
+        return header + linesToDump.reverse().join(LOG_LINE_SEPARATOR);
     }
 
     /**

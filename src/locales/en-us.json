@@ -1723,6 +1723,7 @@
     "Upload": "Upload",
     "UploadLogs": "Upload Logs",
     "UploadLogsDescription": "Send current session logs to the jellyfin server",
+    "UploadLogsTooLarge": "Log exceeds the server's upload limit (HTTP 413)",
     "UploadPerformanceReport": "Upload Performance Report",
     "UploadPerformanceReportDescription": "Generates an in-depth diagnostic audit report and uploads it directly to the Jellyfin server logs.",
     "UploadReport": "Upload Report",

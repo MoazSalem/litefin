@@ -392,14 +392,15 @@ export class DebugTab {
                 const filename = `Litefin_Log_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
                 await api.uploadClientLog(filename, logs);
                 btn.textContent = i18n.t('Success');
-            } catch (error) {
-                log.error('Failed to upload logs:', error);
-                btn.textContent = i18n.t('Failed');
-            } finally {
                 setTimeout(() => {
                     btn.disabled = false;
                     btn.textContent = i18n.t('Upload');
                 }, 2000);
+            } catch (error) {
+                log.error('Failed to upload logs:', error);
+                const message = error.status === 413 ? i18n.t('UploadLogsTooLarge') : i18n.t('Failed');
+                btn.textContent = message;
+                btn.disabled = false;
             }
         });
 
