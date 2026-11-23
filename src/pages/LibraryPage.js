@@ -472,8 +472,7 @@ class LibraryPage extends Page {
         this._markerUnsub = animeMarkerService.onMarkersLoaded(() => {
             if (this._isDestroyed) return;
             const hasEpisodes =
-                this.state.viewType === 'Episodes' ||
-                this.state.items?.some((i) => i.Type === 'Episode');
+                this.state.viewType === 'Episodes' || this.state.items?.some((i) => i.Type === 'Episode');
             if (hasEpisodes) {
                 CardRenderer.clearCache();
                 const grid = this.$('#library-grid');
@@ -482,7 +481,7 @@ class LibraryPage extends Page {
                     const currentRow =
                         this._lastFocusItemIndex != null
                             ? Math.floor(this._lastFocusItemIndex / columns)
-                            : (this._currentStartRow || 0);
+                            : this._currentStartRow || 0;
                     this._syncVirtualGrid(currentRow, this._lastFocusItemIndex);
                 }
             }
@@ -2517,7 +2516,8 @@ class LibraryPage extends Page {
             } else if (viewType === 'Episodes') {
                 // Flattened episodes view: ensure SeriesId, MediaSources, and MediaStreams are requested
                 params.IncludeItemTypes = 'Episode';
-                params.Fields = 'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId,SeriesName';
+                params.Fields =
+                    'DateCreated,ProductionYear,CommunityRating,OfficialRating,MediaSourceCount,Genres,Tags,ProviderIds,Path,SortName,MediaSources,MediaStreams,SeriesId,SeriesName';
                 result = await api.getItems(params);
             } else if (viewType === 'Favorites') {
                 params.Filters = 'IsFavorite';
@@ -2582,11 +2582,15 @@ class LibraryPage extends Page {
                 this.state.totalRecordCount = result?.TotalRecordCount || 0;
 
                 // Preload series anime markers for any episode items so badges render synchronously
-                const episodeItems = (this.state.items || []).filter((item) => item.Type === 'Episode' && item.SeriesId);
+                const episodeItems = (this.state.items || []).filter(
+                    (item) => item.Type === 'Episode' && item.SeriesId
+                );
                 if (episodeItems.length > 0) {
                     const uniqueSeriesIds = [...new Set(episodeItems.map((ep) => ep.SeriesId))];
                     await Promise.all(
-                        uniqueSeriesIds.map((seriesId) => animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null))
+                        uniqueSeriesIds.map((seriesId) =>
+                            animeMarkerService.fetchSeriesMarkers(seriesId).catch(() => null)
+                        )
                     );
                 }
 
@@ -3474,7 +3478,7 @@ class LibraryPage extends Page {
          */
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
         // prettier-ignore
-        const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 10);
+        const POOL_ROWS = isSkipLazy ? totalRows : (isListView ? 22 : 14);
         const poolRows = Math.min(totalRows, POOL_ROWS);
 
         // Reset virtual window and row tracking cursors
@@ -4348,7 +4352,7 @@ class LibraryPage extends Page {
         const totalRows = Math.ceil(items.length / columns);
         const isListView = this.state.viewMode === 'list';
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
-        const POOL_ROWS = isSkipLazy ? totalRows : isListView ? 22 : 10;
+        const POOL_ROWS = isSkipLazy ? totalRows : isListView ? 22 : 14;
 
         // If total rows fit entirely within the pool (or skip lazy mode is active),
         // all cards exist in the DOM and no row recycling is needed.
@@ -4356,7 +4360,7 @@ class LibraryPage extends Page {
             return;
         }
 
-        const BUFFER_ABOVE = isListView ? 6 : 3;
+        const BUFFER_ABOVE = isListView ? 6 : 4;
         const poolRows = Math.min(totalRows, POOL_ROWS);
         const rowHeight = this.state.gridCardRowHeight || this._measureGridRowHeight(grid, columns) || 350;
 
@@ -4465,6 +4469,17 @@ class LibraryPage extends Page {
 
             // Register cards with observers without synchronous image force-load
             this._hookGridCards(bottomRow.querySelectorAll('.media-card'), false);
+
+            /*
+             * IMMEDIATE RE-ENTRY LOAD
+             * When scrolling UP, prepended rows immediately cross into the visible
+             * screen area. Force-loading images on entering recycled rows ensures
+             * returning to previously visited cards renders art without blank popping.
+             */
+            const enteringImgs = bottomRow.querySelectorAll('img[data-src]');
+            for (let j = 0; j < enteringImgs.length; j++) {
+                lazyLoader.forceLoad(enteringImgs[j]);
+            }
         }
 
         this._currentStartRow = startRow;

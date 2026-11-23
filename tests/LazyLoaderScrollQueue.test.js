@@ -163,20 +163,20 @@ test('LazyLoader queues intersecting elements while scrolling and flushes them i
     globalThis.window.__scrollController.isAnimating = false;
     eventBus.emit('scroll:finished');
 
-    // Inside the 800ms post-scroll quiet window, nothing may flush yet
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    assert.equal(scheduledRafs.length, 0, 'RAF slice must NOT schedule inside the 800ms settle window');
+    // Inside the quiet window, nothing may flush yet
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    assert.equal(scheduledRafs.length, 0, 'RAF slice must NOT schedule inside the settle window');
 
     // Simulate another keypress starting a scroll mid-window: must cancel the pending flush
     globalThis.window.__scrollController.isAnimating = true;
     eventBus.emit('scroll:started');
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    assert.equal(scheduledRafs.length, 0, 'scroll:started must cancel the pending 800ms flush timer');
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    assert.equal(scheduledRafs.length, 0, 'scroll:started must cancel the pending flush timer');
 
-    // Finish the second scroll and let the full 800ms quiet window elapse cleanly
+    // Finish the second scroll and let the full quiet window elapse cleanly
     globalThis.window.__scrollController.isAnimating = false;
     eventBus.emit('scroll:finished');
-    await new Promise((resolve) => setTimeout(resolve, 950));
+    await new Promise((resolve) => setTimeout(resolve, 380));
 
     // Frame slice must await rAF turn before mutating DOM
     const loadedAfterSettle = images.filter((img) => img.src !== '').length;
@@ -185,27 +185,23 @@ test('LazyLoader queues intersecting elements while scrolling and flushes them i
     runOneRafTurn();
     assert.equal(
         images.filter((img) => img.src !== '').length,
-        2,
-        'First animation frame slice should load at most 2 queued images'
+        4,
+        'First animation frame slice should load at most 4 queued images'
     );
     assert.equal(images[0].decoding, 'async', 'LazyLoader must set img.decoding = async before loading');
     assert.equal(images[1].decoding, 'async', 'LazyLoader must set img.decoding = async on slice 1 items');
     assert.equal(
         images.filter((img) => img.src === '').length,
-        6,
-        'Remaining 6 images should wait for subsequent animation frames'
+        4,
+        'Remaining 4 images should wait for subsequent animation frames'
     );
 
-    // Drain remaining slices (2 per frame)
-    runOneRafTurn();
-    assert.equal(images.filter((img) => img.src !== '').length, 4);
-    runOneRafTurn();
-    assert.equal(images.filter((img) => img.src !== '').length, 6);
+    // Drain remaining slice (4 per frame)
     runOneRafTurn();
     assert.equal(
         images.filter((img) => img.src !== '').length,
         8,
-        'Fourth animation frame slice should finish draining all 8 images'
+        'Second animation frame slice should finish draining all 8 images'
     );
     assert.equal(lazyLoader._pendingElements.length, 0, 'Pending queue must be empty after flush');
 });
@@ -227,21 +223,21 @@ test('LazyLoader: repeated D-pad keypresses extend the quiet window and never fl
     const keydownHandlers = windowListeners.get('keydown') || [];
     assert.ok(keydownHandlers.length > 0, 'LazyLoader must track keydown activity');
 
-    // Two key repeats 300ms apart. The original 800ms flush deadline passes at
-    // t=1000, but the second press must have pushed it out to t=1600.
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Two key repeats 160ms apart (faster than the 280ms quiet window).
+    // Each press must re-arm the settle window and prevent mid-navigation flushes.
+    await new Promise((resolve) => setTimeout(resolve, 160));
     keydownHandlers.forEach((fn) => fn());
     assert.equal(scheduledRafs.length, 0, 'No flush may start inside the D-pad repeat gap');
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 160));
     keydownHandlers.forEach((fn) => fn());
     assert.equal(scheduledRafs.length, 0, 'No flush may start inside the D-pad repeat gap');
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 160));
     assert.equal(scheduledRafs.length, 0, 'Keydown activity must re-arm the settle window past its original deadline');
 
-    // After a full quiet window the queued work drains.
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    // After a full quiet window (280ms) the queued work drains.
+    await new Promise((resolve) => setTimeout(resolve, 380));
     runOneRafTurn();
     assert.notEqual(img.src, '', 'Queued image must load once the user stops navigating');
 });

@@ -23,18 +23,17 @@ const log = logger.create('LazyLoader');
  * deferred LazyLoader work (image src churn, BlurHash decode, marquee layout
  * measure) may run.
  *
- * TV D-pad key repeats land every ~250-500ms. The previous 220ms settle window
- * fired deferred work in exactly that gap between two presses — telemetry
- * attributed it to `ScrollController.finish (+96-244ms)`. 800ms guarantees a
- * full rapid-scroll burst has drained before the main thread is touched again.
+ * TV D-pad key repeats land every ~200-250ms while holding a direction. A 280ms
+ * quiet window ensures deferred work does not fire mid-scroll during active
+ * navigation bursts, while avoiding noticeable post-scroll poster popping delays.
  */
-const USER_ACTIVITY_QUIET_MS = 800;
+const USER_ACTIVITY_QUIET_MS = 280;
 
 /**
  * Deferred post-scroll settle / pending-element flush delay (ms). Both paths
  * re-arm themselves while the user is still active.
  */
-const POST_SCROLL_SETTLE_MS = 800;
+const POST_SCROLL_SETTLE_MS = 280;
 
 /**
  * IntersectionObserver lookahead cushion (top/bottom 1800px, sides 300px).
@@ -96,12 +95,12 @@ class LazyLoader {
 
         // ── Scroll-paused intersection queue ────────────────────────────────
         // Elements crossing the viewport rootMargin while a scroll animation
-        // is active wait here until scroll settles, then drain in small rAF
-        // batches (2 elements per frame).
+        // is active wait here until scroll settles, then drain in bounded rAF
+        // batches (4 elements per frame) for rapid post-scroll appearance.
         this._pendingElements = [];
         this._pendingFlushTimerId = null;
         this._pendingFlushRafId = null;
-        this._maxPendingPerFrame = 2;
+        this._maxPendingPerFrame = 4;
 
         // Coalesced visibility updates for .skeleton-shimmer cards whose view
         // intersections changed mid-scroll or inside the post-scroll settle window.
@@ -296,14 +295,14 @@ class LazyLoader {
                     let markedIntersect = false;
                     entries.forEach((entry) => {
                         // Fallback check for legacy Chromium engines (e.g. Chromium 56 on Tizen 4)
-                        const isIntersecting =
-                            typeof entry.isIntersecting === 'boolean'
-                                ? entry.isIntersecting
-                                : entry.intersectionRatio > 0 ||
-                                  (Boolean(entry.intersectionRect) &&
-                                      (entry.intersectionRect.width > 0 || entry.intersectionRect.height > 0));
+                        if (entry.isIntersecting === undefined) {
+                            entry.isIntersecting =
+                                entry.intersectionRatio > 0 ||
+                                (Boolean(entry.intersectionRect) &&
+                                    (entry.intersectionRect.width > 0 || entry.intersectionRect.height > 0));
+                        }
 
-                        if (isIntersecting) {
+                        if (entry.isIntersecting) {
                             const target = entry.target;
                             if (!target || target.isConnected === false) return;
 
@@ -385,7 +384,12 @@ class LazyLoader {
                             entry.target.classList.add('shimmer-hidden');
                         }
                     });
-                    if (!canApplyNow && this._pendingShimmerStates.size > 0 && !this._postScrollSettleTimerId && !this._isScrolling()) {
+                    if (
+                        !canApplyNow &&
+                        this._pendingShimmerStates.size > 0 &&
+                        !this._postScrollSettleTimerId &&
+                        !this._isScrolling()
+                    ) {
                         this._schedulePostScrollSettleWork(POST_SCROLL_SETTLE_MS);
                     }
                 },
