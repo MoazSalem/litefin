@@ -3677,48 +3677,54 @@ export class WebOSPlayer {
 
     /**
      * Video box for the current aspect mode inside a cw × ch container.
+     *
+     * According to official LG webOS TV Developer Guidelines ("Playing video in full screen"):
+     * Fullscreen media playback requires the video element to occupy 100% of the viewport,
+     * with its coordinates explicitly anchored at (0, 0).
+     * Applying layout offsets (such as top/left shifts or transforms) signals to webOS
+     * that playback is occurring in a windowed / Picture-In-Graphics (PIG) layout.
+     * This triggers system-level screensavers or compositor dimming routines during playback.
+     *
+     * To adhere to the platform's fullscreen playback specifications and prevent unintentional
+     * screensaver activation or OSD dimming:
+     *   - 'auto' (Letterbox / Contain): 100% fullscreen at (0,0) with object-fit: contain.
+     *   - 'zoom' (Crop / Cover): 100% fullscreen at (0,0) with object-fit: cover.
+     *   - 'stretch' (Non-proportional fill): 100% fullscreen at (0,0) with object-fit: fill.
+     *
      * @private
+     * @param {number} cw - Container client width in pixels
+     * @param {number} ch - Container client height in pixels
      * @returns {{left: number, top: number, width: number, height: number, anchored: boolean, objectFit: string}}
      */
     _computeVideoBox(cw, ch) {
-        // ====================================================================
-        // Mode 1: Fullscreen Stretch
-        // ====================================================================
-        // Forces the hardware video plane to stretch edge-to-edge across the screen
+        /* --------------------------------------------------------------------
+         * Mode 1: Fullscreen Stretch
+         * --------------------------------------------------------------------
+         * Forces the hardware video plane to stretch edge-to-edge across the
+         * 16:9 display panel, utilizing the entire container rect.
+         * -------------------------------------------------------------------- */
         if (this._aspectMode === 'stretch') {
             return this._fullScreenBox(cw, ch, 'fill');
         }
 
-        // Intrinsic video stream dimensions with comprehensive fallback chain
-        const dims = this._getVideoDimensions();
-        const vw = dims?.width || 0;
-        const vh = dims?.height || 0;
-        const cwContent = dims?.contentWidth || vw;
-        const chContent = dims?.contentHeight || vh;
-
-        // If metadata has not loaded yet, default to full viewport until metadata/playback initializes
-        if (!vw || !vh) {
-            return this._fullScreenBox(cw, ch, 'contain');
+        /* --------------------------------------------------------------------
+         * Mode 2: Fullscreen Zoom (Crop / Cover)
+         * --------------------------------------------------------------------
+         * Scales video symmetrically to cover the display without black bars,
+         * maintaining 100% viewport occupancy at (0, 0) via object-fit: cover.
+         * -------------------------------------------------------------------- */
+        if (this._aspectMode === 'zoom') {
+            return this._fullScreenBox(cw, ch, 'cover');
         }
 
-        // ====================================================================
-        // Mode 2: Zoom (Cover / Crop) scales by the larger factor to cover the
-        // screen and crops the overflowing edges symmetrically (negative offsets).
-        // Mode 3: Auto (Contain / Letterbox) scales by the smaller factor to fit
-        // the screen and centers the picture between the bars.
-        // ====================================================================
-        const zoom = this._aspectMode === 'zoom';
-        const scale = zoom ? Math.max(cw / cwContent, ch / chContent) : Math.min(cw / vw, ch / vh);
-        const w = Math.round(vw * scale);
-        const h = Math.round(vh * scale);
-        return {
-            left: Math.round((cw - w) / 2),
-            top: Math.round((ch - h) / 2),
-            width: w,
-            height: h,
-            anchored: false,
-            objectFit: zoom ? 'cover' : 'contain'
-        };
+        /* --------------------------------------------------------------------
+         * Mode 3: Fullscreen Auto (Contain / Letterbox)
+         * --------------------------------------------------------------------
+         * Default playback mode. Ensures the <video> element occupies 100% of
+         * the viewport at position (0, 0) with object-fit: contain.
+         * Preserves stream aspect ratio while adhering to webOS requirements.
+         * -------------------------------------------------------------------- */
+        return this._fullScreenBox(cw, ch, 'contain');
     }
 
     /**

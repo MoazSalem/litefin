@@ -17,6 +17,7 @@
     "iconColor": "#0f0a14",
     "supportTouchMode": "full",
     "enablePigScreenSaver": false,
+    "resolution": "1920x1080",
     "requiredPermissions": [
         "time.query"
     ]

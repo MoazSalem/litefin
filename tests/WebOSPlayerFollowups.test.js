@@ -205,15 +205,15 @@ test('WebOSPlayer: the video box is written only when it changes', async () => {
     assert.strictEqual(style.right, '0px');
     player.setAspectRatio('auto');
     assert.strictEqual(style.objectFit, 'contain');
-    assert.strictEqual(style.right, '');
+    assert.strictEqual(style.right, '0px');
 
-    // The next item on the same element keeps a correct box
+    // The next item on the same element keeps a correct fullscreen box
     await player.stop();
     await playAndStart(player, { url: 'http://srv/Videos/b/stream.mkv', mediaSource });
     player._videoElement.videoWidth = 1440;
     player._videoElement.fire('loadedmetadata');
-    assert.strictEqual(player._videoElement.style.width, '960px');
-    assert.strictEqual(player._videoElement.style.left, '160px');
+    assert.strictEqual(player._videoElement.style.width, '1280px');
+    assert.strictEqual(player._videoElement.style.left, '0px');
 });
 
 /** Old webOS (Chromium < 79) with the Luna bridge: aspect modes go through the TV's video output service */

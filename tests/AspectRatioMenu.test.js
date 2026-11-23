@@ -88,11 +88,15 @@ test('AspectRatioMenu: Retains Zoom option on non-Tizen platforms', async () => 
 
 test('WebOSPlayer: Computes explicit layout bounding box geometry for auto, zoom, and stretch modes', async () => {
     // ------------------------------------------------------------------------
-    // WebOS Player Architecture Verification
+    // WebOS Fullscreen Playback Architecture Verification
     // ------------------------------------------------------------------------
-    // On webOS TV, CSS object-fit is not supported on hardware-backed <video>.
-    // Verify that WebOSPlayer calculates and applies explicit layout bounding
-    // box dimensions (width, height, left, top) for all supported modes.
+    // Per LG webOS TV Developer Guidelines ("Playing video in full screen"):
+    // Fullscreen media playback requires the video element to occupy 100% of
+    // the display viewport with coordinates explicitly anchored at (0, 0).
+    // Avoiding CSS properties that create offset (such as top/left shifts)
+    // is essential to prevent webOS from launching screensavers or dimming OSD.
+    // Verify that WebOSPlayer applies full viewport geometry (1920x1080 at 0,0)
+    // and sets object-fit correctly (contain for auto, cover for zoom, fill for stretch).
     // ------------------------------------------------------------------------
 
     // Dynamically import WebOSPlayer backend
@@ -122,11 +126,13 @@ test('WebOSPlayer: Computes explicit layout bounding box geometry for auto, zoom
     // ------------------------------------------------------------------------
     // Case 1: Fullscreen Stretch Mode
     // ------------------------------------------------------------------------
-    // Must force the bounding box to match the full container (1920x1080)
+    // Forces the bounding box to match the full container (1920x1080) with object-fit: fill
     player.setAspectRatio('stretch');
     assert.strictEqual(player.getAspectRatio(), 'stretch');
     assert.strictEqual(mockStyle.left, '0px');
     assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.right, '0px');
+    assert.strictEqual(mockStyle.bottom, '0px');
     assert.strictEqual(mockStyle.width, '1920px');
     assert.strictEqual(mockStyle.height, '1080px');
     assert.strictEqual(mockStyle.objectFit, 'fill');
@@ -134,45 +140,45 @@ test('WebOSPlayer: Computes explicit layout bounding box geometry for auto, zoom
     // ------------------------------------------------------------------------
     // Case 2: Auto (Letterbox / Contain) Mode
     // ------------------------------------------------------------------------
-    // Scale = min(1920/1920, 1080/800) = 1.0
-    // Width = 1920px, Height = 800px, Top = (1080 - 800) / 2 = 140px
+    // Standard playback mode: 100% viewport at (0,0) with object-fit: contain
+    // No top/left offsets applied to prevent triggering webOS screensaver or PIG masking
     player.setAspectRatio('auto');
     assert.strictEqual(player.getAspectRatio(), 'auto');
-    assert.strictEqual(mockStyle.width, '1920px');
-    assert.strictEqual(mockStyle.height, '800px');
     assert.strictEqual(mockStyle.left, '0px');
-    assert.strictEqual(mockStyle.top, '140px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.right, '0px');
+    assert.strictEqual(mockStyle.bottom, '0px');
+    assert.strictEqual(mockStyle.width, '1920px');
+    assert.strictEqual(mockStyle.height, '1080px');
+    assert.strictEqual(mockStyle.objectFit, 'contain');
 
     // ------------------------------------------------------------------------
     // Case 3: Zoom (Crop / Cover) Mode
     // ------------------------------------------------------------------------
-    // Scale = max(1920/1920, 1080/800) = 1.35
-    // Width = round(1920 * 1.35) = 2592px, Height = round(800 * 1.35) = 1080px
-    // Left = round((1920 - 2592) / 2) = -336px, Top = 0px
+    // 100% viewport at (0,0) with object-fit: cover for symmetric crop
     player.setAspectRatio('zoom');
     assert.strictEqual(player.getAspectRatio(), 'zoom');
-    assert.strictEqual(mockStyle.width, '2592px');
-    assert.strictEqual(mockStyle.height, '1080px');
-    assert.strictEqual(mockStyle.left, '-336px');
+    assert.strictEqual(mockStyle.left, '0px');
     assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.right, '0px');
+    assert.strictEqual(mockStyle.bottom, '0px');
+    assert.strictEqual(mockStyle.width, '1920px');
+    assert.strictEqual(mockStyle.height, '1080px');
+    assert.strictEqual(mockStyle.objectFit, 'cover');
 
     // ------------------------------------------------------------------------
     // Case 4: Transition from Stretch directly to Zoom
     // ------------------------------------------------------------------------
-    // When previous mode was 'stretch', setting 'zoom' resets to auto first,
-    // ensuring right and bottom constraints from stretch are cleared.
     player.setAspectRatio('stretch');
-    assert.strictEqual(mockStyle.right, '0px');
-    assert.strictEqual(mockStyle.bottom, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'fill');
 
     player.setAspectRatio('zoom');
     assert.strictEqual(player.getAspectRatio(), 'zoom');
-    assert.strictEqual(mockStyle.width, '2592px');
-    assert.strictEqual(mockStyle.height, '1080px');
-    assert.strictEqual(mockStyle.left, '-336px');
+    assert.strictEqual(mockStyle.objectFit, 'cover');
+    assert.strictEqual(mockStyle.left, '0px');
     assert.strictEqual(mockStyle.top, '0px');
-    assert.strictEqual(mockStyle.right, '');
-    assert.strictEqual(mockStyle.bottom, '');
+    assert.strictEqual(mockStyle.right, '0px');
+    assert.strictEqual(mockStyle.bottom, '0px');
 });
 
 test('TizenAVPlayer: Computes explicit display rect geometry for auto, zoom, stretch, and video_aspect_ratio modes', async () => {
@@ -292,34 +298,32 @@ test('WebOSPlayer: Resolves fallback dimensions when video element dimensions ar
         }
     };
 
-    // 1. Auto mode with 0x0 DOM dimensions: should resolve to 1920x800 centered
+    // 1. Auto mode: maintains full 100% container viewport (1920x1080) at (0, 0)
+    // with object-fit: contain to comply with webOS fullscreen technical requirements
     player.setAspectRatio('auto');
     assert.strictEqual(mockStyle.width, '1920px');
-    assert.strictEqual(mockStyle.height, '800px');
-    assert.strictEqual(mockStyle.left, '0px');
-    assert.strictEqual(mockStyle.top, '140px');
-
-    // 2. Zoom mode with 0x0 DOM dimensions: should resolve to 2592x1080 cropped
-    player.setAspectRatio('zoom');
-    assert.strictEqual(mockStyle.width, '2592px');
     assert.strictEqual(mockStyle.height, '1080px');
-    assert.strictEqual(mockStyle.left, '-336px');
+    assert.strictEqual(mockStyle.left, '0px');
+    assert.strictEqual(mockStyle.top, '0px');
+    assert.strictEqual(mockStyle.objectFit, 'contain');
+
+    // 2. Zoom mode: maintains full 100% container viewport (1920x1080) at (0, 0)
+    // with object-fit: cover to scale and crop symmetrically
+    player.setAspectRatio('zoom');
+    assert.strictEqual(mockStyle.width, '1920px');
+    assert.strictEqual(mockStyle.height, '1080px');
+    assert.strictEqual(mockStyle.left, '0px');
     assert.strictEqual(mockStyle.top, '0px');
     assert.strictEqual(mockStyle.objectFit, 'cover');
 
     // 3. Zoom mode with 1920x1080 container holding baked 2.40:1 letterbox
-    // DOM reports 1920x1080, but AspectRatio metadata indicates 2.40:1 active frame
     mockVideo.videoWidth = 1920;
     mockVideo.videoHeight = 1080;
     player.setAspectRatio('zoom');
-
-    // Expected scale = 1080 / 800 = 1.35
-    // Width = 1920 * 1.35 = 2592px, Height = 1080 * 1.35 = 1458px
-    // Left = (1920 - 2592) / 2 = -336px, Top = (1080 - 1458) / 2 = -189px
-    assert.strictEqual(mockStyle.width, '2592px');
-    assert.strictEqual(mockStyle.height, '1458px');
-    assert.strictEqual(mockStyle.left, '-336px');
-    assert.strictEqual(mockStyle.top, '-189px');
+    assert.strictEqual(mockStyle.width, '1920px');
+    assert.strictEqual(mockStyle.height, '1080px');
+    assert.strictEqual(mockStyle.left, '0px');
+    assert.strictEqual(mockStyle.top, '0px');
     assert.strictEqual(mockStyle.objectFit, 'cover');
 });
 
