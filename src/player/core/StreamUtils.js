@@ -181,9 +181,15 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
 
     const passthroughForcedOnWebOS = isForcedTrueHdWebOS || isForcedDtsWebOS;
 
+    const isNativeWebOSEac3 =
+        isWebOSActive &&
+        (backendType === 'webos' || PlayerSettings.get('playerBackend') !== 'html5') &&
+        (codec === 'eac3' || codec === 'ec-3');
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
+        : isNativeWebOSEac3
+          ? undefined
+          : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
 
     if (effectiveMaxChannels && typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
         return false;

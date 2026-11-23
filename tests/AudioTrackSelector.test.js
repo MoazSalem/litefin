@@ -354,6 +354,24 @@ test('isAudioTrackNativelyPlayable respects allowedAudioChannels setting', () =>
     assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 2 }), true);
 });
 
+test('webOS Auto allows E-AC-3 7.1 and native selection of an alternate 5.1 track', () => {
+    const webOS = { isWebOS: true };
+    const caps = { maxAudioChannels: 6 };
+    const auto = setup({ allowedAudioChannels: -1 }, caps, {}, webOS);
+    const limited = setup({ allowedAudioChannels: 6 }, caps, {}, webOS);
+    const defaultTrack = { Index: 1, Type: 'Audio', Codec: 'eac3', Channels: 8, IsDefault: true };
+    const selectedTrack = { Index: 2, Type: 'Audio', Codec: 'eac3', Channels: 6 };
+    const source = { Container: 'mkv', MediaStreams: [defaultTrack, selectedTrack] };
+
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source, 'webos'), true);
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source), true);
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source, 'html5'), false);
+    assert.equal(auto.isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 8 }, source, 'webos'), false);
+    assert.equal(auto.doesAudioTrackRequireDirectStream(source, 2, 'webos'), false);
+    assert.equal(limited.isAudioTrackNativelyPlayable(defaultTrack, source, 'webos'), false);
+    assert.equal(limited.doesAudioTrackRequireDirectStream(source, 2, 'webos'), true);
+});
+
 test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max channels is 5.1', () => {
     // -------------------------------------------------------------------------
     // When allowedAudioChannels is 6, resolveBestAudioStream should avoid the
