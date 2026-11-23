@@ -302,7 +302,7 @@ test('doesAudioTrackRequireDirectStream: Multi-audio AC3 tracks do NOT require r
 });
 
 test('webOS MKV can negotiate Direct Play for selected E-AC-3 5.1 with an E-AC-3 7.1 default', () => {
-    const { doesAudioTrackRequireDirectStream } = setup({}, { maxAudioChannels: 6 });
+    const { doesAudioTrackRequireDirectStream } = setup({ allowedAudioChannels: 6 }, { maxAudioChannels: 6 });
     const mediaSource = {
         Container: 'mkv',
         DefaultAudioStreamIndex: 2,
