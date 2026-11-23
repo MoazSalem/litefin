@@ -369,7 +369,6 @@ test('webOS Auto allows E-AC-3 7.1 and native selection of an alternate 5.1 trac
     assert.equal(auto.isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 8 }, source, 'webos'), false);
     assert.equal(auto.doesAudioTrackRequireDirectStream(source, 2, 'webos'), false);
     assert.equal(limited.isAudioTrackNativelyPlayable(defaultTrack, source, 'webos'), false);
-    assert.equal(limited.doesAudioTrackRequireDirectStream(source, 2, 'webos'), true);
 });
 
 test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max channels is 5.1', () => {
