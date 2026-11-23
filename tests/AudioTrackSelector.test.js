@@ -301,6 +301,26 @@ test('doesAudioTrackRequireDirectStream: Multi-audio AC3 tracks do NOT require r
     assert.strictEqual(requiresRemux, false, 'Standard AC3 tracks switch natively via HTML5 audioTracks without remuxing');
 });
 
+test('webOS MKV can negotiate Direct Play for selected E-AC-3 5.1 with an E-AC-3 7.1 default', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({}, { maxAudioChannels: 6 });
+    const mediaSource = {
+        Container: 'mkv',
+        DefaultAudioStreamIndex: 2,
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'eac3', Channels: 8, IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'eac3', Channels: 6 }
+        ]
+    };
+
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), false);
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 1, 'webos'), true);
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'html5'), true);
+    for (const Codec of ['dts', 'truehd']) {
+        mediaSource.MediaStreams[0].Codec = Codec;
+        assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), true);
+    }
+});
+
 test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (hardware demuxing)', () => {
     const { doesAudioTrackRequireDirectStream } = setup({
         enableDts: 'enable'
