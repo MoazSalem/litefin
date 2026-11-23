@@ -892,7 +892,21 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         PlayerSettings.get('enableDts') === 'enable';
     if (physicalDefaultStream && !isForcedDtsTarget &&
         !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
-        return true;
+        const defaultCodec = (physicalDefaultStream.Codec || '').toLowerCase();
+        // A compatible E-AC-3 track can be selected natively even when the
+        // MKV's default E-AC-3 track exceeds the configured channel limit.
+        const canTryNativeSelection =
+            isWebOSActive &&
+            (mediaSource.Container || '').toLowerCase() === 'mkv' &&
+            targetCodec === 'eac3' &&
+            defaultCodec === targetCodec &&
+            physicalDefaultStream.Channels > targetStream.Channels &&
+            isAudioTrackNativelyPlayable(
+                { ...physicalDefaultStream, Channels: targetStream.Channels },
+                mediaSource,
+                backendType
+            );
+        if (!canTryNativeSelection) return true;
     }
 
     // If the requested track matches the container's physical default track,
