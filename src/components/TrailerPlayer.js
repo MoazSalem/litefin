@@ -1,4 +1,5 @@
 import Component from '../core/Component.js';
+import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 // Centralized icon utility library hosting standard SVG mappings.
@@ -26,6 +27,8 @@ export class TrailerPlayer extends Component {
 
         this._isOsdVisible = false;
         this._isPlaying = true;
+        // Playback state last reported to the app (see _reportTrailerPlaying)
+        this._reportedPlaying = false;
         // Tracking flag to lock OSD visibility during trailer buffering phases
         this._isLoading = true;
 
@@ -237,6 +240,9 @@ export class TrailerPlayer extends Component {
         // Steal global keydown
         document.addEventListener('keydown', this._handleKeyDown, true);
 
+        // A trailer left playing in the background must not keep the screensavers off
+        this._offAppHidden = eventBus.on('app:hidden', () => this._reportTrailerPlaying(false));
+
         // Register focus trap with grid orientation to allow two-dimensional traversal
         // Filter out elements marked disabled or with negative tab index so the
         // directional focus calculator only evaluates actively selectable targets.
@@ -278,6 +284,14 @@ export class TrailerPlayer extends Component {
         if (this._progressTimer) clearInterval(this._progressTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
         if (this._mouseMoveThrottle) clearTimeout(this._mouseMoveThrottle);
+
+        // Let the screensavers work again (and restart their idle clocks)
+        if (this._offAppHidden) {
+            this._offAppHidden();
+            this._offAppHidden = null;
+        }
+        this._reportedPlaying = false;
+        eventBus.emit('trailer:stopped');
 
         if (this._ytPlayer) {
             try {
@@ -824,8 +838,30 @@ export class TrailerPlayer extends Component {
         } catch (e) {}
     }
 
+    /**
+     * Tell the app whether the trailer is playing, once per change. The video runs
+     * inside YouTube's iframe, which webOS never counts as full-screen playback, and
+     * it sends none of the player:* events; without this the TV's screensaver and
+     * Litefin's own one start in the middle of a trailer. Buffering keeps the last
+     * state. While Litefin is in the background nothing counts as playing; the
+     * 500 ms heartbeats report the state again once it is back. The plain embed
+     * fallback (_fallbackToEmbedIframe) has no state to read and is left as before.
+     *
+     * @param {boolean} playing
+     * @private
+     */
+    _reportTrailerPlaying(playing) {
+        const next = Boolean(playing) && !document.hidden;
+        if (next === this._reportedPlaying) return;
+        this._reportedPlaying = next;
+        eventBus.emit(next ? 'trailer:playing' : 'trailer:paused');
+    }
+
     _onYTStateChange(event) {
         // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0, BUFFERING = 3
+        if (event.data === 1 || event.data === 2 || event.data === 0) {
+            this._reportTrailerPlaying(event.data === 1);
+        }
         if (event.data === 1) {
             // Playing state active - display filled pause design
             this._isPlaying = true;
@@ -937,6 +973,12 @@ export class TrailerPlayer extends Component {
         try {
             const current = this._ytPlayer.getCurrentTime();
             const total = this._ytPlayer.getDuration();
+
+            // Heartbeat for _reportTrailerPlaying (e.g. after Litefin returns from the background)
+            const ytState = typeof this._ytPlayer.getPlayerState === 'function' ? this._ytPlayer.getPlayerState() : -1;
+            if (ytState === 1 || ytState === 2 || ytState === 0) {
+                this._reportTrailerPlaying(ytState === 1);
+            }
 
             if (total > 0) {
                 // Time strings need ticks (seconds * 10,000,000)
@@ -1658,6 +1700,16 @@ export class TrailerPlayer extends Component {
     _onProxyMessage(ev) {
         if (!ev.data || !ev.data.__ytbridge) return;
         const msg = ev.data;
+
+        // Playing (1), paused (2) or ended (0), from a state change or the 500 ms time heartbeat
+        let ytState = null;
+        if (msg.event === 'playing') ytState = 1;
+        else if (msg.event === 'paused') ytState = 2;
+        else if (msg.type === 'state') ytState = msg.data;
+        else if (msg.type === 'time') ytState = msg.s;
+        if (ytState === 1 || ytState === 2 || ytState === 0) {
+            this._reportTrailerPlaying(ytState === 1);
+        }
 
         if (msg.event === 'playing') {
             this._isPlaying = true;
