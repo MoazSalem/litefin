@@ -46,9 +46,12 @@ serde_json = "1"
 # -----------------------------------------------------------------------------
 # Enables the 'devtools' feature on desktop runtimes so F12 and context-menu
 # inspect element work cleanly in development and production testing builds.
+# Includes native window state persistence to preserve window positions,
+# dimensions, and display configurations across application launches.
 # -----------------------------------------------------------------------------
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tauri = { version = "2.12", features = ["devtools"] }
+tauri-plugin-window-state = "2"
 
 # -----------------------------------------------------------------------------
 # Android Mobile Dependencies

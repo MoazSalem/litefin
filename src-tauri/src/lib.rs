@@ -75,6 +75,18 @@ pub fn run() {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // Desktop Window State Restoration Plugin Registration
+    // -------------------------------------------------------------------------
+    // Automatically persists and restores desktop window positioning, physical
+    // bounds, maximized state, and active display mapping across restarts.
+    // Prevents startup coordinate drift and positioning glitches on desktop shells.
+    // -------------------------------------------------------------------------
+    #[cfg(not(target_os = "android"))]
+    {
+        builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    }
+
     builder
         // Setup hook for platform-specific configurations
         .setup(|_app| {
