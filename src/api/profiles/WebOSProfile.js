@@ -487,8 +487,10 @@ export function buildJellyfinProfile(options = {}) {
         maxBitrate = 40000000;
     }
 
-    // Resolve user's maximum audio channels setting (-1 = all/auto hardware capability)
+    // Native webOS can decode E-AC-3 7.1 independently of its speaker layout.
+    // In Auto, keep the fallback channel cap for the other codecs.
     const userMaxChannels = PlayerSettings.get('allowedAudioChannels');
+    const useNativeEac3Channels = !isHtml5 && !(userMaxChannels > 0);
     // When DTS or TrueHD passthrough is enabled, TV/eARC soundbar systems support full 7.1 (8-channel)
     // audio bitstreams. Defaulting to 6 channels causes Jellyfin server's CodecProfiles condition
     // (AudioChannels <= 6) to reject DirectPlay for 7.1 tracks with AudioChannelsNotSupported,
@@ -1102,6 +1104,7 @@ export function buildJellyfinProfile(options = {}) {
         // ---------------------------------------------------------------------
         {
             Type: 'VideoAudio',
+            ...(useNativeEac3Channels && { Codec: audioCodecs.filter((codec) => codec !== 'eac3').join(',') }),
             Conditions: [
                 {
                     Condition: 'LessThanEqual',
@@ -1117,6 +1120,9 @@ export function buildJellyfinProfile(options = {}) {
         // ---------------------------------------------------------------------
         {
             Type: 'Audio',
+            ...(useNativeEac3Channels && {
+                Codec: directAudioCodecsArr.filter((codec) => codec !== 'eac3').join(',')
+            }),
             Conditions: [
                 {
                     Condition: 'LessThanEqual',

@@ -93,3 +93,34 @@ test('webOS HTML5 profile: Dolby Vision in MKV is not forced to transcode/remux 
     assert.strictEqual(profileFor('html5', []).mkvDolbyVisionRemux, false);
     assert.strictEqual(profileFor('webos', []).mkvDolbyVisionRemux, false);
 });
+
+test('webOS Auto excludes native E-AC-3 from the default Direct Play channel cap', () => {
+    const channelLimits = (profile, type, codec) =>
+        profile.CodecProfiles.filter((p) => p.Type === type && (!p.Codec || p.Codec.split(',').includes(codec)))
+            .flatMap((p) => p.Conditions)
+            .filter((condition) => condition.Property === 'AudioChannels')
+            .map((condition) => condition.Value);
+
+    PlayerSettings.set('allowedAudioChannels', -1);
+    PlayerSettings.set('enableDts', 'disable');
+    PlayerSettings.set('enableTrueHd', 'disable');
+    const native = buildJellyfinProfile({ backend: 'webos' });
+    const html5 = buildJellyfinProfile({ backend: 'html5' });
+    for (const type of ['VideoAudio', 'Audio']) {
+        assert.deepEqual(channelLimits(native, type, 'eac3'), []);
+        assert.deepEqual(channelLimits(native, type, 'aac'), ['6']);
+        assert.deepEqual(channelLimits(html5, type, 'eac3'), ['6']);
+    }
+    const videoTranscodes = native.TranscodingProfiles.filter((p) => p.Type === 'Video' && p.Protocol === 'hls');
+    assert.ok(videoTranscodes.length > 0);
+    assert.ok(videoTranscodes.every((p) => p.MaxAudioChannels === 6));
+
+    try {
+        PlayerSettings.set('allowedAudioChannels', 6);
+        const limited = buildJellyfinProfile({ backend: 'webos' });
+        assert.deepEqual(channelLimits(limited, 'VideoAudio', 'eac3'), ['6']);
+        assert.deepEqual(channelLimits(limited, 'Audio', 'eac3'), ['6']);
+    } finally {
+        PlayerSettings.set('allowedAudioChannels', -1);
+    }
+});

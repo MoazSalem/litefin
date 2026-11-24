@@ -301,6 +301,26 @@ test('doesAudioTrackRequireDirectStream: Multi-audio AC3 tracks do NOT require r
     assert.strictEqual(requiresRemux, false, 'Standard AC3 tracks switch natively via HTML5 audioTracks without remuxing');
 });
 
+test('webOS MKV can negotiate Direct Play for selected E-AC-3 5.1 with an E-AC-3 7.1 default', () => {
+    const { doesAudioTrackRequireDirectStream } = setup({ allowedAudioChannels: 6 }, { maxAudioChannels: 6 });
+    const mediaSource = {
+        Container: 'mkv',
+        DefaultAudioStreamIndex: 2,
+        MediaStreams: [
+            { Index: 1, Type: 'Audio', Codec: 'eac3', Channels: 8, IsDefault: true },
+            { Index: 2, Type: 'Audio', Codec: 'eac3', Channels: 6 }
+        ]
+    };
+
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), false);
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 1, 'webos'), true);
+    assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'html5'), true);
+    for (const Codec of ['dts', 'truehd']) {
+        mediaSource.MediaStreams[0].Codec = Codec;
+        assert.equal(doesAudioTrackRequireDirectStream(mediaSource, 2, 'webos'), true);
+    }
+});
+
 test('doesAudioTrackRequireDirectStream: Tizen AVPlay does NOT require remux (hardware demuxing)', () => {
     const { doesAudioTrackRequireDirectStream } = setup({
         enableDts: 'enable'
@@ -352,6 +372,23 @@ test('isAudioTrackNativelyPlayable respects allowedAudioChannels setting', () =>
     // 6 channels (5.1) and 2 channels (stereo) are within limits and natively playable
     assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'eac3', Channels: 6 }), true);
     assert.strictEqual(isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 2 }), true);
+});
+
+test('webOS Auto allows E-AC-3 7.1 and native selection of an alternate 5.1 track', () => {
+    const webOS = { isWebOS: true };
+    const caps = { maxAudioChannels: 6 };
+    const auto = setup({ allowedAudioChannels: -1 }, caps, {}, webOS);
+    const limited = setup({ allowedAudioChannels: 6 }, caps, {}, webOS);
+    const defaultTrack = { Index: 1, Type: 'Audio', Codec: 'eac3', Channels: 8, IsDefault: true };
+    const selectedTrack = { Index: 2, Type: 'Audio', Codec: 'eac3', Channels: 6 };
+    const source = { Container: 'mkv', MediaStreams: [defaultTrack, selectedTrack] };
+
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source, 'webos'), true);
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source), true);
+    assert.equal(auto.isAudioTrackNativelyPlayable(defaultTrack, source, 'html5'), false);
+    assert.equal(auto.isAudioTrackNativelyPlayable({ Codec: 'aac', Channels: 8 }, source, 'webos'), false);
+    assert.equal(auto.doesAudioTrackRequireDirectStream(source, 2, 'webos'), false);
+    assert.equal(limited.isAudioTrackNativelyPlayable(defaultTrack, source, 'webos'), false);
 });
 
 test('resolveBestAudioStream selects 5.1 track when default track is 7.1 and max channels is 5.1', () => {

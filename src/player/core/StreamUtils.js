@@ -181,9 +181,15 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
 
     const passthroughForcedOnWebOS = isForcedTrueHdWebOS || isForcedDtsWebOS;
 
+    const isNativeWebOSEac3 =
+        isWebOSActive &&
+        (backendType === 'webos' || PlayerSettings.get('playerBackend') !== 'html5') &&
+        (codec === 'eac3' || codec === 'ec-3');
     const effectiveMaxChannels = (userAllowedChannels && userAllowedChannels > 0)
         ? userAllowedChannels
-        : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
+        : isNativeWebOSEac3
+          ? undefined
+          : (isAdvancedBackend || passthroughForcedOnWebOS ? 8 : caps?.maxAudioChannels);
 
     if (effectiveMaxChannels && typeof track.Channels === 'number' && track.Channels > effectiveMaxChannels) {
         return false;
@@ -886,7 +892,21 @@ export function doesAudioTrackRequireDirectStream(mediaSource, audioStreamIndex,
         PlayerSettings.get('enableDts') === 'enable';
     if (physicalDefaultStream && !isForcedDtsTarget &&
         !isAudioTrackNativelyPlayable(physicalDefaultStream, mediaSource, backendType)) {
-        return true;
+        const defaultCodec = (physicalDefaultStream.Codec || '').toLowerCase();
+        // A compatible E-AC-3 track can be selected natively even when the
+        // MKV's default E-AC-3 track exceeds the configured channel limit.
+        const canTryNativeSelection =
+            isWebOSActive &&
+            (mediaSource.Container || '').toLowerCase() === 'mkv' &&
+            targetCodec === 'eac3' &&
+            defaultCodec === targetCodec &&
+            physicalDefaultStream.Channels > targetStream.Channels &&
+            isAudioTrackNativelyPlayable(
+                { ...physicalDefaultStream, Channels: targetStream.Channels },
+                mediaSource,
+                backendType
+            );
+        if (!canTryNativeSelection) return true;
     }
 
     // If the requested track matches the container's physical default track,
