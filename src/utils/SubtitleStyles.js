@@ -625,16 +625,27 @@ export function getSecondaryWindowStyles() {
      * ========================================================================
      * Secondary Subtitle Positioning Logic
      * ========================================================================
-     * Secondary subtitles default to custom absolute top percentage positioning.
-     * Setting 'bottom: auto' explicitly neutralizes any primary subtitle bottom
-     * anchor inherited from the base .subtitle-overlay class.
+     * Secondary subtitles are anchored from the bottom of the viewport,
+     * mirroring primary subtitle positioning architecture.
+     *
+     * In dual-subtitle scenarios where secondary is placed near primary at the
+     * bottom, anchoring both from the bottom guarantees that 1-line and 2-line
+     * cues expand upward from their base, keeping the gap between languages
+     * stable without huge voids when line counts vary.
+     *
+     * Setting 'top: auto' neutralizes any top coordinate so the bottom anchor
+     * governs the placement completely.
      * ========================================================================
      */
     if (posSetting === 'custom') {
-        // Custom: absolute % from top of screen (Standard for secondary)
-        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 10;
-        styles.push({ name: 'top', value: `${customPos}%` });
-        styles.push({ name: 'bottom', value: 'auto' });
+        // Retrieve custom absolute percentage from bottom (defaulting to 80%)
+        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 80;
+
+        // Clear top boundary so the container expands upwards naturally
+        styles.push({ name: 'top', value: 'auto' });
+
+        // Anchor the baseline firmly from the screen bottom
+        styles.push({ name: 'bottom', value: `${customPos}%` });
     } else {
         let pos = parseFloat(posSetting);
         // Fallback or legacy preset handling
@@ -666,7 +677,7 @@ export function getSecondaryWindowStyles() {
  * - Subtitles placed in the top half dodge DOWNWARDS when the top bar shows.
  *
  * Primary subtitle custom position represents percentage offset from screen BOTTOM.
- * Secondary subtitle custom position represents percentage offset from screen TOP.
+ * Secondary subtitle custom position also represents percentage offset from screen BOTTOM.
  * ============================================================================
  */
 
@@ -704,18 +715,18 @@ export function isPrimarySubtitleInBottomHalf() {
  * @returns {boolean} True if situated in the bottom hemisphere; false if top.
  */
 export function isSecondarySubtitleInBottomHalf() {
-    // Secondary positioning defaults to custom slider percentage from the top
+    // Secondary positioning defaults to custom slider percentage from the bottom
     const posSetting = PlayerSettings.get('secondarySubtitleVerticalPosition') || 'custom';
 
     // Handle user-specified numeric percentage slider offset
     if (posSetting === 'custom') {
-        // Secondary custom position is measured as an absolute % from the TOP of the display
-        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 10;
+        // Secondary custom position is measured as an absolute % from the BOTTOM of the display
+        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 80;
 
-        // When custom position is >= 50% (e.g., 75%, 85%, 90%), the cue renders in
-        // the lower hemisphere (directly above or alongside primary subtitles).
-        // Therefore, it must dodge UPWARDS away from bottom OSD playback controls.
-        return customPos >= 50;
+        // Offsets strictly below 50% from the bottom reside in the lower hemisphere
+        // (directly above or alongside primary subtitles). In this case, cues dodge
+        // UPWARD alongside primary subtitles away from bottom OSD playback controls.
+        return customPos < 50;
     }
 
     // Parse legacy or preset numerical values if configured

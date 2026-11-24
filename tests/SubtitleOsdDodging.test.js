@@ -17,6 +17,7 @@ globalThis.document = {
 };
 
 const { PlayerSettings } = await import('../src/utils/PlayerSettings.js');
+const { storage } = await import('../src/utils/StorageService.js');
 const {
     getTextStyles,
     getSecondaryTextStyles,
@@ -220,34 +221,36 @@ test('Dual Subtitle State strips osd-active when OSD is hidden or unmounted', ()
 
 test('Secondary Subtitle position setting updates window styles correctly', () => {
     storageMap.clear();
+    storage.removeItem('player:secondarySubtitleVerticalPositionCustom');
+    storage.removeItem('player:secondarySubtitleVerticalPosition');
 
-    // Default position is 10% from top with elevated z-index and normalized opacity
+    // Default position is 80% from bottom with elevated z-index and normalized opacity
     let styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
         { name: 'zIndex', value: '150' },
         { name: 'opacity', value: '1' },
-        { name: 'top', value: '10%' },
-        { name: 'bottom', value: 'auto' }
+        { name: 'top', value: 'auto' },
+        { name: 'bottom', value: '80%' }
     ]);
 
-    // Change setting to 25% from top
+    // Change setting to 25% from bottom
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 25);
     styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
         { name: 'zIndex', value: '150' },
         { name: 'opacity', value: '1' },
-        { name: 'top', value: '25%' },
-        { name: 'bottom', value: 'auto' }
+        { name: 'top', value: 'auto' },
+        { name: 'bottom', value: '25%' }
     ]);
 
-    // Change setting to 5% from top
+    // Change setting to 5% from bottom
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 5);
     styles = getSecondaryWindowStyles();
     assert.deepEqual(styles, [
         { name: 'zIndex', value: '150' },
         { name: 'opacity', value: '1' },
-        { name: 'top', value: '5%' },
-        { name: 'bottom', value: 'auto' }
+        { name: 'top', value: 'auto' },
+        { name: 'bottom', value: '5%' }
     ]);
 });
 
@@ -355,25 +358,27 @@ test('Smart Hemisphere Detection correctly classifies subtitle positions', () =>
     assert.equal(isPrimarySubtitleInBottomHalf(), false, 'Primary custom 80% must be top half');
 
     // 2. Secondary Subtitle
-    // Default (custom 10% from top) is top half
+    // Default (custom 80% from bottom) is top half
     storageMap.clear();
-    assert.equal(isSecondarySubtitleInBottomHalf(), false, 'Default secondary must be top half');
+    storage.removeItem('player:secondarySubtitleVerticalPositionCustom');
+    storage.removeItem('player:secondarySubtitleVerticalPosition');
+    assert.equal(isSecondarySubtitleInBottomHalf(), false, 'Default secondary (80% from bottom) must be top half');
 
-    // Custom < 50 (% from top) is top half
+    // Custom >= 50 (% from bottom) is top half
     PlayerSettings.set('secondarySubtitleVerticalPosition', 'custom');
+    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 80);
+    assert.equal(isSecondarySubtitleInBottomHalf(), false, 'Secondary custom 80% must be top half');
+
+    // Custom < 50 (% from bottom, placed right above primary subtitle at bottom) is bottom half!
     PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 20);
-    assert.equal(isSecondarySubtitleInBottomHalf(), false, 'Secondary custom 20% must be top half');
+    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 20% must be bottom half');
 
-    // Custom >= 50 (% from top, placed right above primary subtitle at bottom) is bottom half!
-    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 75);
-    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 75% must be bottom half');
+    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 15);
+    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 15% must be bottom half');
 
-    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 85);
-    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 85% must be bottom half');
-
-    // Custom 90% (near bottom baseline) must be bottom half and dodge UPWARDS
-    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 90);
-    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 90% must be bottom half');
+    // Custom 10% (near bottom baseline) must be bottom half and dodge UPWARDS
+    PlayerSettings.set('secondarySubtitleVerticalPositionCustom', 10);
+    assert.equal(isSecondarySubtitleInBottomHalf(), true, 'Secondary custom 10% must be bottom half');
 });
 
 test('Smart Dodging CSS rules shift bottom half UP and top half DOWN', () => {

@@ -659,13 +659,13 @@ html[data-light-music-player="true"] .audio-subtitle {
  * and text-shadow depth remain fully consistent with the primary subtitle.
  * ========================================================================== */
 .subtitle-overlay.secondary {
-    /* Clear bottom pin from base subtitle-overlay */
-    bottom: auto;
-    /* Baseline top offset for standard placement */
-    top: 10%;
-    /* Anchor scaling transitions to top center */
-    -webkit-transform-origin: top center;
-    transform-origin: top center;
+    /* Baseline bottom offset for standard placement (anchored from bottom) */
+    bottom: 80%;
+    /* Neutralize top constraint so cues expand upward without jumping */
+    top: auto;
+    /* Anchor scaling transitions to bottom center */
+    -webkit-transform-origin: bottom center;
+    transform-origin: bottom center;
 }
 
 /* ==========================================================================
@@ -696,11 +696,16 @@ html[data-light-music-player="true"] .audio-subtitle {
 }
 
 .subtitle-overlay.pos-top,
-.subtitle-overlay.secondary:not(.pos-bottom),
 .player-page .subtitle-overlay.pos-top,
 .player-container ~ .subtitle-overlay.pos-top {
     bottom: auto;
     top: 10%;
+    -webkit-transform-origin: top center;
+    transform-origin: top center;
+}
+
+.subtitle-overlay.secondary:not(.pos-bottom) {
+    /* Upper hemisphere origin for smooth downward dodging and scaling */
     -webkit-transform-origin: top center;
     transform-origin: top center;
 }

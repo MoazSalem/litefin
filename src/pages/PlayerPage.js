@@ -246,8 +246,8 @@ class PlayerPage extends Page {
                 <!-- Primary Top Subtitle Overlay (Top-positioned signs and cues) -->
                 <div id="subtitle-top-overlay" class="subtitle-overlay pos-top hidden"></div>
 
-                <!-- Secondary Subtitle Overlay (Top standard default) -->
-                <!-- Positioned via CSS .subtitle-overlay.secondary (top: 10%) -->
+                <!-- Secondary Subtitle Overlay (Top standard default, anchored from bottom) -->
+                <!-- Positioned via CSS .subtitle-overlay.secondary (bottom: 80%) -->
                 <!-- Styles are inherited from primary, only size/position are independent -->
                 <div id="secondary-subtitle-overlay" class="subtitle-overlay secondary pos-top hidden"></div>
 

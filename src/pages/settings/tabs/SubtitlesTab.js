@@ -249,7 +249,21 @@ export class SubtitlesTab {
                 ], PlayerSettings.get('subtitleDropShadowColor') || '#000000'))}
                 ${this._sliderItem('ShadowOpacity', 'Shadow Opacity', 'ShadowOpacityDescription', 'Shadow opacity.', this._slider('subtitle-shadow-opacity', PlayerSettings.get('subtitleDropShadowOpacity') ?? 100, 0, 100, 5), 'subtitle-shadow-opacity-container', showShadowOpacity)}
 
-                <!-- Section 3: Advanced ASS Settings -->
+                <!-- Section 3: Secondary Subtitles (Independent Size & Bottom-Anchored Position) -->
+                <!-- Secondary tracks inherit primary color, font, weight, background, and drop shadow -->
+                <h3 class="setting-section-title" data-i18n="SecondarySubtitles">${i18n.t('SecondarySubtitles') || 'Secondary Subtitles'}</h3>
+                ${this._item('SecondarySize', 'Secondary Text Size', 'SecondarySizeDescription', 'Subtitle size preset for secondary tracks.', this._drop('secondary-subtitle-size-select', [
+                    { value: 'smaller', label: i18n.t('Smaller') },
+                    { value: 'small', label: i18n.t('Small') },
+                    { value: 'medium', label: i18n.t('Medium') },
+                    { value: 'mediumlarge', label: i18n.t('MediumLarge') || 'Medium Large' },
+                    { value: 'large', label: i18n.t('Large') },
+                    { value: 'larger', label: i18n.t('Larger') },
+                    { value: 'extralarge', label: i18n.t('ExtraLarge') }
+                ], PlayerSettings.get('secondarySubtitleSize') || 'medium'))}
+                ${this._sliderItem('SecondarySubtitlePosition', 'Secondary Subtitle Position', 'SecondarySubtitlePositionDescription', 'Position from bottom.', this._slider('secondary-subtitle-custom-pos', PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 80, 0, 100, 1), 'secondary-subtitle-custom-pos-container')}
+
+                <!-- Section 4: Advanced ASS Settings -->
                 <h3 class="setting-section-title" data-i18n="AdvancedAssSettings">${i18n.t('AdvancedAssSettings')}</h3>
                 ${this._item('EnableAssStyleModifications', 'Enable ASS Style Overrides', 'EnableAssStyleModificationsDescription', 'Allow overriding embedded ASS styles.', this._toggle('toggle-enable-ass-style-mods', enableAssMods, 'enableAssStyleModifications'))}
 

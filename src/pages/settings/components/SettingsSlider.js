@@ -22,7 +22,10 @@ const SLIDER_SETTINGS_MAP = {
     'subtitle-border-opacity': 'subtitleBorderOpacity',
     'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
     'subtitle-shadow-blur': 'subtitleDropShadowBlur',
+    // Primary subtitle absolute vertical offset from bottom
     'subtitle-custom-pos': 'subtitleVerticalPositionCustom',
+    // Secondary subtitle absolute vertical offset from bottom
+    'secondary-subtitle-custom-pos': 'secondarySubtitleVerticalPositionCustom',
     'subtitle-font-scale': 'subtitleFontScale',
     'subtitle-outline-thickness': 'subtitleOutlineThickness',
     'subtitle-shadow-thickness': 'subtitleShadowThickness',

@@ -85,6 +85,8 @@ export function getSettingsDropdownMap() {
         'subtitle-burn-in-select': { key: 'subtitleBurnIn', type: 'player' },
         'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
         'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+        // Secondary subtitle text size preset (independent from primary size)
+        'secondary-subtitle-size-select': { key: 'secondarySubtitleSize', type: 'player' },
         'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
         'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
         'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },

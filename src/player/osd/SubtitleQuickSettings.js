@@ -587,8 +587,12 @@ export default class SubtitleQuickSettings extends BaseMenu {
             // ================================================================
             // SECONDARY SUBTITLE SETTINGS
             // Shown only when a secondary subtitle track is active and primary
-            // is not ASS. Secondary inherits all appearance from primary \u2014
+            // is not ASS. Secondary inherits all appearance from primary —
             // only position and size are independently configurable here.
+            //
+            // Position slider is anchored from the screen bottom (0-100%),
+            // matching primary subtitle architecture so cues expand upward
+            // consistently without gaps between dual tracks.
             // ================================================================
             {
                 id: 'secondaryPosition',

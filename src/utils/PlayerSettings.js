@@ -444,11 +444,23 @@ const DEFAULTS = {
     // Secondary subtitle text size (independent from primary)
     secondarySubtitleSize: 'medium',
 
-    // Secondary subtitle vertical position (defaults to 'custom' for absolute slider)
+    // Secondary subtitle vertical position mode
+    // Defaults to 'custom' to allow exact percentage alignment
     secondarySubtitleVerticalPosition: 'custom',
 
-    // Secondary subtitle absolute position (% from top)
-    secondarySubtitleVerticalPositionCustom: 10,
+    /* -------------------------------------------------------------------------
+     * SECONDARY SUBTITLE ABSOLUTE VERTICAL POSITION (% FROM BOTTOM)
+     * -------------------------------------------------------------------------
+     * Anchored from the bottom of the viewport, matching primary subtitles.
+     * Anchoring both primary and secondary tracks from the bottom ensures that
+     * single-line and multi-line cues expand upward consistently, eliminating
+     * awkward vertical gaps between the two language tracks when rendered
+     * together near the bottom of the screen.
+     *
+     * Default: 80% from bottom (positions secondary cues in the upper screen
+     * hemisphere, visually matching the standard top placement with safe clearance).
+     * ------------------------------------------------------------------------- */
+    secondarySubtitleVerticalPositionCustom: 80,
 
     // Burn-in subtitles mode ('', 'allcomplex', 'all')
     subtitleBurnIn: '',
