@@ -50,3 +50,16 @@ test('WebOSPlayer: stall recovery timeout is evaluated in milliseconds', () => {
         'WebOSPlayer must schedule _stallTimer with recoveryDelayMs directly'
     );
 });
+
+test('WebOSPlayer: stall check is only started when download is not idle', () => {
+    const webosSource = readFileSync(
+        new URL('../src/player/core/WebOSPlayer.js', import.meta.url),
+        'utf8'
+    );
+
+    assert.match(
+        webosSource,
+        /if\s*\(!downloadIdle\)\s*\{\s*this\.onEvent\(\{\s*type:\s*'waiting'\s*\}\);\s*this\._startStallCheck\(\);/m,
+        'WebOSPlayer must gate _startStallCheck and waiting event on !downloadIdle'
+    );
+});
