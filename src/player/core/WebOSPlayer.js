@@ -904,8 +904,16 @@ export class WebOSPlayer {
         // server builds the playlist through live.m3u8, so main.m3u8 is invalid.
         const hasKnownRuntime = Boolean(options.mediaSource?.RunTimeTicks);
 
-        if (hasKnownRuntime && isVideoDirect && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
-            log.info('WebOSPlayer: Video stream copy active — requesting main.m3u8 directly to bypass server SDR variant');
+        const videoStream = (options.mediaSource?.MediaStreams || []).find((s) => s.Type === 'Video');
+        const rangeType = (videoStream?.VideoRangeType || videoStream?.VideoRange || '').toUpperCase();
+        const extendedRange = (videoStream?.ExtendedVideoRangeType || '').toUpperCase();
+        const itemRange = (options.item?.VideoRange || options.item?.VideoRangeType || '').toUpperCase();
+        const isHdr = rangeType.startsWith('HDR') || rangeType.startsWith('HLG') || rangeType.includes('DOVI') ||
+                      extendedRange.startsWith('HDR') || extendedRange.startsWith('HLG') || extendedRange.includes('DOVI') ||
+                      itemRange.startsWith('HDR') || itemRange.startsWith('HLG') || itemRange.includes('DOVI');
+
+        if (hasKnownRuntime && isVideoDirect && isHdr && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
+            log.info('WebOSPlayer: HDR video stream copy active — requesting main.m3u8 directly to bypass server SDR variant');
             streamUrl = streamUrl.replace(/\/master\.m3u8/i, '/main.m3u8');
             options = { ...options, url: streamUrl };
         }
@@ -4278,8 +4286,10 @@ export class WebOSPlayer {
         // once we know the player is already producing frames.
         if (!this._started) return;
 
-        if (!downloadIdle) this.onEvent({ type: 'waiting' });
-        this._startStallCheck();
+        if (!downloadIdle) {
+            this.onEvent({ type: 'waiting' });
+            this._startStallCheck();
+        }
     }
 
     /** @private */

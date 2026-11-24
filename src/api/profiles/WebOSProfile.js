@@ -842,17 +842,19 @@ export function buildJellyfinProfile(options = {}) {
     if (playbackMode === 'remux') {
         // -----------------------------------------------------------------------
         // Change Container / Remux:
-        //   Video → copy verbatim ('copy' tells Jellyfin to stream video as-is)
+        //   Video → copy verbatim (all supported codecs are allowed through)
         //   Audio → transcoded to preferred codec via transAudioCodecsArr above
         // -----------------------------------------------------------------------
-        transVideoCodecs = 'copy';
+        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs]);
+        transVideoCodecs = Array.from(allVideo).join(',');
     } else if (playbackMode === 'transcodeAudio') {
         // -----------------------------------------------------------------------
         // Transcode Audio Only:
-        //   Video → copy verbatim (same as remux — 'copy' passes video through)
+        //   Video → copy verbatim (same as remux — all codecs allowed through)
         //   Audio → always re-encoded to the preferred transcode target codec
         // -----------------------------------------------------------------------
-        transVideoCodecs = 'copy';
+        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs]);
+        transVideoCodecs = Array.from(allVideo).join(',');
     } else if (playbackMode === 'transcodeVideo') {
         // -----------------------------------------------------------------------
         // Transcode Video Only:

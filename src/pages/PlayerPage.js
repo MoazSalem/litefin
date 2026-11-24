@@ -2553,7 +2553,7 @@ class PlayerPage extends Page {
         this._pauseReportTimer = setInterval(() => {
             if (this._isPaused && this._hasReportedStart && !this._isExiting) {
                 log.info('[Pause Heartbeat] Reporting progress while paused to preserve transcode session');
-                this._reportPlaybackProgress('pause');
+                this._reportPlaybackProgress('pause_heartbeat');
             }
         }, 10000);
     }
@@ -4392,7 +4392,7 @@ class PlayerPage extends Page {
         try {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState(manualPositionTicks);
-            const isPaused = eventName === 'pause';
+            const isPaused = this._isPaused;
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
@@ -4406,17 +4406,18 @@ class PlayerPage extends Page {
                     playQueue.stampPlaylistItemId(this._item),
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: eventName
+                EventName: eventName === 'pause_heartbeat' ? 'timeupdate' : eventName
             };
 
             // ================================================================
             // OPTIMIZED PROGRESS PAYLOAD:
             // Only attach NowPlayingQueue on explicit state transitions (e.g. pause,
-            // unpause, track change), NOT on every routine 10-second timeupdate.
-            // This cuts megabytes of unnecessary JSON payload serialization and
-            // prevents bandwidth / connection congestion during active video playback.
+            // unpause, track change), NOT on routine 10-second timeupdate or
+            // pause heartbeat intervals. This cuts megabytes of unnecessary JSON
+            // payload serialization and prevents connection congestion during
+            // playback and extended pauses.
             // ================================================================
-            if (eventName !== 'timeupdate') {
+            if (eventName !== 'timeupdate' && eventName !== 'pause_heartbeat') {
                 info.NowPlayingQueue = this._buildNowPlayingQueue();
                 log.info(`Reporting ${eventName}, IsPaused:`, isPaused);
             }
