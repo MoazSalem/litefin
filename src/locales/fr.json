@@ -1723,6 +1723,7 @@
     "Upload": "Télécharger",
     "UploadLogs": "Télécharger les journaux",
     "UploadLogsDescription": "Envoyer les journaux de la session actuelle au serveur Jellyfin",
+    "UploadLogsTooLarge": "Le journal dépasse la taille acceptée par le serveur (HTTP 413)",
     "UploadPerformanceReport": "Téléverser le rapport de performance",
     "UploadPerformanceReportDescription": "Génère un rapport d'audit diagnostique approfondi et le téléverse directement dans les journaux du serveur Jellyfin.",
     "UploadReport": "Téléverser le rapport",

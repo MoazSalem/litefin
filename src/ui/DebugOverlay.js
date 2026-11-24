@@ -12,6 +12,57 @@ import { eventBus } from '../core/EventBus.js';
 import { logger, LogLevel } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 
+// Jellyfin accepts up to 1,000,000 bytes on /ClientLog/Document.
+const MAX_LOG_UPLOAD_BYTES = 900000;
+const LOG_LINE_SEPARATOR = '\r\n';
+
+/**
+ * Calculates the exact UTF-8 byte length of a string without creating objects.
+ * Avoids DOM/Web API Blob allocations in tight loops to prevent GC jank on TV runtimes.
+ *
+ * @param {string} str - String to measure
+ * @returns {number} Byte length in UTF-8
+ */
+function getUtf8ByteLength(str) {
+    if (!str) return 0;
+    let bytes = 0;
+    const len = str.length;
+
+    // Scan through all code units in string
+    for (let i = 0; i < len; i++) {
+        const code = str.charCodeAt(i);
+
+        // Standard 1-byte ASCII range (0x00 - 0x7F)
+        if (code < 0x80) {
+            bytes += 1;
+        }
+        // 2-byte UTF-8 sequence (0x80 - 0x7FF)
+        else if (code < 0x800) {
+            bytes += 2;
+        }
+        // Surrogate pairs (0xD800 - 0xDBFF followed by 0xDC00 - 0xDFFF)
+        // High and low surrogates together represent a 4-byte UTF-8 code point
+        else if (code >= 0xd800 && code <= 0xdbff) {
+            if (i + 1 < len) {
+                const nextCode = str.charCodeAt(i + 1);
+                if (nextCode >= 0xdc00 && nextCode <= 0xdfff) {
+                    bytes += 4;
+                    i++; // Advance past low surrogate
+                    continue;
+                }
+            }
+            // Lone high surrogate fallback
+            bytes += 3;
+        }
+        // Standard 3-byte BMP characters (0x800 - 0xFFFF)
+        else {
+            bytes += 3;
+        }
+    }
+
+    return bytes;
+}
+
 class DebugOverlay {
     constructor() {
         this._initialized = false;
@@ -405,9 +456,13 @@ class DebugOverlay {
     }
 
     /**
-     * Get all buffered logs as a single string
+     * Get the most recent buffered logs within the upload size limit.
+     * Capped at MAX_LOG_UPLOAD_BYTES to strictly stay within Jellyfin server limits.
+     *
+     * @returns {string} Formatted log dump string
      */
     getLogDump() {
+        // Construct header section with platform and client build metadata
         const header = [
             '================================================================================',
             `Litefin Client Log`,
@@ -416,15 +471,43 @@ class DebugOverlay {
             `Time: ${new Date().toLocaleString()}`,
             '================================================================================',
             ''
-        ].join('\r\n');
+        ].join(LOG_LINE_SEPARATOR);
 
-        // Cap uploaded dump to the most recent 2,500 lines.
-        // Prevents multi-megabyte payloads that cause socket timeouts on TV network stacks
-        // while preserving ample history for diagnosing app behavior and playback issues.
-        const linesToDump =
-            this._uploadBuffer.length > 2500 ? this._uploadBuffer.slice(-2500) : this._uploadBuffer;
+        // Measure header size in UTF-8 bytes to compute remaining payload capacity
+        const headerBytes = getUtf8ByteLength(header);
+        const logBudget = MAX_LOG_UPLOAD_BYTES - headerBytes;
+        let remainingBytes = logBudget;
 
-        return header + linesToDump.join('\r\n');
+        // Traverse recent log entries backwards from newest to oldest
+        // Limit traversal window to 2500 entries max to prevent unnecessary looping
+        const buffer = this._uploadBuffer;
+        const maxLines = 2500;
+        const startIdx = Math.max(0, buffer.length - maxLines);
+
+        const linesToDump = [];
+
+        // Scan backwards starting from the latest log line
+        for (let i = buffer.length - 1; i >= startIdx; i--) {
+            const line = buffer[i];
+            const lineBytes = getUtf8ByteLength(line);
+            const separatorBytes = linesToDump.length > 0 ? LOG_LINE_SEPARATOR.length : 0;
+
+            // Skip any anomaly line that exceeds the entire log budget on its own
+            if (lineBytes > logBudget) {
+                continue;
+            }
+
+            // Once the cumulative lines exceed the remaining byte allowance, stop scanning
+            if (lineBytes + separatorBytes > remainingBytes) {
+                break;
+            }
+
+            linesToDump.push(line);
+            remainingBytes -= (lineBytes + separatorBytes);
+        }
+
+        // Restore chronological order (oldest to newest) before joining
+        return header + linesToDump.reverse().join(LOG_LINE_SEPARATOR);
     }
 
     /**
@@ -517,3 +600,4 @@ class DebugOverlay {
 }
 
 export const debugOverlay = new DebugOverlay();
+export { getUtf8ByteLength };

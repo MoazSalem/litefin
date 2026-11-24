@@ -21,6 +21,7 @@ import { logger } from '../../../utils/Logger.js';
 import { eventBus } from '../../../core/EventBus.js';
 import { api } from '../../../api/index.js';
 import { i18n } from '../../../utils/i18n.js';
+import { toast } from '../../../ui/Toast.js';
 
 const log = logger.create('DebugTab');
 
@@ -384,18 +385,37 @@ export class DebugTab {
         addListener('#btn-upload-logs', 'click', async () => {
             const btn = root.querySelector('#btn-upload-logs');
             if (!btn) return;
+
+            // Transition button into uploading state and disable interaction
             btn.disabled = true;
             btn.textContent = i18n.t('Uploading');
+
             try {
+                // Generate size-bounded log dump fitting within server limit
                 const logs = debugOverlay.getLogDump();
                 if (!logs) throw new Error('No logs to upload');
+
+                // Dispatch telemetry bundle to Jellyfin ClientLog endpoint
                 const filename = `Litefin_Log_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
                 await api.uploadClientLog(filename, logs);
+
+                // Indicate successful upload
                 btn.textContent = i18n.t('Success');
             } catch (error) {
+                // Log failure for troubleshooting
                 log.error('Failed to upload logs:', error);
+
+                // Show concise failed indicator on button
                 btn.textContent = i18n.t('Failed');
+
+                // Display detailed feedback toast if server rejected with HTTP 413
+                if (error.status === 413) {
+                    toast.show(i18n.t('UploadLogsTooLarge') || 'Log exceeds the server upload limit (HTTP 413)', 4000, {
+                        type: 'error'
+                    });
+                }
             } finally {
+                // Restore button label and interactive state after delay
                 setTimeout(() => {
                     btn.disabled = false;
                     btn.textContent = i18n.t('Upload');
