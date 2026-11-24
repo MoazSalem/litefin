@@ -28,14 +28,9 @@
     /* Elevated width for comfortable category text breathing room */
     width: 380px;
     min-width: 380px;
-    /* Static physical surface fallbacks guaranteeing solid background & borders on legacy engines prior to variable resolution */
-    background: #101010;
     background: var(--sidebar-bg, var(--jf-background-alt, #101010));
-    background-color: #101010;
     background-color: var(--sidebar-bg, var(--jf-background-alt, #101010));
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
     border-left: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     padding: 40px 0;
     display: flex;

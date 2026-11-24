@@ -91,25 +91,6 @@ html[data-platform="webos"] .player-container {
     background: #000000 !important;
 }
 
-/* ==========================================================================
-   WebOS Hardware Video Overlay Punch-Through
-   ==========================================================================
-   On LG webOS, hardware-accelerated video decoding (including AV1 on Alpha 9
-   silicon such as the LG C2, as well as 4K HEVC and Dolby Vision) is rendered
-   directly onto the television's dedicated Video Display Controller (VDC)
-   hardware overlay surface.
-   
-   The native video overlay sits physically behind the Chromium graphics plane.
-   For the video bitstream to be visible through the webview, the active <video>
-   element layout quad must be completely transparent. If the <video> element
-   carries an opaque background (e.g. #000), Chromium's compositor paints an
-   opaque quad over the video rect, resulting in a black screen with audio.
-   ========================================================================== */
-html[data-platform="webos"] .player-container video {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-
 .player-container video,
 .player-container movi-player,
 .player-container .movi-player-container,
