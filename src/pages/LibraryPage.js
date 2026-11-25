@@ -4354,6 +4354,15 @@ class LibraryPage extends Page {
         const isSkipLazy = !this.state.isInfinite && this.state.limit < 60;
         const POOL_ROWS = isSkipLazy ? totalRows : isListView ? 22 : 14;
 
+        /*
+         * Ensure rows currently entering or visible at the bottom of the viewport
+         * are loaded immediately on legacy engines (e.g. Tizen 3/4) where
+         * IntersectionObserver is absent or unreliable inside overflow containers.
+         */
+        if (!isSkipLazy) {
+            this._loadVisibleGridRows(grid, currentRow, totalRows);
+        }
+
         // If total rows fit entirely within the pool (or skip lazy mode is active),
         // all cards exist in the DOM and no row recycling is needed.
         if (isSkipLazy || totalRows <= POOL_ROWS) {
@@ -4407,6 +4416,8 @@ class LibraryPage extends Page {
             this.state.gridWindowEnd = Math.min(items.length, (this._currentEndRow + 1) * columns);
 
             this._hookGridCards(grid.querySelectorAll('.media-card'), false);
+            // Guarantee immediate image loading for the visible rows at the jump target
+            this._loadVisibleGridRows(grid, currentRow, totalRows);
             // Restore focus/navigation state immediately across the re-indexed grid
             focusManager.invalidateCache('library-grid');
             // Schedule speculative lookahead image pre-warm after the navigation frame settles
@@ -4492,6 +4503,29 @@ class LibraryPage extends Page {
             focusManager.invalidateCache('library-grid');
             // Schedule speculative lookahead image pre-warming after the navigation frame
             this._schedulePreWarm(endRow + 1, 1);
+        }
+    }
+
+    /**
+     * Loads any unloaded images in the active viewport window [currentRow .. currentRow + 3].
+     * Ensures rows entering from below load reliably on legacy TV engines where
+     * IntersectionObserver cannot track overflow-scrolled virtual tracks.
+     *
+     * @param {HTMLElement} grid - The #library-grid container
+     * @param {number} currentRow - Active 0-based row index
+     * @param {number} totalRows - Total rows in the current item list
+     * @private
+     */
+    _loadVisibleGridRows(grid, currentRow, totalRows) {
+        const visibleBottomRow = Math.min(totalRows - 1, currentRow + 3);
+        for (let r = Math.max(0, currentRow); r <= visibleBottomRow; r++) {
+            const rowEl = grid.querySelector(`.virtual-grid-row[data-row-index="${r}"]`);
+            if (!rowEl || rowEl.dataset.skeleton === 'true') continue;
+
+            const imgs = rowEl.querySelectorAll('img[data-src]');
+            for (let j = 0; j < imgs.length; j++) {
+                lazyLoader.forceLoad(imgs[j]);
+            }
         }
     }
 

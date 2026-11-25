@@ -1228,6 +1228,7 @@ class LazyLoader {
         // ----------------------------------------------------------------
         const grid = currentCard.closest('#library-grid');
         const columns = parseInt(grid?.dataset.gridColumns, 10) || 7;
+        const parentRow = currentCard.closest('.virtual-grid-row');
 
         // Phase 1: current row forward + 1 backward (immediate)
         let nextCard = currentCard.nextElementSibling;
@@ -1257,6 +1258,15 @@ class LazyLoader {
             }
         };
 
+        // Helper to load all unloaded images inside a .virtual-grid-row wrapper
+        const loadVirtualRow = (rowEl) => {
+            if (!rowEl || rowEl.dataset.skeleton === 'true') return;
+            const imgs = rowEl.querySelectorAll('img[data-src]');
+            for (let i = 0; i < imgs.length; i++) {
+                this._loadImage(imgs[i]);
+            }
+        };
+
         // Cancel any pending deferred preload from a previous focus change
         // so stale rAFs don't pile up (e.g. rapid D-pad holding).
         if (this._deferredPreloadFrameId) {
@@ -1264,21 +1274,43 @@ class LazyLoader {
             this._deferredPreloadFrameId = null;
         }
 
+        // Resolve adjacent virtual rows when cards are wrapped in .virtual-grid-row
+        const prevVirtualRow =
+            parentRow &&
+            parentRow.previousElementSibling &&
+            parentRow.previousElementSibling.classList.contains('virtual-grid-row')
+                ? parentRow.previousElementSibling
+                : null;
+        const nextVirtualRow =
+            parentRow &&
+            parentRow.nextElementSibling &&
+            parentRow.nextElementSibling.classList.contains('virtual-grid-row')
+                ? parentRow.nextElementSibling
+                : null;
+
         // Schedule deferred phases (chained: Phase 2 -> Phase 3)
         const schedulePhase3 = () => {
-            if (nextCard) {
+            if (nextVirtualRow || nextCard) {
                 this._deferredPreloadFrameId = requestAnimationFrame(() => {
                     this._deferredPreloadFrameId = null;
-                    loadSiblings(nextCard, columns, false);
+                    if (nextVirtualRow) {
+                        loadVirtualRow(nextVirtualRow);
+                    } else {
+                        loadSiblings(nextCard, columns, false);
+                    }
                 });
             }
         };
 
-        if (prevCard) {
+        if (prevVirtualRow || prevCard) {
             // Phase 2: complete the previous row
             this._deferredPreloadFrameId = requestAnimationFrame(() => {
                 this._deferredPreloadFrameId = null;
-                loadSiblings(prevCard.previousElementSibling, columns - 1, true);
+                if (prevVirtualRow) {
+                    loadVirtualRow(prevVirtualRow);
+                } else if (prevCard) {
+                    loadSiblings(prevCard.previousElementSibling, columns - 1, true);
+                }
                 // Chain: Phase 3 runs after Phase 2
                 schedulePhase3();
             });
