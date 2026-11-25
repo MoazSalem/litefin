@@ -651,6 +651,22 @@ export function buildJellyfinProfile(options = {}) {
             });
         }
 
+        // =====================================================================
+        // HLS Container DirectPlay Profile
+        // =====================================================================
+        // WebOS plays HLS streams client-side via either the native hardware
+        // media pipeline or the hls.js fallback. Declaring Container: 'hls'
+        // lets pre-packaged HLS sources (e.g. addon VOD streams) direct-play
+        // or direct-stream instead of failing with NoCompatibleStream when the
+        // server cannot or does not transcode them.
+        // =====================================================================
+        directPlayProfiles.push({
+            Container: 'hls',
+            Type: 'Video',
+            VideoCodec: generalVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        });
+
         /*
          * Native WebOS DirectPlay for TS and M2TS containers:
          *
