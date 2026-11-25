@@ -904,13 +904,31 @@ export class WebOSPlayer {
         // server builds the playlist through live.m3u8, so main.m3u8 is invalid.
         const hasKnownRuntime = Boolean(options.mediaSource?.RunTimeTicks);
 
+        // Inspect video stream dynamic range metadata from mediaSource and item fallbacks.
+        // We separate Dolby Vision (DOVI*) from standard HDR10/HLG because their HLS
+        // manifest signaling works differently in Jellyfin's DynamicHlsHelper.
         const videoStream = (options.mediaSource?.MediaStreams || []).find((s) => s.Type === 'Video');
         const rangeType = (videoStream?.VideoRangeType || videoStream?.VideoRange || '').toUpperCase();
         const extendedRange = (videoStream?.ExtendedVideoRangeType || '').toUpperCase();
         const itemRange = (options.item?.VideoRange || options.item?.VideoRangeType || '').toUpperCase();
-        const isHdr = rangeType.startsWith('HDR') || rangeType.startsWith('HLG') || rangeType.includes('DOVI') ||
-                      extendedRange.startsWith('HDR') || extendedRange.startsWith('HLG') || extendedRange.includes('DOVI') ||
-                      itemRange.startsWith('HDR') || itemRange.startsWith('HLG') || itemRange.includes('DOVI');
+
+        // Dolby Vision streams MUST keep master.m3u8:
+        // Jellyfin emits SUPPLEMENTAL-CODECS="dvh1.08.xx/db1p" (for Profile 7/8) and
+        // CODECS="dvh1.05.xx,..." (for Profile 5) + VIDEO-RANGE=PQ only in master.m3u8.
+        // main.m3u8 is a bare media segment playlist with no #EXT-X-STREAM-INF tags, so
+        // bypassing master.m3u8 strips the dvh1 signaling and causes webOS to fall back
+        // to the HDR10 base layer (showing the HDR badge instead of Dolby Vision).
+        const isDoVi = rangeType.includes('DOVI') ||
+                       extendedRange.includes('DOVI') ||
+                       itemRange.includes('DOVI');
+
+        // Standard HDR10 / HDR10+ / HLG carry their metadata in-band in the HEVC bitstream,
+        // so they can safely bypass master.m3u8 to avoid the equal-bandwidth SDR fallback.
+        const isHdr = !isDoVi && (
+            rangeType.startsWith('HDR') || rangeType.startsWith('HLG') ||
+            extendedRange.startsWith('HDR') || extendedRange.startsWith('HLG') ||
+            itemRange.startsWith('HDR') || itemRange.startsWith('HLG')
+        );
 
         if (hasKnownRuntime && isVideoDirect && isHdr && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
             log.info('WebOSPlayer: HDR video stream copy active — requesting main.m3u8 directly to bypass server SDR variant');

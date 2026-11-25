@@ -48,12 +48,17 @@ test('WebOSPlayer: source contains HLS master variant bypass logic', () => {
         'WebOSPlayer must apply the variant bypass only when runtime, video copy, and HDR are present'
     );
     assert.ok(
-        webosSource.includes("rangeType.startsWith('HDR') || rangeType.startsWith('HLG') || rangeType.includes('DOVI')"),
-        'WebOSPlayer must detect HDR range types'
+        webosSource.includes("rangeType.includes('DOVI')") &&
+        webosSource.includes("const isHdr = !isDoVi &&"),
+        'WebOSPlayer must exclude Dolby Vision (DOVI) from the master.m3u8 -> main.m3u8 bypass'
+    );
+    assert.ok(
+        webosSource.includes("rangeType.startsWith('HDR') || rangeType.startsWith('HLG')"),
+        'WebOSPlayer must detect non-DoVi HDR range types'
     );
 });
 
-test('WebOSPlayer: variant bypass rewrites master.m3u8 only for video copy of HDR content', () => {
+test('WebOSPlayer: variant bypass rewrites master.m3u8 only for video copy of non-DoVi HDR content', () => {
     // Simulate the URL rewrite logic in WebOSPlayer.play()
     function getAdjustedUrl(options) {
         let streamUrl = options.url;
@@ -67,9 +72,15 @@ test('WebOSPlayer: variant bypass rewrites master.m3u8 only for video copy of HD
         const rangeType = (videoStream?.VideoRangeType || videoStream?.VideoRange || '').toUpperCase();
         const extendedRange = (videoStream?.ExtendedVideoRangeType || '').toUpperCase();
         const itemRange = (options.item?.VideoRange || options.item?.VideoRangeType || '').toUpperCase();
-        const isHdr = rangeType.startsWith('HDR') || rangeType.startsWith('HLG') || rangeType.includes('DOVI') ||
-                      extendedRange.startsWith('HDR') || extendedRange.startsWith('HLG') || extendedRange.includes('DOVI') ||
-                      itemRange.startsWith('HDR') || itemRange.startsWith('HLG') || itemRange.includes('DOVI');
+        // Dolby Vision requires master.m3u8 for SUPPLEMENTAL-CODECS / CODECS (dvh1)
+        const isDoVi = rangeType.includes('DOVI') ||
+                       extendedRange.includes('DOVI') ||
+                       itemRange.includes('DOVI');
+        const isHdr = !isDoVi && (
+            rangeType.startsWith('HDR') || rangeType.startsWith('HLG') ||
+            extendedRange.startsWith('HDR') || extendedRange.startsWith('HLG') ||
+            itemRange.startsWith('HDR') || itemRange.startsWith('HLG')
+        );
 
         if (hasKnownRuntime && isVideoDirect && isHdr && typeof streamUrl === 'string' && streamUrl.includes('/master.m3u8')) {
             streamUrl = streamUrl.replace(/\/master\.m3u8/i, '/main.m3u8');
@@ -182,5 +193,42 @@ test('WebOSPlayer: variant bypass rewrites master.m3u8 only for video copy of HD
         }),
         mainExpected,
         'VOD HDR items must still rewrite to main.m3u8'
+    );
+
+    // 12. Dolby Vision Profile 8 (DOVIWithHDR10) with audio transcode -> preserves master.m3u8
+    //     so webOS receives SUPPLEMENTAL-CODECS="dvh1..." and triggers Dolby Vision instead of HDR10
+    const dvP8Streams = [{ Type: 'Video', Codec: 'hevc', VideoRangeType: 'DOVIWithHDR10' }];
+    assert.equal(
+        getAdjustedUrl({
+            url: masterUrl,
+            playMethod: 'DirectStream',
+            mediaSource: { RunTimeTicks: runtime, MediaStreams: dvP8Streams }
+        }),
+        masterUrl,
+        'DirectStream Dolby Vision Profile 8 (DOVIWithHDR10) must preserve master.m3u8'
+    );
+
+    // 13. Dolby Vision Profile 5 (DOVI) -> preserves master.m3u8 for dvh1 variant selection
+    const dvP5Streams = [{ Type: 'Video', Codec: 'hevc', VideoRangeType: 'DOVI' }];
+    assert.equal(
+        getAdjustedUrl({
+            url: masterUrl,
+            playMethod: 'Remux',
+            mediaSource: { RunTimeTicks: runtime, MediaStreams: dvP5Streams }
+        }),
+        masterUrl,
+        'Remux Dolby Vision Profile 5 (DOVI) must preserve master.m3u8'
+    );
+
+    // 14. Dolby Vision via ExtendedVideoRangeType -> preserves master.m3u8
+    const dvExtendedStreams = [{ Type: 'Video', Codec: 'hevc', VideoRangeType: 'HDR10', ExtendedVideoRangeType: 'DOVIWithHDR10' }];
+    assert.equal(
+        getAdjustedUrl({
+            url: masterUrl,
+            playMethod: 'DirectStream',
+            mediaSource: { RunTimeTicks: runtime, MediaStreams: dvExtendedStreams }
+        }),
+        masterUrl,
+        'Dolby Vision detected via ExtendedVideoRangeType must preserve master.m3u8'
     );
 });
