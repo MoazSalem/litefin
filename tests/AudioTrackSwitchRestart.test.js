@@ -96,19 +96,30 @@ function mediaSource(container) {
 function createPlayer(methods, ms) {
     return Object.assign(Object.create(methods), {
         events: [],
+        errorEvents: [],
         playCalls: [],
+        stopCalls: 0,
         _isRestarting: false,
         _audioRestartInProgress: false,
+        _audioTrackSwitchRetryOptions: null,
         _backendType: 'webos',
         _currentPlayMethod: 'DirectPlay',
         _playbackMode: 'auto',
         _currentMediaSource: ms,
         _currentAudioStreamIndex: 2,
         _currentPlayOptions: { itemId: 'item1', mediaSourceId: 'source', startPositionTicks: 0 },
-        emit(type) {
+        emit(type, data) {
             this.events.push(type);
+            if (type === 'error') {
+                this.errorEvents.push(data);
+            }
         },
-        async stop() {},
+        async stop(opts) {
+            if (!opts?.restart) {
+                this.stopCalls += 1;
+                this._audioTrackSwitchRetryOptions = null;
+            }
+        },
         async play(options) {
             this.playCalls.push(options);
         },
@@ -155,4 +166,53 @@ test('JellyfinPlayer: the restart after a failed native track switch starts with
     assert.strictEqual(player.playCalls[0].audioStreamIndex, 2);
     await flush();
     assert.strictEqual(player._isRestarting, false);
+});
+
+test('JellyfinPlayer: audiotrackswitchfailed stops with an error when remux was requested but server returned DirectPlay', async () => {
+    const { methods } = createContext();
+    const player = createPlayer(methods, mediaSource('mkv'));
+    player._playbackMode = 'remux';
+    player._currentPlayMethod = 'DirectPlay';
+
+    player._handleBackendEvent({ type: 'audiotrackswitchfailed', data: { listIndex: 0 } });
+    await flush();
+
+    assert.strictEqual(player.playCalls.length, 0, 'must not repeat remux restart when server returns DirectPlay-only');
+    assert.strictEqual(player.stopCalls, 1, 'must stop playback cleanly');
+    assert.strictEqual(player.errorEvents.length, 1, 'must emit an actionable playback error');
+    assert.strictEqual(player.errorEvents[0].code, 'AUDIO_REMUX_UNAVAILABLE');
+    assert.match(player.errorEvents[0].message, /remuxing is unavailable/i);
+});
+
+test('JellyfinPlayer: audiotrackswitchfailed bounds recovery to one restart when the restarted session fails again', async () => {
+    const { methods } = createContext();
+    const player = createPlayer(methods, mediaSource('mkv'));
+
+    // First failure in auto/DirectPlay triggers a single remux restart
+    player._handleBackendEvent({ type: 'audiotrackswitchfailed', data: { listIndex: 1 } });
+    await flush();
+
+    assert.strictEqual(player.playCalls.length, 1);
+    assert.strictEqual(player.playCalls[0].playbackMode, 'remux');
+    assert.strictEqual(player._isRestarting, false);
+
+    // Simulate the restarted session still failing to switch audio tracks
+    player._playbackMode = 'remux';
+    player._currentPlayMethod = 'Remux';
+    player._handleBackendEvent({ type: 'audiotrackswitchfailed', data: { listIndex: 1 } });
+    await flush();
+
+    assert.strictEqual(player.playCalls.length, 1, 'must not restart a second time on the same restarted session');
+    assert.strictEqual(player.stopCalls, 1);
+    assert.strictEqual(player.errorEvents.length, 1);
+    assert.strictEqual(player.errorEvents[0].code, 'AUDIO_REMUX_UNAVAILABLE');
+
+    // A fresh session with new options after stop() can recover again
+    player._currentPlayOptions = { itemId: 'item2', mediaSourceId: 'source2', startPositionTicks: 0 };
+    player._playbackMode = 'auto';
+    player._currentPlayMethod = 'DirectPlay';
+    player._handleBackendEvent({ type: 'audiotrackswitchfailed', data: { listIndex: 1 } });
+    await flush();
+
+    assert.strictEqual(player.playCalls.length, 2, 'fresh session is allowed one recovery attempt');
 });

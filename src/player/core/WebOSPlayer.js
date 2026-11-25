@@ -2074,8 +2074,15 @@ export class WebOSPlayer {
                         return;
                     }
 
-                    log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty, requested index', requestedIndex,
-                        '≠ container default', defaultIndex, '. Scheduling deferred remux restart.');
+                    // Distinguish an unplayable container default from a track index mismatch
+                    // so diagnostics don't report misleading "index 1 ≠ container default 1" warnings.
+                    if (isDefaultTrack) {
+                        log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty and container default track',
+                            defaultIndex, `(${defaultCodec || 'unknown'}) is not natively playable. Scheduling deferred remux restart.`);
+                    } else {
+                        log.warn('WebOSPlayer: _applyInitialTracks — audioTracks empty, requested index', requestedIndex,
+                            '≠ container default', defaultIndex, '. Scheduling deferred remux restart.');
+                    }
                     // Reported by play() once it has resolved: JellyfinPlayer restarts the
                     // item on it, and a restart while play() is still pending cancels that
                     // play(). A 0 ms timer started here fired before video.play() resolved

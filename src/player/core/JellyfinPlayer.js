@@ -320,6 +320,10 @@ export class JellyfinPlayer extends EventEmitter {
         // (see the resumeseekfailed handler); any other restart creates new options
         this._resumeRetryOptions = null;
 
+        // Play options of the single bounded remux/transcode restart allowed for
+        // audiotrackswitchfailed so DirectPlay-only servers cannot loop forever
+        this._audioTrackSwitchRetryOptions = null;
+
         // Play options of the reload a stuck seek gets (see the seekstuck handler)
         this._seekReloadOptions = null;
 
@@ -890,6 +894,46 @@ export class JellyfinPlayer extends EventEmitter {
             }
 
             if (this._currentPlayOptions && !this._audioRestartInProgress) {
+                // =============================================================
+                // Bounded Audio Track Switch Recovery Guard
+                // =============================================================
+                // Prevent an infinite restart loop when server remuxing is
+                // unavailable (e.g. a DirectPlay-only server that ignores
+                // EnableDirectPlay=false and still returns SupportsDirectPlay=true,
+                // SupportsDirectStream=false) or when the remuxed stream still
+                // cannot switch/decode the requested audio track.
+                //
+                // Stop retrying if:
+                //   1. We already restarted for audiotrackswitchfailed on this
+                //      exact play options instance, OR
+                //   2. We already requested 'remux' or 'transcode' yet the
+                //      server still returned a DirectPlay-only response.
+                // =============================================================
+                const alreadyRetriedAudioSwitch = Boolean(
+                    this._audioTrackSwitchRetryOptions &&
+                    this._currentPlayOptions === this._audioTrackSwitchRetryOptions
+                );
+                const remuxUnavailableOnDirectPlay =
+                    (this._playbackMode === 'remux' || this._playbackMode === 'transcode') &&
+                    this._currentPlayMethod === 'DirectPlay';
+
+                if (alreadyRetriedAudioSwitch || remuxUnavailableOnDirectPlay) {
+                    log.error(
+                        'audiotrackswitchfailed: bounded recovery exhausted ' +
+                        `(mode=${this._playbackMode}, playMethod=${this._currentPlayMethod}, ` +
+                        `audioIndex=${targetIndex}) — stopping playback`
+                    );
+                    this.emit(PlayerEvent.ERROR, {
+                        code: 'AUDIO_REMUX_UNAVAILABLE',
+                        message: remuxUnavailableOnDirectPlay
+                            ? 'This audio track is not supported on this device and server remuxing is unavailable. Try another version or audio track.'
+                            : 'Failed to switch to the selected audio track. Try another version or audio track.',
+                        type: 'playback'
+                    });
+                    this.stop();
+                    return;
+                }
+
                 const currentTicks = this.getCurrentPositionTicks();
 
                 // Build clean restart options carrying active audio and subtitle tracks
@@ -916,6 +960,9 @@ export class JellyfinPlayer extends EventEmitter {
                     playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux'
                 };
 
+                // Track this exact restart attempt by object identity so a second
+                // audiotrackswitchfailed on the restarted session terminates cleanly
+                this._audioTrackSwitchRetryOptions = restartOptions;
                 this._currentPlayOptions = restartOptions;
                 this._lastPlayOptions = restartOptions;
                 this._audioRestartInProgress = true;
@@ -2887,6 +2934,7 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentMediaSource = null;
             this._currentPlayOptions = null;
             this._directPlayEscalated = false;
+            this._audioTrackSwitchRetryOptions = null;
         }
 
         this._isPlaying = false;
