@@ -59,6 +59,46 @@ export class BaseProfile {
     }
 
     /**
+     * Strip Matroska ('mkv' / 'matroska') from both DirectPlayProfiles and
+     * DirectStreamProfiles on a Jellyfin DeviceProfile.
+     *
+     * Stripping from DirectPlayProfiles alone is not enough on platforms like
+     * webOS whose DirectStreamProfiles also declare 'mkv' — Jellyfin would
+     * otherwise fall back to DirectStream over progressive HTTP (/stream.mkv)
+     * instead of remuxing through TranscodingProfiles (HLS TS / fMP4).
+     *
+     * @param {Object} deviceProfile - Mutable Jellyfin DeviceProfile object
+     */
+    static stripMkvContainerFromProfiles(deviceProfile) {
+        if (!deviceProfile || typeof deviceProfile !== 'object') return;
+
+        // Target both DirectPlayProfiles and DirectStreamProfiles so the server
+        // cannot serve a raw MKV byte-stream on either path.
+        const profileKeys = ['DirectPlayProfiles', 'DirectStreamProfiles'];
+
+        for (const key of profileKeys) {
+            const profiles = deviceProfile[key];
+            if (!Array.isArray(profiles)) continue;
+
+            for (const profile of profiles) {
+                if (typeof profile.Container !== 'string') continue;
+
+                // Filter out both 'mkv' and 'matroska' container tokens
+                const containers = profile.Container.split(',').filter((c) => {
+                    const normalized = c.trim().toLowerCase();
+                    return normalized !== 'mkv' && normalized !== 'matroska';
+                });
+                profile.Container = containers.join(',');
+            }
+
+            // Drop any profile entries that became empty after removing MKV
+            deviceProfile[key] = profiles.filter(
+                (p) => typeof p.Container !== 'string' || p.Container.length > 0
+            );
+        }
+    }
+
+    /**
      * Build the standard subtitle profiles array based on the subtitleBurnIn setting.
      * @returns {Array} List of subtitle profiles
      */

@@ -4655,9 +4655,18 @@ export class JellyfinPlayer extends EventEmitter {
                         log.info(
                             '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay, but active track requires Remux. Discarding in favor of fresh direct-stream request.'
                         );
-                    } else if (remuxMkvToMp4Setting && isPrewarmedMkv && this._playbackMode === 'transcode' && (firstSource.SupportsDirectPlay || firstSource.SupportsDirectStream)) {
+                    } else if (
+                        remuxMkvToMp4Setting &&
+                        isPrewarmedMkv &&
+                        this._playbackMode !== 'directPlay' &&
+                        (firstSource.SupportsDirectPlay ||
+                            (firstSource.SupportsDirectStream && !firstSource.TranscodingUrl) ||
+                            (this._playbackMode === 'transcode' && firstSource.SupportsDirectStream))
+                    ) {
+                        // Discard cached DirectPlay or raw progressive DirectStream MKV responses
+                        // so a fresh PlaybackInfo request enforces MKV remuxing (or transcoding).
                         log.info(
-                            '[Prewarm] Prewarmed PlaybackInfo cached DirectPlay/DirectStream, but active mode requires Transcode. Discarding in favor of fresh transcode request.'
+                            '[Prewarm] Prewarmed PlaybackInfo cached raw DirectPlay/DirectStream for MKV, but active policy requires Remux/Transcode. Discarding in favor of fresh request.'
                         );
                     } else if (prewarmedStartTicks !== null && prewarmedStartTicks !== (options.startPositionTicks || 0)) {
                         // A progressive (non-HLS) transcode starts at the position in its URL;
@@ -4916,43 +4925,38 @@ export class JellyfinPlayer extends EventEmitter {
         // -------------------------------------------------------------------------
         // MKV → MP4 Remux Enforcement
         // -------------------------------------------------------------------------
-        // If the user enabled "Remux MKV to MP4", we surgically remove 'mkv' from
-        // every DirectPlayProfile entry in the cloned device profile — but ONLY when
-        // the item being played is actually an MKV container. The server then cannot
-        // DirectPlay that MKV file and falls back to DirectStream, which remuxes the
-        // container into MP4 (lossless stream copy — no re-encoding).
+        // If the user enabled "Remux MKV to MP4", we remove 'mkv' from both
+        // DirectPlayProfiles and DirectStreamProfiles in the cloned device profile —
+        // but ONLY when the item being played is actually an MKV container.
+        // Removing it from DirectStreamProfiles as well is essential on webOS, where
+        // DirectStreamProfiles declares 'mkv' and would otherwise serve raw MKV
+        // over HTTP (/stream.mkv) instead of falling through to HLS remuxing.
         //
         // We also skip when already in a locked override mode (directPlay / transcode /
         // remux) since those modes rebuild the profile wholesale themselves.
         const remuxMkvToMp4Setting = PlayerSettings.get('remuxMkvToMp4');
         const modeLockedProfiles = currentMode === 'directPlay' || currentMode === 'transcode' || currentMode === 'remux';
-        // Treat both 'mkv' and 'matroska' as Matroska containers.
-        // Check top-level item container, nested MediaSources[0].Container, and mediaSource.Container
-        // because Jellyfin episode and item metadata responses frequently place the container
-        // format under MediaSources rather than the root item object.
+        // Resolve the active MediaSource first (when mediaSourceId is specified) before
+        // falling back to the root item or first MediaSource.
+        const matchedSource =
+            options.mediaSource ||
+            (options.mediaSourceId && options.item?.MediaSources?.find((m) => m.Id === options.mediaSourceId)) ||
+            options.item?.MediaSources?.[0];
         const itemContainer = (
+            matchedSource?.Container ||
             options.item?.Container ||
-            options.item?.MediaSources?.[0]?.Container ||
-            options.mediaSource?.Container ||
             ''
         ).toLowerCase();
-        const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
+        const itemPath = (matchedSource?.Path || options.item?.Path || '').toLowerCase();
+        const isMkvItem =
+            itemContainer === 'mkv' ||
+            itemContainer === 'matroska' ||
+            itemContainer.includes('mkv') ||
+            itemPath.endsWith('.mkv');
         if (remuxMkvToMp4Setting && !modeLockedProfiles && isMkvItem) {
-            const profiles = requestBody.DeviceProfile.DirectPlayProfiles;
-            if (Array.isArray(profiles)) {
-                for (const profile of profiles) {
-                    if (typeof profile.Container === 'string') {
-                        // Split the comma-separated container list, filter out 'mkv', rejoin
-                        const containers = profile.Container.split(',').filter(c => c.trim() !== 'mkv');
-                        profile.Container = containers.join(',');
-                    }
-                }
-                // Remove any entries that became empty after stripping mkv
-                requestBody.DeviceProfile.DirectPlayProfiles = profiles.filter(
-                    p => typeof p.Container !== 'string' || p.Container.length > 0
-                );
-            }
-            log.info('[RemuxMkvToMp4] Item container is MKV — stripping from DirectPlayProfiles so server remuxes to MP4.');
+            // Strip 'mkv' / 'matroska' from both DirectPlayProfiles and DirectStreamProfiles
+            BaseProfile.stripMkvContainerFromProfiles(requestBody.DeviceProfile);
+            log.info('[RemuxMkvToMp4] Item container is MKV — stripping from DirectPlayProfiles and DirectStreamProfiles so server remuxes.');
         } else if (remuxMkvToMp4Setting && !isMkvItem) {
             // Item is not MKV — leave the profile untouched, let the server DirectPlay normally
             log.debug(`[RemuxMkvToMp4] Setting enabled but item container "${itemContainer}" is not MKV — skipping.`);

@@ -15,6 +15,7 @@ import { api } from '../../api/index.js';
 import { state } from '../../core/StateManager.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
+import { BaseProfile } from '../../api/profiles/BaseProfile.js';
 import FontLoader from '../../utils/FontLoader.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
@@ -237,17 +238,16 @@ export class PrewarmManager {
                 item.MediaSources?.[0]?.Container ||
                 ''
             ).toLowerCase();
-            const isMkvItem = itemContainer === 'mkv' || itemContainer === 'matroska' || itemContainer.includes('mkv');
-            if (remuxMkvToMp4 && !needsRemux && isMkvItem && Array.isArray(deviceProfile.DirectPlayProfiles)) {
-                for (const profile of deviceProfile.DirectPlayProfiles) {
-                    if (typeof profile.Container === 'string') {
-                        const containers = profile.Container.split(',').filter(c => c.trim() !== 'mkv');
-                        profile.Container = containers.join(',');
-                    }
-                }
-                deviceProfile.DirectPlayProfiles = deviceProfile.DirectPlayProfiles.filter(
-                    p => typeof p.Container !== 'string' || p.Container.length > 0
-                );
+            const itemPath = (targetSource?.Path || item.Path || '').toLowerCase();
+            const isMkvItem =
+                itemContainer === 'mkv' ||
+                itemContainer === 'matroska' ||
+                itemContainer.includes('mkv') ||
+                itemPath.endsWith('.mkv');
+            if (remuxMkvToMp4 && !needsRemux && isMkvItem) {
+                // Strip MKV from both DirectPlayProfiles and DirectStreamProfiles so
+                // platforms like webOS fall through to HLS remuxing instead of progressive MKV.
+                BaseProfile.stripMkvContainerFromProfiles(deviceProfile);
             }
 
             // Clone profile to prevent accidental external mutations
