@@ -32,7 +32,8 @@
     "security": {
       "csp": null,
       "capabilities": [
-        "default"
+        "default",
+        "desktop"
       ]
     }
   },

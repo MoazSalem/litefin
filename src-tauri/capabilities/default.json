@@ -16,7 +16,6 @@
     "core:window:allow-hide",
     "core:window:allow-close",
     "core:window:allow-set-focus",
-    "core:webview:allow-set-webview-zoom",
-    "window-state:default"
+    "core:webview:allow-set-webview-zoom"
   ]
 }
