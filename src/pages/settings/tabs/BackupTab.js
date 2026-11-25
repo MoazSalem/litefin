@@ -12,6 +12,7 @@ import { storage } from '../../../utils/StorageService.js';
 import { focusManager } from '../../../ui/FocusManager.js';
 import { platformInfo } from '../../../utils/PlatformInfo.js';
 import { PlayerSettings } from '../../../utils/PlayerSettings.js';
+import { imageService } from '../../../utils/ImageService.js';
 import { api } from '../../../api/index.js';
 import { i18n } from '../../../utils/i18n.js';
 import { logger } from '../../../utils/Logger.js';
@@ -20,25 +21,81 @@ import { BackupModals } from '../modals/BackupModals.js';
 const log = logger.create('BackupTab');
 
 /**
- * Sensitive storage keys excluded from cloud settings snapshots.
+ * Sensitive, device-bound, or ephemeral storage keys excluded from cloud settings snapshots.
  */
 const EXCLUDED_BACKUP_KEYS = [
-    'litefin:serverUrl', 'litefin:deviceId', 'litefin:activeUserId',
-    'litefin:serverSessions', 'litefin:sessions', 'litefin:serverNames',
-    'litefin:accessToken', 'litefin:userId', 'app_platform'
+    'litefin:serverUrl',
+    'litefin:deviceId',
+    'litefin:activeUserId',
+    'litefin:serverSessions',
+    'litefin:sessions',
+    'litefin:serverNames',
+    'litefin:accessToken',
+    'litefin:userId',
+    'app_platform',
+    'litefin:skip_profiles_once',
+    'bl_log'
 ];
 
 /**
+ * Key prefixes that hold transient runtime caches rather than user preferences.
+ */
+const EXCLUDED_BACKUP_PREFIXES = [
+    'serverPlugin:available:',
+    'libThumb:',
+    'session:',
+    'seerr:session_status'
+];
+
+/**
+ * Determines whether a storage key should be omitted from backup snapshots.
+ * @param {string} key - Storage key name
+ * @returns {boolean} True when the key should be excluded
+ */
+function isExcludedBackupKey(key) {
+    if (EXCLUDED_BACKUP_KEYS.includes(key)) return true;
+    return EXCLUDED_BACKUP_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+/**
  * Helper to serialize current application preferences into a JSON string.
+ * Captures all non-excluded storage keys, per-user profile blobs, plus explicit
+ * defaults from PlayerSettings and ImageService so unmodified settings are preserved.
+ * @returns {string} Serialized JSON backup payload
  */
 function serializeBackupPayload() {
     const backupData = {};
+
+    // Collect every persisted non-excluded key currently in active storage
     for (const key of storage.keys()) {
-        if (!EXCLUDED_BACKUP_KEYS.includes(key) && !key.startsWith('serverPlugin:available:') && !key.startsWith('litefin:user_settings_')) {
+        if (!isExcludedBackupKey(key)) {
             const value = storage.getItem(key);
             if (value !== null) backupData[key] = value;
         }
     }
+
+    // Include all PlayerSettings (even those still at default values) so upgrades
+    // never silently alter previously relied-upon behavior like okShowOsdOnly
+    const allPlayerSettings = PlayerSettings.getAll();
+    for (const [playerKey, val] of Object.entries(allPlayerSettings)) {
+        const storageKey = `player:${playerKey}`;
+        if (backupData[storageKey] === undefined && val !== undefined) {
+            backupData[storageKey] = String(val);
+        }
+    }
+
+    // Explicitly snapshot ImageService quality presets even when left at defaults
+    const imagePresetDefaults = {
+        'pref:imageQuality': imageService.getPreset(),
+        'pref:detailsImageQuality': imageService.getDetailsPreset(),
+        'pref:heroImageQuality': imageService.getHeroPreset()
+    };
+    for (const [imgKey, imgVal] of Object.entries(imagePresetDefaults)) {
+        if (backupData[imgKey] === undefined && imgVal) {
+            backupData[imgKey] = String(imgVal);
+        }
+    }
+
     return JSON.stringify(backupData);
 }
 
@@ -303,17 +360,57 @@ export class BackupTab {
 
         try {
             const restoredData = JSON.parse(backupRecord.Settings);
+
+            // Disable per-user routing and clear existing profile blobs first so
+            // subsequent prefix wipes target global storage without stale profile masking
+            storage.removeItem('litefin:settings_per_user');
+            storage.clearByPrefix('litefin:user_settings_');
+
+            // Wipe all application and player preference namespaces prior to restore
             PlayerSettings.resetAll();
             storage.clearByPrefix('pref:');
+            storage.clearByPrefix('player:');
+            storage.clearByPrefix('home:');
+            storage.clearByPrefix('search:');
             storage.removeItem('app_language');
             storage.removeItem('layout_direction');
+            storage.removeItem('jellyfin-player-volume');
             storage.removeItem('image_preset');
             storage.removeItem('image_details_preset');
 
-            const keysToClear = storage.keys().filter((k) => k.startsWith('litefin:') && !EXCLUDED_BACKUP_KEYS.includes(k) && !k.startsWith('litefin:user_settings_'));
+            // Clear all remaining non-excluded litefin: preference keys
+            const keysToClear = storage.keys().filter(
+                (k) => k.startsWith('litefin:') && !isExcludedBackupKey(k)
+            );
             for (const key of keysToClear) storage.removeItem(key);
 
-            for (const [key, value] of Object.entries(restoredData)) storage.setItem(key, value);
+            // Restore per-user profile blobs first so multi-profile setups are preserved
+            for (const [key, value] of Object.entries(restoredData)) {
+                if (key.startsWith('litefin:user_settings_') && !isExcludedBackupKey(key)) {
+                    storage.setItem(key, value);
+                }
+            }
+
+            // Establish per-user mode before restoring individual keys so StorageService
+            // routes them into the active user's profile instead of global storage
+            if ('litefin:settings_per_user' in restoredData) {
+                storage.setItem('litefin:settings_per_user', restoredData['litefin:settings_per_user']);
+            }
+
+            // Restore all remaining preferences, skipping excluded and already-applied keys
+            for (const [key, value] of Object.entries(restoredData)) {
+                if (
+                    key === 'litefin:settings_per_user' ||
+                    key.startsWith('litefin:user_settings_') ||
+                    isExcludedBackupKey(key)
+                ) {
+                    continue;
+                }
+                storage.setItem(key, value);
+            }
+
+            // Guarantee all debounced non-global writes hit disk before reloading on Tizen
+            storage.flush();
             this._triggerHardReload();
         } catch (error) {
             log.error('Restore failed:', error);
@@ -344,12 +441,17 @@ export class BackupTab {
     handleResetAll() {
         PlayerSettings.resetAll();
         storage.clearByPrefix('pref:');
+        storage.clearByPrefix('player:');
+        storage.clearByPrefix('home:');
+        storage.clearByPrefix('search:');
         storage.clearByPrefix('litefin:');
         storage.removeItem('app_language');
         storage.removeItem('layout_direction');
+        storage.removeItem('jellyfin-player-volume');
         storage.removeItem('image_preset');
         storage.removeItem('image_details_preset');
         storage.clearByPrefix('debug_');
+        storage.flush();
         this._triggerHardReload();
     }
 

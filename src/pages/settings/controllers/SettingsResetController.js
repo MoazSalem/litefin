@@ -80,7 +80,11 @@ export class SettingsResetController {
             // Reset player settings registry
             PlayerSettings.resetAll();
 
-            // Clear custom layout and appearance image preset overrides
+            // Clear custom layout, appearance, and image quality preset overrides
+            storage.clearByPrefix('pref:');
+            storage.removeItem('pref:imageQuality');
+            storage.removeItem('pref:detailsImageQuality');
+            storage.removeItem('pref:heroImageQuality');
             storage.removeItem('image_preset');
             storage.removeItem('image_details_preset');
 
