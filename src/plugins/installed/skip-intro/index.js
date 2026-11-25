@@ -459,11 +459,14 @@ const skipIntroPlugin = {
                         }
                     });
 
-                    // Sort each segment category chronologically
-                    this._introSegment = serverIntros.sort((a, b) => a.start - b.start);
-                    this._outroSegment = serverOutros.sort((a, b) => a.start - b.start);
-                    this._recapSegment = serverRecaps.sort((a, b) => a.start - b.start);
-                    this._previewSegment = serverPreviews.sort((a, b) => a.start - b.start);
+                    // Sort and merge overlapping/near-duplicate segments of the same type.
+                    // Multiple server providers (e.g. Intro Skipper + skipme.db) often report
+                    // separate MediaSegments entries for the same intro/outro/recap/preview,
+                    // which would otherwise spawn duplicate stacked skip buttons on screen.
+                    this._introSegment = this._deduplicateSegments(serverIntros);
+                    this._outroSegment = this._deduplicateSegments(serverOutros);
+                    this._recapSegment = this._deduplicateSegments(serverRecaps);
+                    this._previewSegment = this._deduplicateSegments(serverPreviews);
 
                     serverLoaded =
                         this._introSegment.length > 0 ||
@@ -652,25 +655,21 @@ const skipIntroPlugin = {
                     const mergeSegments = (serverSegs, chapterSegs) => {
                         const merged = [...serverSegs];
                         chapterSegs.forEach((c) => {
-                            const overlaps = merged.some((s) => {
-                                const timeOverlap = Math.max(c.start, s.start) < Math.min(c.end, s.end);
-                                const closeStart = Math.abs(c.start - s.start) < 5 * TICKS_PER_SECOND;
-                                return timeOverlap || closeStart;
-                            });
+                            const overlaps = merged.some((s) => this._segmentsOverlap(c, s));
                             if (!overlaps) {
                                 merged.push(c);
                             }
                         });
-                        return merged.sort((a, b) => a.start - b.start);
+                        return this._deduplicateSegments(merged);
                     };
 
                     this._introSegment = mergeSegments(this._introSegment, chapterIntros);
                     this._outroSegment = mergeSegments(this._outroSegment, chapterOutros);
                     this._recapSegment = mergeSegments(this._recapSegment, chapterRecaps);
                 } else if (sourcePref === 'chapters') {
-                    this._introSegment = chapterIntros;
-                    this._outroSegment = chapterOutros;
-                    this._recapSegment = chapterRecaps;
+                    this._introSegment = this._deduplicateSegments(chapterIntros);
+                    this._outroSegment = this._deduplicateSegments(chapterOutros);
+                    this._recapSegment = this._deduplicateSegments(chapterRecaps);
                 }
             } else {
                 api.log.debug(`Skip Intro: no chapters found for item ${itemId}`);
@@ -684,6 +683,53 @@ const skipIntroPlugin = {
             recap: this._recapSegment,
             preview: this._previewSegment
         });
+    },
+
+    /**
+     * Checks whether two segments of the same type overlap in time or start
+     * within 5 seconds of each other (common when two providers detect the same intro).
+     *
+     * @param {{ start: number, end: number }} a
+     * @param {{ start: number, end: number }} b
+     * @returns {boolean}
+     * @private
+     */
+    _segmentsOverlap(a, b) {
+        const timeOverlap = Math.max(a.start, b.start) < Math.min(a.end, b.end);
+        const closeStart = Math.abs(a.start - b.start) < 5 * TICKS_PER_SECOND;
+        return timeOverlap || closeStart;
+    },
+
+    /**
+     * Sorts segments chronologically and merges any overlapping or near-duplicate
+     * entries of the same type into a single span.
+     *
+     * @param {Array<{ start: number, end: number }>} segments
+     * @returns {Array<{ start: number, end: number }>}
+     * @private
+     */
+    _deduplicateSegments(segments) {
+        if (!Array.isArray(segments) || segments.length <= 1) {
+            return Array.isArray(segments) ? segments.map((s) => ({ ...s })) : [];
+        }
+
+        // Sort by start time ascending (and end time ascending on ties)
+        const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
+        const deduped = [{ ...sorted[0] }];
+
+        for (let i = 1; i < sorted.length; i++) {
+            const current = sorted[i];
+            const previous = deduped[deduped.length - 1];
+
+            // Merge overlapping or near-identical starts into the active span
+            if (this._segmentsOverlap(previous, current)) {
+                previous.end = Math.max(previous.end, current.end);
+            } else {
+                deduped.push({ ...current });
+            }
+        }
+
+        return deduped;
     },
 
     /**
