@@ -1264,7 +1264,8 @@ class LibraryPage extends Page {
                 }
             };
 
-            content.addEventListener('mousedown', handleActivate);
+            // Activate on click only so drag-scrolling and long-press hold gestures
+            // on media cards can resolve before navigation fires.
             content.addEventListener('click', handleActivate);
         }
     }

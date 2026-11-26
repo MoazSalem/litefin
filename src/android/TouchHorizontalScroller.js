@@ -67,6 +67,9 @@ const SETTLE_TOLERANCE_PX = 12;
 /** Minimum pointer displacement in pixels required to register as a drag */
 const DRAG_SLOP_PX = 8;
 
+/** Stationary press duration in ms required to trigger a card hold/long-press */
+const HOLD_DURATION_MS = 500;
+
 /** Grace period after pointerup before starting alignment check (ms) */
 const SETTLE_MIN_WAIT_MS = 300;
 
@@ -109,13 +112,18 @@ export class TouchHorizontalScroller {
         this._downX = 0;
         this._downY = 0;
         this._moved = false;
+        this._held = false;
+        this._holdCard = null;
+        this._holdTimer = null;
         this._blockClickUntil = 0;
+        this._blockContextMenuUntil = 0;
 
         // Bound event listener references for clean teardown
         this._grabListener = null;
         this._moveListener = null;
         this._upListener = null;
         this._clickCaptureListener = null;
+        this._contextMenuListener = null;
         this._scrollListener = null;
         this._keyListener = null;
         this._scrollIdleTimer = null;
@@ -166,8 +174,9 @@ export class TouchHorizontalScroller {
         this._settleAnims.forEach((state) => cancelAnimationFrame(state.raf));
         this._settleAnims.clear();
 
-        // Stop any running fling observer
+        // Stop any running fling observer and pending hold timer
         this._cancelFlingWatcher();
+        this._clearHoldTimer();
 
         // Remove document-level pointer listeners
         if (this._grabListener) {
@@ -186,6 +195,10 @@ export class TouchHorizontalScroller {
         if (this._clickCaptureListener) {
             document.removeEventListener('click', this._clickCaptureListener, { capture: true });
             this._clickCaptureListener = null;
+        }
+        if (this._contextMenuListener) {
+            document.removeEventListener('contextmenu', this._contextMenuListener, { capture: true });
+            this._contextMenuListener = null;
         }
         if (this._scrollListener) {
             document.removeEventListener('scroll', this._scrollListener, { capture: true });
@@ -225,6 +238,9 @@ export class TouchHorizontalScroller {
             if (e.pointerType !== 'touch' && e.pointerType !== 'mouse') {
                 return;
             }
+            if (e.pointerType === 'mouse' && e.button !== 0) {
+                return;
+            }
             const track = this._resolveTrack(e.target);
             if (!track) {
                 return;
@@ -232,11 +248,21 @@ export class TouchHorizontalScroller {
 
             // Immediately halt any existing momentum watcher on new finger touch
             this._cancelFlingWatcher();
+            this._clearHoldTimer();
 
             this._activePointerId = e.pointerId;
             this._downX = e.clientX;
             this._downY = e.clientY;
             this._moved = false;
+            this._held = false;
+            this._holdCard = e.target instanceof Element ? e.target.closest('.media-card') : null;
+
+            // Start hold timer when pressing down on a media card
+            if (this._holdCard) {
+                this._holdTimer = setTimeout(() => {
+                    this._triggerHold(e.pointerType);
+                }, HOLD_DURATION_MS);
+            }
         };
         document.addEventListener('pointerdown', this._grabListener, { capture: true });
 
@@ -245,8 +271,17 @@ export class TouchHorizontalScroller {
             if (e.pointerId !== this._activePointerId) {
                 return;
             }
+            // Once hold fired, ignore jitter so release never morphs into a drag
+            if (this._held) {
+                return;
+            }
             const dx = Math.abs(e.clientX - this._downX);
             const dy = Math.abs(e.clientY - this._downY);
+
+            // Cancel pending hold immediately on any movement beyond slop
+            if (dx > DRAG_SLOP_PX || dy > DRAG_SLOP_PX) {
+                this._clearHoldTimer();
+            }
 
             // Flag as intentional drag if horizontal motion exceeds slop
             if (dx > DRAG_SLOP_PX && dx > dy) {
@@ -261,9 +296,21 @@ export class TouchHorizontalScroller {
             if (e.pointerId !== this._activePointerId) {
                 return;
             }
+            this._clearHoldTimer();
+            const wasHeld = this._held;
+            const wasMoved = this._moved;
             this._activePointerId = null;
+            this._holdCard = null;
+            this._held = false;
 
-            if (this._moved) {
+            if (wasHeld) {
+                // Prevent synthetic click and native contextmenu after a hold gesture
+                this._blockClickUntil = Date.now() + CLICK_SUPPRESS_MS;
+                this._blockContextMenuUntil = Date.now() + CLICK_SUPPRESS_MS;
+                return;
+            }
+
+            if (wasMoved) {
                 // Prevent synthetic clicks on cards immediately following gesture
                 this._blockClickUntil = Date.now() + CLICK_SUPPRESS_MS;
                 this._scheduleSettle(e.target);
@@ -277,10 +324,18 @@ export class TouchHorizontalScroller {
             if (Date.now() < this._blockClickUntil && this._resolveTrack(e.target)) {
                 e.stopPropagation();
                 e.preventDefault();
-                log.debug('Suppressed accidental card click following touch swipe');
+                log.debug('Suppressed accidental card click following touch swipe or hold');
             }
         };
         document.addEventListener('click', this._clickCaptureListener, { capture: true });
+
+        // Suppress native browser context menu when our custom hold gesture fired
+        this._contextMenuListener = (e) => {
+            if (Date.now() < this._blockContextMenuUntil && this._resolveTrack(e.target)) {
+                e.preventDefault();
+            }
+        };
+        document.addEventListener('contextmenu', this._contextMenuListener, { capture: true });
 
         // Scroll synchronization: update VirtualCardRow rendering as content scrolls
         this._scrollListener = (e) => {
@@ -386,6 +441,49 @@ export class TouchHorizontalScroller {
         if (this._flingWatcher) {
             cancelAnimationFrame(this._flingWatcher.raf);
             this._flingWatcher = null;
+        }
+    }
+
+    /**
+     * Fires `card:longpress` when a touch/pointer remains stationary on a media
+     * card for HOLD_DURATION_MS, enabling future context menu integration.
+     * @param {string} pointerType
+     * @private
+     */
+    _triggerHold(pointerType) {
+        this._holdTimer = null;
+        const card = this._holdCard;
+        if (!card || this._moved) {
+            return;
+        }
+
+        // Lock gesture into held state and block click/contextmenu on release
+        this._held = true;
+        this._blockClickUntil = Date.now() + CLICK_SUPPRESS_MS;
+        this._blockContextMenuUntil = Date.now() + CLICK_SUPPRESS_MS;
+
+        const event = new CustomEvent('card:longpress', {
+            bubbles: true,
+            cancelable: true,
+            detail: {
+                card,
+                itemId: card.dataset?.itemId || null,
+                pointerType,
+                clientX: this._downX,
+                clientY: this._downY
+            }
+        });
+        card.dispatchEvent(event);
+    }
+
+    /**
+     * Clears any pending long-press hold timer.
+     * @private
+     */
+    _clearHoldTimer() {
+        if (this._holdTimer) {
+            clearTimeout(this._holdTimer);
+            this._holdTimer = null;
         }
     }
 

@@ -3240,8 +3240,8 @@ class HomePage extends Page {
             }
         };
 
-        // Bind both events for parity with Sidebar.js snappy behavior
-        container.addEventListener('mousedown', handleActivate);
+        // Activate on click only (not mousedown) so drag-scrolling and long-press
+        // hold gestures on media cards can resolve before navigation fires.
         container.addEventListener('click', handleActivate);
 
         // ── FocusIn → Sync VirtualCardRow index & lookahead prefetch ──────────

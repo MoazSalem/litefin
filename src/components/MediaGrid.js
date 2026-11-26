@@ -124,7 +124,8 @@ class MediaGrid extends Component {
                 }
             };
 
-            this._gridEl.addEventListener('mousedown', this._handleActivate);
+            // Activate on click only so long-press hold gestures on grid cards
+            // can resolve without navigating on mousedown.
             this._gridEl.addEventListener('click', this._handleActivate);
 
             lazyLoader.observe(this._gridEl);
@@ -139,7 +140,6 @@ class MediaGrid extends Component {
         }
         if (this._gridEl) {
             lazyLoader.clearContainer(this._gridEl);
-            this._gridEl.removeEventListener('mousedown', this._handleActivate);
             this._gridEl.removeEventListener('click', this._handleActivate);
             this._gridEl = null;
         }

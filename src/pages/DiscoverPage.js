@@ -737,8 +737,9 @@ class DiscoverPage extends Page {
             }
         };
 
+        // Activate on click only so drag-scrolling and long-press hold gestures
+        // on media cards can resolve before navigation fires.
         container.addEventListener('click', handleActivate);
-        container.addEventListener('mousedown', handleActivate);
 
         // Track focus in events to sync virtual index and check proximity for prefetching
         container.addEventListener('focusin', (e) => {

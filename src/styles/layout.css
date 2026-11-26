@@ -340,6 +340,47 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     contain: layout paint style;
 }
 
+/*
+ * Web & Desktop Touch + Mouse Drag Scroll Support:
+ * Allow native compositor horizontal panning on touchscreens while hiding
+ * scrollbars across all engines. GPU/instant modes still override this via
+ * scroll-compositing.css (!important).
+ */
+[data-platform="web"] .row-items,
+[data-platform="desktop"] .row-items,
+[data-platform="web"] .library-content .row-items,
+[data-platform="desktop"] .library-content .row-items {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Permit horizontal row swipes while passing vertical drags to page scroll */
+    touch-action: pan-x pan-y;
+}
+
+[data-platform="web"] .row-items::-webkit-scrollbar,
+[data-platform="desktop"] .row-items::-webkit-scrollbar {
+    display: none;
+}
+
+/* Prevent native browser image/text ghost-dragging inside scrollable rows */
+[data-platform="web"] .row-items .media-card,
+[data-platform="desktop"] .row-items .media-card,
+[data-platform="web"] .row-items .media-card img,
+[data-platform="desktop"] .row-items .media-card img {
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Active mouse-drag cursor feedback */
+.row-items.is-dragging,
+.row-items.is-dragging * {
+    cursor: grabbing !important;
+}
+
 /* GPU Accelerated slide track wrapper */
 .row-items-track {
     position: relative; /* GUARANTEE offsetParent for JS calculation */
