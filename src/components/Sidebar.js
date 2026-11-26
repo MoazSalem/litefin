@@ -1560,9 +1560,13 @@ class Sidebar extends Component {
         if (focused) {
             // Update immediately for engines that reflow synchronously
             this._updateIndicator(focused, { instant: true });
-            // And defer a 50ms update to ensure the TV rendering layout paint has fully settled
+            // Re-sync after layout settles, but re-query the live focused item so
+            // an async route mount (e.g. first-time Settings chunk load) that moved
+            // focus out of the sidebar in the meantime doesn't get .has-focus re-added.
             setTimeout(() => {
-                this._updateIndicator(focused, { instant: true });
+                if (!this.el) return;
+                const currentFocused = this.el.querySelector('.sidebar-item.focused');
+                this._updateIndicator(currentFocused, { instant: true });
             }, 50);
         }
     }
@@ -1686,7 +1690,12 @@ class Sidebar extends Component {
         const indicator = this.el.querySelector('.sidebar-focus-indicator');
         if (!indicator) return;
 
-        const target = focusedItem || this.el.querySelector('.sidebar-item.focused');
+        // Ignore a stale reference if focus has already left that item
+        const validFocusedItem =
+            focusedItem && this.el.contains(focusedItem) && focusedItem.classList.contains('focused')
+                ? focusedItem
+                : null;
+        const target = validFocusedItem || this.el.querySelector('.sidebar-item.focused');
 
         if (target) {
             // If we are currently NOT expanded, we want to snap instantly
