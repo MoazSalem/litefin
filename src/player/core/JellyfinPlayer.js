@@ -2451,7 +2451,6 @@ export class JellyfinPlayer extends EventEmitter {
 
             if (awaitTracks && !isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
                 log.info('[Play-Flow] Awaiting subtitle track setup pre-flight...');
-                this._playSetupInProgress = true;
 
                 let preFlightTimeoutId = null;
                 try {
@@ -2467,7 +2466,9 @@ export class JellyfinPlayer extends EventEmitter {
                      * the background asynchronously.
                      * -----------------------------------------------------------------
                      */
-                    const subtitlePromise = this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex);
+                    const subtitlePromise = this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex, {
+                        initialSetup: true
+                    });
 
                     const timeoutPromise = new Promise((_, reject) => {
                         preFlightTimeoutId = setTimeout(() => {
@@ -2483,7 +2484,6 @@ export class JellyfinPlayer extends EventEmitter {
                     if (preFlightTimeoutId) {
                         clearTimeout(preFlightTimeoutId);
                     }
-                    this._playSetupInProgress = false;
                 }
                 if (isSuperseded()) return abandon('subtitle pre-flight');
 
@@ -2605,11 +2605,9 @@ export class JellyfinPlayer extends EventEmitter {
                 // Initialize the SubtitleManager with the selected subtitle track.
                 // The subtitle index is already included in the server request, so
                 // this call only needs to set up CLIENT-SIDE rendering.
-                this._playSetupInProgress = true;
                 // Fire-and-forget — don't block playback on subtitle fetch
-                this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex)
-                    .catch((err) => log.warn('Initial subtitle setup failed:', err))
-                    .finally(() => { this._playSetupInProgress = false; });
+                this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex, { initialSetup: true })
+                    .catch((err) => log.warn('Initial subtitle setup failed:', err));
             }
 
             /*
@@ -3300,8 +3298,13 @@ export class JellyfinPlayer extends EventEmitter {
      * SubtitleStreamIndex — we must restart playback from the current position.
      *
      * @param {number} index - Subtitle stream index (-1 to disable)
+     * @param {Object} [options]
+     * @param {boolean} [options.initialSetup] - Track already selected in the playback request
      */
-    async setSubtitleStreamIndex(index) {
+    async setSubtitleStreamIndex(index, { initialSetup = false } = {}) {
+        const playRequest = this._playRequestId;
+        const subtitleRequest = (this._subtitleRequestId = (this._subtitleRequestId || 0) + 1);
+
         // =====================================================================
         // Prewarm Cache Invalidation
         // =====================================================================
@@ -3311,7 +3314,7 @@ export class JellyfinPlayer extends EventEmitter {
         // fetch fresh item metadata from Jellyfin rather than reusing stale
         // prewarmed metadata with the previous default subtitle track.
         // =====================================================================
-        if (!this._playSetupInProgress && this._currentSubtitleStreamIndex !== index) {
+        if (!initialSetup && this._currentSubtitleStreamIndex !== index) {
             log.info(`[Prewarm] Invalidating prewarm cache due to subtitle stream change (${this._currentSubtitleStreamIndex} -> ${index})`);
             prewarmManager.invalidateCache();
         }
@@ -3344,7 +3347,7 @@ export class JellyfinPlayer extends EventEmitter {
         //                   VOBSUB, ASS, SSA). Simple Text formats (SRT, VTT) are 
         //                   delivered externally — no restart needed for those.
         //
-        // Guards: _playSetupInProgress     → called from play()'s own setup;
+        // Guards: initialSetup     → called from play()'s own setup;
         //                                    subtitle index already in server req.
         //         _burnInRestartInProgress → already inside a restart; prevents
         //                                    re-entrant second restart from play().
@@ -3381,7 +3384,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         const needsBurnInRestart = burnIn === 'all' || isComplexBurnIn;
 
-        if (needsBurnInRestart && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
+        if (needsBurnInRestart && this._currentPlayOptions && !this._burnInRestartInProgress && !initialSetup) {
             log.info(`Burn-in restart (mode: ${burnIn}, track: ${index}) — retranscoding`);
 
             // Capture current position so we can resume from the same spot
@@ -3438,6 +3441,9 @@ export class JellyfinPlayer extends EventEmitter {
         // Let SubtitleManager determine the best delivery method
         const delivery = await this._subtitleManager.setPrimaryTrack(index);
 
+        // An older load must not change the backend or notify the OSD after a switch.
+        if (playRequest !== this._playRequestId || subtitleRequest !== this._subtitleRequestId) return;
+
         // If SubtitleManager chose embedded native, we need to tell the backend.
         //
         // IMPORTANT: In a transcoding session (Transcode or DirectStream play method)
@@ -3449,7 +3455,7 @@ export class JellyfinPlayer extends EventEmitter {
             const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                 this._currentPlayMethod === 'DirectStream';
 
-            if (isTranscoding && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
+            if (isTranscoding && this._currentPlayOptions && !this._burnInRestartInProgress && !initialSetup) {
                 // Same restart pattern as burn-in — we reuse the burn-in guard flag
                 // because the two paths are mutually exclusive (burn-in was already
                 // checked earlier and would have returned by now).
@@ -3493,7 +3499,7 @@ export class JellyfinPlayer extends EventEmitter {
                 // Skip explicit backend call during initial playback setup.
                 // TizenAVPlayer natively handles initial track selection via _pendingSubtitleIndex
                 // deferred until the 'onbufferingcomplete' event safely transitions the player.
-                if (this._playSetupInProgress) {
+                if (initialSetup) {
                     log.info('Skipping backend subtitle assignment during initial play (Tizen handles natively via pending index)');
                 } else if (index === -1) {
                     this._backend.setSubtitleStreamIndex(-1);

@@ -203,7 +203,7 @@ function createPlayingPlayer(failure) {
 }
 
 test('JellyfinPlayer: a failed subtitle burn-in restart clears the restarting state', async () => {
-    const player = createPlayer(['async setSubtitleStreamIndex(index) {'], {
+    const player = createPlayer(['async setSubtitleStreamIndex(index, { initialSetup = false } = {}) {'], {
         settings: { subtitleBurnIn: 'all' },
         globals: { prewarmManager: { invalidateCache() {} } }
     });
@@ -369,4 +369,34 @@ test('JellyfinPlayer: a stuck seek during a restart or after stop() is ignored',
     seekStuck(player);
     await settle();
     assert.strictEqual(player.playCalls.length, 0);
+});
+
+test('JellyfinPlayer: late subtitles from the previous episode cannot disable the new native track', async () => {
+    const delivery = { EXTERNAL_TEXT: 'external_text', EMBEDDED_NATIVE: 'embedded_native' };
+    const player = createPlayer(['async setSubtitleStreamIndex(index, { initialSetup = false } = {}) {'], {
+        globals: { DeliveryMethod: delivery }
+    });
+    const backendSelections = [];
+    player._backendType = 'tizen';
+    player._backend.setSubtitleStreamIndex = (index) => backendSelections.push(index);
+    player._playRequestId = 1;
+
+    let finishPreviousLoad;
+    player._subtitleManager = {
+        setPrimaryTrack: () =>
+            new Promise((resolve) => {
+                finishPreviousLoad = resolve;
+            })
+    };
+    const previousLoad = player.setSubtitleStreamIndex(2, { initialSetup: true });
+
+    player._playRequestId++;
+    player._subtitleManager.setPrimaryTrack = async () => delivery.EMBEDDED_NATIVE;
+    await player.setSubtitleStreamIndex(2, { initialSetup: true });
+
+    finishPreviousLoad(delivery.EXTERNAL_TEXT);
+    await previousLoad;
+
+    assert.deepEqual(backendSelections, []);
+    assert.deepEqual(player.events, [player.PlayerEvent.MEDIA_STREAMS_CHANGE]);
 });
