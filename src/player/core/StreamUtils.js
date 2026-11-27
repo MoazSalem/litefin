@@ -324,6 +324,17 @@ export function isAudioTrackNativelyPlayable(track, mediaSource = null, backendT
         if (backendType === 'tizen' || backendType === 'avplay' || isTizenPlatform) {
             return caps?.opus !== false;
         }
+        /*
+         * WebOSProfile advertises Opus in MP4, MKV, and WebM DirectPlayProfiles
+         * on webOS 4+ devices. Exempt webOS 4+ from the WebM/Ogg-only guard so
+         * Opus MKV/MP4 tracks do not falsely trigger a server remux upgrade.
+         */
+        const isWebOSPlatform =
+            backendType === 'webos' ||
+            (!backendType && typeof platformInfo !== 'undefined' && platformInfo.isWebOS);
+        if (isWebOSPlatform && (caps?.webosVersion ?? 4) >= 4) {
+            return caps?.opus !== false;
+        }
         if (container && container !== 'webm' && container !== 'ogg' && container !== 'opus') {
             return false;
         }

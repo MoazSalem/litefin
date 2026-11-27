@@ -853,36 +853,53 @@ export function buildJellyfinProfile(options = {}) {
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     const directAudioCodecs = directAudioCodecsArr.join(',');
 
-    let transVideoCodecs = hevcInHls ? 'h264,hevc' : 'h264';
+    /*
+     * =========================================================================
+     * HLS Transcoding / Remux Video Codec Selection by Container
+     * =========================================================================
+     * MPEG-TS ('ts') only supports H.264 and HEVC on WebOS. Advertising AV1,
+     * VP9, or legacy codecs inside a 'ts' TranscodingProfile causes Jellyfin
+     * to stream-copy AV1 into MPEG-TS segments during remux/DirectStream.
+     * WebOS's native TS demuxer cannot decode AV1 PIDs in MPEG-TS, resulting
+     * in audio-only playback with a black screen (videoWidth/videoHeight = 0).
+     *
+     * fMP4 ('mp4') HLS natively supports AV1 alongside H.264 and HEVC, so AV1
+     * remuxing is scoped strictly to fMP4 profiles.
+     * =========================================================================
+     */
+    let tsVideoCodecs = hevcInHls ? 'h264,hevc' : 'h264';
+    let fmp4VideoCodecs = [
+        'h264',
+        ...(hevcInHls ? ['hevc'] : []),
+        ...(enableAV1 ? ['av1'] : [])
+    ].join(',');
 
-    if (playbackMode === 'remux') {
+    if (playbackMode === 'remux' || playbackMode === 'transcodeAudio') {
         // -----------------------------------------------------------------------
-        // Change Container / Remux:
-        //   Video → copy verbatim (all supported codecs are allowed through)
-        //   Audio → transcoded to preferred codec via transAudioCodecsArr above
+        // Change Container / Remux & Transcode Audio Only:
+        //   Video -> copy verbatim into container-compatible codecs
+        //   Audio -> transcoded to preferred codec via transAudioCodecsArr above
         // -----------------------------------------------------------------------
-        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs]);
-        transVideoCodecs = Array.from(allVideo).join(',');
-    } else if (playbackMode === 'transcodeAudio') {
-        // -----------------------------------------------------------------------
-        // Transcode Audio Only:
-        //   Video → copy verbatim (same as remux — all codecs allowed through)
-        //   Audio → always re-encoded to the preferred transcode target codec
-        // -----------------------------------------------------------------------
-        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs]);
-        transVideoCodecs = Array.from(allVideo).join(',');
+        tsVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+        fmp4VideoCodecs = [
+            'h264',
+            ...(enableHEVC ? ['hevc'] : []),
+            ...(enableAV1 ? ['av1'] : []),
+            ...(enableVP9 ? ['vp9'] : [])
+        ].join(',');
     } else if (playbackMode === 'transcodeVideo') {
         // -----------------------------------------------------------------------
         // Transcode Video Only:
-        //   Video → always re-encoded to H264 (clear VideoCodec to force encode)
-        //   Audio → copy verbatim (all audio codecs declared in AudioCodec so
+        //   Video -> always re-encoded to H264 (clear VideoCodec to force encode)
+        //   Audio -> copy verbatim (all audio codecs declared in AudioCodec so
         //           the server selects whichever the source has and copies it)
         // -----------------------------------------------------------------------
         //
         // NOTE: We intentionally do NOT set 'copy' for transVideoCodecs because
         // that would tell Jellyfin to copy the video. Instead we use a minimal
         // list ('h264') so the server knows it must re-encode everything else.
-        transVideoCodecs = 'h264'; // Force video re-encode to H264
+        tsVideoCodecs = 'h264'; // Force video re-encode to H264
+        fmp4VideoCodecs = 'h264';
     }
 
     const transcodingProfiles = [];
@@ -930,7 +947,7 @@ export function buildJellyfinProfile(options = {}) {
             Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: audioCodec,
-            VideoCodec: transVideoCodecs,
+            VideoCodec: primaryHlsContainer === 'mp4' ? fmp4VideoCodecs : tsVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
@@ -1009,7 +1026,7 @@ export function buildJellyfinProfile(options = {}) {
                 Container: 'mp4',
                 Type: 'Video',
                 AudioCodec: audioCodec,
-                VideoCodec: transVideoCodecs,
+                VideoCodec: fmp4VideoCodecs,
                 Context: 'Streaming',
                 Protocol: 'hls',
                 MaxAudioChannels: transMaxAudioChannels,
