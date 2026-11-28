@@ -138,7 +138,7 @@ function setupPlayerTestContext() {
     );
 
     const setSubtitleSource = playerSource.slice(
-        playerSource.indexOf('    async setSubtitleStreamIndex(index) {'),
+        playerSource.indexOf('    async setSubtitleStreamIndex(index, { initialSetup = false } = {}) {'),
         playerSource.indexOf('\n    /**\n     * Set subtitle offset')
     );
 
@@ -147,7 +147,6 @@ function setupPlayerTestContext() {
             constructor() {
                 this._currentAudioStreamIndex = 1;
                 this._currentSubtitleStreamIndex = 0;
-                this._playSetupInProgress = false;
                 this._backendType = 'html5';
                 this._backend = {
                     setAudioStreamIndex() {},
@@ -233,7 +232,6 @@ test('changing subtitle stream index in player invalidates prewarm cache outside
     assert.strictEqual(getInvalidateCount(), 1, 'Duplicate subtitle track selection should not re-invalidate');
 
     // When play setup is in progress (initial playback start), changing subtitle should NOT invalidate
-    player._playSetupInProgress = true;
-    await player.setSubtitleStreamIndex(1);
+    await player.setSubtitleStreamIndex(1, { initialSetup: true });
     assert.strictEqual(getInvalidateCount(), 1, 'Setup phase subtitle application must not invalidate cache');
 });
