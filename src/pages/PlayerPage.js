@@ -1897,7 +1897,8 @@ class PlayerPage extends Page {
                 mediaSourceId: preSelectedMediaSourceId || mediaSource?.Id,
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
-                autoPlay: syncPlayManager.wantsAutoPlay()
+                autoPlay: syncPlayManager.wantsAutoPlay(),
+                playbackSpeed: this._getStartSpeed(item)
             };
 
             // ----------------------------------------------------------------
@@ -1929,7 +1930,8 @@ class PlayerPage extends Page {
                         mediaSourceId: mediaSource?.Id,
                         audioStreamIndex: savedAudioIndex,
                         subtitleStreamIndex: savedSubtitleIndex,
-                        autoPlay: syncPlayManager.wantsAutoPlay()
+                        autoPlay: syncPlayManager.wantsAutoPlay(),
+                        playbackSpeed: this._getStartSpeed(item)
                     })) === false;
             } else {
                 /*
@@ -2444,6 +2446,19 @@ class PlayerPage extends Page {
         }
 
         log.info('OSD initialized');
+    }
+
+    /**
+     * Speed to start an item at: the remembered speed when the setting covers it
+     * and this backend can play it, otherwise 1x. SyncPlay groups always start at 1x.
+     * @param {Object} item - Jellyfin item about to play
+     * @returns {number}
+     */
+    _getStartSpeed(item) {
+        if (syncPlayManager.isEnabled) return 1;
+        const speed = PlayerSettings.getRememberedSpeed(item, api.userId);
+        if (speed !== 1 && this._player?.isPlaybackSpeedSupported?.(speed) === false) return 1;
+        return speed;
     }
 
     /**
