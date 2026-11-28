@@ -31,7 +31,7 @@ Extend Litefin features by installing the **Litefin Plugin** on your [**Jellyfin
     - In-player subtitle search and download directly from OpenSubtitles/Jellyfin.
 - **Player Controls (OSD)**:
     - Dynamic stream quality switching, audio/subtitle track selectors with persistence across episodes.
-    - Chapter navigation, playback speed (0.5x–2.0x), aspect ratio overrides, and real-time playback info (bitrates, codecs, transcode reasons).
+    - Chapter navigation, playback speed (0.5x–2.0x, optionally remembered per series or for every video), aspect ratio overrides, and real-time playback info (bitrates, codecs, transcode reasons).
     - Synchronized scrolling lyrics for music playback, Now Playing queue management, and interactive Up Next auto-play countdowns.
     - High-performance Trickplay thumbnail previews while seeking.
 - **Unified Remote & Input Navigation**:

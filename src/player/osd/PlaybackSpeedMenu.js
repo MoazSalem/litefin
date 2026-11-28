@@ -10,6 +10,15 @@ import { logger } from '../../utils/Logger.js';
 // Localization function library for translation of player UI elements.
 import { i18n } from '../../utils/i18n.js';
 
+// API client used to read the current user ID for remembered speeds.
+import { api } from '../../api/index.js';
+
+// Player settings store that saves the picked speed when Remember playback speed is on.
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
+
+// SyncPlay manager used to avoid saving solo speed preferences during group playback.
+import { syncPlayManager } from '../../core/syncplay/SyncPlayManager.js';
+
 const log = logger.create('PlaybackSpeedMenu');
 
 export default class PlaybackSpeedMenu extends BaseMenu {
@@ -281,6 +290,9 @@ export default class PlaybackSpeedMenu extends BaseMenu {
         if (selected) {
             log.info(`Selected playback speed: ${selected.id}x (backend support: ${selected.isSupported ? 'native' : 'unsupported/override'})`);
             this.osd.player.setPlaybackSpeed(selected.id);
+            if (!syncPlayManager.isEnabled) {
+                PlayerSettings.rememberSpeed(this.osd.player.getCurrentItem?.(), api.userId, selected.id);
+            }
             this.osd.closeMenu();
         }
     }

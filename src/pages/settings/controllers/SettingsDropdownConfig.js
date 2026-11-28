@@ -77,6 +77,7 @@ export function getSettingsDropdownMap() {
         'audio-fallback-lang-3-select': { key: 'pref:audioLangFallback3', type: 'local' },
         'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
         'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
+        'remember-playback-speed-select': { key: 'rememberPlaybackSpeed', type: 'player' },
         'skip-back-select': { key: 'skipBackLength', type: 'player' },
         'resume-rewind-select': { key: 'resumeRewindLength', type: 'player' },
 

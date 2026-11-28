@@ -785,6 +785,19 @@ const DEFAULTS = {
      */
     resetSeekSpeedOnDirectionChange: false,
 
+    /*
+     * Remember Playback Speed
+     * -------------------------------------------------------------------------
+     * Whether the speed picked in the player is kept instead of resetting to 1x.
+     * Speeds are stored on this device for each user.
+     *
+     *   'off'    (default) — Every video starts at 1x.
+     *   'series'           — Each series keeps its own speed. Videos that are
+     *                        not episodes start at 1x.
+     *   'all'              — The last speed picked is used for every video.
+     */
+    rememberPlaybackSpeed: 'off',
+
     // Enable mouse/magic cursor support in the OSD (hover and click)
     // Enabled by default across all platforms whenever a pointer/mouse is active
     enableMagicCursor: true,
@@ -1194,6 +1207,48 @@ export const PlayerSettings = {
         );
 
         return adjustedTicks;
+    },
+
+    /**
+     * Storage key for a remembered playback speed, or null when the
+     * rememberPlaybackSpeed setting does not cover this item.
+     * @private
+     * @param {Object} item - Jellyfin item (SeriesId is used in 'series' mode)
+     * @param {string} userId - Current user ID
+     * @returns {string|null} Storage key, or null when no speed should be kept
+     */
+    _speedKey(item, userId) {
+        if (!userId) return null;
+        const mode = this.get('rememberPlaybackSpeed');
+        if (mode === 'all') return `${STORAGE_PREFIX}speed:${userId}:all`;
+        if (mode === 'series' && item?.SeriesId) return `${STORAGE_PREFIX}speed:${userId}:${item.SeriesId}`;
+        return null;
+    },
+
+    /**
+     * Playback speed to start an item at, from the rememberPlaybackSpeed setting.
+     * @param {Object} item - Jellyfin item about to play
+     * @param {string} userId - Current user ID
+     * @returns {number} Remembered speed, or 1 when none applies
+     */
+    getRememberedSpeed(item, userId) {
+        const key = this._speedKey(item, userId);
+        const speed = key ? parseFloat(storage.getItem(key)) : NaN;
+        return Number.isFinite(speed) && speed > 0 ? speed : 1;
+    },
+
+    /**
+     * Save a speed the user picked so later playback starts at it.
+     * Does nothing when the rememberPlaybackSpeed setting does not cover the item.
+     * @param {Object} item - Jellyfin item playing
+     * @param {string} userId - Current user ID
+     * @param {number} speed - Picked speed
+     */
+    rememberSpeed(item, userId, speed) {
+        const key = this._speedKey(item, userId);
+        if (!key) return;
+        if (speed === 1) storage.removeItem(key);
+        else storage.setItem(key, String(speed));
     },
 
     /**

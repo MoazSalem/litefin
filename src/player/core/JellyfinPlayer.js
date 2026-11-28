@@ -1879,6 +1879,10 @@ export class JellyfinPlayer extends EventEmitter {
                 this._userPlaybackMode = requestedMode;
                 // Fresh playback request resets the escalation safeguard
                 this._directPlayEscalated = false;
+                // Speed to start at (remembered speed); applied once the backend has loaded
+                if (options.playbackSpeed) {
+                    this._playbackSpeed = options.playbackSpeed;
+                }
             } else {
                 this._itemFallbackMode = { itemId: options.itemId, mode: this._playbackMode };
             }
