@@ -417,10 +417,46 @@ class LibraryPage extends Page {
             const grid = this.$('#library-grid');
             if (!grid || !grid.classList.contains('mode-dynamic')) return;
             if (!this.state.items || this.state.items.length === 0) return;
+
             const expected = this._resolveDynamicGridColumns(this.state.viewMode);
             const current = parseInt(grid.style.getPropertyValue('--grid-columns'), 10);
             if (!isNaN(current) && expected && expected !== current) {
                 this._renderGrid(this.state.items);
+                return;
+            }
+
+            // When the window resizes without changing column count (e.g. desktop
+            // window drag), dynamic cards scale proportionally via CSS while
+            // virtual-grid-row top offsets still use the cached rowHeight.
+            // Re-measure and reposition rows so scaled cards never overlap.
+            if (grid.classList.contains('virtual-active')) {
+                if (this._resizeRelayoutTimer) {
+                    clearTimeout(this._resizeRelayoutTimer);
+                }
+                this._resizeRelayoutTimer = setTimeout(() => {
+                    this._resizeRelayoutTimer = null;
+                    if (this._isDestroyed) return;
+                    const activeGrid = this.$('#library-grid');
+                    if (!activeGrid || !activeGrid.classList.contains('virtual-active')) return;
+
+                    const prevHeight = this.state.gridCardRowHeight;
+                    this.state.gridCardRowHeight = null;
+                    const cols = this.state._gridColumns || current || 5;
+                    const newHeight = this._measureGridRowHeight(activeGrid, cols);
+                    if (!newHeight || newHeight === prevHeight) return;
+
+                    const rowNodes = activeGrid.querySelectorAll('.virtual-grid-row');
+                    for (let i = 0; i < rowNodes.length; i++) {
+                        const rowEl = rowNodes[i];
+                        const rowIdx = parseInt(rowEl.dataset.rowIndex, 10);
+                        if (!isNaN(rowIdx)) {
+                            rowEl.style.top = `${rowIdx * newHeight}px`;
+                        }
+                    }
+
+                    const totalRows = Math.ceil(this.state.items.length / cols);
+                    activeGrid.style.height = `${totalRows * newHeight}px`;
+                }, 60);
             }
         } catch (e) {
             log.warn('Grid rotation re-render failed:', e);
@@ -1443,6 +1479,10 @@ class LibraryPage extends Page {
         if (this._boundViewportColumnsChanged) {
             window.removeEventListener('resize', this._boundViewportColumnsChanged);
             this._boundViewportColumnsChanged = null;
+        }
+        if (this._resizeRelayoutTimer) {
+            clearTimeout(this._resizeRelayoutTimer);
+            this._resizeRelayoutTimer = null;
         }
         // Clear focus restoration safety fallback timer (upstream)
         if (this._focusRestoreSafetyTimeout) {

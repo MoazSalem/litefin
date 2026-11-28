@@ -7,6 +7,8 @@
  * ============================================================================
  */
 
+import '../styles/media-grid.css';
+
 import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';

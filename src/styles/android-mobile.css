@@ -1399,6 +1399,7 @@ html[data-litefin-touch] .sidebar:not(#nonexistent) .sidebar-item.focused:not(#s
 
     html[data-litefin-scaled] .person-grid .card-image {
         height: auto !important;
+        padding-bottom: 0 !important;
         aspect-ratio: 1 / 1 !important;
     }
 

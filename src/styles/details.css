@@ -1630,15 +1630,20 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 .person-grid .card-image {
+    position: relative;
     width: 100%;
-    height: 360px; /* Fixed height fallback for Tizen (approx 2:3 portrait) */
+    /* Match home.css 2:3 portrait padding hack so height never stacks with padding-bottom */
+    height: 0;
+    padding-bottom: 150%;
+    overflow: hidden;
     background-color: rgba(255, 255, 255, 0.05); /* Placeholder bg */
 }
 
 /* Landscape grid modifier */
 .landscape .card-image,
 .landscape-grid .card-image {
-    height: 225px !important; /* 16:9 approx for landscape cards */
+    height: 0 !important;
+    padding-bottom: 56.25% !important; /* 16:9 approx for landscape cards */
 }
 
 /* Landscape Grid (Episodes on Season/Details Page) */
@@ -1841,10 +1846,12 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 .person-grid.seerr-person-grid .card-image {
-    /* Full width card container fill */
+    /* Full width card container fill with 2:3 portrait ratio */
+    position: relative;
     width: 100%;
-    /* Height scaled to 350px for 7 items per row maintaining authentic 2:3 poster ratio */
-    height: 350px;
+    height: 0;
+    padding-bottom: 150%;
+    overflow: hidden;
 }
 
 /* ============================================================================
@@ -1865,8 +1872,11 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 }
 
 .person-grid.person-appearances-grid .card-image {
+    position: relative;
     width: 100%;
-    height: 350px; /* Proportionally scaled for 7 items per row (2:3 aspect ratio) */
+    height: 0;
+    padding-bottom: 150%; /* 2:3 portrait aspect ratio */
+    overflow: hidden;
 }
 
 /* ============================================================================
@@ -1889,8 +1899,11 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 
 .person-grid.landscape-grid.person-episodes-grid .card-image,
 .person-page #person-episodes .card-image {
+    position: relative;
     width: 100%;
-    height: 194px !important; /* True 16:9 widescreen ratio (~344px card width) */
+    height: 0 !important;
+    padding-bottom: 56.25% !important; /* True 16:9 widescreen ratio */
+    overflow: hidden;
 }
 
 /* Modern Layouts: Rounded Corners for Person Page & Seerr Grids */

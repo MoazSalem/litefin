@@ -162,3 +162,19 @@ html[data-layout-tier="ultra-legacy"] .search-input {
 .search-results .media-row {
     margin-bottom: 32px;
 }
+
+/*
+ * Search Results Grid Sizing:
+ * Use 7 columns with a 240px max-width cap on desktop/TV so posters match
+ * HomePage/LibraryPage density and do not scale into giant cards on large
+ * desktop windows. Landscape grids (episodes) cap at 400px.
+ */
+.search-results .person-grid .media-card {
+    width: calc(14.2857% - 24px) !important;
+    max-width: 240px !important;
+}
+
+.search-results .person-grid.landscape-grid .media-card {
+    width: calc(25% - 24px) !important;
+    max-width: 400px !important;
+}
