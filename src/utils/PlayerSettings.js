@@ -1213,6 +1213,9 @@ export const PlayerSettings = {
      * Storage key for a remembered playback speed, or null when the
      * rememberPlaybackSpeed setting does not cover this item.
      * @private
+     * @param {Object} item - Jellyfin item (SeriesId is used in 'series' mode)
+     * @param {string} userId - Current user ID
+     * @returns {string|null} Storage key, or null when no speed should be kept
      */
     _speedKey(item, userId) {
         const mode = this.get('rememberPlaybackSpeed');

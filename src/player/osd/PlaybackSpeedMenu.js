@@ -10,7 +10,10 @@ import { logger } from '../../utils/Logger.js';
 // Localization function library for translation of player UI elements.
 import { i18n } from '../../utils/i18n.js';
 
+// API client used to read the current user ID for remembered speeds.
 import { api } from '../../api/index.js';
+
+// Player settings store that saves the picked speed when Remember playback speed is on.
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('PlaybackSpeedMenu');
