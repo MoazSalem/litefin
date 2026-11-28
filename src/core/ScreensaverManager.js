@@ -31,6 +31,8 @@ class ScreensaverManager {
 
         // Track functional playback to block screensaver
         this._isVideoPlaying = false;
+        // A remote trailer (YouTube iframe) is playing; it sends no player:* events
+        this._isTrailerPlaying = false;
 
         // Screensaver settings from storage defaults
         this._delaySeconds = parseInt(storage.getItem('pref:screensaverDelay'), 10) || 0;
@@ -138,6 +140,20 @@ class ScreensaverManager {
             // Reset OS idle timer on the resolved platform adapter
             this._resetPlatformIdle();
         });
+
+        // Remote trailers play in an iframe overlay, outside the player events above
+        eventBus.on('trailer:playing', () => {
+            this._isTrailerPlaying = true;
+            this.hide();
+        });
+        eventBus.on('trailer:paused', () => {
+            this._isTrailerPlaying = false;
+        });
+        eventBus.on('trailer:stopped', () => {
+            this._isTrailerPlaying = false;
+            // Same as player:stopped: a long trailer must not leave an expired idle clock behind
+            this._resetPlatformIdle();
+        });
         eventBus.on('auth:logout', () => {
             this.hide();
         }); // hide on logout to switch visuals safely
@@ -193,8 +209,8 @@ class ScreensaverManager {
         if (this.isShowing) return;
         if (this._delaySeconds <= 0) return;
 
-        // If currently playing video, never show screensaver
-        if (this._isVideoPlaying) return;
+        // If currently playing video or a trailer, never show screensaver
+        if (this._isVideoPlaying || this._isTrailerPlaying) return;
 
         // Query idle time from the active platform adapter
         const minIdleTimeMs = this._delaySeconds * 1000;

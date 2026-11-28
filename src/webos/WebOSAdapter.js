@@ -82,6 +82,8 @@ class WebOSAdapter {
         // A create request is in flight (its activityId is not known yet)
         this._keepScreenActivityPending = false;
         this._isPlaybackKeepOnRequested = false;
+        // A trailer is playing (see setTrailerKeepScreenOn)
+        this._isTrailerKeepOnRequested = false;
         // PalmServiceBridge objects waiting for their reply: a bridge nothing references
         // can be garbage-collected before its callback fires
         this._pendingBridges = [];
@@ -550,6 +552,17 @@ class WebOSAdapter {
             eventBus.on('player:stopped', () => {
                 this.setKeepScreenOn(false);
             });
+
+            // Remote trailers play in an iframe, outside the player events above
+            eventBus.on('trailer:playing', () => {
+                this.setTrailerKeepScreenOn(true);
+            });
+            eventBus.on('trailer:paused', () => {
+                this.setTrailerKeepScreenOn(false);
+            });
+            eventBus.on('trailer:stopped', () => {
+                this.setTrailerKeepScreenOn(false);
+            });
         }
     }
 
@@ -666,6 +679,7 @@ class WebOSAdapter {
      * When keepOn is false:
      *   - Unblocks screensaver so tvpower requests receive ack: true
      *   - Cancels the power keepalive activity
+     * A playing trailer (setTrailerKeepScreenOn) keeps the screensaver blocked either way.
      *
      * @param {boolean} keepOn - True to request screensaver suppression; false to restore normal behavior
      */
@@ -678,12 +692,13 @@ class WebOSAdapter {
 
         // Check if user explicitly enabled screensaver suppression in Settings (disabled by default)
         const isEnabledByUser = storage.getItem('pref:suppressScreensaverOnPlayback') === 'true';
-        const shouldBlock = Boolean(keepOn && isEnabledByUser);
+        const trailerPlaying = Boolean(this._isTrailerKeepOnRequested);
+        const shouldBlock = Boolean((keepOn && isEnabledByUser) || trailerPlaying);
 
         // Update internal suppression flag for upcoming tvpower callbacks
         this._screenSaverBlocked = shouldBlock;
         log.info(
-            `WebOSAdapter.setKeepScreenOn(${keepOn}) - enabledByUser: ${isEnabledByUser}, screensaverBlocked: ${this._screenSaverBlocked}`
+            `WebOSAdapter.setKeepScreenOn(${keepOn}) - enabledByUser: ${isEnabledByUser}, trailerPlaying: ${trailerPlaying}, screensaverBlocked: ${this._screenSaverBlocked}`
         );
 
         if (shouldBlock) {
@@ -695,6 +710,27 @@ class WebOSAdapter {
             // Cancel power keepalive activity to prevent holding system resources
             this._cancelKeepScreenActivity();
         }
+    }
+
+    /**
+     * Keep the screen on while a remote trailer plays.
+     *
+     * Remote trailers play YouTube inside an iframe. webOS only holds off its
+     * screensaver while the app plays full-screen video, which an iframe never
+     * counts as, so on OLED TVs the screensaver started a few minutes into a
+     * trailer. Main playback gets that exemption from the TV itself; this gives
+     * trailers the same treatment, so it does not depend on
+     * pref:suppressScreensaverOnPlayback. A paused, ended or closed trailer lets
+     * the screensaver work as usual.
+     *
+     * @param {boolean} keepOn - True while a trailer is playing
+     */
+    setTrailerKeepScreenOn(keepOn) {
+        if (!this._isWebOS) return;
+        const next = Boolean(keepOn);
+        if (next === this._isTrailerKeepOnRequested) return;
+        this._isTrailerKeepOnRequested = next;
+        this.setKeepScreenOn(this._isPlaybackKeepOnRequested);
     }
 
     /**
