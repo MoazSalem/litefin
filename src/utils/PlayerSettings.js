@@ -1218,6 +1218,7 @@ export const PlayerSettings = {
      * @returns {string|null} Storage key, or null when no speed should be kept
      */
     _speedKey(item, userId) {
+        if (!userId) return null;
         const mode = this.get('rememberPlaybackSpeed');
         if (mode === 'all') return `${STORAGE_PREFIX}speed:${userId}:all`;
         if (mode === 'series' && item?.SeriesId) return `${STORAGE_PREFIX}speed:${userId}:${item.SeriesId}`;
@@ -1233,7 +1234,7 @@ export const PlayerSettings = {
     getRememberedSpeed(item, userId) {
         const key = this._speedKey(item, userId);
         const speed = key ? parseFloat(storage.getItem(key)) : NaN;
-        return speed > 0 ? speed : 1;
+        return Number.isFinite(speed) && speed > 0 ? speed : 1;
     },
 
     /**
